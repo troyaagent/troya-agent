@@ -9,6 +9,7 @@ body.site { overflow-x: hidden; }
 .x-btn { justify-self: end; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-2); background: rgba(10, 16, 19, 0.55); color: var(--fg); transition: border-color .2s, color .2s; }
 .x-btn svg { width: 14px; height: 14px; }
 .x-btn svg.tg { width: 16px; height: 16px; margin-left: -1px; }
+.x-btn svg.gh { width: 15px; height: 15px; }
 .s-soc { justify-self: end; display: flex; gap: 8px; }
 .x-btn:hover { border-color: var(--blue); color: var(--blue-3); }
 .menu-btn { font-size: 13px; font-weight: 500; padding: 8px 14px; position: relative; color: var(--fg); }

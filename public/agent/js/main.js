@@ -73,12 +73,14 @@ function renderRight() {
   if (xLink) xLink.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>';
   const tgLink = /^https:\/\/t\.me\//.test(SITE.telegram || "") ? h("a", { class: "icon-btn x-link", href: SITE.telegram, target: "_blank", rel: "noopener", "aria-label": "Troya Agent on Telegram", title: "Troya Agent on Telegram" }) : null;
   if (tgLink) tgLink.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="tg"><path fill="currentColor" d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>';
+  const ghLink = /^https:\/\/github\.com\//.test(SITE.github || "") ? h("a", { class: "icon-btn x-link gh-link", href: SITE.github, target: "_blank", rel: "noopener", "aria-label": "Troya Agent on GitHub", title: "Troya Agent on GitHub" }) : null;
+  if (ghLink) ghLink.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" class="gh"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
   const bell = h("a", { class: "icon-btn", href: "#/portfolio/inbox", "aria-label": "Inbox" }, icon("bell"), inboxCount ? h("span", { class: "badge" }, inboxCount > 9 ? "9+" : inboxCount) : null);
   const wbtn = wallet.address
     ? h("button", { class: "wallet-btn on", type: "button", onclick: walletMenu }, h("i", { class: "av" }), short(wallet.address))
     : h("button", { class: "wallet-btn", type: "button", onclick: () => openConnect(), "aria-label": "Connect wallet" }, icon("wallet"), h("span", {}, "Connect", h("span", { class: "wb-more" }, " wallet")));
   const gear = h("button", { class: "icon-btn", type: "button", "aria-label": "Settings", onclick: openSettings }, icon("gear"));
-  clear(right, chip, xLink, tgLink, bell, wbtn, gear);
+  clear(right, chip, xLink, tgLink, ghLink, bell, wbtn, gear);
 }
 function walletMenu() {
   const m = modal({ title: "Wallet", body: h("div", {},
@@ -158,6 +160,7 @@ clear($("[data-foot]"),
     h("a", { href: "/" }, "Troya Agent"),
     SITE.x ? h("a", { href: SITE.x, target: "_blank", rel: "noopener" }, "X") : null,
     SITE.telegram ? h("a", { href: SITE.telegram, target: "_blank", rel: "noopener" }, "Telegram") : null,
+    /^https:\/\/github\.com\//.test(SITE.github || "") ? h("a", { href: SITE.github, target: "_blank", rel: "noopener" }, "GitHub") : null,
     h("a", { href: "#/bridge" }, "Bridge"),
     h("a", { href: "#/docs" }, "Docs"),
     h("a", { href: "/verify" }, "Verify"),

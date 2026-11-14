@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | Verify</title>
+<meta name="description" content="The sentry's log: real swaps, a bridge round trip, Agent Wallet trades and Hyperliquid fills run through Troya with real funds, plus verified router code and open endpoints.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | Verify">
+<meta property="og:description" content="Real transactions, verified code and open endpoints. Each line comes with its link.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/verify">
+<meta property="og:url" content="https://troya.codes/verify">
+<meta property="og:image" content="https://troya.codes/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
+<meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<meta name="theme-color" content="#020405">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+</head>
+<body class="site">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="s-head">
+  <a class="brand" href="/" aria-label="Troya Agent home"><i class="mark"></i>Troya Agent</a>
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="s-menu" data-menu>Menu</button>
+</header>
+<nav class="s-menu" id="s-menu" aria-label="Site" data-menu-panel></nav>
+
+<main id="main">
+  <section class="page-hero" aria-labelledby="ph">
+    <canvas class="hero-canvas" data-hero="page" aria-hidden="true"></canvas>
+    <div class="hero-shade"></div>
+    <span class="eyebrow"><i class="dot"></i>Verify</span>
+    <h1 id="ph" class="words" data-words>The sentry's log</h1>
+    <p class="lead rv">Troya ran with real funds on Robinhood Chain before launch, through the same app anyone opens. Each line below has a place to read it, no account needed. The wallet that signed is a test wallet: <a class="ulink" href="https://robinhoodchain.blockscout.com/address/0x12a05719851c8375342DE65c9105329c81f57054" target="_blank" rel="noopener">0x12a0…7054</a>.</p>
+  </section>
+
+  <section class="ip" aria-labelledby="tx-h">
+    <div class="eyebrow-line"><span>01 / Real trades, 11 Nov 2026</span></div>
+    <div class="split" style="margin-bottom:56px">
+      <h2 id="tx-h" class="h2 words" data-words>Every route, run once</h2>
+      <p class="lead rv">Each trade went through Troya Gate first, was built by the Troya server, and was signed by the wallet. In every swap the tokens moved between the pools and that wallet; none went to Troya.</p>
+    </div>
+    <div class="steps">
+      <article class="step rv"><span class="n">01</span><h3>Uniswap v3</h3><p>ETH to NVDA, a tokenized stock, routed through Uniswap SwapRouter02, then sold back.</p><p class="vlinks"><a class="ulink" href="https://robinhoodchain.blockscout.com/tx/0x88545a2127a8f3bd7c847e483105c08494030be51d54ac7a025dc6dc00825cf4" target="_blank" rel="noopener">Buy</a> <a class="ulink" href="https://robinhoodchain.blockscout.com/tx/0xf412b39b5b07c1a223afc2277053d999b1b916001fa9793b7bbad16cb1880cd2" target="_blank" rel="noopener">Sell</a></p></article>
+      <article class="step rv"><span class="n">02</span><h3>Uniswap v4 through Permit2</h3><p>A graduated Pons coin bought and sold through the Universal Router, with the two Permit2 approvals in between.</p><p class="vlinks"><a class="ulink" href="https://robinhoodchain.blockscout.com/tx/0xfdafe63ccaea8743ec06440cf3b10c81ed32d00314a5fe879be339e4492cac4f" target="_blank" rel="noopener">Buy</a> <a class="ulink" href="https://robinhoodchain.blockscout.com/tx/0xdf5827c7d3f84676c3ce16078c326251f5e4e729a7c5e97ad9dab59cad1d5a3f" target="_blank" rel="noopener">Sell</a></p></article>
+      <article class="step rv"><span class="n">03</span><h3>A Pons curve</h3><p>A Pons coin still on its bonding curve, bought and sold on the curve itself.</p><p class="vlinks"><a class="ulink" href="https://robinhoodchain.blockscout.com/tx/0x2ef33a9b16b331e192287fb5d5f149ec3d2d908019352678a3f7726760c5b86f" target="_blank" rel="noopener">Buy</a> <a class="ulink" href="https://robinhoodchain.blockscout.com/tx/0xe45f3ea043b21d212bb307af7937dfff5d5f7ae6f00d6ea0f47539c7293ed23b" target="_blank" rel="noopener">Sell</a></p></article>
+      <article class="step rv"><span class="n">04</span><h3>Bridge round trip</h3><p>ETH from Robinhood Chain to Arbitrum and back through LI.FI. Each leg landed in about ten seconds.</p><p class="vlinks"><a class="ulink" href="https://robinhoodchain.blockscout.com/tx/0x106b35a7e29551d9f907733bae4562bce1aca36836fe60d9649739abbff1b730" target="_blank" rel="noopener">Out, Robinhood Chain</a> <a class="ulink" href="https://arbiscan.io/tx/0x7cbe23f72daef6440bb70915baf489d37b52d4ae8b33616bad463d50c98379ed" target="_blank" rel="noopener">Landed, Arbitrum</a> <a class="ulink" href="https://arbiscan.io/tx/0xe108a08a7b6b01ba36de7124ba3f3f7445fc8373ea4eadb2b74d52551efc4aee" target="_blank" rel="noopener">Back, Arbitrum</a> <a class="ulink" href="https://robinhoodchain.blockscout.com/tx/0xca2d1d5964a253897045cfe4b72e5749a155db11e476c51482bfb29eb7e8058f" target="_blank" rel="noopener">Landed, Robinhood Chain</a></p></article>
+      <article class="step rv"><span class="n">05</span><h3>Agent Wallet</h3><p>A chat ticket executed by the Agent Wallet inside its caps, then everything withdrawn to the wallet that owns it.</p><p class="vlinks"><a class="ulink" href="https://robinhoodchain.blockscout.com/tx/0x5d3db1995477304fbbe3ce4c67a04a44f1c6be8c60147f693086a17f6f2762f6" target="_blank" rel="noopener">Executed</a> <a class="ulink" href="https://robinhoodchain.blockscout.com/tx/0x4d1f80241a73fbaa1026166d1fc54d8d4ab950c0ad3182ce8f03f459b52347fb" target="_blank" rel="noopener">Withdrawn</a></p></article>
+      <article class="step rv"><span class="n">06</span><h3>Hyperliquid</h3><p>A long on ETH with take-profit and stop-loss from the Perps page, closed, then the same trade placed by the Agent Wallet. All four fills are on Hyperliquid's explorer.</p><p class="vlinks"><a class="ulink" href="https://app.hyperliquid.xyz/explorer/address/0x12a05719851c8375342DE65c9105329c81f57054" target="_blank" rel="noopener">Fills</a></p></article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="code-h">
+    <div class="eyebrow-line"><span>02 / Code Troya builds for</span></div>
+    <div class="split" style="margin-bottom:56px">
+      <h2 id="code-h" class="h2 words" data-words>Confirmed by Sourcify</h2>
+      <p class="lead rv">Troya has no contract of its own in these paths. It builds transactions for these contracts, and their source code is confirmed by Sourcify on chain 4663.</p>
+    </div>
+    <div class="steps">
+      <article class="step rv"><span class="n">01</span><h3>SwapRouter02</h3><p><code>0xCaf681a66D020601342297493863E78C959E5cb2</code></p><p class="vlinks"><a class="ulink" href="https://sourcify.dev/server/v2/contract/4663/0xCaf681a66D020601342297493863E78C959E5cb2" target="_blank" rel="noopener">Sourcify</a> <a class="ulink" href="https://robinhoodchain.blockscout.com/address/0xCaf681a66D020601342297493863E78C959E5cb2?tab=contract" target="_blank" rel="noopener">Blockscout</a></p></article><article class="step rv"><span class="n">02</span><h3>Universal Router</h3><p><code>0x8876789976dEcBfCbBbe364623C63652db8C0904</code></p><p class="vlinks"><a class="ulink" href="https://sourcify.dev/server/v2/contract/4663/0x8876789976dEcBfCbBbe364623C63652db8C0904" target="_blank" rel="noopener">Sourcify</a> <a class="ulink" href="https://robinhoodchain.blockscout.com/address/0x8876789976dEcBfCbBbe364623C63652db8C0904?tab=contract" target="_blank" rel="noopener">Blockscout</a></p></article><article class="step rv"><span class="n">03</span><h3>Permit2</h3><p><code>0x000000000022D473030F116dDEE9F6B43aC78BA3</code></p><p class="vlinks"><a class="ulink" href="https://sourcify.dev/server/v2/contract/4663/0x000000000022D473030F116dDEE9F6B43aC78BA3" target="_blank" rel="noopener">Sourcify</a> <a class="ulink" href="https://robinhoodchain.blockscout.com/address/0x000000000022D473030F116dDEE9F6B43aC78BA3?tab=contract" target="_blank" rel="noopener">Blockscout</a></p></article><article class="step rv"><span class="n">04</span><h3>Pons factory</h3><p><code>0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e</code></p><p class="vlinks"><a class="ulink" href="https://sourcify.dev/server/v2/contract/4663/0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e" target="_blank" rel="noopener">Sourcify</a> <a class="ulink" href="https://robinhoodchain.blockscout.com/address/0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e?tab=contract" target="_blank" rel="noopener">Blockscout</a></p></article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="api-h">
+    <div class="eyebrow-line"><span>03 / Open endpoints</span></div>
+    <div class="split" style="margin-bottom:56px">
+      <h2 id="api-h" class="h2 words" data-words>Ask the gate directly</h2>
+      <p class="lead rv">The checks the app runs are plain HTTP. Change the token address and read the result.</p>
+    </div>
+    <div class="steps">
+      <article class="step rv"><span class="n">01</span><h3>Troya Gate</h3><p>Route, price impact, pool depth, fees and taxes, the swap simulated and a sell-back, for any Robinhood Chain token.</p><p class="vlinks"><a class="ulink" href="https://troya.codes/api/swap/gate?tokenIn=ETH&tokenOut=0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec&amountIn=0.001" target="_blank" rel="noopener">/api/swap/gate</a></p></article>
+      <article class="step rv"><span class="n">02</span><h3>The agent's tools</h3><p>The same tools the chat and MCP clients use: market data, token health, quotes, balances.</p><p class="vlinks"><a class="ulink" href="/api/tools" target="_blank" rel="noopener">/api/tools</a></p></article>
+      <article class="step rv"><span class="n">03</span><h3>Live market</h3><p>Robinhood Chain coins and tokenized stocks, read live from pools and the chain.</p><p class="vlinks"><a class="ulink" href="/api/market/robinhood" target="_blank" rel="noopener">/api/market/robinhood</a> <a class="ulink" href="/api/market/stocks" target="_blank" rel="noopener">/api/market/stocks</a></p></article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="no-h">
+    <div class="eyebrow-line"><span>04 / What this page does not say</span></div>
+    <div class="split">
+      <h2 id="no-h" class="h2 words" data-words>Read it plainly</h2>
+      <p class="lead rv">There is no third-party audit of Troya. The Agent Wallet is custodial by design: its key is held encrypted by the operator, so keep it small. Not financial advice. Crypto is volatile. DYOR.</p>
+    </div>
+    <div class="cta-band">
+      <h2 id="cta-h" class="h2 sm words" data-words>Wheel nothing in blind.</h2>
+      <div class="acts rv"><a class="ulink" href="/agent">Launch app</a><a class="ulink" href="/risk-controls">Risk Controls</a></div>
+    </div>
+  </section>
+</main>
+
+<footer class="s-foot" data-footer></footer>
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/js/hero.js"></script>
+<script type="module" src="/js/fx.js"></script>
+</body>
+</html>

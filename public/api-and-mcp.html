@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | API and MCP</title>
+<meta name="description" content="Connect Troya to Claude Desktop, Cursor or Claude Code with one MCP command, or call the REST API from your own code. Same tools, same limits, same journal.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | API and MCP">
+<meta property="og:description" content="One MCP command or a plain REST API: Robinhood Chain and Hyperliquid tools behind your limits.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/api-and-mcp">
+<meta property="og:url" content="https://troya.codes/api-and-mcp">
+<meta property="og:image" content="https://troya.codes/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
+<meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<meta name="theme-color" content="#020405">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+</head>
+<body class="site">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="s-head">
+  <a class="brand" href="/" aria-label="Troya Agent home"><i class="mark"></i>Troya Agent</a>
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="s-menu" data-menu>Menu</button>
+</header>
+<nav class="s-menu" id="s-menu" aria-label="Site" data-menu-panel></nav>
+
+<main id="main">
+  <section class="page-hero" aria-labelledby="ph">
+    <canvas class="hero-canvas" data-hero="page" aria-hidden="true"></canvas>
+    <div class="hero-shade"></div>
+    <span class="eyebrow"><i class="dot"></i>API and MCP</span>
+    <h1 id="ph" class="words" data-words>Give your own agent a desk with walls</h1>
+    <p class="lead rv">Install the Troya MCP server with one command, or call the REST API directly. Read tools work for everyone. Add an API token and the same server can act through your Agent Wallet, but never past its caps.</p>
+    <div class="hero-act rv" style="align-items:center">
+      <div class="cmd" style="margin:0"><span>$</span><code data-mcp-cmd>npx -y @troyaagent/mcp</code><button type="button" data-copy-cmd>COPY</button></div>
+      <a class="ulink" href="/agent">Launch app</a>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="install-h">
+    <div class="eyebrow-line"><span>01 / Install</span></div>
+    <div class="split" style="margin-bottom:48px">
+      <h2 id="install-h" class="h2 words" data-words>One command, any client</h2>
+      <p class="lead rv">The MCP server runs on your own machine over stdio and stores no keys. It forwards each tool call to Troya, where your policy is checked before anything happens. Leave the token out and you get the read tools only.</p>
+    </div>
+    <div class="code-grid">
+      <div class="code rv">
+        <div class="code-h">Claude Desktop · claude_desktop_config.json<button type="button" data-copy-block>COPY</button></div>
+        <pre data-tpl>{
+  <span class="s">"mcpServers"</span>: {
+    <span class="s">"troya"</span>: {
+      <span class="s">"command"</span>: <span class="s">"npx"</span>,
+      <span class="s">"args"</span>: [<span class="s">"-y"</span>, <span class="s">"{{pkg}}"</span>],
+      <span class="s">"env"</span>: {
+        <span class="s">"TROYA_BASE_URL"</span>: <span class="s">"{{base}}"</span>,
+        <span class="s">"TROYA_API_KEY"</span>: <span class="s">""</span>
+      }
+    }
+  }
+}</pre>
+      </div>
+      <div class="code rv">
+        <div class="code-h">Cursor · .cursor/mcp.json<button type="button" data-copy-block>COPY</button></div>
+        <pre data-tpl>{
+  <span class="s">"mcpServers"</span>: {
+    <span class="s">"troya"</span>: {
+      <span class="s">"command"</span>: <span class="s">"npx"</span>,
+      <span class="s">"args"</span>: [<span class="s">"-y"</span>, <span class="s">"{{pkg}}"</span>],
+      <span class="s">"env"</span>: { <span class="s">"TROYA_BASE_URL"</span>: <span class="s">"{{base}}"</span> }
+    }
+  }
+}</pre>
+      </div>
+    </div>
+    <div class="code rv">
+      <div class="code-h">Claude Code · terminal<button type="button" data-copy-block>COPY</button></div>
+      <pre data-tpl><span class="c"># read tools only</span>
+claude mcp add troya -e TROYA_BASE_URL={{base}} -- npx -y {{pkg}}
+
+<span class="c"># with Agent Wallet tools (create the token in the app: Agent → Wallet → API tokens)</span>
+claude mcp add troya -e TROYA_BASE_URL={{base}} -e TROYA_API_KEY=&lt;your-token&gt; -- npx -y {{pkg}}</pre>
+    </div>
+    <div class="callout blue rv">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <div>Execution over MCP starts in dry-run: orders are prepared and checked, then reported instead of sent. Switching dry-run off is a deliberate setting per API token in the app.</div>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="iface-h">
+    <canvas class="sec-fx" data-fx="burst" aria-hidden="true"></canvas>
+    <div class="eyebrow-line"><span>02 / Choose an interface</span></div>
+    <h2 id="iface-h" class="h2 words" data-words style="margin-bottom:56px">Three doors, one set of walls</h2>
+    <div class="steps">
+      <article class="step rv"><span class="n">01 · READ TOOLS</span><h3>No token needed</h3><p>Hyperliquid perps, the Robinhood Chain token board, swap quotes on Robinhood Chain, token health checks and the daily brief. Nothing in this set can move funds.</p></article>
+      <article class="step rv"><span class="n">02 · AGENT WALLET TOOLS</span><h3>With an API token</h3><p>Add a token and the server can also swap, bridge, trade perps and launch tokens from your Agent Wallet, each call passing Troya Gate and your caps first.</p></article>
+      <article class="step rv"><span class="n">03 · REST</span><h3>Plain HTTP</h3><p>Public GET routes for markets and quotes. POST routes for execution need an <code class="mono">x-api-key</code> header and an <code class="mono">Idempotency-Key</code>, so retries are safe.</p></article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="rest-h">
+    <div class="eyebrow-line"><span>03 / REST</span></div>
+    <div class="split" style="margin-bottom:40px">
+      <h2 id="rest-h" class="h2 words" data-words>HTTP for your own code</h2>
+      <p class="lead rv">Base URL <code class="mono" data-base>/agent/api</code>. Responses are JSON. Every call made with a token lands in the same journal you see in the app.</p>
+    </div>
+    <div class="eps-wrap rv">
+      <table class="eps">
+        <thead><tr><th>Method</th><th>Route</th><th>What it returns</th><th>Auth</th></tr></thead>
+        <tbody>
+          <tr><td><span class="m">GET</span></td><td><code>/market/robinhood</code></td><td>Robinhood Chain token board. Query: <code>q</code>, <code>launchpad</code>, <code>sort</code>, <code>dir</code>, <code>limit</code>, <code>offset</code>.</td><td>Public</td></tr>
+          <tr><td><span class="m">GET</span></td><td><code>/market/robinhood/token?address=</code></td><td>One Robinhood Chain token: price, volume, pool and launchpad.</td><td>Public</td></tr>
+          <tr><td><span class="m">GET</span></td><td><code>/market/hl</code></td><td>Hyperliquid perp markets with price, 24h change, funding, open interest and volume.</td><td>Public</td></tr>
+          <tr><td><span class="m">GET</span></td><td><code>/tools</code></td><td>The tool list with each tool's tier and input schema.</td><td>Public</td></tr>
+          <tr><td><span class="m write">POST</span></td><td><code>/tools/:name</code></td><td>Run a tool. Read tools work without a token; prepare and execute tools need one.</td><td><code>x-api-key</code> + <code>Idempotency-Key</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code-grid" style="margin-top:32px">
+      <div class="code rv">
+        <div class="code-h">Read · top Robinhood Chain tokens by volume<button type="button" data-copy-block>COPY</button></div>
+        <pre data-tpl>curl -s <span class="s">"{{base}}/market/robinhood?sort=volume&amp;limit=10"</span></pre>
+      </div>
+      <div class="code rv">
+        <div class="code-h">Read · Hyperliquid markets<button type="button" data-copy-block>COPY</button></div>
+        <pre data-tpl>curl -s <span class="s">"{{base}}/market/hl"</span></pre>
+      </div>
+    </div>
+    <div class="code rv">
+      <div class="code-h">Execute · prepare, then execute with the confirmationId<button type="button" data-copy-block>COPY</button></div>
+      <pre data-tpl><span class="c"># 1) prepare: Troya Gate runs, you get a one-time confirmationId (valid 120 s)</span>
+curl -s -X POST <span class="s">"{{base}}/tools/prepare_order"</span> \
+  -H <span class="s">"content-type: application/json"</span> \
+  -H <span class="s">"x-api-key: $TROYA_API_KEY"</span> \
+  -H <span class="s">"Idempotency-Key: $(uuidgen)"</span> \
+  -d <span class="s">'{"venue":"hyperliquid","coin":"BTC","side":"long","sizeUsd":50,"leverage":3}'</span>
+
+<span class="c"># 2) execute: only the confirmationId is accepted; dry-run unless you turned it off</span>
+curl -s -X POST <span class="s">"{{base}}/tools/execute_intent"</span> \
+  -H <span class="s">"content-type: application/json"</span> \
+  -H <span class="s">"x-api-key: $TROYA_API_KEY"</span> \
+  -H <span class="s">"Idempotency-Key: $(uuidgen)"</span> \
+  -d <span class="s">'{"confirmationId":"&lt;from step 1&gt;"}'</span></pre>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="tiers-h">
+    <div class="eyebrow-line"><span>04 / Tool tiers</span></div>
+    <h2 id="tiers-h" class="h2 sm words" data-words style="margin-bottom:40px">What each tier is allowed to do</h2>
+    <div class="tools">
+      <div class="tool rv"><code>Tier 1 · Read</code><p>Look only: markets, quotes, balances, positions, token health, policy. Safe to call in a loop.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+      <div class="tool rv"><code>Tier 2 · Prepare</code><p>Simulate an order and run Troya Gate. Returns a confirmationId that expires after 120 seconds and is bound to a hash of the exact parameters.</p><span class="tier"><span class="tier-pill prep">PREPARE</span></span></div>
+      <div class="tool rv"><code>Tier 3 · Execute</code><p>Takes only a confirmationId, re-reads the policy and sends the order from the Agent Wallet. Dry-run by default; blocked entirely while Pause or the operator kill switch is on.</p><span class="tier"><span class="tier-pill exec">EXECUTE</span></span></div>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="cta-h">
+    <div class="cta-band">
+      <h2 id="cta-h" class="h2 sm words" data-words>Create a token, then connect.</h2>
+      <div class="acts rv"><a class="ulink" href="/agent#/agent/wallet">Open the Troya app</a><a class="ulink" href="/risk-controls">Risk Controls</a></div>
+    </div>
+  </section>
+</main>
+
+<footer class="s-foot" data-footer></footer>
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/js/hero.js"></script>
+<script type="module" src="/js/fx.js"></script>
+<script type="module">
+const pkg = (window.SITE && window.SITE.mcpPackage) || "@troyaagent/mcp";
+const base = location.origin + "/agent/api";
+document.querySelectorAll("[data-tpl]").forEach((el) => { el.innerHTML = el.innerHTML.replaceAll("{{pkg}}", pkg).replaceAll("{{base}}", base); });
+document.querySelectorAll("[data-base]").forEach((el) => { el.textContent = base; });
+const note = (text, kind) => {
+  const box = document.querySelector("[data-toasts]");
+  if (!box) return;
+  const t = document.createElement("div");
+  t.className = "toast " + kind;
+  t.textContent = text;
+  box.append(t);
+  setTimeout(() => t.remove(), 2400);
+};
+document.querySelectorAll("[data-copy-block]").forEach((b) => {
+  b.addEventListener("click", async () => {
+    const pre = b.closest(".code").querySelector("pre");
+    try { await navigator.clipboard.writeText(pre.innerText.trim()); note("Copied", "ok"); }
+    catch { note("Copy failed. Select the text and copy it manually.", "error"); }
+  });
+});
+</script>
+</body>
+</html>

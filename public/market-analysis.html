@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | Market Analysis</title>
+<meta name="description" content="Read-only analysis for Hyperliquid perps, Robinhood Chain tokens and pools: tickers, movers, order books, token health and the data sources behind them, with their limits stated plainly.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | Market Analysis">
+<meta property="og:description" content="Look hard before any order: read-only tools and honest data sources for Robinhood Chain and Hyperliquid.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/market-analysis">
+<meta property="og:url" content="https://troya.codes/market-analysis">
+<meta property="og:image" content="https://troya.codes/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
+<meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<meta name="theme-color" content="#020405">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+</head>
+<body class="site">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="s-head">
+  <a class="brand" href="/" aria-label="Troya Agent home"><i class="mark"></i>Troya Agent</a>
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="s-menu" data-menu>Menu</button>
+</header>
+<nav class="s-menu" id="s-menu" aria-label="Site" data-menu-panel></nav>
+
+<main id="main">
+  <section class="page-hero" aria-labelledby="ph">
+    <canvas class="hero-canvas" data-hero="page" aria-hidden="true"></canvas>
+    <div class="hero-shade"></div>
+    <span class="eyebrow"><i class="dot"></i>Market Analysis</span>
+    <h1 id="ph" class="words" data-words>Look hard before any order</h1>
+    <p class="lead rv">Read-only tools for perps, order books, Robinhood Chain pools and token risk. They explain what is happening and what might go wrong. They never trade.</p>
+    <div class="hero-act rv"><a class="ulink" href="/agent#/market">Open the market</a><a class="ulink" href="/plans">See plans</a></div>
+  </section>
+
+  <section class="ip" aria-labelledby="ro-h">
+    <div class="eyebrow-line"><span>01 / Read only</span></div>
+    <div class="split">
+      <h2 id="ro-h" class="h2 words" data-words>Analysis lives on its own floor</h2>
+      <div class="cards">
+        <article class="card rv"><h3>No order buttons here</h3><p>Analysis tools cannot place, sign or cancel anything. Execution sits one tier up, behind your policy and an expiring confirmation, and it has to be asked for separately.</p></article>
+        <article class="card rv"><h3>Same answers everywhere</h3><p>The assistant in the app, the MCP server and the REST API call the same tools, so a number you see in chat matches the one your script reads.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="md-h">
+    <canvas class="sec-fx" data-fx="wisps" aria-hidden="true"></canvas>
+    <div class="eyebrow-line"><span>02 / Market data</span></div>
+    <div class="split" style="margin-bottom:48px">
+      <h2 id="md-h" class="h2 words" data-words>From raw numbers to a reading</h2>
+      <p class="lead rv">Prices on their own say little. Troya pairs them with the context a trader would check next: volume, open interest, funding, depth and the shape of the book.</p>
+    </div>
+    <div class="tools">
+      <div class="tool rv"><code>analyze_ticker</code><p>Mark, oracle, 24h change and volume, open interest, funding per hour and per year, and the liquidity near the touch for any Hyperliquid perp.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+      <div class="tool rv"><code>get_movers</code><p>Ranks perps and Robinhood Chain tokens by move, volume and volume against open interest, and points out funding that looks stretched.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+      <div class="tool rv"><code>simulate_trade</code><p>Walks the live order book or pool curve to estimate the fill and the slippage of an order you are only thinking about. It prepares nothing.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="ts-h">
+    <div class="eyebrow-line"><span>03 / Token and social</span></div>
+    <div class="split" style="margin-bottom:56px">
+      <h2 id="ts-h" class="h2 words" data-words>Check before you hold</h2>
+      <p class="lead rv">New coins launch on Robinhood Chain all the time, on Pons Family and elsewhere. A few quick checks catch the obvious traps before you put ETH into one.</p>
+    </div>
+    <div class="steps">
+      <article class="step rv"><span class="n">01</span><h3>Token health</h3><p><code class="mono">analyze_token_health</code> reads the contract's bytecode for mint, pause, blacklist, fee-switch and owner powers, and tells you which ones it found. It is a heuristic; a clean result is not a guarantee.</p></article>
+      <article class="step rv"><span class="n">02</span><h3>Social</h3><p><code class="mono">get_social_info</code> searches X for a token or ticker. It needs an X API bearer token configured by the operator, and every post it returns is fenced as untrusted text.</p></article>
+      <article class="step rv"><span class="n">03</span><h3>Discovery <span class="tier-pill soon">IN DEVELOPMENT</span></h3><p><code class="mono">get_new_pairs</code> will list pairs the moment they launch. It depends on an indexer that is not finished, so for now the Launchpad page sorts by age instead.</p></article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="src-h">
+    <div class="eyebrow-line"><span>04 / Data sources</span></div>
+    <div class="split" style="margin-bottom:40px">
+      <h2 id="src-h" class="h2 words" data-words>Live data, limits stated</h2>
+      <p class="lead rv">Each number comes from somewhere specific. Here is where, and what each source cannot tell you.</p>
+    </div>
+    <div class="sources">
+      <div class="source rv"><b>Hyperliquid</b><p>Perp prices, funding, open interest, candles and order books from Hyperliquid's public info API. Perp orders go to Hyperliquid mainnet.</p><p class="lim">Candles are only as fine as Hyperliquid serves them; very new listings have short histories.</p></div>
+      <div class="source rv"><b>Robinhood Chain</b><p>Balances, Pons curve and pool state, and quotes read directly from chain 4663 over RPC. Gas is paid in ETH, and every transaction can be checked on robinhoodchain.blockscout.com.</p><p class="lim">A chain read is a snapshot. Prices can move before you sign, which is why a quote is refreshed once more before your wallet opens.</p></div>
+      <div class="source rv"><b>GeckoTerminal</b><p>Token lists, launch times, prices and volume for Robinhood Chain launches and pools from Pons, Clanker, Bankr, Virtuals, Hoodit, Uniswap, Ramses, PancakeSwap and others.</p><p class="lim">Tokens GeckoTerminal has not picked up yet will be missing, and some listed tokens have no Pons curve or Uniswap pool Troya can swap through.</p></div>
+      <div class="source rv"><b>LI.FI bridge routes</b><p>Routes for moving ETH into and out of Robinhood Chain from Arbitrum, Base and Ethereum.</p><p class="lim">Most routes land in minutes, but the time and the cost depend on the route available when you send.</p></div>
+    </div>
+    <div class="callout rv" style="margin-top:32px">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20zM12 10v5M12 18h.01" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div>Robinhood Chain prices are quoted against the pair token, usually ETH or USDG. USD figures are converted at the current ETH price and are approximate. Tokenized stock prices come from their on-chain pools. Market caps are estimated from total supply, not circulating supply.</div>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="cta-h">
+    <div class="cta-band">
+      <h2 id="cta-h" class="h2 sm words" data-words>Open the desk, then connect your agent.</h2>
+      <div class="acts rv"><a class="ulink" href="/agent">Open the web app</a><a class="ulink" href="/api-and-mcp">API and MCP</a><a class="ulink" href="/risk-controls">Risk Controls</a></div>
+    </div>
+  </section>
+</main>
+
+<footer class="s-foot" data-footer></footer>
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/js/hero.js"></script>
+<script type="module" src="/js/fx.js"></script>
+</body>
+</html>

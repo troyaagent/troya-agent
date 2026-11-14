@@ -1,0 +1,23 @@
+# Only the app itself is public. Everything else (data, media, content, keys, deploy) stays local.
+/*
+!/.gitignore
+!/README.md
+!/LICENSE
+!/.env.example
+!/package.json
+!/package-lock.json
+!/server.mjs
+!/server/
+!/public/
+!/mcp/
+!/tools/
+/public/_*/
+/tools/*
+!/tools/crawl.mjs
+!/tools/rh-smoke.mjs
+node_modules/
+.DS_Store
+.env
+.env.*
+!/.env.example
+*.log

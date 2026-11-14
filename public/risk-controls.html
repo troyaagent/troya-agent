@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | Risk Controls</title>
+<meta name="description" content="How Troya keeps the agent inside hard limits: pause, dry-run and kill switch, who holds which key, per-trade and daily caps, and the Troya Gate pre-trade check.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | Risk Controls">
+<meta property="og:description" content="Pause, dry-run, caps, allowlists and Troya Gate: the walls around the agent, in detail.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/risk-controls">
+<meta property="og:url" content="https://troya.codes/risk-controls">
+<meta property="og:image" content="https://troya.codes/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
+<meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<meta name="theme-color" content="#020405">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+</head>
+<body class="site">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="s-head">
+  <a class="brand" href="/" aria-label="Troya Agent home"><i class="mark"></i>Troya Agent</a>
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="s-menu" data-menu>Menu</button>
+</header>
+<nav class="s-menu" id="s-menu" aria-label="Site" data-menu-panel></nav>
+
+<main id="main">
+  <section class="page-hero" aria-labelledby="ph">
+    <canvas class="hero-canvas" data-hero="page" aria-hidden="true"></canvas>
+    <div class="hero-shade"></div>
+    <span class="eyebrow"><i class="dot"></i>Risk Controls</span>
+    <h1 id="ph" class="words" data-words>The walls, in detail</h1>
+    <p class="lead rv">Every limit lives in policy, outside the model. Every action is tested against it before it runs and written down after it runs. Here is what that means in practice.</p>
+    <div class="hero-act rv"><a class="ulink" href="/agent#/agent/wallet">Set your limits in the app</a></div>
+  </section>
+
+  <section class="ip" aria-labelledby="brake-h">
+    <div class="eyebrow-line"><span>01 / Brakes</span></div>
+    <div class="split" style="margin-bottom:56px">
+      <h2 id="brake-h" class="h2 words" data-words>Three ways to stop</h2>
+      <p class="lead rv">Stopping should never be harder than starting. Each brake works on its own, and none of them needs the agent's cooperation.</p>
+    </div>
+    <div class="steps">
+      <article class="step rv"><span class="n">01</span><h3>Pause</h3><p>One switch in the app. While it is on, your Agent Wallet cannot sign anything and running playbooks are held. Turning it off again is your call alone.</p></article>
+      <article class="step rv"><span class="n">02</span><h3>Dry-run</h3><p>Over MCP, execution starts in dry-run: orders are prepared, checked and reported, not sent. You switch it off per API token when you are ready.</p></article>
+      <article class="step rv"><span class="n">03</span><h3>Kill switch</h3><p>The operator can halt every execution path at once, for every user, if something looks wrong with a venue, a contract or the service itself.</p></article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="trust-h">
+    <canvas class="sec-fx" data-fx="vortex" aria-hidden="true"></canvas>
+    <div class="eyebrow-line"><span>02 / Who holds what</span></div>
+    <div class="split" style="margin-bottom:56px">
+      <h2 id="trust-h" class="h2 words" data-words>Know where each key sits</h2>
+      <p class="lead rv">There are up to three keys in play. Only one of them is held by the operator, and it is the one you are told to keep small.</p>
+    </div>
+    <div class="trust">
+      <article class="t rv">
+        <svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="10" width="30" height="22" rx="4" fill="none" stroke="#5fd3ef" stroke-width="1.5"/><path d="M25 21h10" stroke="#5fd3ef" stroke-width="1.5"/><circle cx="28" cy="21" r="1.6" fill="#8ee6ff"/></svg>
+        <h3>Your wallet</h3><span class="who">Held by you</span>
+        <ul>
+          <li>Troya never sees or stores its key.</li>
+          <li>Every action needs your signature in the wallet itself.</li>
+          <li>Disconnect at any time; nothing keeps running in its name.</li>
+        </ul>
+      </article>
+      <article class="t rv">
+        <svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4 33 9v10c0 8-5 14-13 17C12 33 7 27 7 19V9z" fill="none" stroke="#5fd3ef" stroke-width="1.5"/><rect x="15" y="17" width="10" height="8" rx="1.5" fill="none" stroke="#8ee6ff" stroke-width="1.5"/><path d="M17 17v-2a3 3 0 0 1 6 0v2" fill="none" stroke="#8ee6ff" stroke-width="1.5"/></svg>
+        <h3>Agent Wallet</h3><span class="who">Held by the operator, encrypted</span>
+        <ul>
+          <li>Optional and custodial: treat it like pocket money.</li>
+          <li>Acts only inside your daily caps and leverage cap.</li>
+          <li>Withdrawals go only to your own connected address.</li>
+          <li>You can export its key whenever you like.</li>
+          <li class="no">Never touches your main wallet.</li>
+        </ul>
+      </article>
+      <article class="t rv">
+        <svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><circle cx="15" cy="20" r="7" fill="none" stroke="#5fd3ef" stroke-width="1.5"/><path d="M22 20h13M30 20v5M34 20v4" stroke="#5fd3ef" stroke-width="1.5"/></svg>
+        <h3>Hyperliquid trading key</h3><span class="who">An approved agent key</span>
+        <ul>
+          <li>Approved by you on Hyperliquid for placing and cancelling orders.</li>
+          <li class="no">Cannot withdraw or transfer funds; Hyperliquid itself enforces that.</li>
+          <li>Revoke it on Hyperliquid at any time.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="caps-h">
+    <div class="eyebrow-line"><span>03 / Limits</span></div>
+    <div class="split" style="margin-bottom:56px">
+      <h2 id="caps-h" class="h2 words" data-words>Caps you set, checks it cannot skip</h2>
+      <p class="lead rv">These live in policy on the server and are read again on every single call. If an order breaks any of them, it is refused, and the refusal is logged with the rule that stopped it.</p>
+    </div>
+    <div class="steps four">
+      <article class="step rv"><span class="n">A</span><h3>Per-trade cap</h3><p>The most one order can be worth in USD, whoever signs it.</p></article>
+      <article class="step rv"><span class="n">B</span><h3>Daily USD cap</h3><p>A ceiling on what the Agent Wallet may spend or open in a rolling day.</p></article>
+      <article class="step rv"><span class="n">C</span><h3>Leverage cap</h3><p>The highest leverage the agent may use on any perp, below the venue's own maximum if you choose.</p></article>
+      <article class="step rv"><span class="n">D</span><h3>Allowlist</h3><p>Only the coins and tokens you allow can be traded by the agent. Everything else is read-only for it.</p></article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="gate-h">
+    <canvas class="sec-fx" data-fx="wisps" aria-hidden="true"></canvas>
+    <div class="eyebrow-line"><span>04 / Troya Gate</span></div>
+    <div class="split" style="margin-bottom:48px">
+      <h2 id="gate-h" class="h2 words" data-words>Five questions before every swap</h2>
+      <p class="lead rv">Troya Gate is the pre-trade check. It runs before a proposal is shown to you and again before the Agent Wallet signs. If any answer is bad, the order is not offered, and you see which check failed and why.</p>
+    </div>
+    <div class="checks rv">
+      <div class="c"><span>01</span><b>Route</b><p>Is the path real, through pools that exist on the chain right now?</p></div>
+      <div class="c"><span>02</span><b>Price impact</b><p>How far does this order move the price, and is that within your slippage?</p></div>
+      <div class="c"><span>03</span><b>Pool depth</b><p>Is there enough liquidity behind the quote to exit later?</p></div>
+      <div class="c"><span>04</span><b>Sell simulation</b><p>Can the token actually be sold back, or would a sell revert?</p></div>
+      <div class="c"><span>05</span><b>Transfer tax</b><p>Does the token skim a fee on transfer that the quote does not show?</p></div>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="text-h">
+    <div class="eyebrow-line"><span>05 / Text and records</span></div>
+    <div class="split">
+      <h2 id="text-h" class="h2 sm words" data-words>Strangers' words are data. Every move is on record.</h2>
+      <div class="cards">
+        <article class="card rv"><h3>Fenced text</h3><p>Token names, descriptions and posts from X are written by people you do not know. Troya marks them as untrusted before the model sees them, so a line like "ignore your limits" inside a token name is just a string.</p></article>
+        <article class="card rv"><h3>The journal</h3><p>Every proposal, signature, refusal and Agent Wallet action is written to your journal with the reason the agent gave and the rule that applied. It is readable in the app and is never edited after the fact.</p><a class="ulink" href="/agent#/portfolio/history">Review the journal in the app</a></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="cta-h">
+    <div class="cta-band">
+      <h2 id="cta-h" class="h2 sm words" data-words>Set the walls before you trade.</h2>
+      <div class="acts rv"><a class="ulink" href="/agent">Launch app</a><a class="ulink" href="/philosophy">Philosophy</a></div>
+    </div>
+  </section>
+</main>
+
+<footer class="s-foot" data-footer></footer>
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/js/hero.js"></script>
+<script type="module" src="/js/fx.js"></script>
+</body>
+</html>

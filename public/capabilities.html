@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | Capabilities</title>
+<meta name="description" content="What Troya reads and what it can do: read-only market tools for Robinhood Chain and Hyperliquid, and a guarded three-step path to execution in the app, over MCP and over REST.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | Capabilities">
+<meta property="og:description" content="Read-only market tools and a guarded path to execution on Robinhood Chain and Hyperliquid.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/capabilities">
+<meta property="og:url" content="https://troya.codes/capabilities">
+<meta property="og:image" content="https://troya.codes/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
+<meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<meta name="theme-color" content="#020405">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+</head>
+<body class="site">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="s-head">
+  <a class="brand" href="/" aria-label="Troya Agent home"><i class="mark"></i>Troya Agent</a>
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="s-menu" data-menu>Menu</button>
+</header>
+<nav class="s-menu" id="s-menu" aria-label="Site" data-menu-panel></nav>
+
+<main id="main">
+  <section class="page-hero" aria-labelledby="ph">
+    <canvas class="hero-canvas" data-hero="page" aria-hidden="true"></canvas>
+    <div class="hero-shade"></div>
+    <span class="eyebrow"><i class="dot"></i>Capabilities</span>
+    <h1 id="ph" class="words" data-words>Everything it reads. Every way it acts.</h1>
+    <p class="lead rv">Troya splits its work in two. The reading half looks at markets, pools and contracts and can never move a coin. The acting half drafts, checks and sends orders, and only inside the walls you set. Both halves are open to you in the app, over MCP and through REST.</p>
+    <div class="hero-act rv">
+      <a class="ulink" href="/agent">Launch app</a>
+      <a class="ulink" href="/api-and-mcp">API and MCP</a>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="read-h">
+    <div class="eyebrow-line"><span>01 / Market reading</span></div>
+    <div class="split" style="margin-bottom:56px">
+      <h2 id="read-h" class="h2 words" data-words>Reading never touches funds</h2>
+      <p class="lead rv">These tools only look. They pull live data, score it and explain it in plain words. Run them as often as you like: nothing they do can sign, send or spend.</p>
+    </div>
+    <div class="tools">
+      <div class="tool rv"><code>analyze_ticker</code><p>A snapshot of any Hyperliquid perp: mark and oracle price, 24h volume, open interest, hourly funding and the liquidity resting near the top of the book.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+      <div class="tool rv"><code>get_movers</code><p>The biggest risers and fallers across Hyperliquid perps and Robinhood Chain tokens, with volume, volume against open interest and 24h change side by side.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+      <div class="tool rv"><code>get_robinhood_tokens</code><p>The Robinhood Chain token board: launches and pools on chain 4663 from on-chain reads and GeckoTerminal, with price, 24h volume and the launchpad each one came from.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+      <div class="tool rv"><code>analyze_token_health</code><p>Reads a token contract's bytecode on Robinhood Chain and flags mint, pause, blacklist, fee-switch and owner powers. A fast heuristic, not an audit.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+      <div class="tool rv"><code>quote_swap</code><p>Prices a swap across Pons curves and Uniswap v3 and v4 pools on Robinhood Chain, with price impact, pool or curve fee and the minimum amount you would receive after slippage.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+      <div class="tool rv"><code>get_new_pairs</code><p>A feed of freshly launched pairs on Robinhood Chain. It needs a dedicated indexer that is still being built, so this tool is not live yet.</p><span class="tier"><span class="tier-pill soon">IN DEVELOPMENT</span></span></div>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="exec-h">
+    <canvas class="sec-fx" data-fx="wisps" aria-hidden="true"></canvas>
+    <div class="eyebrow-line"><span>02 / Guarded execution</span></div>
+    <div class="split" style="margin-bottom:56px">
+      <h2 id="exec-h" class="h2 words" data-words>Acting takes three locked steps</h2>
+      <p class="lead rv">No single call can jump from an idea to a filled order. Each step hands a token to the next, and every step reads your limits again before it lets anything through.</p>
+    </div>
+    <div class="flow rv" role="list">
+      <div class="node" role="listitem"><span>simulate_trade</span><b>Simulate</b><p>Walks the live order book or pool curve to estimate fill price and slippage. Still read-only.</p></div>
+      <div class="arrow" aria-hidden="true"><svg viewBox="0 0 28 12"><path d="M0 6h26M21 1l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></div>
+      <div class="node" role="listitem"><span>prepare_order</span><b>Prepare</b><p>Runs Troya Gate against your policy, then returns a one-time confirmationId tied to the exact parameters.</p></div>
+      <div class="arrow" aria-hidden="true"><svg viewBox="0 0 28 12"><path d="M0 6h26M21 1l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></div>
+      <div class="node" role="listitem"><span>execute_intent</span><b>Execute</b><p>Accepts nothing but the confirmationId, checks the policy once more, then submits. Over MCP it stays in dry-run until you turn that off.</p></div>
+    </div>
+    <div class="steps">
+      <article class="step rv"><span class="n">01</span><h3>In the app</h3><p>The assistant writes the order as a proposal card. You review it and sign in your own wallet, or the Agent Wallet signs it when you have switched it on and the order fits its caps.</p></article>
+      <article class="step rv"><span class="n">02</span><h3>Over MCP</h3><p>The same three steps exposed as tools for Claude Desktop, Cursor or Claude Code. Dry-run is the default, so a fresh install cannot place a live order by accident.</p></article>
+      <article class="step rv"><span class="n">03</span><h3>Over REST</h3><p>Public GET routes for reading. Execution routes need an <code class="mono">x-api-key</code> and an <code class="mono">Idempotency-Key</code>, so a retried request cannot fire twice.</p></article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="venue-h">
+    <div class="eyebrow-line"><span>03 / Venues</span></div>
+    <div class="split">
+      <div>
+        <h2 id="venue-h" class="h2 words" data-words>Where it works</h2>
+        <p class="lead rv">Robinhood Chain is home. Chain 4663 is an Ethereum L2 built on Arbitrum Orbit that pays gas in ETH, and Troya reaches out to Hyperliquid for perps and to Arbitrum, Base and Ethereum for bridging.</p>
+      </div>
+      <div class="cards">
+        <article class="card rv"><h3>Robinhood Chain swaps <span class="tag">Live on Robinhood Chain</span></h3><p>Routes through a coin's Pons curve until it graduates to a Uniswap v4 pool with the Pons hook, and through Uniswap v3 and v4 pools for everything else, tokenized stocks included, with WETH and USDG as the main hubs. You see the route, the price impact and the minimum received before you sign.</p><a class="ulink" href="/agent#/swap">Open Swap</a></article>
+        <article class="card rv"><h3>Hyperliquid perps</h3><p>Every listed perp market, long or short, market or limit, with leverage plus take-profit and stop-loss in one ticket.</p><a class="ulink" href="/agent#/perps">Open Perps</a></article>
+        <article class="card rv"><h3>Bridge</h3><p>ETH into and out of Robinhood Chain from Arbitrum, Base and Ethereum through LI.FI routes. Most transfers land in minutes, and you see the route before you sign.</p><a class="ulink" href="/agent#/bridge">Open Bridge</a></article>
+        <article class="card rv"><h3>Launchpad</h3><p>Browse new coins launching on Robinhood Chain, or create your own on Pons Family: a 0.0005 ETH launch fee, a 1% curve fee of which you earn 70% as creator, an optional creator tax up to 10%, and graduation to Uniswap v4.</p><a class="ulink" href="/agent#/launch">Open Launchpad</a></article>
+        <article class="card rv"><h3>Journal</h3><p>Every action, the rule that allowed it and the reason the agent gave, readable in the app at any time.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="cta-h">
+    <div class="cta-band">
+      <h2 id="cta-h" class="h2 sm words" data-words>Read first, act second.</h2>
+      <div class="acts rv"><a class="ulink" href="/agent">Launch app</a><a class="ulink" href="/risk-controls">Risk Controls</a></div>
+    </div>
+  </section>
+</main>
+
+<footer class="s-foot" data-footer></footer>
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/js/hero.js"></script>
+<script type="module" src="/js/fx.js"></script>
+</body>
+</html>

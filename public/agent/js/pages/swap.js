@@ -1,0 +1,332 @@
+// Swap (#/swap?in=&out=): any pair on Robinhood Chain through Pons curves and Uniswap v3 / v4 pools.
+// Quotes and the Troya Gate come from the server; every transaction is signed in the user's wallet.
+import { h, clear, pageHead, seg, icon, modal, review, toast, tokenIcon, chainLogo, venueLogo, tiny, num, short, useCss, debounce, infoTip } from "../ui.js";
+import { wallet, onWallet, openConnect, CHAINS } from "../wallet.js";
+import { api } from "../api.js";
+import { ETH, isNative, balanceOf, toRaw, fromRaw, inputNum, sendTx, waitReceipt, errText, journal } from "../chain.js";
+
+const SLIPS = [{ value: 100, label: "1%" }, { value: 300, label: "3%" }, { value: 500, label: "5%" }];
+
+export async function mount(view, ctx) {
+  useCss("swap");
+  let alive = true;
+  const st = {
+    sell: ETH, buy: null, amount: "", slip: Math.round((ctx.prefs.get().slippage || 1) * 100),
+    quote: null, quoteErr: null, loading: false, gate: null, gating: false, bal: null, busy: false, seq: 0,
+  };
+  if (![100, 300, 500].includes(st.slip)) st.slip = 100;
+
+  // preload tokens from ?in= / ?out=
+  const pre = async (a) => {
+    if (!a || /^eth$/i.test(a)) return ETH;
+    if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return null;
+    try { const m = await api.get(`token/meta?address=${a}`); return { address: m.address, symbol: m.symbol, name: m.name, decimals: m.decimals }; } catch { return null; }
+  };
+  if (ctx.query.in || ctx.query.out) {
+    const [a, b] = await Promise.all([pre(ctx.query.in), pre(ctx.query.out)]);
+    if (a) st.sell = a;
+    if (b) st.buy = b;
+    if (isNative(st.sell) && isNative(st.buy)) st.buy = null;
+    if (st.sell && st.buy && !isNative(st.sell) && st.sell.address === st.buy.address) st.buy = null;
+  }
+  if (ctx.query.amount && /^\d*\.?\d+$/.test(ctx.query.amount)) st.amount = ctx.query.amount;
+
+  /* ---------- layout ---------- */
+  const netChip = h("span", { class: "chain-chip" }, chainLogo("robinhood", 16), "Robinhood Chain · 4663");
+  const body = h("div", { class: "sw-body" });
+  clear(view,
+    pageHead("Swap", "Trade coins and tokenized stocks on Robinhood Chain: Pons curves and Uniswap v3/v4 pools. You sign every swap in your own wallet."),
+    h("div", { class: "sw-wrap" }, h("div", { class: "sw-net" }, netChip), body));
+
+  // sell leg
+  const sellInput = h("input", { class: "sw-amt", inputmode: "decimal", placeholder: "0", autocomplete: "off", spellcheck: "false", "aria-label": "Amount to sell", value: st.amount });
+  const sellTok = h("button", { class: "sw-tok", type: "button", onclick: () => pick("sell") });
+  const sellBal = h("button", { class: "sw-bal", type: "button", onclick: () => setMax() });
+  const quick = h("div", { class: "sw-quick" });
+  // buy leg
+  const buyOut = h("div", { class: "sw-amt out", "aria-live": "polite" }, "0");
+  const buyTok = h("button", { class: "sw-tok", type: "button", onclick: () => pick("buy") });
+  const buySub = h("div", { class: "sw-sub" });
+  const flip = h("button", { class: "sw-flip", type: "button", "aria-label": "Switch tokens", onclick: () => { [st.sell, st.buy] = [st.buy || ETH, st.sell]; if (isNative(st.sell) && isNative(st.buy)) st.buy = null; st.amount = ""; sellInput.value = ""; reset(); paint(); refreshBal(); } }, icon("swap"));
+  const slipSeg = seg(SLIPS, st.slip, (v) => { st.slip = v; const p = ctx.prefs.get(); ctx.prefs.set({ ...p, slippage: v / 100 }); reset(); requote(); });
+  slipSeg.classList.add("sm");
+  const rows = h("div", { class: "rows sw-rows" });
+  const gateBox = h("div", { class: "gate-box sw-gate" });
+  const warnBox = h("div", { class: "sw-warn" });
+  const btn = h("button", { class: "btn primary big", type: "button", onclick: () => act() });
+  const txBox = h("div", { class: "sw-tx" });
+
+  const card = h("div", { class: "sw-card panel" },
+    h("div", { class: "sw-leg" },
+      h("div", { class: "sw-leg-top" }, h("span", {}, "Sell"), sellBal),
+      h("div", { class: "sw-leg-main" }, sellInput, sellTok),
+      quick),
+    h("div", { class: "sw-mid" }, flip),
+    h("div", { class: "sw-leg" },
+      h("div", { class: "sw-leg-top" }, h("span", {}, "Buy"), buySub),
+      h("div", { class: "sw-leg-main" }, buyOut, buyTok)),
+    h("div", { class: "sw-meta" }, h("span", { class: "muted" }, "Slippage"), slipSeg,
+      infoTip("The most the price may move against you between quote and inclusion. If it moves further, the swap reverts and only the network fee is spent.")),
+    rows, warnBox, gateBox, btn, txBox);
+  const note = h("p", { class: "note sw-note" },
+    "Robinhood Chain is chain 4663, gas is paid in ETH. Troya routes Pons Family curves (until a coin graduates) and Uniswap v3/v4 pools, and adds no fee of its own. ",
+    h("a", { class: "link", href: "#/bridge" }, "Bridge ETH in"), " · ", h("a", { class: "link", href: "#/market" }, "Browse the market"));
+
+  sellInput.addEventListener("input", () => {
+    const v = sellInput.value.replace(/,/g, ".").replace(/[^\d.]/g, "");
+    const fixed = v.split(".").length > 2 ? v.slice(0, v.lastIndexOf(".")) : v;
+    if (fixed !== sellInput.value) sellInput.value = fixed;
+    st.amount = fixed;
+    reset();
+    paint();
+    requote();
+  });
+
+  function render() {
+    clear(body, card, note);
+    paint();
+  }
+
+  function tokBtn(el, t) {
+    clear(el, t ? [tokenIcon(t, "sm"), h("b", {}, t.symbol), icon("arrowRight", "chev")] : [h("span", {}, "Select token"), icon("arrowRight", "chev")]);
+    el.classList.toggle("empty", !t);
+  }
+
+  function reset() { st.quote = null; st.quoteErr = null; st.gate = null; st.gating = false; st.seq++; }
+
+  function paint() {
+    tokBtn(sellTok, st.sell);
+    tokBtn(buyTok, st.buy);
+    // balance + quick picks
+    if (wallet.address && st.bal) {
+      clear(sellBal, `Balance ${tiny(st.bal.amount)} ${st.sell.symbol}`);
+      sellBal.disabled = false;
+    } else { clear(sellBal, wallet.address ? "Balance …" : ""); sellBal.disabled = true; }
+    clear(quick, isNative(st.sell)
+      ? ["0.005", "0.01", "0.05", "0.1"].map((v) => h("button", { type: "button", class: "chip", onclick: () => { sellInput.value = v; sellInput.dispatchEvent(new Event("input")); } }, `${v} ETH`))
+      : wallet.address && st.bal?.raw > 0n ? [25, 50, 75, 100].map((p) => h("button", { type: "button", class: "chip", onclick: () => setPct(p) }, p === 100 ? "Max" : `${p}%`)) : []);
+    // output
+    const q = st.quote;
+    clear(buyOut, q ? tiny(Number(q.amountOut)) : st.loading ? h("span", { class: "sk sw-sk" }) : "0");
+    buyOut.classList.toggle("dim", !q);
+    clear(buySub, q && q.side === "buy" ? `≈ ${tiny(Number(q.amountOut) / Number(q.amountIn))} per ETH` : q?.ethUsd && q.side === "sell" ? `≈ $${tiny(Number(q.amountOut) * q.ethUsd)}` : "");
+    // rows
+    if (q) {
+      const outSym = q.tokenOut.symbol, inSym = q.tokenIn.symbol;
+      clear(rows,
+        h("div", {}, h("span", {}, "Rate"), h("span", {}, `1 ${inSym} = ${tiny(q.rate)} ${outSym}`)),
+        h("div", {}, h("span", {}, "Minimum received"), h("span", {}, `${tiny(Number(q.minOut))} ${outSym}`)),
+        h("div", {}, h("span", {}, "Price impact"), h("span", { class: q.priceImpact > 0.05 ? "down" : "" }, q.priceImpact == null ? "–" : `${(q.priceImpact * 100).toFixed(2)}%`)),
+        h("div", {}, h("span", {}, "Fees and taxes"), h("span", {}, q.feePct == null ? "–" : `${num(q.feePct, 2)}%`)),
+        h("div", {}, h("span", {}, "Route"), h("span", { class: "tok-link" }, venueLogo(q.route.venue || q.route.label, 14), q.route.label)),
+        q.route.pons && !q.route.pons.graduated ? h("div", {}, h("span", {}, "Pons curve"), h("span", {}, `${num(q.route.pons.progressPct, 1)}% to graduation`)) : null,
+        h("div", {}, h("span", {}, "Network fee"), h("span", {}, "Shown in your wallet (ETH)")));
+    } else clear(rows);
+    rows.hidden = !q;
+    // warnings
+    const warns = [...(q?.warnings || [])];
+    if (st.quoteErr) warns.unshift(st.quoteErr);
+    clear(warnBox, warns.map((w) => h("div", { class: `alert ${st.quoteErr === w ? "error" : "warn"}` }, w)));
+    // gate
+    paintGate();
+    // button state
+    const amt = toRaw(st.amount, st.sell?.decimals ?? 18);
+    let label = "Review swap", disabled = false;
+    if (!wallet.address) label = "Connect wallet";
+    else if (!st.buy || !st.sell) { label = "Select a token"; disabled = true; }
+    else if (!amt || amt <= 0n) { label = "Enter an amount"; disabled = true; }
+    else if (st.bal && amt > st.bal.raw) { label = `Not enough ${st.sell.symbol}`; disabled = true; }
+    else if (st.loading) { label = "Getting a quote…"; disabled = true; }
+    else if (!q) { label = st.quoteErr ? "No route" : "Getting a quote…"; disabled = true; }
+    else if (st.gate && !st.gate.pass) { label = "Blocked by Troya Gate"; disabled = true; }
+    if (st.busy) { label = st.busy; disabled = true; }
+    btn.textContent = label;
+    btn.disabled = disabled;
+  }
+
+  function paintGate() {
+    if (!st.quote && !st.gating) { gateBox.hidden = true; return; }
+    gateBox.hidden = false;
+    const g = st.gate;
+    const head = h("div", { class: "gh" }, icon("shield"), "Troya Gate",
+      h("span", { class: `badge-s ${g ? (g.pass ? "blue" : "down") : ""}` }, g ? (g.pass ? (g.checks.some((c) => c.status === "warn") ? "Passed with notes" : "Passed") : "Blocked") : "Checking…"));
+    if (!g) { clear(gateBox, head, h("div", { class: "muted" }, "Simulating the exact swap and a test sell…")); return; }
+    clear(gateBox, head, h("ul", {}, g.checks.map((c) => h("li", { class: c.status === "skip" ? "skipped" : c.status }, h("span", {}, c.label), h("b", { title: c.detail || "" }, c.status === "skip" ? (c.detail || "Skipped") : c.detail || c.status)))));
+  }
+
+  /* ---------- quote + gate ---------- */
+  const requote = debounce(async () => {
+    const amt = toRaw(st.amount, st.sell?.decimals ?? 18);
+    if (!st.sell || !st.buy || !amt || amt <= 0n) { st.loading = false; paint(); return; }
+    const seq = ++st.seq;
+    st.loading = true;
+    paint();
+    const qs = new URLSearchParams({ tokenIn: isNative(st.sell) ? "ETH" : st.sell.address, tokenOut: isNative(st.buy) ? "ETH" : st.buy.address, amountInRaw: amt.toString(), slippageBps: String(st.slip) });
+    try {
+      const q = await api.get(`swap/quote?${qs}`);
+      if (!alive || seq !== st.seq) return;
+      st.quote = q; st.quoteErr = null; st.loading = false; st.gating = true;
+      paint();
+      if (wallet.address) qs.set("from", wallet.address);
+      const g = await api.get(`swap/gate?${qs}`).catch((e) => ({ pass: true, checks: [{ key: "gate", status: "warn", label: "Gate", detail: `Checks unavailable: ${e.message}` }] }));
+      if (!alive || seq !== st.seq) return;
+      st.gate = g; st.gating = false;
+      paint();
+    } catch (e) {
+      if (!alive || seq !== st.seq) return;
+      st.quote = null; st.quoteErr = e.message; st.loading = false;
+      paint();
+    }
+  }, 380);
+
+  async function refreshBal() {
+    st.bal = null;
+    paint();
+    if (!wallet.address || !st.sell) return;
+    try { st.bal = await balanceOf(wallet.address, st.sell); } catch { st.bal = null; }
+    if (alive) paint();
+  }
+  function setMax() {
+    if (!st.bal) return;
+    let raw = st.bal.raw;
+    if (isNative(st.sell)) raw = raw > 3n * 10n ** 14n ? raw - 3n * 10n ** 14n : 0n; // keep a little ETH for gas
+    sellInput.value = inputNum(fromRaw(raw, st.sell.decimals ?? 18), 8);
+    sellInput.dispatchEvent(new Event("input"));
+  }
+  function setPct(p) {
+    if (!st.bal) return;
+    const raw = (st.bal.raw * BigInt(p)) / 100n;
+    sellInput.value = inputNum(fromRaw(raw, st.sell.decimals ?? 18), 8);
+    sellInput.dispatchEvent(new Event("input"));
+  }
+
+  /* ---------- token picker ---------- */
+  let stocksCache = null;
+  function pick(side) {
+    const other = side === "sell" ? st.buy : st.sell;
+    const input = h("input", { class: "input", placeholder: "Search a name, symbol or paste an address", autocomplete: "off", spellcheck: "false" });
+    const list = h("div", { class: "tp-list" });
+    const choose = (t) => {
+      if (side === "sell") st.sell = t; else st.buy = t;
+      if (other && (isNative(t) ? isNative(other) : !isNative(other) && other.address === t.address)) { if (side === "sell") st.buy = null; else st.sell = ETH; }
+      m.close(); reset(); paint(); refreshBal(); requote();
+    };
+    const row = (t, extra) => h("button", { class: "tp-row", type: "button", onclick: () => choose(t) }, tokenIcon(t, "sm"),
+      h("span", { class: "tp-name" }, h("b", {}, t.symbol), h("small", {}, t.name || (t.address === "native" ? "Native gas token" : short(t.address)))),
+      extra ? h("span", { class: "tp-extra" }, extra) : null);
+    let seq = 0;
+    const search = debounce(async () => {
+      const q = input.value.trim();
+      const my = ++seq;
+      const items = [];
+      const base = [[ETH, "Native"], [{ address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", symbol: "USDG", name: "Global Dollar", decimals: 6 }, "Stablecoin"], [{ address: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", symbol: "WETH", name: "Wrapped Ether", decimals: 18 }, "Wrapped"]];
+      for (const [t, tag] of base) if (!q || t.symbol.toLowerCase().startsWith(q.toLowerCase())) items.push(row(t, tag));
+      clear(list, ...items, h("div", { class: "tp-load muted" }, "Searching…"));
+      try {
+        if (/^0x[0-9a-fA-F]{40}$/.test(q)) {
+          const m2 = await api.get(`token/meta?address=${q}`);
+          if (my !== seq) return;
+          clear(list, row({ address: m2.address, symbol: m2.symbol, name: m2.name, decimals: m2.decimals }, "By address"));
+          return;
+        }
+        const [r, sk] = await Promise.all([
+          api.get(`market/robinhood?${new URLSearchParams({ q, limit: "30", sort: "volume", dir: "desc", tradable: "1" })}`),
+          (stocksCache ||= api.get("market/stocks").catch(() => ({ stocks: [] }))),
+        ]);
+        if (my !== seq) return;
+        const ql = q.toLowerCase();
+        const stocks = (sk.stocks || []).filter((t) => t.tradable && (!ql || t.symbol.toLowerCase().includes(ql) || t.name.toLowerCase().includes(ql))).slice(0, q ? 12 : 6);
+        const toks = (r.tokens || r.rows || []).filter((t) => t.address && t.address !== "native");
+        clear(list, ...items,
+          ...stocks.map((t) => row({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals ?? 18, image: t.image }, h("span", { class: "badge-s" }, "Stock"))),
+          ...toks.map((t) => row({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals ?? 18, image: t.image }, t.launchpad ? h("span", { class: "badge-s" }, t.launchpad) : null)),
+          toks.length || stocks.length ? null : h("div", { class: "tp-load muted" }, q ? "No match. Paste the token address instead." : "Type to search Robinhood Chain tokens."));
+      } catch (e) {
+        if (my !== seq) return;
+        clear(list, ...items, h("div", { class: "tp-load muted" }, "The token list is unavailable right now. Paste a token address instead."));
+      }
+    }, 250);
+    input.addEventListener("input", search);
+    const m = modal({ title: side === "sell" ? "Sell which token?" : "Buy which token?", body: h("div", { class: "tp" }, input, list,
+      h("p", { class: "note" }, "Troya routes Pons curves and Uniswap v3/v4 pools. A coin still on its Pons curve trades against its curve pair (usually ETH).")) });
+    search();
+    setTimeout(() => input.focus(), 40);
+  }
+
+  /* ---------- execute ---------- */
+  async function act() {
+    if (!wallet.address) { await openConnect(); refreshBal(); return; }
+    const q = st.quote;
+    if (!q) return;
+    try {
+      st.busy = "Preparing…"; paint();
+      const buildArgs = { from: wallet.address, tokenIn: isNative(q.tokenIn) ? "ETH" : q.tokenIn.address, tokenOut: isNative(q.tokenOut) ? "ETH" : q.tokenOut.address, amountInRaw: q.amountInRaw, slippageBps: st.slip };
+      let built = await api.post("swap/build", buildArgs);
+      const need = (built.approvals || []).filter((a) => a.needed);
+      if (need.length) {
+        const okA = await review({
+          title: need.length > 1 ? `${need.length} approvals first` : `Approve ${q.tokenIn.symbol}`,
+          summary: `Exactly ${tiny(Number(q.amountIn))} ${q.tokenIn.symbol} for this swap, nothing more.`,
+          rows: [...need.map((a, i) => [`Step ${i + 1}`, a.label]), ["Token", `${q.tokenIn.symbol} · ${short(q.tokenIn.address)}`], ["Network", "Robinhood Chain · 4663"]],
+          confirmLabel: "Approve in wallet",
+        });
+        if (!okA) { st.busy = false; paint(); return; }
+        for (const [i, a] of need.entries()) {
+          st.busy = `Approval ${i + 1} of ${need.length}: confirm in your wallet…`; paint();
+          const ah = await sendTx("robinhood", a.tx);
+          st.busy = `Waiting for approval ${i + 1}…`; paint();
+          const ar = await waitReceipt("robinhood", ah);
+          if (!ar || ar.status !== 1) throw new Error("The approval did not go through. Nothing was swapped.");
+        }
+        toast(`${q.tokenIn.symbol} approved`, "ok");
+        built = await api.post("swap/build", buildArgs);
+        if ((built.approvals || []).some((a) => a.needed)) throw new Error("The approval is not visible on chain yet. Wait a few seconds and try again.");
+      }
+      const fq = built.quote;
+      const ok = await review({
+        title: "Review swap",
+        summary: `${tiny(Number(fq.amountIn))} ${fq.tokenIn.symbol} → about ${tiny(Number(fq.amountOut))} ${fq.tokenOut.symbol}`,
+        rows: [
+          ["You pay", `${tiny(Number(fq.amountIn))} ${fq.tokenIn.symbol}`],
+          ["You receive (est.)", `${tiny(Number(fq.amountOut))} ${fq.tokenOut.symbol}`],
+          ["Minimum received", `${tiny(Number(fq.minOut))} ${fq.tokenOut.symbol}`],
+          ["Slippage", `${st.slip / 100}%`],
+          ["Price impact", fq.priceImpact == null ? "–" : `${(fq.priceImpact * 100).toFixed(2)}%`],
+          ["Route", fq.route.label],
+          ["Recipient", `${short(wallet.address)} (you)`],
+          ["Network", "Robinhood Chain · 4663"],
+        ],
+        warn: fq.warnings?.length ? fq.warnings.join(" ") : null,
+        confirmLabel: "Swap in wallet",
+      });
+      if (!ok) { st.busy = false; paint(); return; }
+      st.busy = "Confirm in your wallet…"; paint();
+      const hash = await sendTx("robinhood", built);
+      clear(txBox, h("div", { class: "muted" }, "Submitted ", h("a", { class: "mono link", href: `https://robinhoodchain.blockscout.com/tx/${hash}`, target: "_blank", rel: "noopener" }, short(hash, 6)), " · waiting for Robinhood Chain…"));
+      st.busy = "Waiting for Robinhood Chain…"; paint();
+      const rc = await waitReceipt("robinhood", hash);
+      if (rc && rc.status === 1) {
+        toast(`Swapped ${tiny(Number(fq.amountIn))} ${fq.tokenIn.symbol} for ${fq.tokenOut.symbol}`, "ok", 5000);
+        clear(txBox, h("div", { class: "alert ok" }, icon("check"), ` Swap confirmed · `, h("button", { class: "link", type: "button", onclick: () => navigator.clipboard?.writeText(hash).then(() => toast("Hash copied", "ok")) }, short(hash, 6))));
+        journal({ kind: "swap", chain: "robinhood", hash, status: "confirmed", venue: fq.venue, tokenIn: fq.tokenIn.address, tokenOut: fq.tokenOut.address, amountIn: fq.amountIn, amountOut: fq.amountOut, rationale: "Manual swap from the Swap page" });
+        st.amount = ""; sellInput.value = "";
+        reset();
+      } else if (rc) {
+        clear(txBox, h("div", { class: "alert error" }, "The swap reverted on chain. Only the network fee was spent."));
+        journal({ kind: "swap", chain: "robinhood", hash, status: "reverted", venue: fq.venue });
+      } else {
+        clear(txBox, h("div", { class: "alert warn" }, "Still waiting for Robinhood Chain to include it. It is not lost: keep the hash ", h("span", { class: "mono" }, short(hash, 6)), "."));
+      }
+    } catch (e) {
+      toast(errText(e), "error", 5000);
+    } finally {
+      st.busy = false;
+      if (alive) { paint(); refreshBal(); }
+    }
+  }
+
+  const off = onWallet(() => { refreshBal(); paint(); });
+  render();
+  if (st.amount) requote();
+  return () => { alive = false; off(); };
+}

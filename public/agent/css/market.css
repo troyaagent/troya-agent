@@ -1,0 +1,70 @@
+/* Market, Token detail, Launchpad */
+.mk-top { margin: -6px 0 16px; }
+.mk-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
+.mk-filters .chips { flex: 1; min-width: 0; }
+.mk-sub { margin: 2px 0 10px; }
+.mk-panel { padding: 2px 6px; }
+.mk-panel .tbl td { padding-top: 8px; padding-bottom: 8px; }
+.mk-foot { color: var(--faint); font-size: 11.5px; line-height: 1.55; max-width: 70em; }
+.mk-foot p { margin: 0 0 4px; }
+.tbl td.rank, .tbl .rank { color: var(--faint); text-align: left; width: 34px; }
+
+/* launchpad */
+.lp-tabs { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.lp-more { display: flex; justify-content: center; padding: 14px 0 4px; }
+
+/* token detail */
+.tk-back { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin: 22px 0 0; }
+.tk-back:hover { color: var(--fg); }
+.tk-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding: 18px 0 20px; }
+.tk-id { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.tk-id .tok-ico { width: 52px; height: 52px; font-size: 15px; }
+.tk-id h1 { margin: 0; font-size: clamp(26px, 3vw, 38px); font-weight: 500; letter-spacing: -0.025em; line-height: 1.05; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tk-id .sym { color: var(--muted); font-size: .55em; font-weight: 400; letter-spacing: 0; }
+.tk-addr { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.tk-addr button { color: var(--muted); display: inline-grid; }
+.tk-addr button:hover { color: var(--blue-3); }
+.tk-addr svg { width: 13px; height: 13px; }
+.tk-px { text-align: right; }
+.tk-px .p { font-size: clamp(24px, 2.6vw, 34px); font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.tk-px .u { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 8px; justify-content: flex-end; margin-top: 2px; }
+.tk-act { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+.tk-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
+.tk-chart { position: relative; height: 380px; padding: 8px 8px 0; }
+.tk-chart-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px 0; }
+.tk-chart-msg { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; color: var(--muted); font-size: 13px; gap: 4px; }
+.tk-chart-msg b { color: var(--fg); font-weight: 500; }
+.tk-stats { display: grid; grid-template-columns: 1fr 1fr; }
+.tk-stats > div { padding: 12px 14px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.tk-stats > div:nth-child(-n+2) { border-top: 0; }
+.tk-stats > div:nth-child(odd) { border-left: 0; }
+.tk-stats .k { font-size: 11px; color: var(--muted); }
+.tk-stats .v { font-size: 15px; font-weight: 500; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.tk-side { display: grid; gap: 14px; }
+.tk-info { padding: 14px 16px; font-size: 12.5px; color: var(--fg-2); display: grid; gap: 8px; }
+.tk-info .links { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.tk-tabs { margin-top: 18px; }
+.tk-trade-buy { color: var(--up); }
+.tk-trade-sell { color: var(--down); }
+.tk-bar { display: inline-block; height: 4px; border-radius: 2px; background: var(--blue-2); opacity: .7; vertical-align: middle; margin-left: 8px; }
+
+@media (max-width: 960px) {
+  .tk-grid { grid-template-columns: minmax(0, 1fr); }
+  .tk-px { text-align: left; }
+  .tk-px .u { justify-content: flex-start; }
+}
+@media (max-width: 720px) {
+  .tbl .hide-s, .tbl th.hide-s, td.hide-s { display: none; }
+  .tk-chart { height: 280px; }
+}
+@media (max-width: 720px) {
+  .mk-filters .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .mk-filters .chip { flex: none; }
+  .mk-panel .tok small { max-width: 110px; }
+  .mk-panel .tbl { font-size: 12.5px; }
+  .mk-top .seg { max-width: 100%; overflow-x: auto; }
+}
+@media (max-width: 720px) {
+  .tk-chart-bar .fine { display: none; }
+  .tk-act .btn.ghost { display: none; }
+}

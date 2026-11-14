@@ -1,0 +1,142 @@
+// In-app docs: how Troya works, Troya Gate, limits, Agent Wallet trust model, playbooks, MCP + REST, glossary, FAQ.
+import { h, clear, icon, useCss, copyText, esc } from "../ui.js";
+import { api } from "../api.js";
+
+const SITE = window.SITE || {};
+const PKG = SITE.mcpPackage || "@troyaagent/mcp";
+
+const code = (text, label) => h("div", { class: "dc-code" }, h("button", { class: "btn ghost sm", type: "button", onclick: () => copyText(text, `${label || "Snippet"} copied`) }, icon("copy"), "Copy"), h("pre", {}, h("code", {}, text)));
+const P = (...kids) => h("p", {}, ...kids);
+const UL = (items) => h("ul", {}, items.map((x) => h("li", {}, x)));
+
+export async function mount(view) {
+  useCss("docs");
+  const base = location.origin;
+  const sections = [
+    ["overview", "Overview", [
+      P("Troya Agent is a trading desk for Robinhood Chain (chain 4663) and Hyperliquid perps, with an assistant in front of it. You ask in plain words; Troya reads live data, runs checks, and hands you a ticket. Nothing moves until you sign it, or until your optional Agent Wallet acts inside the caps you set."),
+      UL([
+        [h("b", {}, "Market: "), "Robinhood Chain coins and tokenized stocks from GeckoTerminal pools and Pons on chain, plus every Hyperliquid perp and spot pair."],
+        [h("b", {}, "Swap: "), "any pair on Robinhood Chain through Pons curves and Uniswap v3/v4 pools. You sign in your own wallet."],
+        [h("b", {}, "Perps: "), "Hyperliquid orders with leverage, take-profit and stop-loss, signed by a trade-only key you approve once."],
+        [h("b", {}, "Bridge: "), "ETH between Robinhood Chain and Arbitrum, Base or Ethereum through LI.FI routes."],
+        [h("b", {}, "Launchpad: "), "new coins from Pons, Clanker, Bankr, Virtuals and more, and a form to launch your own on Pons."],
+        [h("b", {}, "Agent: "), "chat, Agent Wallet, Autopilot and Playbooks."],
+      ]),
+    ]],
+    ["flow", "How a request flows", [
+      h("ol", { class: "dc-steps" },
+        h("li", {}, h("b", {}, "Read. "), "Read tools fetch prices, books, funding, balances and contract code. They cannot move funds."),
+        h("li", {}, h("b", {}, "Prepare. "), "The order is simulated, checked by Troya Gate and your limits, and turned into a ticket (in chat) or a one-time confirmationId (over MCP/REST, valid 120 seconds and bound to a hash of the parameters). Chat tickets expire after 10 minutes."),
+        h("li", {}, h("b", {}, "Execute. "), "You sign the ticket in your wallet, or the Agent Wallet runs it inside its caps. Over MCP/REST, execute_intent takes only the confirmationId and re-checks your limits. Every outcome lands in your journal with its reason.")),
+    ]],
+    ["gate", "Troya Gate", [
+      P("Troya Gate runs before anything executes. A failed check blocks the action; a warning is shown on the ticket."),
+      UL([
+        [h("b", {}, "Route: "), "an executable route exists for the swap."],
+        [h("b", {}, "Price impact: "), "below the operator limit (default 8%)."],
+        [h("b", {}, "Pool depth: "), "enough ETH on the pool's ETH side, or raised on a Pons curve (default 0.25 ETH)."],
+        [h("b", {}, "Contract: "), "bytecode heuristics for mint, pause, blacklist, fee setters, proxies and live owners. A heuristic, not an audit."],
+        [h("b", {}, "Transfer tax: "), "fee or tax setters in the token contract, and the fixed creator tax on Pons coins."],
+        [h("b", {}, "Sell simulation: "), "a test sell of the exact amount goes through against the live curve or pool (simulated, never sent)."],
+        [h("b", {}, "Perps: "), "market exists, leverage within the market and your cap, the size fits the visible book, slippage and funding."],
+      ]),
+      P("Token names, tickers and social posts come from the internet. Troya treats them as untrusted text: shown as data, never followed as instructions."),
+    ]],
+    ["limits", "Limits and policy", [
+      P("Limits live outside any model, in a policy file the server re-reads on every action. The operator sets the ceiling; you can only go stricter, in Agent → Autopilot."),
+      UL(["Per-action and per-day USD caps", "Maximum leverage", "Allowed perp markets (empty means all)", "Pause: stops every Agent Wallet action at once", "Operator kill switch: stops all execution for everyone"]),
+      P("Troya charges no fee during the beta. Network gas and venue fees (pool fees, Hyperliquid fees) still apply."),
+    ]],
+    ["wallet", "Agent Wallet trust model", [
+      P("By default Troya is non-custodial: your wallet signs every transaction and the app never sees its key."),
+      P("The Agent Wallet is optional and custodial. It is a separate small wallet whose key the operator stores encrypted (AES-256-GCM). It lets the agent act without a popup each time."),
+      UL([
+        "Withdrawals go only to the address that owns it.",
+        "Per-action and per-day caps, plus your limits, apply to everything it does.",
+        "Its key can be exported at any time with a fresh signature from your wallet.",
+        "On Hyperliquid it trades as an approved agent on your account: trade-only, it cannot withdraw there.",
+        "Keep its balance small. Your main wallet is never touched.",
+      ]),
+    ]],
+    ["playbooks", "Playbooks and Autopilot", [
+      P("Playbooks are rules the server checks every 20 seconds: stop-loss guards, take-profit ladders, DCA schedules and price alerts. When one fires, the Agent Wallet executes it if it is on and inside its caps; otherwise you get a ticket in your inbox (valid 10 minutes)."),
+      P("Autopilot is opt-in and runs in your browser tab. It picks up due tickets and runs them with the Agent Wallet, so you do not have to click each one. Close the tab and it stops."),
+    ]],
+    ["mcp", "MCP setup", [
+      P("Use Troya from Claude Desktop, Cursor or Claude Code. The MCP server holds no keys; it calls this server's API with your token."),
+      P("1. Create an API token in ", h("a", { class: "link", href: "#/agent/wallet" }, "Agent → Wallet → API tokens"), ". Tokens are stored hashed and start in dry-run."),
+      P("2. Add the server:"),
+      code(`npx -y ${PKG}`, "Command"),
+      P(h("b", {}, "Claude Desktop / Cursor"), " (claude_desktop_config.json or .cursor/mcp.json):"),
+      code(JSON.stringify({ mcpServers: { troya: { command: "npx", args: ["-y", PKG], env: { TROYA_BASE_URL: base, TROYA_API_KEY: "troya_…" } } } }, null, 2), "Config"),
+      P(h("b", {}, "Claude Code:")),
+      code(`claude mcp add troya --env TROYA_BASE_URL=${base} --env TROYA_API_KEY=troya_… -- npx -y ${PKG}`, "Command"),
+      UL([
+        [h("code", {}, "TROYA_BASE_URL"), " this server (", h("code", {}, "TROYA_URL"), " also works)."],
+        [h("code", {}, "TROYA_API_KEY"), " needed for prepare and execute tools; read tools work without it."],
+        [h("code", {}, "TROYA_LIVE=1"), " lets execute_intent run live. Execution also needs a token with the execute scope and dry-run switched off for that token."],
+      ]),
+    ]],
+    ["rest", "REST API", [
+      P("Base URL: ", h("code", {}, `${base}/agent/api`), " (also served at ", h("code", {}, `${base}/api`), ")."),
+      code([
+        "GET  /agent/api/tools                     list tools, tiers, JSON schemas",
+        "GET  /agent/api/tools/:name?arg=value     read tools (public)",
+        "POST /agent/api/tools/:name   {args}      prepare: x-api-key · execute: x-api-key + Idempotency-Key",
+        "GET  /agent/api/market/robinhood          Robinhood Chain coins",
+        "GET  /agent/api/market/robinhood/token?address=0x…",
+        "GET  /agent/api/market/stocks             tokenized stocks",
+        "GET  /agent/api/swap/quote?tokenIn=ETH&tokenOut=0x…&amountIn=0.01",
+        "GET  /agent/api/market/hl                 Hyperliquid perps",
+      ].join("\n"), "Routes"),
+      code(`curl "${base}/agent/api/tools/analyze_ticker?coin=BTC"\n\ncurl -X POST ${base}/agent/api/tools/prepare_order \\\n  -H "x-api-key: troya_…" -H "content-type: application/json" \\\n  -d '{"kind":"perp","coin":"ETH","side":"long","sizeUsd":50,"leverage":3}'\n\ncurl -X POST ${base}/agent/api/tools/execute_intent \\\n  -H "x-api-key: troya_…" -H "Idempotency-Key: $(uuidgen)" -H "content-type: application/json" \\\n  -d '{"confirmationId":"cf_…"}'`, "Examples"),
+      h("div", { class: "dc-tools", "data-tools": "" }, h("div", { class: "sk", style: { height: "120px" } })),
+    ]],
+    ["chains", "Chains and venues", [
+      UL([
+        [h("b", {}, "Robinhood Chain: "), "chain 4663, an Ethereum L2 on Arbitrum Orbit, gas in ETH. Explorer: robinhoodchain.blockscout.com."],
+        [h("b", {}, "Pons Family: "), "bonding-curve launches; a coin graduates into a Uniswap v4 pool with the Pons hook. 1% fee (70% to the creator) plus an optional creator tax up to 10%."],
+        [h("b", {}, "Uniswap v3 / v4: "), "everything else, with WETH and USDG as the main hubs. Tokenized stocks trade here."],
+        [h("b", {}, "Hyperliquid: "), "perps. Orders go to Hyperliquid mainnet."],
+        [h("b", {}, "Bridge: "), "LI.FI routes between Robinhood Chain and Arbitrum, Base or Ethereum, usually minutes."],
+      ]),
+    ]],
+    ["glossary", "Glossary", [
+      h("dl", { class: "dc-dl" },
+        ...[["Ticket", "A proposed action with its numbers and checks. Expires after 10 minutes."], ["confirmationId", "One-time id from a prepare tool, valid 120 seconds, bound to the exact parameters."], ["Dry-run", "The action is checked and logged but not sent."], ["Funding", "Hourly payment between longs and shorts on a perp. Positive: longs pay."], ["Price impact", "How much your own order moves the pool price."], ["Agent Wallet", "Optional custodial hot wallet the agent can use inside caps."], ["Journal", "Your audit log: every action, its reason and outcome."]]
+          .flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])),
+    ]],
+    ["faq", "FAQ", [
+      ...[["Does Troya hold my funds?", "No, unless you create an Agent Wallet. That one is custodial by design and capped; your own wallet stays yours."],
+        ["Can the agent trade without me?", "Only through the Agent Wallet, only inside its caps and your limits, and only when it is switched on. Pause stops it instantly."],
+        ["Is the token health score an audit?", "No. It reads the contract bytecode for common owner controls. A clean score does not make a token safe."],
+        ["Why was my action blocked?", "The ticket shows which Troya Gate check or limit failed. Your journal keeps the reason."],
+        ["How many chat messages do I get?", "The operator sets a free daily allowance per wallet (20 by default)."]]
+        .map(([q, a]) => h("details", { class: "dc-faq" }, h("summary", {}, q), h("p", {}, a))),
+    ]],
+  ];
+
+  const toc = h("nav", { class: "dc-toc", "aria-label": "Docs sections" }, sections.map(([id, t]) => h("a", { href: `#/docs`, "data-id": id, onclick: (e) => { e.preventDefault(); document.getElementById(`dc-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }); } }, t)));
+  const content = h("div", { class: "dc-content" }, sections.map(([id, t, kids]) => h("section", { id: `dc-${id}`, class: "dc-sec" }, h("h2", {}, t), kids)));
+  clear(view, h("div", { class: "dc-wrap" },
+    h("header", { class: "page-head" }, h("h1", {}, "Docs"), h("p", {}, "How Troya works, what it checks, and how to plug your own agent in.")),
+    h("div", { class: "dc-grid" }, toc, content)));
+
+  // tools table from the live registry
+  const box = content.querySelector("[data-tools]");
+  try {
+    const r = await api.get("tools");
+    clear(box, h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" },
+      h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Tool"), h("th", { class: "l" }, "Tier"), h("th", { class: "l" }, "What it does"))),
+      h("tbody", {}, r.tools.map((t) => h("tr", {}, h("td", { class: "l mono" }, t.name), h("td", { class: "l" }, h("span", { class: `badge-s ${t.tier === "read" ? "" : t.tier === "prepare" ? "blue" : "warn"}` }, t.tier)), h("td", { class: "l dc-desc" }, t.description)))))));
+  } catch (e) { clear(box, h("p", { class: "faint" }, `Tool list unavailable: ${esc(e.message)}`)); }
+
+  // highlight the section in view
+  const links = [...toc.querySelectorAll("a")];
+  const io = new IntersectionObserver((entries) => {
+    for (const en of entries) if (en.isIntersecting) { const id = en.target.id.slice(3); links.forEach((a) => a.toggleAttribute("aria-current", a.dataset.id === id)); }
+  }, { rootMargin: "-20% 0px -70% 0px" });
+  content.querySelectorAll(".dc-sec").forEach((s) => io.observe(s));
+  return () => io.disconnect();
+}

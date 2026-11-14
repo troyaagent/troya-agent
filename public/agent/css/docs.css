@@ -1,0 +1,36 @@
+/* Docs page */
+.dc-wrap { padding-bottom: 40px; }
+.dc-grid { display: grid; grid-template-columns: 200px 1fr; gap: 40px; align-items: start; }
+.dc-toc { position: sticky; top: 76px; display: grid; gap: 2px; border-left: 1px solid var(--line); }
+.dc-toc a { padding: 5px 0 5px 14px; margin-left: -1px; border-left: 1px solid transparent; font-size: 13px; color: var(--muted); }
+.dc-toc a:hover { color: var(--fg); }
+.dc-toc a[aria-current] { color: var(--fg); border-left-color: var(--blue-2); }
+.dc-content { min-width: 0; max-width: 760px; }
+.dc-sec { padding: 6px 0 30px; border-bottom: 1px solid var(--line); margin-bottom: 26px; scroll-margin-top: 76px; }
+.dc-sec:last-child { border-bottom: 0; }
+.dc-sec h2 { margin: 0 0 12px; font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
+.dc-sec p { margin: 0 0 10px; color: var(--fg-2); font-size: 14px; line-height: 1.6; }
+.dc-sec ul, .dc-steps { margin: 0 0 12px; padding-left: 20px; color: var(--fg-2); font-size: 14px; line-height: 1.6; display: grid; gap: 4px; }
+.dc-sec b { color: var(--fg); font-weight: 500; }
+.dc-sec code { font-family: var(--mono); font-size: 12px; background: var(--bg-3); border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 5px; }
+.dc-code { position: relative; margin: 0 0 12px; }
+.dc-code pre { margin: 0; padding: 14px 16px; padding-right: 80px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--bg-1); overflow-x: auto; }
+.dc-code pre code { background: none; border: 0; padding: 0; font-size: 12px; line-height: 1.6; color: var(--ice); white-space: pre; }
+.dc-code .btn { position: absolute; top: 8px; right: 8px; }
+.dc-tools { margin-top: 8px; }
+.dc-tools .dc-desc { white-space: normal; color: var(--fg-2); font-size: 12.5px; min-width: 260px; }
+.dc-dl { display: grid; grid-template-columns: 160px 1fr; gap: 8px 16px; margin: 0; font-size: 14px; }
+.dc-dl dt { color: var(--fg); font-weight: 500; }
+.dc-dl dd { margin: 0; color: var(--fg-2); }
+.dc-faq { border-top: 1px solid var(--line); padding: 10px 0; }
+.dc-faq summary { cursor: pointer; font-size: 14px; color: var(--fg); list-style: none; display: flex; justify-content: space-between; gap: 10px; }
+.dc-faq summary::after { content: "+"; color: var(--muted); }
+.dc-faq[open] summary::after { content: "–"; }
+.dc-faq p { margin: 8px 0 2px; }
+@media (max-width: 860px) {
+  .dc-grid { grid-template-columns: 1fr; gap: 16px; }
+  .dc-toc { position: static; display: flex; flex-wrap: wrap; gap: 4px 12px; border-left: 0; }
+  .dc-toc a { padding: 4px 0; border-left: 0; }
+  .dc-dl { grid-template-columns: 1fr; gap: 2px 0; }
+  .dc-dl dd { margin-bottom: 8px; }
+}

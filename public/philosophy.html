@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | Philosophy</title>
+<meta name="description" content="Why Troya is built walls first: limits outside the model, one-time confirmations, a single guarded path to execution and a journal for every action.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | Philosophy">
+<meta property="og:description" content="Walls first, cleverness second: how Troya keeps an AI trading agent inside hard limits.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/philosophy">
+<meta property="og:url" content="https://troya.codes/philosophy">
+<meta property="og:image" content="https://troya.codes/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
+<meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<meta name="theme-color" content="#020405">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+</head>
+<body class="site">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="s-head">
+  <a class="brand" href="/" aria-label="Troya Agent home"><i class="mark"></i>Troya Agent</a>
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="s-menu" data-menu>Menu</button>
+</header>
+<nav class="s-menu" id="s-menu" aria-label="Site" data-menu-panel></nav>
+
+<main id="main">
+  <section class="page-hero" aria-labelledby="ph">
+    <canvas class="hero-canvas" data-hero="page" aria-hidden="true"></canvas>
+    <div class="hero-shade"></div>
+    <span class="eyebrow"><i class="dot"></i>Philosophy</span>
+    <h1 id="ph" class="words" data-words>Walls first, cleverness second</h1>
+    <p class="lead rv">A trading agent is only as safe as the limits it cannot talk its way around. Troya is built so the model may propose almost anything, and execute almost nothing on its own say-so.</p>
+    <div class="hero-act rv"><a class="ulink" href="/agent">Launch app</a><a class="ulink" href="/risk-controls">Risk Controls</a></div>
+  </section>
+
+  <section class="ip" aria-labelledby="path-h">
+    <div class="eyebrow-line"><span>01 / The guarded path</span></div>
+    <div class="split" style="margin-bottom:56px">
+      <h2 id="path-h" class="h2 words" data-words>Read, prepare, then act</h2>
+      <p class="lead rv">There is exactly one road from a question to a filled order, and it has two checkpoints. The app, the MCP server and the REST API all travel the same road.</p>
+    </div>
+    <div class="steps">
+      <article class="step rv"><span class="n">01</span><h3>Read</h3><p>Tier 1 tools look at markets, your positions, your policy and token contracts. Nothing at this stage can spend, sign or send.</p></article>
+      <article class="step rv"><span class="n">02</span><h3>Prepare &amp; confirm</h3><p>In the app the assistant drafts a proposal card. Over MCP, Tier 2 tools simulate the order and ask for a confirmationId. Either way Troya Gate runs against your limits before anything is put in front of you.</p></article>
+      <article class="step rv"><span class="n">03</span><h3>Execute &amp; audit</h3><p>You sign in your own wallet, or the Agent Wallet signs inside its caps. Over MCP, <code class="mono">execute_intent</code> takes nothing but the confirmationId and checks the policy one last time. The outcome and the reasoning go into the journal.</p></article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="shape-h">
+    <canvas class="sec-fx" data-fx="vortex" aria-hidden="true"></canvas>
+    <div class="eyebrow-line"><span>02 / Shape</span></div>
+    <div class="split" style="margin-bottom:64px">
+      <h2 id="shape-h" class="h2 words" data-words>Wide eyes, narrow hands</h2>
+      <p class="lead rv">Troya reads broadly: every perp, every Robinhood Chain token it can find, pools, funding, contract powers. It acts narrowly: one guarded path, one policy, one journal.</p>
+    </div>
+    <div class="steps four">
+      <article class="step rv"><span class="n">A</span><h3>Limits outside the model</h3><p>Caps live in <code class="mono">policy.json</code> on the server, not in a prompt. They are loaded fresh on every call, so no conversation, however persuasive, can edit them.</p></article>
+      <article class="step rv"><span class="n">B</span><h3>One-time confirmations</h3><p>A proposal in the app expires after 10 minutes. An MCP confirmationId lives for 120 seconds and is bound to a hash of its parameters, so changing the size or the market voids it.</p></article>
+      <article class="step rv"><span class="n">C</span><h3>Mainnet, with brakes</h3><p>Real markets and real money. Pause stops your Agent Wallet at once, and an operator kill switch halts every execution path together.</p></article>
+      <article class="step rv"><span class="n">D</span><h3>Fenced text</h3><p>Tweets, token names and descriptions are written by strangers. Troya wraps them as untrusted text, so an instruction hidden in a token name is read as data and never obeyed.</p></article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="desk-h">
+    <div class="eyebrow-line"><span>03 / Why it is built this way</span></div>
+    <div class="split">
+      <h2 id="desk-h" class="h2 sm words" data-words>The model is a sharp junior. The walls are the desk rules.</h2>
+      <div class="cards">
+        <article class="card rv"><h3>Models are persuadable</h3><p>A language model will happily follow a clever instruction, including one planted in a token description. That is fine for reading. It is not fine for spending, which is why spending never depends on the model agreeing to behave.</p></article>
+        <article class="card rv"><h3>Every action has a reason</h3><p>When the agent proposes something it has to say why, and that reason is stored next to the action. Weeks later you can still see what it was thinking and which rule let it through.</p></article>
+        <article class="card rv"><h3>You stay accountable</h3><p>Troya never pretends the decision was its own. You set the walls, you approve or pre-approve the moves, and the journal shows exactly what was done in your name.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="cta-h">
+    <div class="cta-band">
+      <h2 id="cta-h" class="h2 sm words" data-words>See the walls for yourself.</h2>
+      <div class="acts rv"><a class="ulink" href="/agent">Launch app</a><a class="ulink" href="/capabilities">Capabilities</a></div>
+    </div>
+  </section>
+</main>
+
+<footer class="s-foot" data-footer></footer>
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/js/hero.js"></script>
+<script type="module" src="/js/fx.js"></script>
+</body>
+</html>

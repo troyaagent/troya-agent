@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | Your agent, inside the walls</title>
+<meta name="description" content="An agent-first trading desk for Robinhood Chain and Hyperliquid. Ask in plain words, review what the agent proposes, sign inside limits it cannot cross.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | Your agent, inside the walls">
+<meta property="og:description" content="Swap, perps, bridge and launch on Robinhood Chain with an agent that proposes and never crosses your limits.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/">
+<meta property="og:url" content="https://troya.codes/">
+<meta property="og:image" content="https://troya.codes/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
+<meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<meta name="theme-color" content="#020405">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+</head>
+<body class="site">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="s-head">
+  <a class="brand" href="/" aria-label="Troya Agent home"><i class="mark"></i>Troya Agent</a>
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="s-menu" data-menu>Menu</button>
+</header>
+<nav class="s-menu" id="s-menu" aria-label="Site" data-menu-panel></nav>
+
+<main id="main">
+  <section class="hero" aria-labelledby="hero-h">
+    <canvas class="hero-canvas" data-hero-troy aria-hidden="true"></canvas>
+    <div class="hero-shade"></div>
+    <div class="hero-in">
+      <h1 id="hero-h" class="words" data-words>Your agent, inside the walls</h1>
+      <div class="hero-cta rv">
+        <a class="ulink" href="/agent">Launch app</a>
+        <div class="ca-chip" data-ca><b>CA</b><span class="sep">:</span><span class="addr" data-ca-addr>TBA</span><button type="button" data-ca-copy>COPY</button></div>
+      </div>
+    </div>
+    <div class="hero-foot">
+      <span class="live"><i class="dot"></i>Robinhood Chain · chain 4663 · gas in ETH</span>
+      <span>Swap · Perps · Bridge · Launch · MCP</span>
+    </div>
+  </section>
+
+  <section class="sec desk" aria-labelledby="desk-h">
+    <canvas class="sec-fx" data-fx="wisps" aria-hidden="true"></canvas>
+    <div class="eyebrow-line"><span>Capabilities</span></div>
+    <div class="split">
+      <div>
+        <h2 id="desk-h" class="h2 words" data-words>Robinhood Chain Desk</h2>
+        <p class="lead rv">Talk to it the way you would talk to a trader sitting next to you. Troya pulls the Robinhood Chain tape, Pons curves, Uniswap pools and Hyperliquid perps into one desk, then hands you a ticket that is ready to sign.</p>
+      </div>
+      <div class="cards">
+        <article class="card rv">
+          <h3>Ask &amp; Quote</h3>
+          <p>Point at a token, a pool or a perp and ask. Troya answers with live numbers (price, depth, funding, your balances) plus a contract risk read, in whatever language you typed.</p>
+          <a class="ulink" href="/market-analysis">Learn more</a>
+        </article>
+        <article class="card rv">
+          <h3>Robinhood Chain Swaps <span class="tag">Live on Robinhood Chain</span></h3>
+          <p>Orders for coins and tokenized stocks route through Pons curves and Uniswap v3 and v4 pools on chain 4663. Pools that are too thin, too new or misbehaving are skipped, and the quote is refreshed once more before your wallet opens.</p>
+        </article>
+        <article class="card rv">
+          <h3>Perps Ticket</h3>
+          <p>Any Hyperliquid perp, either side, with leverage, take-profit and stop-loss set in the same ticket.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec wallet" aria-labelledby="wallet-h">
+    <canvas class="sec-fx" data-fx="vortex" aria-hidden="true"></canvas>
+    <div class="eyebrow-line"><span>Agent Wallet</span></div>
+    <div class="split">
+      <div>
+        <h2 id="wallet-h" class="h2 words" data-words>Agent Wallet</h2>
+        <p class="lead rv">Want it hands-free? Spin up a small Agent Wallet and Troya can act from chat (swaps, transfers, perps) without a popup every time, and never past the daily caps you set. It is custodial: the operator keeps its key encrypted, so fund it like pocket money. Your own wallet stays out of reach.</p>
+      </div>
+      <div></div>
+    </div>
+    <div class="cards-2">
+      <article class="card rv">
+        <h3>Autopilot &amp; Playbooks</h3>
+        <p>Write a playbook once (a stop-loss guard, a take-profit ladder, a weekly DCA) and the server checks it every 20 seconds. Autopilot is opt-in and only runs while your tab is open.</p>
+      </article>
+      <article class="card rv">
+        <h3>Troya Gate</h3>
+        <p>Nothing moves until the Gate clears it: route, price impact, pool depth, any fee or creator tax, a simulation of the exact transaction and a test sell. Whatever happens next is written to your journal.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="sec integr" aria-labelledby="integr-h">
+    <canvas class="sec-fx" data-fx="burst" aria-hidden="true"></canvas>
+    <div class="eyebrow-line"><span>Integrations</span></div>
+    <div class="integr-in">
+      <h2 id="integr-h" class="h2 words" data-words>The agent suggests, the walls decide, you keep the keys</h2>
+      <p class="lead rv">Wire Troya into Claude Desktop, Cursor or Claude Code with one MCP command, or call the REST API from your own code. Whichever door you use, the same tools, caps and journal sit behind it.</p>
+      <div class="cmd rv"><span>$</span><code data-mcp-cmd>npx -y @troyaagent/mcp</code><button type="button" data-copy-cmd>COPY</button></div>
+      <div class="integr-act rv">
+        <a class="ulink" href="/api-and-mcp">Set up the MCP</a>
+        <a class="ulink" href="/agent">Launch app <svg class="arr" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 8 8 2M3.5 2H8v4.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec princ" aria-labelledby="princ-h">
+    <div class="eyebrow-line"><span>Principles</span></div>
+    <h2 id="princ-h" class="h2 words" data-words>High walls. Your rules at the gate.</h2>
+    <div class="princ-grid">
+      <article class="princ-item rv">
+        <svg class="princ-ico" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="gK" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#bfeefb"/><stop offset="1" stop-color="#3fb7d4"/></linearGradient></defs>
+          <path fill="url(#gK)" d="M19 58h28l-2-6H21zM22 50h22c0-7-3-11-3-17 0-3 1-5 3-7l-2-9-4 3-2-8-3 6c-9 2-15 9-18 17l2 5 5-3 6 1-6 6c-1 2 0 4 0 6z"/>
+          <circle cx="31" cy="21" r="1.6" fill="#03191d"/></svg>
+        <div class="body"><h3>Real Markets</h3><p>Mainnet only: Robinhood Chain and Hyperliquid, with real money. Each action passes a check before it runs, an operator kill switch can freeze everything, and MCP execution ships in dry-run.</p></div>
+      </article>
+      <article class="princ-item rv">
+        <svg class="princ-ico" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="gS" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#c9f4ff"/><stop offset="1" stop-color="#2a7487"/></linearGradient></defs>
+          <path fill="url(#gS)" d="M32 5 54 13v17c0 14-9 24-22 29C19 54 10 44 10 30V13z"/><path fill="#03191d" opacity=".55" d="M32 11v42c10-4 16-12 16-23V17z"/></svg>
+        <div class="body"><h3>Risk First</h3><p>Order size, leverage, a market allowlist and a daily USD ceiling are tested before every action. The Agent Wallet lives inside them, and Pause freezes it on the spot.</p></div>
+      </article>
+      <article class="princ-item rv">
+        <svg class="princ-ico" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="gL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#bfeefb"/><stop offset="1" stop-color="#3fb7d4"/></linearGradient></defs>
+          <path fill="url(#gL)" d="M14 8h30l8 8v40H14z"/><path fill="#03191d" opacity=".6" d="M20 22h24v3H20zm0 8h24v3H20zm0 8h17v3H20zm0 8h20v3H20z"/><path fill="#8ee6ff" d="M44 8v8h8z"/></svg>
+        <div class="body"><h3>Full Audit Trail</h3><p>Every move is logged with the reasoning behind it, and the whole journal is readable inside the app.</p></div>
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer class="s-foot" data-footer></footer>
+
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/js/hero-troy.js"></script>
+<script type="module" src="/js/fx.js"></script>
+</body>
+</html>

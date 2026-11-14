@@ -1,0 +1,19 @@
+{
+  "name": "troya-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "node server.mjs",
+    "dev": "node --watch-path=server --watch-path=server.mjs server.mjs"
+  },
+  "dependencies": {
+    "@msgpack/msgpack": "^3.0.0",
+    "ethers": "^6.13.4",
+    "lightweight-charts": "^4.2.0",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.16.0"
+  }
+}

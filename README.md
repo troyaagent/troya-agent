@@ -36,9 +36,10 @@ Every swap quote goes through `gateCheck` in [`server/robinhood.mjs`](server/rob
 
 After the Gate:
 
-1. When you press Swap, the server re-quotes from scratch. Calldata is never built from a route sent by the browser (`buildSwapTx`).
-2. The transaction carries a hard minimum-out from your slippage (1, 3 or 5%, capped at 5%). If the pool moves past it before inclusion, the swap reverts and only gas is spent.
-3. Agent Wallet trades re-run the quote, the full Gate and your caps at execution time. Prepared actions expire (120 s over the API, 10 minutes in chat).
+1. When you press Swap, Troya Gate runs again on the pool as it is at that moment, again after any approval, and once more if the review stays open past 45 seconds. If it fails, or cannot be reached, nothing is built and nothing is sent ([`public/agent/js/pages/swap.js`](public/agent/js/pages/swap.js)).
+2. The server then re-quotes from scratch. Calldata is never built from a route sent by the browser (`buildSwapTx`).
+3. The transaction carries a hard minimum-out from your slippage (1, 3 or 5%, capped at 5%). If the pool moves past it before inclusion, the swap reverts and only gas is spent.
+4. Agent Wallet trades re-run the quote, the full Gate and your caps at execution time. Prepared actions expire (120 s over the API, 10 minutes in chat).
 
 ## Run it locally
 
@@ -70,7 +71,7 @@ server/             API: chain engine and Gate (robinhood.mjs), tools and limits
                     Agent Wallet, assistant, Hyperliquid signing (hl.mjs), journal, Telegram bot
 public/             the site (index, capabilities, verify, risk-controls, api-and-mcp…) and the app (public/agent)
 mcp/                @troyaagent/mcp, the MCP server; holds no keys, forwards to the REST API
-tools/              rh-smoke.mjs (read-only live checks), crawl.mjs (page and link check)
+tools/              rh-smoke.mjs (read-only live checks), regate-test.mjs (Swap re-check), crawl.mjs (page and link check)
 ```
 
 ## Tests
@@ -78,6 +79,7 @@ tools/              rh-smoke.mjs (read-only live checks), crawl.mjs (page and li
 ```bash
 node --test server/hl.test.mjs     # Hyperliquid signing vectors
 node tools/rh-smoke.mjs            # live, read-only: quotes, Gate, token health, launch build; sends nothing
+node tools/regate-test.mjs [url]   # browser: the Gate runs again on Swap, blocks on a fail, refuses when unreachable
 ```
 
 ## Security notes

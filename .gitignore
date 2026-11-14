@@ -15,6 +15,7 @@
 /tools/*
 !/tools/crawl.mjs
 !/tools/rh-smoke.mjs
+!/tools/regate-test.mjs
 node_modules/
 .DS_Store
 .env

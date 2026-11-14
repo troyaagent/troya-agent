@@ -12,7 +12,7 @@ export async function mount(view, ctx) {
   let alive = true;
   const st = {
     sell: ETH, buy: null, amount: "", slip: Math.round((ctx.prefs.get().slippage || 1) * 100),
-    quote: null, quoteErr: null, loading: false, gate: null, gating: false, bal: null, busy: false, seq: 0,
+    quote: null, quoteErr: null, loading: false, gate: null, gateAt: 0, gating: false, bal: null, busy: false, seq: 0,
   };
   if (![100, 300, 500].includes(st.slip)) st.slip = 100;
 
@@ -92,7 +92,7 @@ export async function mount(view, ctx) {
     el.classList.toggle("empty", !t);
   }
 
-  function reset() { st.quote = null; st.quoteErr = null; st.gate = null; st.gating = false; st.seq++; }
+  function reset() { st.quote = null; st.quoteErr = null; st.gate = null; st.gateAt = 0; st.gating = false; st.seq++; }
 
   function paint() {
     tokBtn(sellTok, st.sell);
@@ -149,9 +149,32 @@ export async function mount(view, ctx) {
     gateBox.hidden = false;
     const g = st.gate;
     const head = h("div", { class: "gh" }, icon("shield"), "Troya Gate",
+      g && st.gateAt ? h("span", { class: "gate-age", "data-gate-age": "" }, gateAge()) : null,
       h("span", { class: `badge-s ${g ? (g.pass ? "blue" : "down") : ""}` }, g ? (g.pass ? (g.checks.some((c) => c.status === "warn") ? "Passed with notes" : "Passed") : "Blocked") : "Checking…"));
     if (!g) { clear(gateBox, head, h("div", { class: "muted" }, "Simulating the exact swap and a test sell…")); return; }
-    clear(gateBox, head, h("ul", {}, g.checks.map((c) => h("li", { class: c.status === "skip" ? "skipped" : c.status }, h("span", {}, c.label), h("b", { title: c.detail || "" }, c.status === "skip" ? (c.detail || "Skipped") : c.detail || c.status)))));
+    clear(gateBox, head, h("ul", {}, g.checks.map((c) => h("li", { class: c.status === "skip" ? "skipped" : c.status }, h("span", {}, c.label), h("b", { title: c.detail || "" }, c.status === "skip" ? (c.detail || "Skipped") : c.detail || c.status)))),
+      h("div", { class: "gate-note" }, "Runs again the moment you press Swap, on the pool as it is then."));
+  }
+  function gateAge() {
+    const s = Math.max(0, Math.round((Date.now() - st.gateAt) / 1000));
+    return s < 60 ? `checked ${s}s ago` : `checked ${Math.floor(s / 60)}m ago`;
+  }
+  const ageTick = setInterval(() => { const el = gateBox.querySelector("[data-gate-age]"); if (el && st.gateAt) el.textContent = gateAge(); }, 1000);
+
+  // Troya Gate runs again at the moment of signing: on a new pool, liquidity can move between the quote and the click.
+  async function regate(q, label) {
+    st.busy = label || "Running Troya Gate again…"; paint();
+    const qs = new URLSearchParams({ tokenIn: isNative(q.tokenIn) ? "ETH" : q.tokenIn.address, tokenOut: isNative(q.tokenOut) ? "ETH" : q.tokenOut.address, amountInRaw: q.amountInRaw, slippageBps: String(st.slip), from: wallet.address });
+    let g;
+    try { g = await api.get(`swap/gate?${qs}`); }
+    catch (e) { const err = new Error(`Troya Gate could not run again just now (${e.message}). Nothing was sent. Try again in a moment.`); err.gate = true; throw err; }
+    if (!alive) { const err = new Error("Swap cancelled."); err.gate = true; throw err; }
+    st.gate = g; st.gateAt = Date.now(); paintGate();
+    if (!g.pass) {
+      const why = g.checks.filter((c) => c.status === "fail").map((c) => `${c.label}: ${c.detail}`).join(" · ");
+      const err = new Error(`Troya Gate ran again and blocked this swap. ${why}`.slice(0, 300)); err.gate = true; throw err;
+    }
+    return g;
   }
 
   /* ---------- quote + gate ---------- */
@@ -170,7 +193,7 @@ export async function mount(view, ctx) {
       if (wallet.address) qs.set("from", wallet.address);
       const g = await api.get(`swap/gate?${qs}`).catch((e) => ({ pass: true, checks: [{ key: "gate", status: "warn", label: "Gate", detail: `Checks unavailable: ${e.message}` }] }));
       if (!alive || seq !== st.seq) return;
-      st.gate = g; st.gating = false;
+      st.gate = g; st.gateAt = Date.now(); st.gating = false;
       paint();
     } catch (e) {
       if (!alive || seq !== st.seq) return;
@@ -259,6 +282,7 @@ export async function mount(view, ctx) {
     const q = st.quote;
     if (!q) return;
     try {
+      await regate(q);
       st.busy = "Preparing…"; paint();
       const buildArgs = { from: wallet.address, tokenIn: isNative(q.tokenIn) ? "ETH" : q.tokenIn.address, tokenOut: isNative(q.tokenOut) ? "ETH" : q.tokenOut.address, amountInRaw: q.amountInRaw, slippageBps: st.slip };
       let built = await api.post("swap/build", buildArgs);
@@ -279,6 +303,7 @@ export async function mount(view, ctx) {
           if (!ar || ar.status !== 1) throw new Error("The approval did not go through. Nothing was swapped.");
         }
         toast(`${q.tokenIn.symbol} approved`, "ok");
+        await regate(q, "Running Troya Gate again after the approval…");
         built = await api.post("swap/build", buildArgs);
         if ((built.approvals || []).some((a) => a.needed)) throw new Error("The approval is not visible on chain yet. Wait a few seconds and try again.");
       }
@@ -300,6 +325,7 @@ export async function mount(view, ctx) {
         confirmLabel: "Swap in wallet",
       });
       if (!ok) { st.busy = false; paint(); return; }
+      if (Date.now() - st.gateAt > 45000) await regate(q, "Running Troya Gate again…");
       st.busy = "Confirm in your wallet…"; paint();
       const hash = await sendTx("robinhood", built);
       clear(txBox, h("div", { class: "muted" }, "Submitted ", h("a", { class: "mono link", href: `https://robinhoodchain.blockscout.com/tx/${hash}`, target: "_blank", rel: "noopener" }, short(hash, 6)), " · waiting for Robinhood Chain…"));
@@ -318,7 +344,7 @@ export async function mount(view, ctx) {
         clear(txBox, h("div", { class: "alert warn" }, "Still waiting for Robinhood Chain to include it. It is not lost: keep the hash ", h("span", { class: "mono" }, short(hash, 6)), "."));
       }
     } catch (e) {
-      toast(errText(e), "error", 5000);
+      toast(e?.gate ? e.message : errText(e), "error", e?.gate ? 8000 : 5000);
     } finally {
       st.busy = false;
       if (alive) { paint(); refreshBal(); }
@@ -328,5 +354,5 @@ export async function mount(view, ctx) {
   const off = onWallet(() => { refreshBal(); paint(); });
   render();
   if (st.amount) requote();
-  return () => { alive = false; off(); };
+  return () => { alive = false; off(); clearInterval(ageTick); };
 }

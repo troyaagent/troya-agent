@@ -32,7 +32,7 @@ claude mcp add troya --env TROYA_BASE_URL=https://troya.codes --env TROYA_API_KE
 
 | Variable | Meaning |
 |---|---|
-| `TROYA_BASE_URL` | Troya server URL. `TROYA_URL` is accepted as a fallback. Default `https://troya.codes`. |
+| `TROYA_BASE_URL` | Troya server URL. `TROYA_URL` is accepted as a fallback. Default `https://troya.codes`; a URL ending in `/agent/api` or `/api` also works. |
 | `TROYA_API_KEY` | API token from the app: **Agent → Wallet → API tokens**. Read tools work without it. |
 | `TROYA_LIVE` | Set to `1` to let `execute_intent` run live. Without it, every execution from this MCP is a dry run. |
 

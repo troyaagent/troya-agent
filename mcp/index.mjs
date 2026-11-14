@@ -6,10 +6,11 @@
 //   TROYA_LIVE=1    let execute_intent run live (the token must also have dry-run switched off)
 import { randomUUID } from "node:crypto";
 
-const BASE = (process.env.TROYA_BASE_URL || process.env.TROYA_URL || "https://troya.codes").replace(/\/+$/, "");
+// Accept the site root or the REST base shown on the site (…/agent/api or …/api); tools add /api/… themselves.
+const BASE = (process.env.TROYA_BASE_URL || process.env.TROYA_URL || "https://troya.codes").replace(/\/+$/, "").replace(/\/(agent\/)?api$/, "");
 const KEY = process.env.TROYA_API_KEY || "";
 const LIVE = process.env.TROYA_LIVE === "1";
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 const SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const out = (msg) => process.stdout.write(JSON.stringify(msg) + "\n");

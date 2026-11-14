@@ -1,6 +1,6 @@
 {
   "name": "@troyaagent/mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server for Troya Agent: Robinhood Chain and Hyperliquid market tools with hard limits. Read tools work without a key; execution is dry-run by default.",
   "type": "module",
   "bin": { "troya-mcp": "index.mjs" },

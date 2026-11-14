@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // Troya Agent MCP server (stdio, JSON-RPC 2.0, no dependencies).
 // It holds no keys: every call goes to the Troya REST API, where limits, Troya Gate and the journal apply.
-//   TROYA_BASE_URL  Troya server URL (default http://127.0.0.1:9270); TROYA_URL is accepted as a fallback
+//   TROYA_BASE_URL  Troya server URL (default https://troya.codes); TROYA_URL is accepted as a fallback
 //   TROYA_API_KEY   API token from Agent → Wallet → API tokens (needed for prepare/execute tools)
 //   TROYA_LIVE=1    let execute_intent run live (the token must also have dry-run switched off)
 import { randomUUID } from "node:crypto";
 
-const BASE = (process.env.TROYA_BASE_URL || process.env.TROYA_URL || "http://127.0.0.1:9270").replace(/\/+$/, "");
+const BASE = (process.env.TROYA_BASE_URL || process.env.TROYA_URL || "https://troya.codes").replace(/\/+$/, "");
 const KEY = process.env.TROYA_API_KEY || "";
 const LIVE = process.env.TROYA_LIVE === "1";
 const VERSION = "0.1.0";

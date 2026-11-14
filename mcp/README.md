@@ -16,7 +16,7 @@ npx -y @troyaagent/mcp
     "troya": {
       "command": "npx",
       "args": ["-y", "@troyaagent/mcp"],
-      "env": { "TROYA_BASE_URL": "https://your-troya-host", "TROYA_API_KEY": "troya_…" }
+      "env": { "TROYA_BASE_URL": "https://troya.codes", "TROYA_API_KEY": "troya_…" }
     }
   }
 }
@@ -25,14 +25,14 @@ npx -y @troyaagent/mcp
 ### Claude Code
 
 ```bash
-claude mcp add troya --env TROYA_BASE_URL=https://your-troya-host --env TROYA_API_KEY=troya_… -- npx -y @troyaagent/mcp
+claude mcp add troya --env TROYA_BASE_URL=https://troya.codes --env TROYA_API_KEY=troya_… -- npx -y @troyaagent/mcp
 ```
 
 ## Environment
 
 | Variable | Meaning |
 |---|---|
-| `TROYA_BASE_URL` | Troya server URL. `TROYA_URL` is accepted as a fallback. Default `http://127.0.0.1:9270`. |
+| `TROYA_BASE_URL` | Troya server URL. `TROYA_URL` is accepted as a fallback. Default `https://troya.codes`. |
 | `TROYA_API_KEY` | API token from the app: **Agent → Wallet → API tokens**. Read tools work without it. |
 | `TROYA_LIVE` | Set to `1` to let `execute_intent` run live. Without it, every execution from this MCP is a dry run. |
 

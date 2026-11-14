@@ -3,6 +3,9 @@
 An AI trading desk for **Robinhood Chain** (chain 4663) with **Hyperliquid** perps.
 Ask in plain words, read what Troya Gate found, then sign. Live at **[troya.codes](https://troya.codes)**.
 
+**$TROYA CA (Robinhood Chain):** `0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074`
+The same address is shown on [troya.codes](https://troya.codes). Trade it on [Pons](https://ponsfamily.com/launchpad/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074) or through Troya Gate in the [app](https://troya.codes/agent#/swap?in=eth&out=0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074).
+
 - App: [troya.codes/agent](https://troya.codes/agent)
 - Real transactions made with this code: [troya.codes/verify](https://troya.codes/verify)
 - X: [@Troyaagent](https://x.com/Troyaagent) · Telegram: [t.me/troyaagent](https://t.me/troyaagent)

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | Gate badge</title>
+<meta name="description" content="A live Troya Gate badge for any Robinhood Chain coin: route, simulation, test sell, tax and fees, re-checked every 10 minutes. One line to embed.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | Gate badge">
+<meta property="og:description" content="Show buyers a live Troya Gate result for your coin. One line to embed.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/badge">
+<meta property="og:url" content="https://troya.codes/badge">
+<meta property="og:image" content="https://troya.codes/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
+<meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<meta name="theme-color" content="#020405">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+</head>
+<body class="site">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="s-head">
+  <a class="brand" href="/" aria-label="Troya Agent home"><i class="mark"></i>Troya Agent</a>
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="s-menu" data-menu>Menu</button>
+</header>
+<nav class="s-menu" id="s-menu" aria-label="Site" data-menu-panel></nav>
+
+<main id="main">
+  <section class="page-hero" aria-labelledby="ph">
+    <canvas class="hero-canvas" data-hero="page" aria-hidden="true"></canvas>
+    <div class="hero-shade"></div>
+    <span class="eyebrow"><i class="dot"></i>Gate badge</span>
+    <h1 id="ph" class="words" data-words>Show the Gate on your site</h1>
+    <p class="lead rv">For Pons devs and anyone launching on Robinhood Chain: a live Troya Gate result for your coin, re-checked at most every 10 minutes. Paste the contract, copy one line, and buyers see the same checks Troya runs before every swap.</p>
+  </section>
+
+  <section class="ip" aria-labelledby="get-h">
+    <div class="eyebrow-line"><span>01 / Get yours</span></div>
+    <div class="split" style="margin-bottom:40px">
+      <h2 id="get-h" class="h2 words" data-words>Paste a contract</h2>
+      <p class="lead rv">Any token on Robinhood Chain works. The badge links back to this page with the full result, so anyone can read what was checked.</p>
+    </div>
+    <form class="rv" data-badge-form style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:28px">
+      <input name="ca" data-badge-ca placeholder="0x… token contract on Robinhood Chain" autocomplete="off" spellcheck="false" aria-label="Token contract address" style="flex:1 1 420px;min-width:0;height:48px;padding:0 16px;border-radius:10px;border:1px solid var(--line-3);background:var(--bg-1);color:var(--fg);font-family:var(--mono);font-size:14px">
+      <button type="submit" style="height:48px;padding:0 22px;border-radius:10px;border:1px solid var(--blue);background:transparent;color:var(--blue-3);font-weight:600;cursor:pointer">Make badge</button>
+    </form>
+    <div data-badge-out hidden>
+      <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:22px"><img data-badge-img alt="Troya Gate badge" height="44"><span data-badge-status style="color:var(--muted);font-size:14px"></span></div>
+      <ul data-badge-checks style="list-style:none;margin:0 0 28px;padding:0;display:grid;gap:8px;max-width:760px"></ul>
+      <div class="code-grid">
+        <div class="code"><div class="code-h"><span>HTML</span><button type="button" data-copy-html>COPY</button></div><pre data-code-html></pre></div>
+        <div class="code"><div class="code-h"><span>Markdown</span><button type="button" data-copy-md>COPY</button></div><pre data-code-md></pre></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="what-h">
+    <div class="eyebrow-line"><span>02 / What it checks</span></div>
+    <div class="split" style="margin-bottom:56px">
+      <h2 id="what-h" class="h2 words" data-words>Four states, one line</h2>
+      <p class="lead rv">A 0.01 ETH buy is routed and simulated against the pool as it is, then sold back in a test, with transfer tax and fees measured. A thin young curve is reported, never counted as a failure on its own.</p>
+    </div>
+    <div class="steps">
+      <article class="step rv"><span class="n">01</span><h3>Passed</h3><p>Route, simulation, test sell, tax and fees all went through at that moment.</p></article>
+      <article class="step rv"><span class="n">02</span><h3>Caution</h3><p>Something worth reading first, such as fees above 5%. The page says which one.</p></article>
+      <article class="step rv"><span class="n">03</span><h3>Failed</h3><p>A check failed: the swap would not go through, a sell back reverted, or the tax is high. The page names it.</p></article>
+      <article class="step rv"><span class="n">04</span><h3>Not tested yet</h3><p>The curve holds no buyers' ETH, so there is nothing to test a sell against. It updates once people buy.</p></article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="no-h">
+    <div class="eyebrow-line"><span>03 / What it does not say</span></div>
+    <div class="split">
+      <h2 id="no-h" class="h2 words" data-words>Read it plainly</h2>
+      <p class="lead rv">A badge is a snapshot, not an audit or an endorsement, and a coin can change after a check. Troya is not paid for badges and does not list or rank coins with them. Not financial advice.</p>
+    </div>
+    <div class="cta-band">
+      <h2 id="cta-h" class="h2 sm words" data-words>Wheel nothing in blind.</h2>
+      <div class="acts rv"><a class="ulink" href="/agent">Launch app</a><a class="ulink" href="https://t.me/troyasentry">Troya Sentry</a></div>
+    </div>
+  </section>
+</main>
+
+<footer class="s-foot" data-footer></footer>
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/js/badge.js"></script>
+<script type="module" src="/js/hero.js"></script>
+<script type="module" src="/js/fx.js"></script>
+</body>
+</html>

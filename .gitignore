@@ -28,6 +28,7 @@
 !/tools/bridge-hl-ui-test.mjs
 !/tools/tgterm-test.mjs
 !/tools/brief-test.mjs
+!/tools/autopilot-test.mjs
 node_modules/
 .DS_Store
 .env

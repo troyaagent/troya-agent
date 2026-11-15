@@ -287,6 +287,8 @@ async function work(s) {
     const j = await send(CHANNEL, formatPost(r), buttons(r.token), logo).catch((e) => ({ ok: false, description: e.message }));
     if (!j.ok) console.warn("[sentry] post failed:", j.description);
     if (MODE !== "dry") holderDms(r, logo && fileIds.has(logo.cid) ? { cid: logo.cid, fileId: fileIds.get(logo.cid) } : null).catch((e) => console.warn("[sentry] holder DMs:", e.message));
+    // Phase 7: Sentry Autopilot acts on every launch that passed
+    if (MODE !== "dry" && r.v === "passed") import("./autopilot.mjs").then((a) => a.onLaunch(r)).catch((e) => console.warn("[sentry] autopilot:", e.message));
     bump(s, r.v);
     recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, reason: r.why ? `${r.why.label}: ${r.why.detail}` : null, raised: r.pons?.raised ?? null, progressPct: r.pons?.progressPct ?? null, at: r.at, post: j.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${j.result.message_id}` : null });
     recent.length = Math.min(recent.length, 200);

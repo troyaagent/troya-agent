@@ -150,7 +150,7 @@ async function assistantReply(base, text) {
 }
 
 /* ---------- entry points ---------- */
-const CMD = /^\/(long|short|close|positions|pos|fund|stop|tp|playbooks|brief|alerts)(?:@\w+)?(?:\s+([\s\S]*))?$/i;
+const CMD = /^\/(long|short|close|positions|pos|fund|stop|tp|playbooks|brief|alerts|autopilot)(?:@\w+)?(?:\s+([\s\S]*))?$/i;
 export function parse(text) {
   const m = CMD.exec(String(text || "").trim());
   if (!m) return null;
@@ -167,7 +167,7 @@ export function parse(text) {
     const a = /^([A-Za-z0-9:]+)\s+\$?(\d+(?:\.\d+)?)(?:\s+(\d{1,3})%?)?/.exec(arg);
     return a ? { cmd, coin: coinOf(a[1]), price: Number(a[2]), pct: Math.min(100, Math.max(1, Number(a[3]) || 100)) } : { cmd, error: `Usage: /${cmd} ETH ${cmd === "stop" ? "3000" : "3600"} [50]` };
   }
-  if (cmd === "brief" || cmd === "alerts") return { cmd, arg };
+  if (cmd === "brief" || cmd === "alerts" || cmd === "autopilot") return { cmd, arg };
   return { cmd: cmd === "pos" ? "positions" : cmd };
 }
 
@@ -197,6 +197,7 @@ export async function handleMessage(m, tg, st) {
     }
     if (c.cmd === "playbooks") { await send(await playbooksText(base)); return true; }
     if (c.cmd === "brief") { const b = await import("./brief.mjs"); b.init(store); const note = await b.command(owner, chat, c.arg); if (note) await send(esc(note)); return true; }
+    if (c.cmd === "autopilot") { const ap = await import("./autopilot.mjs"); ap.init(store); try { await send(await ap.command(owner, c.arg)); } catch (e) { await send(esc(e.message)); } return true; }
     if (c.cmd === "alerts") { const b = await import("./brief.mjs"); b.init(store); await send(esc(await b.alertsCommand(owner, c.arg))); return true; }
     if (c.cmd === "positions") { const r = await positionsCard(base); await send(r.text, r.markup); return true; }
     if (!aw?.exists) { await send(NEED_AW, { inline_keyboard: [appBtn("/agent#/agent/wallet")] }); return true; }

@@ -3,7 +3,7 @@ import { h, clear, icon, toast, modal, review, short, greeting, useCss, every, s
 import { api, stream } from "../api.js";
 import { wallet, onWallet, signIn, openConnect } from "../wallet.js";
 
-const TABS = [["chat", "Chat"], ["wallet", "Wallet"], ["autopilot", "Autopilot"], ["playbooks", "Playbooks"]];
+const TABS = [["chat", "Chat"], ["wallet", "Wallet"], ["autopilot", "Autopilot"], ["sentry", "Sentry Autopilot"], ["playbooks", "Playbooks"]];
 const autoPref = store("troya.autopilot", { on: false, playbooks: true, chat: false });
 
 /* ---------- tiny safe markdown (escape first, then format) ---------- */
@@ -42,7 +42,7 @@ export async function mount(view, ctx) {
   const nav = h("nav", { class: "ag-tabs", "aria-label": "Agent sections" }, TABS.map(([k, t]) => h("a", { href: k === "chat" ? "#/agent" : `#/agent/${k}`, ...(k === tab ? { "aria-current": "page" } : {}) }, t)));
   const body = h("div", { class: `ag-body ag-${tab}` });
   clear(view, h("div", { class: "ag-wrap" }, nav, body));
-  const page = { chat: mountChat, wallet: mountWallet, autopilot: mountAutopilot, playbooks: mountPlaybooks }[tab];
+  const page = { chat: mountChat, wallet: mountWallet, autopilot: mountAutopilot, sentry: mountSentryAuto, playbooks: mountPlaybooks }[tab];
   return page(body, ctx);
 }
 
@@ -560,4 +560,50 @@ function mountPlaybooks(box) {
   }
   const off = onWallet(render);
   return () => { off(); stop?.(); };
+}
+
+/* =====================================================================================
+   SENTRY AUTOPILOT (Phase 7): rules run on the server around the clock, practice or live
+   ===================================================================================== */
+function mountSentryAuto(box) {
+  const main = h("div", { class: "ag-col" });
+  clear(box, main);
+  const ethf = (v, d = 4) => (v == null || !isFinite(v) ? "–" : `${Number(v).toFixed(d)} ETH`);
+  async function render() {
+    if (!wallet.session) { clear(main, h("div", { class: "ag-intro" }, h("h2", {}, "Sentry Autopilot"), h("p", {}, "Give the agent your rules and it buys Pons launches that pass Troya Gate, then sells at your take-profit or stop. It runs on the server around the clock.")), needSignIn(main, "Sign in to set your rules.")); return; }
+    let d;
+    try { d = await api.get("autopilot"); } catch (e) { clear(main, h("div", { class: "alert error" }, e.message)); return; }
+    const s = d.settings, r = s.rules;
+    const save = async (patch) => { try { await api.post("autopilot/settings", patch); toast("Saved", "ok"); render(); } catch (e) { toast(e.message, "error"); } };
+    const sw = h("button", { class: `ag-switch ${s.on ? "on" : ""}`, type: "button", role: "switch", "aria-checked": String(s.on), onclick: () => save({ on: !s.on }) }, h("i"));
+    const mode = h("div", { class: "seg" },
+      h("button", { type: "button", "aria-pressed": String(s.mode === "practice"), onclick: () => save({ mode: "practice" }) }, "Practice"),
+      h("button", { type: "button", "aria-pressed": String(s.mode === "live"), disabled: !s.liveAvailable, title: s.liveAvailable ? "" : "Live mode opens after it passes real-money tests", onclick: () => save({ mode: "live" }) }, "Live"));
+    const f = (key, label, step, suffix) => h("label", { class: "field" }, h("span", {}, label), h("div", { class: "row" }, h("input", { class: "input", type: "number", step, min: d.limits[key][0], max: d.limits[key][1], value: r[key], name: key }), suffix ? h("span", { class: "faint" }, suffix) : null));
+    const form = h("div", { class: "ag-grid3" }, f("minRaisedEth", "Curve raised at least", "0.1", "ETH"), f("buyEth", "Buy per coin", "0.001", "ETH"), f("takeProfitX", "Take profit at", "0.1", "x"), f("stopPct", "Stop at", "1", "% down"), f("maxOpen", "Open at once", "1", ""), f("maxBuysPerDay", "Buys a day", "1", ""));
+    const saveRules = h("button", { class: "btn primary", type: "button", onclick: () => save({ rules: Object.fromEntries([...form.querySelectorAll("input")].map((i) => [i.name, Number(i.value)])) }) }, "Save rules");
+    const pub = h("label", { class: "row" }, h("input", { type: "checkbox", checked: s.public, onchange: (e) => save({ public: e.target.checked }) }), "Show my results on the leaderboard (address shortened)");
+    const st = d.stats;
+    const line = (x) => `${x.closed} closed · ${x.pnlEth >= 0 ? "+" : ""}${ethf(x.pnlEth)}${x.winRate != null ? ` · ${(x.winRate * 100).toFixed(0)}% won` : ""}`;
+    const open = d.positions.filter((p) => p.status === "open"), closed = d.positions.filter((p) => p.status === "closed");
+    const row = (p) => h("div", { class: "ap-row" },
+      h("div", { class: "grow" }, h("b", {}, `$${p.symbol}`), h("span", { class: "faint" }, ` · ${p.mode} · in ${ethf(p.amountEth)} at ${p.raisedAtEntry != null ? Number(p.raisedAtEntry).toFixed(2) : "–"} ETH raised · ${ago(p.openedAt)} ago`)),
+      p.status === "open"
+        ? h("div", { class: "row" }, h("span", {}, p.lastValueEth != null ? `${ethf(p.lastValueEth)} (${((p.lastValueEth / p.amountEth - 1) * 100).toFixed(1)}%)` : "checking…"), h("button", { class: "btn sm", type: "button", onclick: async () => { try { await api.post("autopilot/close", { id: p.id }); toast("Closed", "ok"); render(); } catch (e) { toast(e.message, "error"); } } }, "Close"))
+        : h("span", { class: (p.pnlEth || 0) >= 0 ? "up" : "down" }, `${(p.pnlEth || 0) >= 0 ? "+" : ""}${ethf(p.pnlEth)} · ${p.reason}`));
+    clear(main,
+      h("div", { class: "ag-intro" }, h("h2", {}, "Sentry Autopilot"), h("p", {}, "Every Pons launch goes through Troya Gate about 90 seconds in. When one passes and its curve has raised what you set, Autopilot buys, then sells at your take-profit or stop, or after 7 days. Practice mode uses play money at real prices; live mode trades from your Agent Wallet inside its caps.")),
+      h("div", { class: "panel ag-panel" },
+        h("div", { class: "ag-auto-h" }, h("div", {}, h("b", {}, s.on ? `On · ${s.mode === "live" ? "live, Agent Wallet" : "practice, play money"}` : "Off"), h("div", { class: "faint" }, s.liveAvailable ? "Live mode buys and sells from your Agent Wallet." : "Live mode opens after it passes real-money tests. Practice runs at real prices meanwhile.")), h("div", { class: "row" }, mode, sw)),
+        h("hr", { class: "hr" }), h("h3", {}, "Your rules"), form, h("div", { class: "row", style: { justifyContent: "space-between", flexWrap: "wrap", gap: "10px" } }, pub, saveRules),
+        h("p", { class: "note", style: { margin: 0 } }, "Same rules in Telegram: /autopilot set min 1 buy 0.01 tp 2 sl 30 max 3")),
+      h("div", { class: "panel ag-panel" }, h("h3", {}, "Results"), h("div", { class: "rows" }, h("div", {}, h("span", {}, "Practice"), h("span", {}, line(st.practice))), h("div", {}, h("span", {}, "Live"), h("span", {}, line(st.live))), h("div", {}, h("span", {}, "Open now"), h("span", {}, String(st.open)))),
+        h("a", { class: "link", href: "#/leaderboard" }, "See the leaderboard")),
+      h("div", { class: "panel ag-panel" }, h("h3", {}, `Open (${open.length})`), open.length ? h("div", { class: "ap-list" }, open.map(row)) : h("p", { class: "faint", style: { margin: 0 } }, s.on ? "Waiting for the next launch that passes your rules." : "Switch it on to start.")),
+      closed.length ? h("div", { class: "panel ag-panel" }, h("h3", {}, "Closed"), h("div", { class: "ap-list" }, closed.slice(0, 30).map(row))) : null);
+  }
+  render();
+  const off = onWallet(() => render());
+  const t = setInterval(() => { if (!document.hidden) render(); }, 30000);
+  return () => { off(); clearInterval(t); };
 }

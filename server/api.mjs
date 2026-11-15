@@ -20,6 +20,7 @@ const MODULES = [
   "./badge.mjs",       // Phase 4: live Troya Gate badge (SVG + JSON) for Pons devs to embed
   "./holders.mjs",     // Phase 3: $TROYA holder perks (more messages, more playbooks, Sentry DMs)
   "./brief.mjs",       // Phase 6: daily AI brief + smart alerts (Telegram DM and the web)
+  "./autopilot.mjs",   // Phase 7: Sentry Autopilot (practice mode with play money; live through the Agent Wallet)
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];
 

@@ -93,6 +93,10 @@
 .ag-bal .v { font-size: 20px; }
 .ag-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .ag-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ap-list { display: grid; }
+.ap-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px; flex-wrap: wrap; }
+.ap-row:first-child { border-top: 0; }
+.ap-row .faint { font-size: 12px; }
 .ag-key { display: block; padding: 12px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line-2); font-family: var(--mono); font-size: 12px; word-break: break-all; user-select: all; }
 .ag-tokens { display: grid; gap: 0; }
 .ag-tok { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }

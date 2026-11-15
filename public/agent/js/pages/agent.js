@@ -143,13 +143,14 @@ function mountChat(box, ctx) {
       if (p.kind === "swap") rows.push(["Sell", `${num(pr.amountIn, 6)} ${pr.symbolIn || "ETH"}`], ["Receive (est.)", pr.amountOut != null ? `${num(pr.amountOut, pr.amountOut < 1 ? 8 : 2)} ${pr.symbolOut}` : "–"], ["Value", pr.usd ? usd(pr.usd) : "–"], ["Slippage", `${pr.slippagePct}%`], ["Network", "Robinhood Chain"]);
       if (p.kind === "perp") rows.push(["Side", pr.side === "short" ? "Short" : "Long"], ["Market", `${pr.coin}-PERP`], ["Size", usd(pr.sizeUsd)], ["Leverage", `${pr.leverage}x`], ["Margin", usd(pr.sizeUsd / (pr.leverage || 1))], pr.tpPx ? ["Take profit", pr.tpPx] : null, pr.slPx ? ["Stop loss", pr.slPx] : null);
       if (p.kind === "bridge") rows.push(["Direction", `${CHAIN_NAME[pr.fromChain] || "?"} → ${CHAIN_NAME[pr.toChain] || "?"}`], ["Amount", `${pr.amount} ${pr.asset || "ETH"}`], ["Route", "LI.FI (quoted when you open Bridge)"]);
+      if (p.kind === "hl_fund") rows.push(["Route", "Robinhood Chain → Hyperliquid"], ["Send", `${pr.amount} ETH`], ["Receive (est.)", pr.usdcEstimate ? `${num(pr.usdcEstimate, 2)} USDC` : "quoted when you sign"], ["Lands on", "your own Hyperliquid account, as USDC for perps"]);
       if (p.kind === "watch") rows.push(["Playbook", pr.type?.replace("_", " ")], ["Checked", "every 20 seconds on the server"]);
       const left = Math.max(0, Math.round((p.expiresAt - Date.now()) / 1000));
       const live = p.status === "pending" && left > 0;
       const statusText = p.status !== "pending" ? p.status : left > 0 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} left` : "expired";
       clear(card,
-        h("div", { class: "tk-h" }, h("span", { class: "badge-s blue" }, { swap: "Swap", perp: "Perp", bridge: "Bridge", watch: "Playbook" }[p.kind] || p.kind),
-          p.kind === "perp" && pr.coin ? coinIcon(pr.coin, "sm") : p.kind === "swap" ? tokenIcon(pr.symbolIn && pr.symbolIn !== "ETH" ? { symbol: pr.symbolIn, address: pr.tokenIn } : { symbol: pr.symbolOut, address: pr.tokenOut }, "sm") : p.kind === "bridge" ? chainLogo("robinhood", 20) : null,
+        h("div", { class: "tk-h" }, h("span", { class: "badge-s blue" }, { swap: "Swap", perp: "Perp", bridge: "Bridge", watch: "Playbook", hl_fund: "Fund Hyperliquid" }[p.kind] || p.kind),
+          p.kind === "perp" && pr.coin ? coinIcon(pr.coin, "sm") : p.kind === "swap" ? tokenIcon(pr.symbolIn && pr.symbolIn !== "ETH" ? { symbol: pr.symbolIn, address: pr.tokenIn } : { symbol: pr.symbolOut, address: pr.tokenOut }, "sm") : p.kind === "bridge" ? chainLogo("robinhood", 20) : p.kind === "hl_fund" ? chainLogo("hyperliquid", 20) : null,
           h("b", {}, p.summary), h("span", { class: `tk-st ${live ? "" : "off"}` }, statusText)),
         h("div", { class: "rows" }, rows.filter(Boolean).map(([k, v]) => h("div", {}, h("span", {}, k), h("span", {}, String(v))))),
         p.gate?.checks?.length ? h("ul", { class: "tk-gate" }, h("li", { class: "tk-gh" }, icon("shield"), "Troya Gate"), p.gate.checks.map((c) => h("li", { class: c.status === "skip" ? "skipped" : c.status }, h("span", {}, c.name || c.label), h("b", {}, c.status === "pass" ? "pass" : c.status === "warn" ? "check" : c.status === "skip" ? "later" : "fail"), h("small", {}, c.detail)))) : null,
@@ -163,6 +164,9 @@ function mountChat(box, ctx) {
       const done = (status, note) => { p.status = status; render(); if (note) toast(note, status === "done" || status === "submitted" ? "ok" : ""); };
       const dismiss = h("button", { class: "btn ghost sm", type: "button", onclick: async () => { try { await api.post("inbox/proposal-done", { id: p.id, status: "rejected" }); } catch {} done("rejected"); } }, "Dismiss");
       if (p.kind === "watch") return [h("button", { class: "btn primary sm", type: "button", onclick: async () => { try { const r = await api.post("agent-wallet/execute", { proposalId: p.id }); done("done", r.summary); } catch (e) { toast(e.message, "error"); } } }, icon("check"), "Turn on playbook"), dismiss];
+      if (p.kind === "hl_fund") return [
+        h("a", { class: "btn primary sm", href: `#/bridge?${new URLSearchParams({ dir: "hl", amount: String(p.params?.amount || "") })}`, onclick: () => { api.post("inbox/proposal-done", { id: p.id, status: "submitted", note: "Opened in Bridge" }).catch(() => {}); } }, icon("wallet"), "Sign in my wallet"),
+        h("button", { class: "btn sm", type: "button", onclick: () => approveAgent(p, done) }, icon("bolt"), "Run with Agent Wallet"), dismiss];
       if (p.kind === "bridge") return [h("a", { class: "btn primary sm", href: `#/bridge?${new URLSearchParams({ dir: p.params?.fromChain === 4663 ? "out" : "in", chain: CHAIN_KEY[p.params?.fromChain === 4663 ? p.params?.toChain : p.params?.fromChain] || "arbitrum", amount: String(p.params?.amount || "") })}`, onclick: () => api.post("inbox/proposal-done", { id: p.id, status: "submitted", note: "Opened the Bridge page" }).catch(() => {}) }, icon("bridge"), "Open Bridge"), dismiss];
       const own = h("button", { class: "btn primary sm", type: "button", onclick: () => approveOwn(p, done) }, icon("wallet"), "Sign in my wallet");
       const agent = h("button", { class: "btn sm", type: "button", onclick: () => approveAgent(p, done) }, icon("bolt"), "Run with Agent Wallet");

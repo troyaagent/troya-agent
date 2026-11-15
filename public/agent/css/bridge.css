@@ -1,7 +1,7 @@
 /* Bridge page */
 .br-wrap { display: grid; justify-items: center; gap: 18px; padding-bottom: 24px; }
 .br-modes { display: flex; justify-content: center; }
-.br-box { width: min(460px, 100%); display: grid; gap: 12px; }
+.br-box { width: min(460px, 100%); min-width: 0; display: grid; gap: 12px; }
 .br-ctrls { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .br-ctrls .seg button:disabled { opacity: .45; cursor: not-allowed; }
 .br-card { padding: 12px; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); box-shadow: 0 30px 80px rgba(0, 0, 0, .45); }
@@ -41,4 +41,4 @@
 .br-item-l { display: grid; gap: 2px; min-width: 0; }
 .br-item-l b { font-weight: 500; }
 .br-item-l .muted { font-size: 11.5px; }
-@media (max-width: 520px) { .br-amt { font-size: 26px; } .br-ctrls { justify-content: center; } }
+@media (max-width: 520px) { .br-amt { font-size: 26px; } .br-ctrls { justify-content: center; } .br-ctrls .seg { flex-wrap: wrap; justify-content: center; max-width: 100%; height: auto; } .br-ctrls .seg button { flex: 1 1 auto; } }

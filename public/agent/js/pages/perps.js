@@ -410,7 +410,7 @@ export async function mount(view, ctx) {
     try {
       const ok = await review({ title: "Enable trading on Hyperliquid", summary: "Approve a trade-only key for this browser.", confirmLabel: "Approve in wallet", rows: [
         ["Account", short(wallet.address, 6)], ["Key name", "Troya"], ["Can", "place and cancel perp orders, change leverage"], ["Cannot", "withdraw or transfer funds"], ["Stored", "in this browser only"], ["Signature network", "Arbitrum (EIP-712 typed data, no gas)"],
-      ], warn: "Your Hyperliquid account must already hold USDC. If someone gets this browser's storage they could trade (not withdraw) until you revoke it." });
+      ], warn: "Your Hyperliquid account must already hold USDC (fund it from Robinhood Chain: Bridge → To Hyperliquid). If someone gets this browser's storage they could trade (not withdraw) until you revoke it." });
       if (!ok) return;
       await ensureChain("arbitrum");
       await approveTradingKey(wallet.address, wallet.eip);

@@ -20,6 +20,7 @@
 !/tools/holders-test.mjs
 !/tools/tgmod-test.mjs
 !/tools/botcmds-test.mjs
+!/tools/hlfund-test.mjs
 node_modules/
 .DS_Store
 .env

@@ -906,6 +906,31 @@ export async function bridgeQuote({ fromChain, toChain = CHAIN_ID, address, amou
   };
 }
 
+/* Fund Hyperliquid: ETH on Robinhood Chain → USDC on the user's own Hyperliquid account, one LI.FI transaction.
+   LI.FI calls Hyperliquid (HyperCore) chain 1337 and lists perps USDC under the Arbitrum USDC address. The route is
+   checked to deliver that token to the expected account before anything is returned for signing. */
+export const HL_CHAIN = 1337;
+const HL_USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
+export async function hlFundQuote({ address, amountWei, toAddress }) {
+  const from = addr(address, "wallet address");
+  const to = toAddress ? addr(toAddress, "Hyperliquid account") : from;
+  const amount = BigInt(amountWei || 0);
+  if (amount <= 0n) throw new HttpError(400, "Enter a positive amount.");
+  const q = await lifi(`/quote?fromChain=${CHAIN_ID}&toChain=${HL_CHAIN}&fromToken=${ZERO}&toToken=${HL_USDC}&fromAddress=${from}&toAddress=${to}&fromAmount=${amount}&integrator=troya-agent&slippage=0.01`);
+  const e = q.estimate || {}, tx = q.transactionRequest, a = q.action || {};
+  if (!tx?.to || !tx?.data) throw new HttpError(502, "The route came back without a transaction to sign.");
+  if (Number(tx.chainId || CHAIN_ID) !== CHAIN_ID) throw new HttpError(502, "The route asked for a transaction on another chain.");
+  if (Number(a.toChainId) !== HL_CHAIN || String(a.toToken?.address || "").toLowerCase() !== HL_USDC.toLowerCase()) throw new HttpError(502, "The route does not end in USDC on Hyperliquid.");
+  if (String(a.toAddress || to).toLowerCase() !== to.toLowerCase()) throw new HttpError(502, "The route would deliver to a different account.");
+  const usd = (l) => (l || []).reduce((s, x) => s + (Number(x?.amountUSD) || 0), 0);
+  return {
+    fromChain: CHAIN_ID, toChain: HL_CHAIN, fromName: "Robinhood Chain", toName: "Hyperliquid", toAddress: to, tool: String(q.toolDetails?.name || q.tool || "unknown"),
+    fromAmount: String(amount), toAmount: String(e.toAmount || 0), toAmountMin: String(e.toAmountMin || 0), toDecimals: Number(a.toToken?.decimals ?? 6),
+    fromSymbol: "ETH", toSymbol: "USDC", executionSec: Number(e.executionDuration || 0), feeUsd: usd(e.feeCosts), gasUsd: usd(e.gasCosts), toAmountUsd: Number(e.toAmountUSD || 0),
+    tx: { to: tx.to, data: tx.data, value: String(BigInt(tx.value || 0)), gasLimit: String(BigInt(tx.gasLimit || 600000)), chainId: CHAIN_ID },
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* Pons launch                                                         */
 /* ------------------------------------------------------------------ */
@@ -1090,6 +1115,8 @@ export async function register(r, ctx) {
 
   r.get("/api/bridge/chains", () => ({ chains: Object.entries(LIFI_CHAINS).map(([id, name]) => ({ id: Number(id), name })), home: CHAIN_ID }));
   r.get("/api/bridge/quote", ({ query }) => bridgeQuote({ fromChain: query.fromChain, toChain: query.toChain, address: query.address, amountWei: query.amountWei }), { perMin: 60 });
+  // Fund Hyperliquid from your own wallet: always to the same address on Hyperliquid
+  r.get("/api/bridge/hl-quote", ({ query }) => hlFundQuote({ address: query.address, amountWei: query.amountWei }), { perMin: 60 });
   r.get("/api/bridge/status", async ({ query }) => {
     if (!/^0x[0-9a-fA-F]{64}$/.test(query.txHash || "")) throw new HttpError(400, "Bad transaction hash.");
     const st = await lifi(`/status?txHash=${query.txHash}&fromChain=${Number(query.fromChain)}&toChain=${Number(query.toChain || CHAIN_ID)}`);

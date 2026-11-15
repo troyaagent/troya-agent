@@ -368,6 +368,17 @@ export const TOOLS = [
       const params = { kind: "swap", tokenIn: q.tokenIn.native ? "native" : q.tokenIn.address, tokenOut: q.tokenOut.native ? "native" : q.tokenOut.address, amountIn: q.amountIn, slippagePct: q.slippagePct, usd };
       return { ok: true, gate, quote: { ...q, quote: { ...q.quote, plan: undefined } }, ...issueConfirmation(ctx.address, "swap", params, `Swap ${q.amountIn} ${q.tokenIn.symbol} → ${q.tokenOut.symbol}`) };
     } },
+  { name: "prepare_hl_funding", tier: "prepare", description: "Fund your Hyperliquid account for perps: quote ETH on Robinhood Chain → USDC on your own Hyperliquid account (one LI.FI route), then return a one-time confirmationId (120 s) for execute_intent, which runs it from your Agent Wallet. Also returns a link to sign it from your own wallet instead.", schema: S({ amountEth: numS("ETH to send from Robinhood Chain") }, ["amountEth"]),
+    run: async ({ amountEth }, ctx) => {
+      const amount = Number(amountEth);
+      if (!(amount > 0)) throw new HttpError(400, "amountEth must be above zero.");
+      const rh = await import("./robinhood.mjs");
+      const q = await rh.hlFundQuote({ address: ctx.address, amountWei: BigInt(Math.round(amount * 1e9)) * 10n ** 9n });
+      const usdc = Number(q.toAmount) / 10 ** q.toDecimals, min = Number(q.toAmountMin) / 10 ** q.toDecimals;
+      const params = { kind: "hl_fund", amount, usd: 0 };
+      return { ok: true, estimate: { sendEth: amount, receiveUsdc: usdc, minimumUsdc: min, route: q.tool, arrivesSec: q.executionSec, feesUsd: q.feeUsd + q.gasUsd }, to: "your own Hyperliquid account (the signed-in address)",
+        signYourself: `https://troya.codes/agent#/bridge?dir=hl&amount=${amount}`, ...issueConfirmation(ctx.address, "hl_fund", params, `Fund Hyperliquid with ${amount} ETH (about ${usdc.toFixed(2)} USDC)`) };
+    } },
   { name: "execute_intent", tier: "execute", description: "Execute a prepared action by confirmationId through your Agent Wallet. Re-checks policy. Dry-run unless this API token has the execute scope and you switched dry-run off for it.", schema: S({ confirmationId: str("From prepare_*"), dryRun: { type: "boolean", description: "Force a dry run" } }, ["confirmationId"]),
     run: async ({ confirmationId, dryRun }, ctx) => {
       const c = takeConfirmation(confirmationId, ctx.address);

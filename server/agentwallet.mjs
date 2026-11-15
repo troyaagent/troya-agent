@@ -1,5 +1,5 @@
 // Optional custodial Agent Wallet: one small hot wallet per signed-in owner, key encrypted at rest
-// (AES-256-GCM, master key from TROYA_MASTER_KEY or data/master.key). It can only withdraw to the owner,
+// (AES-256-GCM, master key from TROYA_MASTER_KEY or data/master.key). It can only withdraw to the owner (on Robinhood Chain, or as USDC to the owner's own Hyperliquid account),
 // its key can be exported with a fresh signature, and every execution passes limits + Troya Gate and is journaled.
 // TROYA_NO_BROADCAST=1 stops right before sending (tests / staging).
 import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
@@ -10,7 +10,7 @@ import { HttpError } from "./api.mjs";
 import { checkAction, recordUsage, getPolicy, operatorPolicy } from "./policy.mjs";
 import { logAction } from "./journal.mjs";
 import { RPC, getBalances, quoteSwap, gateSwap, simulatePerp, gatePerp, ethUsd } from "./tools.mjs";
-import { buildSwapTx } from "./robinhood.mjs";
+import { buildSwapTx, hlFundQuote } from "./robinhood.mjs";
 import { getProposal, markProposal } from "./inbox.mjs";
 
 let store, master;
@@ -148,6 +148,19 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
         result = await hl.hlPlaceOrder({ privateKey: w.privateKey, coin: meta.coin, isBuy: params.side !== "short", size: usd / mark, leverage: lev, slippage: 0.01,
           tp: Number(params.tpPx) || undefined, sl: Number(params.slPx) || undefined, reduceOnly: !!params.reduceOnly });
       }
+    } else if (kind === "hl_fund") {
+      // ETH from the Agent Wallet → USDC on the OWNER's Hyperliquid account (the account it trades as an approved agent)
+      const amount = Number(params.amount);
+      if (!(amount > 0)) throw new HttpError(400, "Enter an amount above zero.");
+      summary = `Fund Hyperliquid: ${amount} ETH → USDC on the owner's Hyperliquid account`;
+      const pc = await checkAction(owner, { kind: "withdraw" });
+      if (pc.reasons.length) return await blocked(owner, kind, summary, pc.reasons, null, source, proposalId);
+      const w = signer(r, owner, "robinhood");
+      const q = await hlFundQuote({ address: w.address, amountWei: parseUnits(String(amount), 18), toAddress: owner });
+      if (q.toAddress.toLowerCase() !== String(owner).toLowerCase()) throw new HttpError(502, "The route would not deliver to the owner.");
+      const sent = await send(owner, w, { to: q.tx.to, data: q.tx.data, value: BigInt(q.tx.value), gasLimit: (BigInt(q.tx.gasLimit) * 13n) / 10n }, summary);
+      result = { ...sent, route: q.tool, usdcEstimate: Number(formatUnits(q.toAmount, q.toDecimals)), usdcMin: Number(formatUnits(q.toAmountMin, q.toDecimals)) };
+      usd = 0; // the owner's money moving to the owner's own account never counts against trading caps
     } else if (kind === "withdraw" || kind === "send") {
       const chain = "robinhood";
       const amount = Number(params.amount);
@@ -238,7 +251,7 @@ export async function register(r, ctx) {
       return executeForUser(s.address, { kind: p.kind, params: p.params, rationale: p.rationale || "Approved proposal", source: body.source === "autopilot" ? "autopilot" : "app", proposalId: p.id });
     }
     const kind = String(body.kind || "");
-    if (!["swap", "perp", "close", "withdraw"].includes(kind)) throw new HttpError(400, "Unknown action.");
+    if (!["swap", "perp", "close", "withdraw", "hl_fund"].includes(kind)) throw new HttpError(400, "Unknown action.");
     return executeForUser(s.address, { kind, params: body.params || {}, rationale: String(body.rationale || "Requested in the app").slice(0, 300), source: "app" });
   });
 

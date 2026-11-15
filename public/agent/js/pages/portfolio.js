@@ -71,7 +71,7 @@ export async function mount(view, ctx) {
       const steps = [
         { t: "Connect wallet", done: connected, act: connected ? null : h("button", { class: "btn sm", type: "button", onclick: () => openConnect() }, "Connect"), tip: "Your wallet signs everything; Troya never holds its key." },
         { t: "Get ETH on Robinhood Chain", done: (st.rh || 0) > 0, act: h("a", { class: "link", href: "#/bridge" }, "Bridge"), tip: "Robinhood Chain pays gas in ETH. Bridge it from Arbitrum, Base or Ethereum." },
-        { t: "Fund USDC on Hyperliquid", done: (st.hl?.accountValue || 0) > 0, act: h("a", { class: "link", href: "https://app.hyperliquid.xyz/trade", target: "_blank", rel: "noopener" }, "Deposit on Hyperliquid ↗"), tip: "Perps margin is USDC in your Hyperliquid account." },
+        { t: "Fund USDC on Hyperliquid", done: (st.hl?.accountValue || 0) > 0, act: h("a", { class: "link", href: "#/bridge?dir=hl" }, "Fund from Robinhood Chain"), tip: "Perps margin is USDC in your Hyperliquid account. Bridge → To Hyperliquid turns ETH on Robinhood Chain into it in one transaction." },
         { t: "Approve a trading key", done: st.key?.state === "approved", act: h("a", { class: "link", href: "#/perps" }, "Perps"), tip: "A trade-only key in this browser, approved once with your wallet. It cannot withdraw." },
         { t: "First swap", done: swapped, act: h("a", { class: "link", href: "#/swap" }, "Swap"), tip: wallet.session ? "Ticked once a swap appears in your journal." : "Sign in so your journal can confirm it." },
       ];

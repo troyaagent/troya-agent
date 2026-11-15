@@ -65,6 +65,16 @@ It is a small hot wallet that only you can withdraw from, with caps you set per 
 Then paste a coin here again.`;
 const appBtn = (path = "/agent#/agent/wallet") => ({ inline_keyboard: [[{ text: "Open Troya", url: SITE + path }]] });
 
+async function holderLine(owner) {
+  const hp = await import("./holders.mjs").catch(() => null);
+  if (!hp) return "";
+  const h = await hp.holderOf(owner).catch(() => null);
+  if (!h) return "";
+  const n = (v) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(v);
+  if (h.holder && h.on) return `Holder perks: on (${n(h.balance)} $TROYA)\n`;
+  if (h.holder) return `Holder perks: from ${new Date(h.start).toISOString().slice(0, 16).replace("T", " ")} UTC (${n(h.balance)} $TROYA)\n`;
+  return `Holder perks from ${n(h.min)} $TROYA (you hold ${n(h.balance)})\n`;
+}
 async function walletText(owner) {
   const aw = await getAgentWallet(owner);
   if (!aw?.exists) return { text: WALLET_FIRST, markup: appBtn() };
@@ -73,7 +83,7 @@ async function walletText(owner) {
   const ep = (await ethUsd().catch(() => 0)) || 0;
   const caps = aw.caps || {};
   return {
-    text: `<b>Your Agent Wallet</b>\n<code>${aw.address}</code>\n\nBalance: ${eth ? fnum(Number(eth.amount)) : "–"} ETH${eth && ep ? ` (≈$${(Number(eth.amount) * ep).toFixed(2)})` : ""}\nPer trade: ${caps.perTradeUsd != null ? "$" + caps.perTradeUsd : "your policy"} · Per day: ${caps.dailyUsd != null ? "$" + caps.dailyUsd : "your policy"}\nStatus: ${aw.enabled ? "on" : "switched off"}\n\nTop up by sending ETH on Robinhood Chain to the address above. Withdrawals only go back to your own wallet.`,
+    text: `<b>Your Agent Wallet</b>\n<code>${aw.address}</code>\n${await holderLine(owner)}\nBalance: ${eth ? fnum(Number(eth.amount)) : "–"} ETH${eth && ep ? ` (≈$${(Number(eth.amount) * ep).toFixed(2)})` : ""}\nPer trade: ${caps.perTradeUsd != null ? "$" + caps.perTradeUsd : "your policy"} · Per day: ${caps.dailyUsd != null ? "$" + caps.dailyUsd : "your policy"}\nStatus: ${aw.enabled ? "on" : "switched off"}\n\nTop up by sending ETH on Robinhood Chain to the address above. Withdrawals only go back to your own wallet.`,
     markup: appBtn(),
   };
 }

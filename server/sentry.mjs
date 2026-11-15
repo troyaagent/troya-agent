@@ -156,10 +156,21 @@ async function work(s) {
     s.queue = s.queue.filter((x) => x !== q);
     const j = await send(CHANNEL, formatPost(r), buttons(r.token)).catch((e) => ({ ok: false, description: e.message }));
     if (!j.ok) console.warn("[sentry] post failed:", j.description);
+    if (MODE !== "dry") holderDms(r).catch((e) => console.warn("[sentry] holder DMs:", e.message));
     bump(s, r.v);
     recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, reason: r.why ? `${r.why.label}: ${r.why.detail}` : null, raised: r.pons?.raised ?? null, progressPct: r.pons?.progressPct ?? null, at: r.at, post: j.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${j.result.message_id}` : null });
     recent.length = Math.min(recent.length, 200);
     s.recent = recent.slice(0, 200);                                   // survives restarts
+  }
+}
+
+// Phase 3: linked $TROYA holders get each result as a private message too (the bot can only DM people who started it)
+async function holderDms(r) {
+  const hp = await import("./holders.mjs").catch(() => null);
+  if (!hp) return;
+  for (const chat of await hp.holderChats()) {
+    await tg("sendMessage", { chat_id: chat, text: formatPost(r), parse_mode: "HTML", reply_markup: buttons(r.token), link_preview_options: { is_disabled: true } }).catch(() => {});
+    await new Promise((x) => setTimeout(x, 60));
   }
 }
 

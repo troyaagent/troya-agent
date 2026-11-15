@@ -438,7 +438,9 @@ async function parserAnswer(ctx, text, lang) {
 const today = () => new Date().toISOString().slice(0, 10);
 async function takeMessage(address) {
   const op = await operatorPolicy();
-  const limit = op.freeMessagesPerDay;
+  // Phase 3: $TROYA holders get more messages a day
+  const hp = await import("./holders.mjs").catch(() => null);
+  const limit = hp && (await hp.hasPerks(address).catch(() => false)) ? hp.PERKS.messagesPerDay : op.freeMessagesPerDay;
   let used;
   await store.update("chat-usage.json", {}, (all) => {
     const k = address.toLowerCase();
@@ -507,7 +509,9 @@ export async function register(r, ctx) {
     const s = requireSession(req);
     const op = await operatorPolicy();
     const u = (await store.readJson("chat-usage.json", {}))[s.address.toLowerCase()];
-    return { used: u?.day === today() ? u.n : 0, limit: op.freeMessagesPerDay, llm: llmOn() };
+    const hp = await import("./holders.mjs").catch(() => null);
+    const holder = !!(hp && (await hp.hasPerks(s.address).catch(() => false)));
+    return { used: u?.day === today() ? u.n : 0, limit: holder ? hp.PERKS.messagesPerDay : op.freeMessagesPerDay, holder, llm: llmOn() };
   });
   r.post("/api/assistant/feedback", async ({ req, body }) => {
     const s = requireSession(req);

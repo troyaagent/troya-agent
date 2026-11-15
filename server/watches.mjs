@@ -57,8 +57,11 @@ function normalize(input) {
 export async function createWatch(address, input) {
   const w = normalize(input);
   const rec = { id: randomBytes(6).toString("hex"), address: address.toLowerCase(), ...w, status: "active", createdAt: Date.now(), lastCheck: null, lastPrice: null, fires: [] };
+  // Phase 3: $TROYA holders keep more playbooks active
+  const hp = await import("./holders.mjs").catch(() => null);
+  const cap = hp && (await hp.hasPerks(address).catch(() => false)) ? hp.PERKS.playbooks : MAX_PER_USER;
   await store.update("watches.json", [], (list) => {
-    if (list.filter((x) => x.address === rec.address && x.status === "active").length >= MAX_PER_USER) throw new HttpError(400, `You can keep up to ${MAX_PER_USER} active playbooks.`);
+    if (list.filter((x) => x.address === rec.address && x.status === "active").length >= cap) throw new HttpError(400, `You can keep up to ${cap} active playbooks.`);
     list.push(rec);
   });
   await logAction({ address, kind: "watch.create", summary: rec.title, source: "app" });

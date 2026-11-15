@@ -17,6 +17,7 @@
 !/tools/rh-smoke.mjs
 !/tools/regate-test.mjs
 !/tools/tgtrade-test.mjs
+!/tools/holders-test.mjs
 node_modules/
 .DS_Store
 .env

@@ -20,18 +20,28 @@ const LINKS = `<b>Troya Agent</b>
 • Website: <a href="${SITE}">troya.codes</a>
 • X: <a href="https://x.com/Troyaagent">x.com/Troyaagent</a>
 • Telegram: <a href="https://t.me/troyaagent">t.me/troyaagent</a>
+• Troya Sentry: <a href="https://t.me/troyasentry">t.me/troyasentry</a>
+• Gate badge: <a href="${SITE}/badge">troya.codes/badge</a>
 • Docs: <a href="${SITE}/agent#/docs">troya.codes/agent#/docs</a>`;
 
 const HELP = `<b>Troya Agent bot</b>
 Troya is an AI trading desk for Robinhood Chain and Hyperliquid. Troya Gate simulates each trade before you sign.
 
-/price NVDA · live price (a symbol or a 0x address)
+<b>Trade</b> (private chat)
+/trade 0x… · buy or sell a coin from your Agent Wallet, Gate first
+/wallet · Agent Wallet balance, top-up address, holder status
+
+<b>Check</b>
 /gate 0x… · Troya Gate token check
+/price NVDA · live price (a symbol or a 0x address)
+/sentry · the latest Pons launches through the Gate
+/badge 0x… · a coin's live Gate badge for its website
+
+<b>Troya</b>
+/perks · what $TROYA holders get
 /ca · official contract address
-/links · website, app, X, Telegram
+/links · website, app, X, Telegram, Sentry
 /rules · group rules (reply /report to spam)
-/trade 0x… · trade a coin from your Agent Wallet (private chat)
-/wallet · your Agent Wallet balance and top-up address (private chat)
 
 Wallet alerts: open <a href="${SITE}/agent">troya.codes/agent</a>, go to Settings → Telegram and tap Link.
 Admins never DM first. Never share your seed phrase.`;
@@ -262,20 +272,81 @@ export async function handleBotMessage(m, tg, me) {
   const [, cmdRaw, at, arg = ""] = cm;
   if (at && me?.username && at.toLowerCase() !== me.username.toLowerCase()) return;
   const cmd = cmdRaw.toLowerCase();
-  if (!["start", "help", "links", "ca", "price", "p", "gate", "check", "rules"].includes(cmd)) return;
+  if (!["start", "help", "links", "ca", "price", "p", "gate", "check", "rules", "sentry", "badge", "perks"].includes(cmd)) return;
   // one answer per person every 3 s keeps the group readable
   const who = `${chatId}:${m.from?.id}`;
   if (Date.now() - (lastReply.get(who) || 0) < 3000) return;
   lastReply.set(who, Date.now());
 
-  let text;
+  let text, markup;
   try {
+    if (cmd === "start" && m.chat.type === "private") { await tg("sendMessage", { chat_id: chatId, text: DM_WELCOME, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: DM_WELCOME_KB }); return; }
     if (cmd === "start" || cmd === "help") text = HELP;
+    else if (cmd === "sentry") ({ text, markup } = await sentryText());
+    else if (cmd === "badge") ({ text, markup } = await badgeText(arg));
+    else if (cmd === "perks") text = await perksText();
     else if (cmd === "links") text = LINKS;
     else if (cmd === "rules") text = (await import("./tgmod.mjs")).rulesText(siteCa());
     else if (cmd === "ca") { const ca = siteCa(); text = ca ? `<b>Troya Agent CA</b> (Robinhood Chain)\n<code>${ca}</code>` : "The CA is not live yet. It will be announced here and on X at launch. Any address posted before that is fake."; }
     else if (cmd === "price" || cmd === "p") text = await price(arg);
     else text = await gate(arg);
   } catch (e) { text = `Could not read that right now (${esc(String(e.message || e).slice(0, 80))}). Try again in a moment.`; }
-  await tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true } });
+  await tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true }, ...(markup ? { reply_markup: markup } : {}) });
+}
+
+/* ---------- private /start, /sentry, /badge, /perks ---------- */
+const DM_WELCOME = `<b>Welcome to Troya Agent</b>
+The AI trading desk for Robinhood Chain. Troya Gate simulates every trade before it goes through: route, test sell, transfer tax and fees.
+
+<b>Trade from this chat</b>
+1. Open the app, connect your wallet and create an Agent Wallet.
+2. Settings → Telegram → Link, so this chat knows your wallet.
+3. Paste any coin address here, or tap "Trade in Telegram" on a Troya Sentry post. The Gate runs first; Buy only shows when it passes, and nothing goes through until you tap Confirm.
+
+<b>Ask me anything</b>
+Prices, Gate checks, Pons launches, tokenized stocks. Commands: /help
+
+Admins never DM first. Never share your seed phrase.`;
+const DM_WELCOME_KB = { inline_keyboard: [
+  [{ text: "Open Troya", url: `${SITE}/agent` }, { text: "Link Telegram", url: `${SITE}/agent#/settings` }],
+  [{ text: "Troya Sentry", url: "https://t.me/troyasentry" }, { text: "Community", url: "https://t.me/troyaagent" }],
+  [{ text: "Gate badge for devs", url: `${SITE}/badge` }],
+] };
+const ago = (t) => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 90 ? "just now" : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
+const VERDICT = { passed: "Passed", caution: "Caution", failed: "Failed" };
+async function sentryText() {
+  const se = await import("./sentry.mjs");
+  const list = se.recentResults(6);
+  const markup = { inline_keyboard: [[{ text: "Open Troya Sentry", url: "https://t.me/troyasentry" }]] };
+  if (!list.length) return { text: "Troya Sentry checks every new Pons launch through the Gate and posts each result to t.me/troyasentry.", markup };
+  const rows = list.map((r) => {
+    const sym = r.symbol ? `$${esc(r.symbol)}` : "unnamed";
+    const head = `<b>${VERDICT[r.verdict] || esc(r.verdict)}</b> · ${r.post ? `<a href="${esc(r.post)}">${sym}</a>` : sym} · ${ago(r.at)}`;
+    return r.reason && r.verdict !== "passed" ? `${head}\n${esc(String(r.reason).slice(0, 90))}` : head;
+  });
+  return { text: `<b>Troya Sentry · latest checks</b>\n\n${rows.join("\n")}\n\nEvery Pons launch, checked about 90 seconds in. Automated checks, not endorsements.`, markup };
+}
+async function badgeText(arg) {
+  const a = (/0x[0-9a-fA-F]{40}/.exec(String(arg || "")) || [])[0];
+  const page = { inline_keyboard: [[{ text: "Get a Gate badge", url: `${SITE}/badge${a ? `?ca=${a}` : ""}` }]] };
+  if (!a) return { text: "The Troya Gate badge shows a coin's live Gate result on its own website, re-checked at most every 10 minutes. Send <code>/badge 0x…</code> with the coin's address, or open the page.", markup: page };
+  const { badgeResult } = await import("./badge.mjs");
+  const r = await badgeResult(a);
+  const word = { passed: "PASSED", caution: "CAUTION", failed: "FAILED", untested: "NOT TESTED YET" }[r.verdict] || "UNAVAILABLE";
+  const sym = r.symbol ? `$${esc(r.symbol)}` : esc(a.slice(0, 10) + "…");
+  const why = r.reason && r.verdict !== "passed" ? `\n${esc(String(r.reason).slice(0, 140))}` : "";
+  return { text: `<b>Troya Gate badge · ${sym}: ${word}</b>${why}\nChecked ${new Date(r.checkedAt).toISOString().slice(11, 16)} UTC. A snapshot, never a "safe" stamp.\n\nPut it on your site with one line from the badge page:\n<code>${SITE}/api/badge/${a}.svg</code>`, markup: page };
+}
+async function perksText() {
+  const hp = await import("./holders.mjs");
+  const n = (v) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(v);
+  const start = process.env.HOLDER_START ? Date.parse(process.env.HOLDER_START) : 0;
+  const when = hp.perksOn() ? "<b>Live now.</b>" : `They switch on <b>${new Date(start).toISOString().slice(0, 16).replace("T", " ")} UTC</b>.`;
+  return `<b>$TROYA holder perks</b>
+${when} Hold at least ${n(Number(process.env.HOLDER_MIN || 1_000_000))} $TROYA, counted across your wallet and its Agent Wallet:
+• ${hp.PERKS.messagesPerDay} assistant messages a day instead of 20
+• ${hp.PERKS.playbooks} active playbooks instead of 25
+• every Troya Sentry result as a private message from this bot (link Telegram in the app first)
+
+Check your status: /wallet in a private chat with me.`;
 }

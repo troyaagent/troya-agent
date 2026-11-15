@@ -25,6 +25,7 @@ const STATE = "sentry.json";
 
 let store, busy = false, lastPost = 0;
 const recent = [];                        // newest first, for /api/sentry/recent
+export const recentResults = (n = 5) => recent.slice(0, n);   // for the bot's /sentry
 
 /* ---------- text ---------- */
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

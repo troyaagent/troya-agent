@@ -26,6 +26,8 @@ async function result(a) {
   return p;
 }
 
+export const badgeResult = result;           // for the bot's /badge
+
 const LOOK = {
   passed: { word: "PASSED", fg: "#5fd38d", bg: "rgba(95,211,141,.14)" },
   caution: { word: "CAUTION", fg: "#f2c26b", bg: "rgba(242,194,107,.14)" },

@@ -1,0 +1,111 @@
+// Group moderation check: today's real spam must score as spam, real member chat must not, and the warn → ban flow,
+// /report and admin exemptions behave. No network: Telegram calls go to a mock.
+//   node tools/tgmod-test.mjs
+const mod = await import("../server/tgmod.mjs");
+let pass = 0, fail = 0;
+const ok = (c, name, extra = "") => { c ? pass++ : fail++; console.log(`  ${c ? "✓" : "✗"} ${name}${extra ? "  " + extra : ""}`); };
+
+// seen in t.me/troyaagent on 15 Nov 2026
+const SPAM = [
+  "Hey Dev 👋 Looking to grow your project? I have 30+ TG channels, 10 big X/Twitter accounts & 12 CoinMarketCap communities ready for promotion.",
+  "Your dex rocket 🚀 vote is currently at 0 and flames 🔥 is at 0 I can add up the rocket 🚀 to 300 and flames 🔥 to 100",
+  "@admin,Boost your token with @MajorsBoostsBot Increase your token’s DEX exposure and reach more potential traders.",
+  "Call the big investors\n ✅ @Crypto_KingCall",
+  "Hello mate! 👋\n\nWould you be interested in promoting your project?\n\nI have strong channels, communities, and private groups where I can promote your project",
+  "$NIHAO — 106X AND COUNTING! \n\nCalled this one privately at just $80K MC \n\nNow sitting at $8.5M MARKET CAP!\n\nhttps://dexscreener.com/solana/4rsLuj8sBFFMwM4AK6p4R5RbZ7y2m9CGrefxVb29JbgN",
+  "$NIHAO NOW AT $10.1M MC! 🔥\n\nAnother milestone reached, Chad! 🐳",
+  "Everyone is printing, we are catching all runners",
+  "Fade the ghost 100x insider calls at your own risk",
+  "Get ready Chad will post the next play shortly make sure you don’t miss it",
+  "I just made $10k from rugpull if you are interested in learning how to rugpull I can teach you dm now",
+  "$BIG (30K >1.1M) NOW",
+  "Make sure you don’t miss out on my next call DM 👉  @SAMMYGALL To take part in my next calls",
+  "$SCHIFFY (50K> 1.74M) NOW",
+  "﻿24/7 Verified Scanners",
+  "Insider calls big profit big win",
+  "Don’t hold for too long, but just enough to win 💶💶 insider printing 💰",
+  "I invested $500 in this project $SCHIFFY and I make profit of 6K.",
+  "Make sure you follow him up he gives good signals and his legit ✅❤️",
+  "If you’re serious about catching early plays, make sure you follow him! 🔥\n\nHe shares quality signals, spots interesting plays, and knows his game 💯 🐳🐳",
+];
+const LEGIT = [
+  "troya bot communicates well. great tek", "@TrojanTroya_bot what’s the live price for $troya", "We should setup the skeleton bot for raids",
+  "holding nicely for past hrs is a green flag", "dex gempump listed update coming mate?", "Gempump listed next ?", "Ca", "X", "gm", "Gm gm guys",
+  "more people should take a look at what Troya is building. definitely worth checking out if you’re interested in AI and trading",
+  "not worried about price movement. the utility works really well,good potential", "Dev you alive", "yurr, dev keeps posting updates and new features on x",
+  "Let's push to bond. Good way to begin the week", "soon wen pons vol kicks back in, we will see a pump soon. still believe in pons", "hello there",
+  "What are the prizes for the holders?", "Think Troya will cook", "welcome in homies", "I'm 20x long ETH on Hyperliquid", "Website @TrojanTroya_bot",
+  "the CA is 0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074 right?", "check https://dexscreener.com/robinhood/0x1fcf92a1481e9f4f1f66ad68dfb855df5bfe6c6144009d1bf5e2615f3bcc205e",
+];
+
+console.log("A · scoring today's messages");
+const missed = SPAM.filter((t) => mod.score(t) < 3);
+ok(!missed.length, `all ${SPAM.length} spam messages score 3+`, missed.map((t) => `[${mod.score(t)}] ${t.slice(0, 40)}`).join(" | "));
+const hit = LEGIT.filter((t) => mod.score(t) >= 2);
+ok(!hit.length, `none of ${LEGIT.length} member messages score 2+`, hit.map((t) => `[${mod.score(t)}] ${t.slice(0, 40)}`).join(" | "));
+
+// mock Telegram
+const ADMIN = 1, BOT = 9;
+const calls = [];
+const tg = async (method, p) => {
+  calls.push({ method, ...p });
+  if (method === "getChatAdministrators") return { ok: true, result: [{ user: { id: ADMIN } }, { user: { id: BOT, is_bot: true } }] };
+  if (method === "sendMessage") return { ok: true, result: { message_id: 9000 + calls.length } };
+  return { ok: true, result: true };
+};
+const me = { id: BOT, username: "TrojanTroya_bot" };
+let mid = 100;
+const msg = (uid, text, extra = {}) => ({ message_id: ++mid, chat: { id: -100, type: "supergroup" }, from: { id: uid, first_name: `u${uid}` }, text, ...extra });
+const did = (method, f = () => true) => calls.filter((c) => c.method === method && f(c));
+const reset = () => (calls.length = 0);
+
+console.log("B · warn, then ban");
+reset();
+let r = await mod.screen(msg(50, "", { text: undefined, caption: "", photo: [{}], forward_origin: { type: "channel", chat: { id: -2001, title: "SAMMY Galaxy BIG VIP" } } }), tg, me);
+ok(r && did("deleteMessage").length === 1 && !did("banChatMember").length && did("sendMessage", (c) => /warning/.test(c.text)).length === 1, "a forwarded channel ad is removed with a warning, no ban");
+reset();
+r = await mod.screen(msg(50, "$BIG (30K >1.1M) NOW"), tg, me);
+ok(r && did("banChatMember", (c) => c.user_id === 50 && c.revoke_messages).length === 1, "the next promo from the same person is a ban, messages revoked");
+reset();
+r = await mod.screen(msg(51, "I just made $10k from rugpull if you are interested in learning how to rugpull I can teach you dm now"), tg, me);
+ok(r && did("banChatMember", (c) => c.user_id === 51).length === 1, "a scam is a ban on the first message");
+reset();
+r = await mod.screen(msg(52, "$NIHAO — 106X AND COUNTING! https://dexscreener.com/solana/4rsLuj8sBFFMwM4AK6p4R5RbZ7y2m9CGrefxVb29JbgN"), tg, me);
+ok(r && did("banChatMember", (c) => c.user_id === 52).length === 1, "plain spam (many signals) is a ban on the first message");
+reset();
+await mod.screen(msg(53, "24/7 Verified Scanners"), tg, me);
+r = await mod.screen(msg(53, "sorry, did not know the rules"), tg, me);
+ok(!r && !did("banChatMember").length, "after a warning, a plain chat line still goes through");
+
+console.log("C · /report");
+reset();
+const shill = msg(60, "Make sure you follow him up he gives good signals and his legit ✅❤️");
+r = await mod.screen(msg(61, "/report", { reply_to_message: shill }), tg, me);
+ok(r && did("deleteMessage", (c) => c.message_id === shill.message_id).length === 1, "a reported promo message is removed at once");
+reset();
+const normal = msg(62, "this coin is mid tbh");
+await mod.screen(msg(63, "/report", { reply_to_message: normal }), tg, me);
+ok(!did("deleteMessage", (c) => c.message_id === normal.message_id).length, "one report on a normal message only notes it");
+await mod.screen(msg(64, "/report", { reply_to_message: normal }), tg, me);
+ok(did("deleteMessage", (c) => c.message_id === normal.message_id).length === 1, "a second member's report removes it");
+reset();
+const adminMsg = msg(ADMIN, "Call the big investors ✅ @Crypto_KingCall");
+await mod.screen(msg(65, "/report", { reply_to_message: adminMsg }), tg, me);
+ok(!did("deleteMessage", (c) => c.message_id === adminMsg.message_id).length, "admins' messages can't be reported away");
+reset();
+const target = msg(66, "hello there");
+await mod.screen(msg(ADMIN, "/ban", { reply_to_message: target }), tg, me);
+ok(did("banChatMember", (c) => c.user_id === 66).length === 1, "an admin's /ban bans at once");
+
+console.log("D · never touched");
+reset();
+r = await mod.screen(msg(ADMIN, "$BIG (30K >1.1M) NOW https://pump.fun/x"), tg, me);
+ok(!r && !did("deleteMessage").length, "admins are never moderated");
+r = await mod.screen(msg(70, "gm, holding $TROYA"), tg, me);
+ok(!r, "normal chat passes");
+r = await mod.screen(msg(71, "", { text: undefined, caption: "new Sentry post", forward_origin: { type: "channel", chat: { id: -1004430431881 } } }), tg, me);
+ok(!r, "a forward from Troya Sentry passes");
+ok(/1FA81ddaAAc83240803B3F2d20595E40Edc1a074/.test(mod.rulesText()), "rules carry the official CA");
+
+console.log(`\n${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);

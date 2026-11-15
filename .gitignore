@@ -18,6 +18,7 @@
 !/tools/regate-test.mjs
 !/tools/tgtrade-test.mjs
 !/tools/holders-test.mjs
+!/tools/tgmod-test.mjs
 node_modules/
 .DS_Store
 .env

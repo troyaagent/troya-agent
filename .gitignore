@@ -26,6 +26,7 @@
 !/tools/mcp-test.mjs
 !/tools/playbook-test.mjs
 !/tools/bridge-hl-ui-test.mjs
+!/tools/tgterm-test.mjs
 node_modules/
 .DS_Store
 .env

@@ -490,6 +490,22 @@ async function run(req, body, emit) {
   return { id, lang, text: out.text, proposals: out.proposals || [], usage };
 }
 
+// Phase 5: the same assistant for a linked Telegram chat (counts against the same daily message limit, same history)
+export async function answerFor(address, raw, { via = "telegram" } = {}) {
+  const text = String(raw || "").replace(/[\u0000-\u0008\u000b-\u001f]/g, " ").trim().slice(0, 1000);
+  if (!text) throw new HttpError(400, "Write a message first.");
+  const usage = await takeMessage(address);
+  const settings = (await store.readJson("settings.json", {}))[address.toLowerCase()] || {};
+  const lang = detectLang(text, settings.lang);
+  const ctx = { address, via, scopes: ["read", "prepare"], slippage: settings.slippage || 1, status: () => {}, tool: () => {} };
+  const id = randomBytes(6).toString("hex");
+  let out;
+  try { out = await answer(ctx, text, lang); }
+  catch (e) { out = { text: T(lang, `Something failed while reading the markets: ${e.message}`, `Ada yang gagal saat membaca market: ${e.message}`) }; }
+  await saveTurn(address, { id: id + "u", role: "user", text, t: Date.now(), via }, { id, role: "assistant", text: out.text, proposals: (out.proposals || []).map((p) => p.id), t: Date.now(), via });
+  return { lang, text: out.text, proposals: out.proposals || [], usage };
+}
+
 export async function register(r, ctx) {
   store = ctx.store;
   initLlm(store);

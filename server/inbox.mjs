@@ -80,6 +80,8 @@ async function onTelegramMessage(m) {
   }
   // Phase 2: trade messages in a private chat (TG_TRADE=1); everything else goes to the normal bot
   if (await import("./tgtrade.mjs").then((t) => t.handleMessage(m, tg, store)).catch((e) => { console.warn("[telegram trade]", e.message); return false; })) return;
+  // Phase 5: perps, Fund Hyperliquid, positions, playbooks and the assistant in a linked private chat
+  if (await import("./tgterm.mjs").then((t) => t.handleMessage(m, tg, store)).catch((e) => { console.warn("[telegram terminal]", e.message); return false; })) return;
   const bot = await import("./tgbot.mjs");
   await bot.handleBotMessage(m, tg, tgMe);
 }
@@ -96,7 +98,8 @@ async function telegramLoop() {
         if (u.message) await onTelegramMessage(u.message).catch((e) => console.warn("[telegram]", e.message));
         if (u.callback_query) {
           const traded = await import("./tgtrade.mjs").then((t) => t.handleCallback(u.callback_query, tg)).catch((e) => { console.warn("[telegram trade]", e.message); return false; });
-          if (!traded) await import("./tgbot.mjs").then((b) => b.handleCallback(u.callback_query, tg)).catch((e) => console.warn("[telegram guard]", e.message));
+          const term = traded || await import("./tgterm.mjs").then((t) => t.handleCallback(u.callback_query, tg)).catch((e) => { console.warn("[telegram terminal]", e.message); return false; });
+          if (!term) await import("./tgbot.mjs").then((b) => b.handleCallback(u.callback_query, tg)).catch((e) => console.warn("[telegram guard]", e.message));
         }
       }
     } catch { await new Promise((x) => setTimeout(x, 5000)); }

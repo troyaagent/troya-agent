@@ -19,7 +19,9 @@ import { cleanName, cleanSymbol } from "./sentry.mjs";
 export const ON = process.env.TG_TRADE === "1";
 const SITE = "https://troya.codes";
 const SCAN = "https://robinhoodchain.blockscout.com";
-const BUYS = ["0.01", "0.02", "0.05"];
+// Buy buttons in ETH; TG_TRADE_BUYS="0.005,0.01,0.02" overrides (three amounts, each between 0.0005 and 1 ETH)
+const BUYS = ((process.env.TG_TRADE_BUYS || "").split(",").map((x) => x.trim()).filter((x) => /^\d*\.?\d+$/.test(x) && +x >= 0.0005 && +x <= 1).slice(0, 3).length === 3
+  ? process.env.TG_TRADE_BUYS.split(",").map((x) => x.trim()) : ["0.01", "0.02", "0.05"]);
 const SELLS = [25, 50, 100];
 const PICK_TTL = 10 * 60_000, CONFIRM_TTL = 60_000;
 const pend = new Map();               // id → { chat, owner, token, act, amt, pct, sym, step, exp }
@@ -27,6 +29,14 @@ const busy = new Set();               // chats with an execution in flight
 
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+// keep at most 15 significant digits by cutting, never rounding up (a Number of the result stays at or below the input)
+export function trunc(s, sig = 15) {
+  const [i, f = ""] = String(s).split(".");
+  const intD = i.replace(/^0+/, "").length;
+  if (intD >= sig) return i;
+  const keep = intD ? sig - intD : sig + (f.match(/^0*/)[0].length);
+  return f ? `${i}.${f.slice(0, keep)}`.replace(/\.?0+$/, "") || "0" : i;
+}
 const fnum = (v, d = 4) => (v == null || !isFinite(v) ? "–" : Number(v) >= 1 ? Number(v).toFixed(2) : Number(v).toPrecision(d));
 function issue(p, ttl) {
   const now = Date.now();
@@ -163,9 +173,16 @@ export async function handleCallback(cq, tg) {
     await ans("Sending…");
     await edit(`${p.act === "buy" ? `Buying ${p.amt} ETH of` : `Selling ${p.pct}% of`} $${esc(p.sym)}… the Gate is running again.`);
     try {
-      const params = p.act === "buy"
-        ? { tokenIn: "ETH", tokenOut: p.token, amountIn: Number(p.amt), slippagePct: 3 }
-        : { tokenIn: p.token, tokenOut: "ETH", amountIn: Number(formatUnits((BigInt(p.raw) * BigInt(p.pct)) / 100n, p.dec)), slippagePct: 5 };
+      let params;
+      if (p.act === "buy") params = { tokenIn: "ETH", tokenOut: p.token, amountIn: Number(p.amt), slippagePct: 3 };
+      else {
+        // sell a share of what the Agent Wallet holds right now (not when the card was drawn), truncated so it never rounds above it
+        const aw = await getAgentWallet(p.owner);
+        const b = await getBalances(aw.address, [p.token]);
+        const h = b.balances.find((x) => x.address !== "native" && x.address.toLowerCase() === p.token.toLowerCase());
+        if (!h || BigInt(h.raw) === 0n) throw new Error("Your Agent Wallet holds none of this coin right now.");
+        params = { tokenIn: p.token, tokenOut: "ETH", amountIn: Number(trunc(formatUnits((BigInt(h.raw) * BigInt(p.pct)) / 100n, h.decimals))), slippagePct: 5 };
+      }
       if (!(params.amountIn > 0)) throw new Error("Nothing to sell.");
       const r = await executeForUser(p.owner, { kind: "swap", params, rationale: `Telegram: confirmed ${p.act} in private chat`, source: "telegram" });
       let out;

@@ -11,7 +11,7 @@ import { createServer } from "node:http";
 
 const LIVE = process.env.LIVE === "1";
 const data = mkdtempSync(join(tmpdir(), "troya-tgtrade-"));
-Object.assign(process.env, { TG_TRADE: "1", DATA_DIR: data, TELEGRAM_POLL: "0", TELEGRAM_BOT_TOKEN: "", SENTRY: "" });
+Object.assign(process.env, { TG_TRADE_BUYS: process.env.TG_TRADE_BUYS || "", TG_TRADE: "1", DATA_DIR: data, TELEGRAM_POLL: "0", TELEGRAM_BOT_TOKEN: "", SENTRY: "" });
 if (!LIVE) process.env.TROYA_NO_BROADCAST = "1";
 const { initApi, handleApi } = await import("../server/api.mjs");
 await initApi({ dataDir: data, root: join(import.meta.dirname, "..") });
@@ -70,8 +70,8 @@ console.log("B · the card");
 calls = []; await trade.handleMessage(msg(ME, `/start t_${TROYA}`), tg, store);
 const c1 = last("editMessageText"); if (process.env.SHOW) console.log("-----\n" + c1.text + "\n-----");
 ok(/Troya Gate: <b>Passed<\/b>/.test(c1.text || ""), "deep link from a Sentry post opens the $TROYA card, Gate passed", (c1.text || "").split("\n")[1]);
-const b1 = btns(); const buy = b1.find((b) => /^Buy 0\.01/.test(b.text));
-ok(!!buy && b1.every((b) => !b.callback_data || /^tt:[0-9a-f]{12}$/.test(b.callback_data)), "Buy 0.01 / 0.02 / 0.05 buttons with opaque ids", b1.map((b) => b.text).join(" | "));
+const b1 = btns(); const buy = b1.find((b) => /^Buy /.test(b.text) && b.callback_data);
+ok(!!buy && b1.every((b) => !b.callback_data || /^tt:[0-9a-f]{12}$/.test(b.callback_data)), "three Buy buttons with opaque ids", b1.map((b) => b.text).join(" | "));
 
 calls = []; await trade.handleMessage(msg(ME, YOUNG), tg, store);
 const c2 = last("editMessageText");
@@ -84,7 +84,7 @@ calls = []; await trade.handleCallback(cq(buy.callback_data, OTHER, OTHER), tg);
 calls = []; await trade.handleCallback(cq("tt:000000000000", ME, ME), tg); ok(/expired/.test(last().text || ""), "unknown or old ids are refused");
 calls = []; await trade.handleCallback(cq(buy.callback_data, ME, ME), tg);
 const conf = btns().find((b) => b.text === "Confirm");
-ok(!!conf && /Buy <b>0.01 ETH<\/b>/.test(last("editMessageText").text || ""), "Buy 0.01 → confirm step, nothing sent yet");
+ok(!!conf && /Buy <b>[\d.]+ ETH<\/b>/.test(last("editMessageText").text || ""), `${buy.text} → confirm step, nothing sent yet`);
 calls = []; await trade.handleCallback(cq(buy.callback_data, ME, ME), tg); ok(/expired/.test(last().text || ""), "a used pick button can't be replayed");
 calls = []; await trade.handleCallback(cq(conf.callback_data, ME, ME), tg);
 const res = last("editMessageText").text || "";
@@ -93,6 +93,7 @@ calls = []; await trade.handleCallback(cq(conf.callback_data, ME, ME), tg); ok(/
 
 if (LIVE) {
   console.log("D · sell back and withdraw");
+  await new Promise((r) => setTimeout(r, 6000));                    // let the RPC catch up with the buy
   calls = []; await trade.handleMessage(msg(ME, `/trade ${TROYA}`), tg, store);
   const sell = btns().find((b) => b.text === "Sell 100%");
   ok(!!sell, "the card now offers Sell 25 / 50 / 100%");

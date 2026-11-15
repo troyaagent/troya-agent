@@ -155,6 +155,7 @@ async function work(s) {
     bump(s, r.v);
     recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, reason: r.why ? `${r.why.label}: ${r.why.detail}` : null, raised: r.pons?.raised ?? null, progressPct: r.pons?.progressPct ?? null, at: r.at, post: j.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${j.result.message_id}` : null });
     recent.length = Math.min(recent.length, 200);
+    s.recent = recent.slice(0, 200);                                   // survives restarts
   }
 }
 
@@ -185,6 +186,7 @@ async function tick() {
 
 export async function register(r, ctx) {
   store = ctx.store;
+  recent.push(...((await store.readJson(STATE, {})).recent || []));
   r.get("/api/sentry/recent", ({ query }) => ({ items: recent.slice(0, Math.min(100, Number(query.limit) || 30)), channel: `https://t.me/${CHANNEL.replace(/^@/, "")}`, live: !!MODE }));
   if (!MODE || (MODE !== "dry" && !TG)) return;
   console.log(`[sentry] watching Pons launches → ${MODE === "dry" ? "data/sentry-preview.jsonl (dry)" : CHANNEL}`);

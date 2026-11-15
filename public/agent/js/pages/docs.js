@@ -71,7 +71,7 @@ export async function mount(view) {
       P("Sentry checks every Pons launch about 90 seconds in. When a launch passes and its curve has raised at least what you set, Autopilot buys your amount, then sells at your take-profit or stop, or after 7 days. Exits are checked every 60 seconds."),
       UL([
         [h("b", {}, "Practice: "), "play money at real prices. Entries and exits are quoted on chain when they happen; nothing is sent."],
-        [h("b", {}, "Live: "), "buys and sells from your Agent Wallet, so Troya Gate and your caps run again on each trade. It opens after it passes a real-money test."],
+        [h("b", {}, "Live: "), "buys and sells from your Agent Wallet, so Troya Gate and your caps run again on each trade. Tested with real money on 15 Nov 2026 (troya.codes/verify)."],
         [h("b", {}, "Rules: "), "curve raised at least (ETH), buy per coin (ETH), take profit (x), stop (% down), open at once, buys a day. In Telegram: /autopilot set min 1 buy 0.01 tp 2 sl 30 max 3, or plain words."],
         [h("b", {}, "Leaderboard: "), "opt in to show your results with a shortened address; anyone can copy the rules of a trader on the board."],
       ]),

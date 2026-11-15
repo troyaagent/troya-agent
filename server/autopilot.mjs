@@ -23,6 +23,21 @@ let store = null, ticking = false, sender = null;
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const eth = (v, d = 4) => (v == null || !isFinite(v) ? "–" : `${Number(v).toFixed(d)} ETH`);
 const blank = () => ({ users: {}, positions: [] });
+const decStr = (n) => trunc(Number(n).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 18 }));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function tokenBal(addr, token) {
+  const b = await getBalances(addr, [token]).catch(() => null);
+  return b?.balances?.find((x) => x.address !== "native" && x.address.toLowerCase() === token.toLowerCase()) || null;
+}
+async function ethBal(addr) { return Number((await getBalances(addr).catch(() => null))?.balances?.find((x) => x.address === "native")?.amount ?? NaN); }
+// at most 15 significant digits, cut and never rounded up, so a Number of it stays at or below the balance
+function trunc(s, sig = 15) {
+  const [i, f = ""] = String(s).split(".");
+  const intD = i.replace(/^0+/, "").length;
+  if (intD >= sig) return i;
+  const keep = intD ? sig - intD : sig + (f.match(/^0*/)[0].length);
+  return f ? `${i}.${f.slice(0, keep)}`.replace(/\.?0+$/, "") || "0" : i;
+}
 export function useSender(fn) { sender = fn; }
 export function init(st) { store = store || st; }
 async function tg(method, payload) {
@@ -126,12 +141,16 @@ async function open(address, mode, r, rules) {
   if (!(q.amountOut > 0)) throw new Error("no quote");
   const pos = { id: randomBytes(6).toString("hex"), address, mode, token: r.token, symbol: r.symbol || q.tokenOut?.symbol || "?", amountEth: rules.buyEth, tokens: q.amountOut, entryPriceEth: rules.buyEth / q.amountOut, raisedAtEntry: r.pons?.raised ?? null, rules: { takeProfitX: rules.takeProfitX, stopPct: rules.stopPct }, openedAt: Date.now(), status: "open" };
   if (mode === "live") {
+    const awPre = await getAgentWallet(address);
+    const pre = Number((await tokenBal(awPre.address, r.token))?.amount || 0);
     const ex = await executeForUser(address, { kind: "swap", params: { tokenIn: "ETH", tokenOut: r.token, amountIn: rules.buyEth, slippagePct: 3 }, rationale: `Sentry Autopilot: $${r.symbol} passed the Gate at ${Number(r.pons?.raised || 0).toFixed(2)} ETH raised`, source: "autopilot" });
     if (!ex.executed) { await dm(address, `<b>Sentry Autopilot skipped $${esc(pos.symbol)}.</b> ${esc((ex.reasons || [ex.result?.note || "Not sent."]).join(" ").slice(0, 200))}`); return null; }
-    const aw = await getAgentWallet(address);
-    const b = await getBalances(aw.address, [r.token]).catch(() => null);
-    const h = b?.balances?.find((x) => x.address !== "native" && x.address.toLowerCase() === r.token.toLowerCase());
-    if (h) { pos.tokens = Number(h.amount); pos.entryPriceEth = rules.buyEth / pos.tokens; }
+    for (let i = 0; i < 6; i++) {
+      const now = Number((await tokenBal(awPre.address, r.token))?.amount || 0);
+      if (now - pre > q.amountOut * 0.5) { pos.tokens = now - pre; break; }
+      await sleep(3000);
+    }
+    pos.entryPriceEth = rules.buyEth / pos.tokens;
     pos.txBuy = (ex.result?.steps || []).at(-1)?.hash || null;
   }
   await savePosition(pos);
@@ -150,15 +169,23 @@ export function exitReason(pos, valueEth, now = Date.now()) {
 export async function close(pos, reason, valueEth) {
   if (pos.mode === "live") {
     const aw = await getAgentWallet(pos.address);
-    const b = await getBalances(aw.address, [pos.token]);
-    const h = b.balances.find((x) => x.address !== "native" && x.address.toLowerCase() === pos.token.toLowerCase());
-    if (!h || BigInt(h.raw) === 0n) { pos.status = "closed"; pos.closedAt = Date.now(); pos.reason = "nothing left to sell"; pos.exitValueEth = 0; pos.pnlEth = -pos.amountEth; await savePosition(pos); return pos; }
-    const amount = Number(String(formatUnits(BigInt(h.raw), h.decimals)).slice(0, 18));
-    const before = Number((await getBalances(aw.address).catch(() => null))?.balances?.find((x) => x.address === "native")?.amount ?? NaN);
+    // a public RPC can lag right after the buy: wait until the coins show up before selling
+    let h = null;
+    for (let i = 0; i < 5; i++) {
+      const b = await getBalances(aw.address, [pos.token]).catch(() => null);
+      h = b?.balances?.find((x) => x.address !== "native" && x.address.toLowerCase() === pos.token.toLowerCase()) || null;
+      if (h && Number(h.amount) >= pos.tokens * 0.9) break;
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    if (!h || BigInt(h.raw) === 0n || Number(h.amount) < pos.tokens * 0.001) { pos.status = "closed"; pos.closedAt = Date.now(); pos.reason = "nothing left to sell"; pos.exitValueEth = 0; pos.pnlEth = -pos.amountEth; await savePosition(pos); return pos; }
+    const amount = trunc(formatUnits(BigInt(h.raw), h.decimals));   // a decimal string, cut and never rounded above what it holds
+    const before = await ethBal(aw.address);
     const ex = await executeForUser(pos.address, { kind: "swap", params: { tokenIn: pos.token, tokenOut: "ETH", amountIn: amount, slippagePct: 8 }, rationale: `Sentry Autopilot: ${reason} on $${pos.symbol}`, source: "autopilot" });
     if (!ex.executed) { pos.lastError = (ex.reasons || [ex.result?.note || "not sent"]).join(" ").slice(0, 200); await savePosition(pos); return null; }
-    const after = Number((await getBalances(aw.address).catch(() => null))?.balances?.find((x) => x.address === "native")?.amount ?? NaN);
-    if (isFinite(before) && isFinite(after) && after > before) valueEth = after - before;
+    let after = NaN;
+    for (let i = 0; i < 6; i++) { after = await ethBal(aw.address); if (isFinite(before) && after > before) break; await sleep(3000); }
+    if (isFinite(before) && isFinite(after) && after > before) valueEth = after - before;   // what actually came back
+    else if (!(valueEth > 0)) valueEth = await valueOf({ ...pos, tokens: Number(amount) }).catch(() => 0);
     pos.txSell = (ex.result?.steps || []).at(-1)?.hash || null;
   }
   pos.status = "closed"; pos.closedAt = Date.now(); pos.reason = reason; pos.exitValueEth = valueEth; pos.pnlEth = valueEth - pos.amountEth;
@@ -167,7 +194,7 @@ export async function close(pos, reason, valueEth) {
   return pos;
 }
 export async function valueOf(pos) {
-  const q = await quoteSwap({ tokenIn: pos.token, tokenOut: "ETH", amountIn: pos.tokens, slippagePct: 8 });
+  const q = await quoteSwap({ tokenIn: pos.token, tokenOut: "ETH", amountIn: decStr(pos.tokens), slippagePct: 8 });
   return Number(q.amountOut) || 0;
 }
 async function tick() {

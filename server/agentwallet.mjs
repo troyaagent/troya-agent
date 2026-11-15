@@ -115,7 +115,17 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
       const pick = (t) => ({ to: t.to, data: t.data, value: t.value != null ? BigInt(t.value) : 0n });
       const txs = [...(tx.approvals || []).filter((a) => a.needed && a.tx).map((a) => pick(a.tx)), pick(tx)];
       const sends = [];
-      for (const t of txs) sends.push(await send(owner, w, t, summary));
+      // a public RPC can still be a block behind right after an approval: a swap that reverts just after one is retried
+      for (let i = 0; i < txs.length; i++) {
+        for (let attempt = 0; ; attempt++) {
+          try { sends.push(await send(owner, w, txs[i], summary)); break; }
+          catch (e) {
+            const afterApproval = i > 0 && i === txs.length - 1;
+            if (!afterApproval || attempt >= 2 || !/revert|estimateGas|CALL_EXCEPTION/i.test(e.shortMessage || e.message || "")) throw e;
+            await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+          }
+        }
+      }
       result = { steps: sends };
     } else if (kind === "perp" || kind === "close") {
       const hl = await mod("hl");

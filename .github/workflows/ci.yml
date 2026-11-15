@@ -1,0 +1,49 @@
+# Runs on every push and pull request. "unit" needs no network and must pass; "live" reads the real chains
+# (Robinhood Chain RPCs, Hyperliquid, LI.FI) with nothing signed or sent, so an upstream outage can fail it.
+name: ci
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 6 * * *"
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Syntax check
+        run: for f in server.mjs server/*.mjs mcp/*.mjs; do node --check "$f"; done
+      - name: Hyperliquid signing vectors (official SDK)
+        run: node server/hl.test.mjs
+      - name: Server-side limits (slippage, minOut, relay, sign-in domain)
+        run: node tools/security-test.mjs
+      - name: Group moderation
+        run: node tools/tgmod-test.mjs
+      - name: Holder perks
+        run: node tools/holders-test.mjs
+  live:
+    runs-on: ubuntu-latest
+    needs: unit
+    env:
+      TELEGRAM_POLL: "0"
+      TROYA_NO_BROADCAST: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Robinhood Chain engine (quotes, Gate, limits, launch build)
+        run: node tools/rh-smoke.mjs
+      - name: Telegram trading flow (dry run)
+        run: node tools/tgtrade-test.mjs
+      - name: Bot commands
+        run: node tools/botcmds-test.mjs

@@ -15,6 +15,7 @@ const MODULES = [
   "./assistant.mjs",   // chat assistant (intent engine + optional LLM)
   "./apitokens.mjs",   // API tokens for MCP / REST execution
   "./inbox.mjs",       // inbox, notifications, proposals, settings, memory
+  "./sentry.mjs",      // Troya Sentry: every new Pons launch through the Gate → Telegram channel + daily recap
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];
 

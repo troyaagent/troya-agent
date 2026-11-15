@@ -687,8 +687,19 @@ export async function simulateTx(tx, overrides) {
  */
 export async function sellCheck({ token, amountRaw, to = "ETH" }) {
   const t = addr(token, "token address");
-  const amt = BigInt(amountRaw);
+  let amt = BigInt(amountRaw);
   if (amt <= 0n) throw new HttpError(400, "Nothing to sell.");
+  // A Pons curve can only pay out the quote buyers actually put in (realQuoteReserve). Right after launch that is close to
+  // nothing, so selling a whole simulated buy back into the curve as it is now reverts, although the buyer's own ETH would
+  // cover it. Test-sell what the curve can take today instead (constant product: out = x·Q/(T+x) ≤ real → x ≤ real·T/(Q−real)),
+  // and say so plainly when it can take nothing yet.
+  let partial = false;
+  const ps = await ponsState(t).catch(() => null);
+  if (ps && !ps.graduated && ps.quoteReserve > ps.realQuote) {
+    const maxTok = (ps.realQuote * ps.tokenReserve) / (ps.quoteReserve - ps.realQuote);
+    if (ps.realQuote < 10n ** 12n || maxTok <= 0n) return { ok: false, unknown: true, thin: true, reason: "The curve holds no buyers' ETH right now (no buys yet, or every buyer sold), so there is nothing to test a sell against." };
+    if (amt > (maxTok * 9n) / 10n) { amt = (maxTok * 9n) / 10n; partial = true; }
+  }
   const q = await quoteSwap({ tokenIn: t, tokenOut: to, amountInRaw: amt.toString(), slippageBps: 5000, from: SIM_WALLET });
   const b = await buildSwapTx({ from: SIM_WALLET, _quote: q, minOutRaw: "0" });
   const diff = {};
@@ -715,7 +726,7 @@ export async function sellCheck({ token, amountRaw, to = "ETH" }) {
   } catch {}
   const quoted = BigInt(q.amountOutRaw);
   const taxPct = actual != null && quoted > 0n ? Math.max(0, 1 - Number(actual) / Number(quoted)) * 100 : null;
-  return { ok: true, sellable: true, quote: q, actualOut: actual != null ? fmt(actual, q.tokenOut.decimals) : null, quotedOut: q.amountOut, outSymbol: q.tokenOut.symbol, transferTaxPct: taxPct };
+  return { ok: true, sellable: true, partial, quote: q, actualOut: actual != null ? fmt(actual, q.tokenOut.decimals) : null, quotedOut: q.amountOut, outSymbol: q.tokenOut.symbol, transferTaxPct: taxPct };
 }
 
 /**
@@ -753,7 +764,9 @@ export async function gateCheck({ tokenIn, tokenOut, amountIn, amountInRaw, from
       if (sc.unknown) { add("sell", "skip", "Test sell", sc.reason); add("tax", "skip", "Transfer tax", "Not measured"); }
       else if (!sc.sellable) { add("sell", "fail", "Test sell", sc.reason); add("tax", "skip", "Transfer tax", "Not measured"); }
       else {
-        add("sell", "pass", "Test sell", sc.actualOut != null ? `Selling back returns ${Number(sc.actualOut).toPrecision(5)} ${sc.outSymbol}` : "Selling back succeeds");
+        add("sell", "pass", "Test sell", sc.partial
+          ? `A partial sell goes through (${sc.actualOut != null ? Number(sc.actualOut).toPrecision(4) + " " + sc.outSymbol : "succeeds"}); the young curve can't take a full one yet`
+          : sc.actualOut != null ? `Selling back returns ${Number(sc.actualOut).toPrecision(5)} ${sc.outSymbol}` : "Selling back succeeds");
         const tax = sc.transferTaxPct;
         add("tax", tax == null ? "skip" : tax > 10 ? "fail" : tax > 0.5 ? "warn" : "pass", "Transfer tax", tax == null ? "Not measured on this route" : tax > 0.5 ? `About ${tax.toFixed(1)}% is lost on transfer` : "None detected");
       }

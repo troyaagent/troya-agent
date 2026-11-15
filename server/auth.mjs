@@ -36,11 +36,16 @@ function cookies(req) {
   return out;
 }
 
+// The site named in the sign-in message comes from SITE_URL (set in production), never from a request header, so a spoofed
+// Host or X-Forwarded-Host can't make anyone sign a message that names another domain. Without SITE_URL (local dev) the
+// request's host is used.
+const SITE = (() => { try { const u = new URL(process.env.SITE_URL || ""); return /^https?:$/.test(u.protocol) ? { host: u.host, proto: u.protocol.slice(0, -1) } : null; } catch { return null; } })();
+
 // Builds a sign-in style message. `purpose` lets other modules ask for a fresh signature (e.g. key export).
 export function makeChallenge(req, address, purpose = "sign-in", statement) {
   const addr = normAddress(address);
-  const host = hostOf(req);
-  const proto = isHttps(req) ? "https" : "http";
+  const host = SITE?.host || hostOf(req);
+  const proto = SITE?.proto || (isHttps(req) ? "https" : "http");
   const now = new Date();
   const exp = new Date(now.getTime() + NONCE_TTL);
   const nonce = randomBytes(12).toString("hex");

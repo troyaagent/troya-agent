@@ -191,7 +191,8 @@ export async function mount(view, ctx) {
       st.quote = q; st.quoteErr = null; st.loading = false; st.gating = true;
       paint();
       if (wallet.address) qs.set("from", wallet.address);
-      const g = await api.get(`swap/gate?${qs}`).catch((e) => ({ pass: true, checks: [{ key: "gate", status: "warn", label: "Gate", detail: `Checks unavailable: ${e.message}` }] }));
+      // fail closed: if the Gate can't run, the swap stays locked until it can
+      const g = await api.get(`swap/gate?${qs}`).catch((e) => ({ pass: false, checks: [{ key: "gate", status: "fail", label: "Troya Gate", detail: `Could not run the checks just now (${e.message}). The swap stays locked until they pass. Try again in a moment.` }] }));
       if (!alive || seq !== st.seq) return;
       st.gate = g; st.gateAt = Date.now(); st.gating = false;
       paint();

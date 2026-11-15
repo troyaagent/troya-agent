@@ -511,16 +511,30 @@ const liquidityFor = async (token) => { try { marketMod ||= await import("./mark
  * quoteSwap({ tokenIn, tokenOut, amountIn | amountInRaw, slippageBps, from? }) — any pair on Robinhood Chain.
  * tokenIn/tokenOut: "ETH" or a 0x address. Returns the best route plus a `plan` buildSwapTx turns into calldata.
  */
-export async function quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps = 100, from }) {
+// Server-side limits (the app offers up to 5%; the API must not be looser than the app). Internal simulations (the Gate's
+// test sell) pass _sim to go wider; nothing a client sends can.
+export const MAX_SLIPPAGE_BPS = Math.max(10, Math.min(5000, Number(process.env.MAX_SLIPPAGE_BPS) || 500));
+export const capSlippage = (bps, sim = false) => Math.min(sim ? 5000 : MAX_SLIPPAGE_BPS, Math.max(1, Math.round(Number(bps) || 100)));
+// A client may ask for MORE price protection than the quote's own minimum, never less (minOut=0 is ignored).
+export function floorMinOut(quoteMin, requested, sim = false) {
+  const q = BigInt(quoteMin);
+  if (requested == null || requested === "") return q;
+  let r;
+  try { r = BigInt(requested); } catch { throw new HttpError(400, "minOutRaw must be a whole number of token units."); }
+  if (sim) return r < 0n ? 0n : r;
+  return r > q ? r : q;
+}
+export async function quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps = 100, from, _sim = false }) {
   const tin = isNative(tokenIn) ? ZERO : addr(tokenIn, "input token");
   const tout = isNative(tokenOut) ? ZERO : addr(tokenOut, "output token");
   if (lower(tin) === lower(tout)) throw new HttpError(400, "Pick two different tokens.");
   const [mi, mo] = await Promise.all([metaOf(tin), metaOf(tout)]);
   const amt = amountInRaw != null && amountInRaw !== "" ? BigInt(amountInRaw) : parseAmount(amountIn, mi.decimals);
   if (amt <= 0n) throw new HttpError(400, "Enter a positive amount.");
-  const slip = Math.min(5000, Math.max(1, Math.round(Number(slippageBps) || 100)));
+  const slip = capSlippage(slippageBps, _sim);
   const side = tin === ZERO ? "buy" : tout === ZERO ? "sell" : "swap";
   const warnings = [];
+  if (!_sim && Math.round(Number(slippageBps) || 0) > MAX_SLIPPAGE_BPS) warnings.push(`Slippage is capped at ${MAX_SLIPPAGE_BPS / 100}% on this server.`);
   const ethUsd = await ethUsdNow();
   const base = { chain: "robinhood", chainId: CHAIN_ID, side, tokenIn: tin === ZERO ? NATIVE : pub(mi), tokenOut: tout === ZERO ? NATIVE : pub(mo), slippageBps: slip, ethUsd };
   const finish = (o) => {
@@ -600,12 +614,11 @@ async function isPonsEither(a, b) {
  * → { chainId, from, to, data, value, deadline, quote, approvals:[{kind,token,spender,amount,needed,tx}], approval }
  * Always re-quotes on the server: calldata is never built from a client-supplied route.
  */
-export async function buildSwapTx({ from, tokenIn, tokenOut, amountIn, amountInRaw, minOutRaw, slippageBps, deadlineSec = 1200, _quote }) {
+export async function buildSwapTx({ from, tokenIn, tokenOut, amountIn, amountInRaw, minOutRaw, slippageBps, deadlineSec = 1200, _quote, _sim = false }) {
   const who = addr(from, "wallet address");
   const q = _quote?.plan ? _quote : await quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps, from: who });
   const amt = BigInt(q.amountInRaw);
-  let min = BigInt(q.minOutRaw);
-  if (minOutRaw != null && minOutRaw !== "" && BigInt(minOutRaw) >= 0n) min = BigInt(minOutRaw);
+  const min = floorMinOut(q.minOutRaw, minOutRaw, _sim);
   const deadline = Math.floor(Date.now() / 1000) + Math.max(60, Math.min(3600, Number(deadlineSec) || 1200));
   const tin = q.tokenIn.address === "native" ? ZERO : q.tokenIn.address, tout = q.tokenOut.address === "native" ? ZERO : q.tokenOut.address;
   let built;
@@ -700,8 +713,8 @@ export async function sellCheck({ token, amountRaw, to = "ETH" }) {
     if (ps.realQuote < 10n ** 12n || maxTok <= 0n) return { ok: false, unknown: true, thin: true, reason: "The curve holds no buyers' ETH right now (no buys yet, or every buyer sold), so there is nothing to test a sell against." };
     if (amt > (maxTok * 9n) / 10n) { amt = (maxTok * 9n) / 10n; partial = true; }
   }
-  const q = await quoteSwap({ tokenIn: t, tokenOut: to, amountInRaw: amt.toString(), slippageBps: 5000, from: SIM_WALLET });
-  const b = await buildSwapTx({ from: SIM_WALLET, _quote: q, minOutRaw: "0" });
+  const q = await quoteSwap({ tokenIn: t, tokenOut: to, amountInRaw: amt.toString(), slippageBps: 5000, from: SIM_WALLET, _sim: true });
+  const b = await buildSwapTx({ from: SIM_WALLET, _quote: q, minOutRaw: "0", _sim: true });
   const diff = {};
   const balKeys = await touchedKeys(t, iface.erc20.encodeFunctionData("balanceOf", [SIM_WALLET]));
   if (!balKeys.length) return { ok: false, unknown: true, quote: q, reason: "Could not locate the token's balance storage, so the test sell was skipped." };
@@ -1038,11 +1051,12 @@ async function headBlock(chain) {
   headCache[chain] = { at: Date.now(), n };
   return n;
 }
-async function checkCall(chain, c, ip) {
+export async function checkCall(chain, c, ip) {
   const fail = (code, message) => ({ jsonrpc: "2.0", id: c?.id ?? null, error: { code, message } });
   if (!c || typeof c !== "object" || typeof c.method !== "string") return fail(-32600, "Invalid request");
   if (!ALLOWED.has(c.method)) return fail(-32601, `Method ${c.method} is not available through the Troya relay.`);
   const params = Array.isArray(c.params) ? c.params : [];
+  if (c.method === "eth_sendRawTransaction" && process.env.TROYA_NO_BROADCAST === "1") return fail(-32000, "Broadcasting is switched off on this server (TROYA_NO_BROADCAST). Nothing was sent.");
   if (c.method === "eth_sendRawTransaction" && sendLimited(ip)) return fail(-32005, "Too many transactions from this address, wait a minute.");
   if (c.method === "eth_getLogs") {
     const f = params[0] || {};

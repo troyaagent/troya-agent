@@ -11,6 +11,7 @@
 !/public/
 !/mcp/
 !/tools/
+!/.github/
 /public/_*/
 /tools/*
 !/tools/crawl.mjs
@@ -20,6 +21,7 @@
 !/tools/holders-test.mjs
 !/tools/tgmod-test.mjs
 !/tools/botcmds-test.mjs
+!/tools/security-test.mjs
 !/tools/hlfund-test.mjs
 node_modules/
 .DS_Store

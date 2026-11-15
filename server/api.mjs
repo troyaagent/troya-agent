@@ -16,6 +16,7 @@ const MODULES = [
   "./apitokens.mjs",   // API tokens for MCP / REST execution
   "./inbox.mjs",       // inbox, notifications, proposals, settings, memory
   "./sentry.mjs",      // Troya Sentry: every new Pons launch through the Gate → Telegram channel + daily recap
+  "./buybot.mjs",      // buy tracker: every $TROYA buy (Pons curve + Uniswap v4 ETH pools) → the Telegram group
   "./badge.mjs",       // Phase 4: live Troya Gate badge (SVG + JSON) for Pons devs to embed
   "./holders.mjs",     // Phase 3: $TROYA holder perks (more messages, more playbooks, Sentry DMs)
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk

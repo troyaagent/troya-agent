@@ -329,7 +329,7 @@ function saveKeys() {
     try { await writeFile(path.join(DATA_DIR, "v4keys.json.tmp"), JSON.stringify(v4.keys)); await import("node:fs/promises").then((f) => f.rename(path.join(DATA_DIR, "v4keys.json.tmp"), path.join(DATA_DIR, "v4keys.json"))); } catch {}
   }, 2000);
 }
-function addV4Key(id, key) {
+export function addV4Key(id, key) {
   const k = lower(id);
   if (!v4.keys[k]) { v4.keys[k] = key; saveKeys(); }
   else if (key.liq && v4.keys[k]) v4.keys[k].liq = Math.max(v4.keys[k].liq || 0, key.liq);

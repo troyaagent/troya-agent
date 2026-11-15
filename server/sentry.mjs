@@ -3,10 +3,16 @@
 //   SENTRY=1    watch + post        SENTRY=dry   watch, write posts to data/sentry-preview.jsonl, send nothing
 //   SENTRY_CHANNEL (default @troyasentry) · SENTRY_RECAP_CHAT (default @troyaagent) · SENTRY_RECAP_UTC_HOUR (default 13)
 //   SENTRY_IMAGES=0 turns off the coin's logo on posts (on by default; posts fall back to text when a logo can't be fetched)
+//   SENTRY_POOLS=1 also checks coins that launch outside Pons: every new hookless Uniswap v3/v4 pool against ETH, WETH or USDG.
+//   They are posted only once the Gate finds a route and at least 0.05 ETH of depth (checked at 5 min, 15 min, 1 h), so empty
+//   or dust pools never reach the channel. SENTRY_POOLS=dry writes those posts to data/sentry-pools-preview.jsonl instead.
 // Launch log: PonsFactory event, topics = [sig, token, curve, deployer]. Token names come from the internet: they are
 // stripped of links and handles and HTML-escaped before they reach Telegram. Wording stays factual: check results,
 // never "scam" or "safe".
 import { ADDR, rpc, gateCheck, ponsState, ponsPublic, ponsProfile } from "./robinhood.mjs";
+import { readFileSync } from "node:fs";
+import { AbiCoder, getAddress } from "ethers";
+import { addV4Key } from "./robinhood.mjs";
 
 const LAUNCH_TOPIC = "0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607";
 const MODE = process.env.SENTRY || "";
@@ -22,6 +28,14 @@ const FIRST_CHECK_S = 90;                 // past the launch snipe tax
 const RETRY_S = [5 * 60, 15 * 60];        // no buys yet → look again, then drop quietly
 const MAX_RANGE = 2000, CATCHUP = 3000, MAX_GAP = 20000;
 const STATE = "sentry.json";
+const POOLS = process.env.SENTRY_POOLS || "";
+const T_V4_INIT = "0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438";   // PoolManager Initialize
+const T_V3_CREATED = "0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118"; // UniswapV3Factory PoolCreated
+const NULL_ADDR = "0x0000000000000000000000000000000000000000";
+const QUOTES = new Set([NULL_ADDR, ADDR.weth.toLowerCase(), ADDR.usdg.toLowerCase()]);
+const POOL_FIRST_S = 300, POOL_RETRY_S = [15 * 60, 60 * 60];
+const coder = AbiCoder.defaultAbiCoder();
+const STOCKS = (() => { try { return new Set(JSON.parse(readFileSync(new URL("./data/robinhood-stocks.json", import.meta.url), "utf8")).stocks.map((x) => x.address.toLowerCase())); } catch { return new Set(); } })();
 
 let store, busy = false, lastPost = 0;
 const recent = [];                        // newest first, for /api/sentry/recent
@@ -58,6 +72,7 @@ export function formatPost(r) {
   const name = r.name && r.name.toUpperCase() !== (r.symbol || "").toUpperCase() ? ` · ${esc(r.name)}` : "";
   const ck = Object.fromEntries(r.checks.map((c) => [c.key, c]));
   const lines = [`<b>${head}</b> · <b>${sym}</b>${name}`];
+  if (r.source) lines.push(`New ${esc(r.source)} pool`);
   if (r.v === "failed" || r.v === "caution") lines.push(`${esc(r.why.label)}: ${esc(String(r.why.detail).slice(0, 140))}`);
   const bits = [];
   if (ck.sim) bits.push(`Sim ${ck.sim.status === "pass" ? "ok" : ck.sim.status === "fail" ? "failed" : "skipped"}`);
@@ -75,11 +90,16 @@ const buttons = (a) => ({ inline_keyboard: [
   [{ text: "Check in Troya", url: `${SITE}/agent#/swap?in=eth&out=${a}` }, { text: "Pons", url: PONS + a.toLowerCase() }],
 ] });
 
+const poolButtons = (a) => ({ inline_keyboard: [
+  ...(TRADE ? [[{ text: "Trade in Telegram", url: `https://t.me/${process.env.TG_BOT_USERNAME || "TrojanTroya_bot"}?start=t_${a}` }]] : []),
+  [{ text: "Check in Troya", url: `${SITE}/agent#/swap?in=eth&out=${a}` }, { text: "DexScreener", url: `https://dexscreener.com/robinhood/${a}` }],
+] });
+
 export function formatRecap(d, dayLabel) {
   const checked = d.passed + d.caution + d.failed;
   return `<b>Troya Sentry · ${esc(dayLabel)}</b>
 
-${d.seen} Pons launches seen. ${checked} had buyers and went through Troya Gate:
+${d.seen} Pons launches${d.pools ? ` and ${d.pools} new Uniswap pools` : ""} seen. ${checked} had buyers and went through Troya Gate:
 ${d.passed} passed · ${d.caution} caution · ${d.failed} failed
 ${d.nobuys} had an empty or dust-only curve (no real buys, or every buyer sold), so there was nothing to test.
 
@@ -159,7 +179,7 @@ async function send(chat, text, markup, logo = null) {
 
 /* ---------- state ---------- */
 const dayKey = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
-const blank = () => ({ seen: 0, passed: 0, caution: 0, failed: 0, nobuys: 0 });
+const blank = () => ({ seen: 0, pools: 0, passed: 0, caution: 0, failed: 0, nobuys: 0 });
 // one [time, kind] per event, kept 3 days, so the recap counts exactly the last 24 hours
 function bump(s, k) { s.events.push([Date.now(), k]); const cut = Date.now() - 3 * 86400e3; while (s.events.length && s.events[0][0] < cut) s.events.shift(); }
 export function countSince(events, since) { const d = blank(); for (const [t, k] of events) if (t >= since && k in d) d[k]++; return d; }
@@ -189,11 +209,45 @@ async function scan(s) {
       s.queue.push({ token, due: Date.now() + FIRST_CHECK_S * 1000, tries: 0 });
       bump(s, "seen");
     }
+    if (POOLS) await scanPools(s, from, to);
     s.lastBlock = to;
     from = to + 1;
   }
   const keep = Object.entries(s.seen).sort((a, b) => b[1] - a[1]).slice(0, 3000);
   s.seen = Object.fromEntries(keep);
+}
+
+// coins launched outside Pons: a new hookless Uniswap pool with ETH, WETH or USDG on one side. Pons launches (already
+// queued above) and tokenized stocks are skipped; a v4 pool's key is registered so the Gate can route through it at once.
+function notePool(s, token, item) {
+  const t = token.toLowerCase();
+  if (s.seen[t] || STOCKS.has(t) || QUOTES.has(t)) return;
+  s.seen[t] = Date.now();
+  s.queue.push({ token: t, due: Date.now() + POOL_FIRST_S * 1000, tries: 0, kind: "pool", ...item });
+  bump(s, "pools");
+}
+async function scanPools(s, from, to) {
+  const range = { fromBlock: "0x" + from.toString(16), toBlock: "0x" + to.toString(16) };
+  const [v4, v3] = await Promise.all([
+    rpc("robinhood", "eth_getLogs", [{ address: ADDR.poolManager, topics: [T_V4_INIT], ...range }], { timeoutMs: 20000 }),
+    rpc("robinhood", "eth_getLogs", [{ address: ADDR.v3Factory, topics: [T_V3_CREATED], ...range }], { timeoutMs: 20000 }),
+  ]);
+  for (const l of v4 || []) {
+    const c0 = "0x" + l.topics[2].slice(26), c1 = "0x" + l.topics[3].slice(26);
+    const [fee, ts, hooks] = coder.decode(["uint24", "int24", "address", "uint160", "int24"], l.data);
+    if (hooks !== NULL_ADDR && hooks.toLowerCase() !== NULL_ADDR) continue;            // hooked pools (Pons graduations and others) are left out
+    const q0 = QUOTES.has(c0), q1 = QUOTES.has(c1);
+    if (q0 === q1) continue;
+    addV4Key(l.topics[1], { c0: getAddress(c0), c1: getAddress(c1), fee: Number(fee), ts: Number(ts), hooks: getAddress(hooks), liq: 1 });
+    notePool(s, q0 ? c1 : c0, { source: "Uniswap v4", pool: l.topics[1] });
+  }
+  for (const l of v3 || []) {
+    const t0 = "0x" + l.topics[1].slice(26), t1 = "0x" + l.topics[2].slice(26);
+    const q0 = QUOTES.has(t0), q1 = QUOTES.has(t1);
+    if (q0 === q1) continue;
+    const [, pool] = coder.decode(["int24", "address"], l.data);
+    notePool(s, q0 ? t1 : t0, { source: "Uniswap v3", pool });
+  }
 }
 
 async function work(s) {
@@ -203,6 +257,26 @@ async function work(s) {
     let r;
     try { r = await checkLaunch(q.token); }
     catch (e) { q.due = now + 60000; q.err = (q.err || 0) + 1; if (q.err >= 3) s.queue = s.queue.filter((x) => x !== q); console.warn("[sentry]", q.token, e.message); continue; }
+    if (q.kind === "pool") {
+      if (r.pons) { s.queue = s.queue.filter((x) => x !== q); continue; }                 // a Pons coin: its launch is covered already
+      const ck = Object.fromEntries(r.checks.map((c) => [c.key, c]));
+      const ready = ck.route?.status === "pass" && (ck.depth?.status === "pass" || ck.depth?.status === "warn");
+      if (!ready || r.v === "nobuys") {
+        if (q.tries < POOL_RETRY_S.length) { q.due = now + POOL_RETRY_S[q.tries] * 1000; q.tries++; continue; }
+        s.queue = s.queue.filter((x) => x !== q); continue;                               // never reached real depth: dropped quietly
+      }
+      s.queue = s.queue.filter((x) => x !== q);
+      r.source = q.source;
+      if (POOLS === "dry") { await store.append("sentry-pools-preview.jsonl", { t: Date.now(), token: r.token, pool: q.pool, text: formatPost(r) }); continue; }
+      const jp = await send(CHANNEL, formatPost(r), poolButtons(r.token), null).catch((e) => ({ ok: false, description: e.message }));
+      if (!jp.ok) console.warn("[sentry] pool post failed:", jp.description);
+      if (MODE !== "dry") holderDms(r, null).catch((e) => console.warn("[sentry] holder DMs:", e.message));
+      bump(s, r.v);
+      recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, source: r.source, reason: r.why ? `${r.why.label}: ${r.why.detail}` : null, raised: null, progressPct: null, at: r.at, post: jp.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${jp.result.message_id}` : null });
+      recent.length = Math.min(recent.length, 200);
+      s.recent = recent.slice(0, 200);
+      continue;
+    }
     if (r.snipe && q.tries < 3) { q.due = now + 60000; q.tries++; continue; }
     if (r.v === "nobuys") {
       if (q.tries < RETRY_S.length) { q.due = now + RETRY_S[q.tries] * 1000; q.tries++; continue; }
@@ -224,9 +298,10 @@ async function work(s) {
 async function holderDms(r, logo) {
   const hp = await import("./holders.mjs").catch(() => null);
   if (!hp) return;
+  const kb = r.source ? poolButtons(r.token) : buttons(r.token);
   for (const chat of await hp.holderChats()) {
-    const sent = logo ? await sendPhoto(chat, logo, formatPost(r), buttons(r.token)).catch(() => null) : null;
-    if (!sent?.ok) await tg("sendMessage", { chat_id: chat, text: formatPost(r), parse_mode: "HTML", reply_markup: buttons(r.token), link_preview_options: { is_disabled: true } }).catch(() => {});
+    const sent = logo ? await sendPhoto(chat, logo, formatPost(r), kb).catch(() => null) : null;
+    if (!sent?.ok) await tg("sendMessage", { chat_id: chat, text: formatPost(r), parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } }).catch(() => {});
     await new Promise((x) => setTimeout(x, 60));
   }
 }

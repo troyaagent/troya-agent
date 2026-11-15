@@ -2,6 +2,8 @@
 //   BUYBOT=1   watch + post        BUYBOT=dry   watch, write posts to data/buybot-preview.jsonl, send nothing
 //   BUYBOT_CHAT (default @troyaagent) · BUYBOT_MIN_USD (default 25) · BUYBOT_BIG_USD (default 500)
 //   BUYBOT_POOLS (extra v4 pool ids, comma separated). The token is the CA in public/config.js.
+//   BUYBOT_RECAP_UTC_HOUR (default 14): one recap a day of the last 24 hours of buys. Also posts once when the Pons curve
+//   crosses 60/70/80/90% of its graduation target, and once when $TROYA graduates to its Uniswap v4 pool.
 // How a buy is read, per transaction: $TROYA leaving a market (the Pons curve, or the v4 PoolManager) minus $TROYA going
 // back into one. A positive net is a buy; arbitrage that buys on one venue and sells on the other nets to about zero and
 // is skipped. ETH spent comes from the curve's Buy event (gross, fees included) and from our pools' Swap events, so the
@@ -20,6 +22,8 @@ const SITE = "https://troya.codes";
 const EXPLORER = "https://robinhoodchain.blockscout.com";
 const STATE = "buybot.json";
 const MAX_RANGE = 2000, CATCHUP = 400, MAX_GAP = 20000, PER_TICK = 4;
+const RECAP_HOUR = Number(process.env.BUYBOT_RECAP_UTC_HOUR ?? 14);
+const MILESTONES = [60, 70, 80, 90];
 
 const T_TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const T_SWAP = "0x40e9cecb9f5f1f1c5b9c97dec2917b7ee92e57ba5563708daca94dd84ad7112f";   // v4 Swap(id, sender, amount0, amount1, sqrtPriceX96, liquidity, tick, fee)
@@ -79,6 +83,16 @@ export function formatMore(rest) {
   const eth = rest.reduce((s, b) => s + b.eth, 0), usd = rest.reduce((s, b) => s + b.usd, 0);
   return `<b>+${rest.length} more $TROYA buys</b>\n${fmtEth(eth)} (${fmtUsd(usd)}) in total`;
 }
+export function formatRecap(d) {
+  const lines = [`<b>$TROYA, last 24 hours</b>`, "", `Buys: <b>${d.buys}</b> from ${d.wallets} wallet${d.wallets === 1 ? "" : "s"}`, `Bought: <b>${fmtEth(d.eth)}</b> (${fmtUsd(d.usd)})`];
+  if (d.top) lines.push(`Biggest buy: ${fmtEth(d.top.eth)} (${fmtUsd(d.top.usd)}) by <a href="${EXPLORER}/address/${d.top.wallet}">${short(d.top.wallet)}</a>`);
+  if (d.priceUsd) lines.push(`Price now: ${fmtPrice(d.priceUsd)}${d.mcUsd ? ` · MC ${fmtUsd(d.mcUsd)}` : ""}`);
+  if (d.curvePct != null) lines.push(`Pons curve: ${d.curvePct.toFixed(1)}% of the way to graduation (${d.raised.toFixed(2)} of ${d.target} ETH)`);
+  lines.push("", "Every number is read from the chain.");
+  return lines.join("\n");
+}
+export const formatMilestone = (pct, raised, target) => `<b>$TROYA curve: ${pct}% to graduation</b>\n\n${raised.toFixed(2)} of ${target} ETH raised on the Pons curve. At ${target} ETH, $TROYA graduates to its Uniswap v4 pool.`;
+export const formatGraduated = (target) => `<b>$TROYA has graduated</b>\n\nThe Pons curve filled at ${target} ETH and $TROYA now trades on its Uniswap v4 pool on Robinhood Chain.\n\nThe CA does not change. The buy tracker follows the new pool on its own, and Troya Gate routes swaps there automatically.\n\nThanks to everyone who bought on the curve. On to the next one.`;
 const buttons = (ca) => ({ inline_keyboard: [
   [{ text: "Buy through Troya Gate", url: `${SITE}/agent#/swap?in=eth&out=${ca}` }],
   [{ text: "Chart", url: `${SITE}/agent#/token/${ca}` }, { text: "DexScreener", url: `https://dexscreener.com/robinhood/${ca}` }],
@@ -167,6 +181,55 @@ export function readBuy(receipt, m, unit = 10n ** 18n) {
   return { tx: receipt.transactionHash, wallet: getAddress(wallet || receipt.from), tokensRaw: tokens, tokens: Number(tokens) / Number(unit), eth: Number(eth) / 1e18, venue: [...venue].join(" + ") || "Pons curve", sqrt, block: Number(BigInt(receipt.blockNumber)) };
 }
 
+/* ---------- curve milestones, graduation, daily recap ---------- */
+const DAY = 86400e3;
+function note(s, b) {
+  (s.events ||= []).push([Date.now(), b.eth, b.usd, b.wallet]);
+  const cut = Date.now() - 2 * DAY;
+  while (s.events.length && s.events[0][0] < cut) s.events.shift();
+}
+async function watchCurve(s, m) {
+  if (Date.now() - (s.curveAt || 0) < 30000 || !m.ps) return;
+  s.curveAt = Date.now();
+  const ps = await ponsState(m.token).catch(() => null);
+  if (!ps) return;
+  const target = Number(ps.threshold) / 1e18;
+  if (ps.graduated) {
+    if (!s.graduated) {
+      s.graduated = Date.now(); market = null;
+      const j = await send(formatGraduated(+target.toFixed(2)), buttons(m.token));
+      if (!j.ok) console.warn("[buybot] graduation post failed:", j.description);
+    }
+    return;
+  }
+  const raised = Number(ps.realQuote) / 1e18, pct = target > 0 ? (raised / target) * 100 : 0;
+  s.milestones ||= MILESTONES.filter((x) => x <= pct);          // first run: don't announce what already happened
+  const hit = MILESTONES.filter((x) => x <= pct && !s.milestones.includes(x));
+  if (hit.length) {
+    const top = Math.max(...hit);
+    s.milestones.push(...hit);
+    const j = await send(formatMilestone(top, raised, +target.toFixed(2)), buttons(m.token));
+    if (!j.ok) console.warn("[buybot] milestone post failed:", j.description);
+  }
+}
+async function recap(s, m) {
+  const now = new Date(), day = now.toISOString().slice(0, 10);
+  if (now.getUTCHours() !== RECAP_HOUR || s.recapDay === day) return;
+  s.recapDay = day;
+  const ev = (s.events || []).filter((e) => e[0] >= Date.now() - DAY);
+  if (!ev.length) return;
+  const usdPerEth = await ethUsd().catch(() => 0);
+  const ps = m.ps && !m.ps.graduated ? await ponsState(m.token).catch(() => m.ps) : m.ps;
+  const spot = spotEth({ ...m, ps }, null), supply = Number(m.supply) / 10 ** m.decimals;
+  const top = ev.reduce((a, e) => (e[1] > (a?.[1] || 0) ? e : a), null);
+  const d = { buys: ev.length, wallets: new Set(ev.map((e) => e[3])).size, eth: ev.reduce((x, e) => x + e[1], 0), usd: ev.reduce((x, e) => x + e[2], 0),
+    top: top ? { eth: top[1], usd: top[2], wallet: top[3] } : null, priceUsd: spot * usdPerEth || null };
+  d.mcUsd = d.priceUsd ? d.priceUsd * supply : null;
+  if (ps && !ps.graduated) { d.raised = Number(ps.realQuote) / 1e18; d.target = +(Number(ps.threshold) / 1e18).toFixed(2); d.curvePct = d.target ? (d.raised / d.target) * 100 : null; }
+  const j = await send(formatRecap(d), buttons(m.token));
+  if (!j.ok) console.warn("[buybot] recap failed:", j.description);
+}
+
 /* ---------- loop ---------- */
 async function tick() {
   if (busy) return;
@@ -211,6 +274,7 @@ async function tick() {
       const ok = [];
       for (const b of buys) {
         b.usd = b.eth * usdPerEth;
+        note(s, b);
         if (!(b.usd >= MIN_USD)) continue;
         b.priceUsd = spot * usdPerEth || null;
         b.mcUsd = b.priceUsd ? b.priceUsd * supply : null;
@@ -229,6 +293,8 @@ async function tick() {
       for (const b of buys) seen.add(b.tx);
     }
     for (const h of txs) seen.add(h);
+    await watchCurve(s, m).catch((e) => console.warn("[buybot] curve:", e.message));
+    await recap(s, m).catch((e) => console.warn("[buybot] recap:", e.message));
     s.posted = [...seen].slice(-500);
     s.recent = recent.slice(0, 20);
     await store.writeJson(STATE, s);

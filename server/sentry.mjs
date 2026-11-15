@@ -106,7 +106,7 @@ ${d.nobuys} had an empty or dust-only curve (no real buys, or every buyer sold),
 Every result, one line each: t.me/${CHANNEL.replace(/^@/, "")}
 Check any coin yourself: /gate 0x…
 
-Automated checks, not endorsements. Not financial advice.`;
+Automated checks, not endorsements.`;
 }
 
 /* ---------- the coin's logo ---------- */

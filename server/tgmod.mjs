@@ -70,7 +70,7 @@ This group is for Troya Agent only: the project, its progress and the team build
 6. The only official $TROYA contract on Robinhood Chain:
 <code>${ca}</code>
 Ignore any other address.
-7. Be decent to each other. Nothing here is financial advice; check any coin with Troya Gate.
+7. Be decent to each other, and check any coin with Troya Gate before you trade it.
 
 <b>How it is enforced</b>
 A message that breaks rules 2 to 4 is removed and you get a warning. A second one, or anything plainly spam or a scam, is a ban. See something like it? Reply <code>/report</code> to the message.

@@ -2,10 +2,11 @@
 // The group gets one recap a day. Results also feed GET /api/sentry/recent (public, read-only).
 //   SENTRY=1    watch + post        SENTRY=dry   watch, write posts to data/sentry-preview.jsonl, send nothing
 //   SENTRY_CHANNEL (default @troyasentry) · SENTRY_RECAP_CHAT (default @troyaagent) · SENTRY_RECAP_UTC_HOUR (default 13)
+//   SENTRY_IMAGES=0 turns off the coin's logo on posts (on by default; posts fall back to text when a logo can't be fetched)
 // Launch log: PonsFactory event, topics = [sig, token, curve, deployer]. Token names come from the internet: they are
 // stripped of links and handles and HTML-escaped before they reach Telegram. Wording stays factual: check results,
 // never "scam" or "safe".
-import { ADDR, rpc, gateCheck, ponsState, ponsPublic } from "./robinhood.mjs";
+import { ADDR, rpc, gateCheck, ponsState, ponsPublic, ponsProfile } from "./robinhood.mjs";
 
 const LAUNCH_TOPIC = "0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607";
 const MODE = process.env.SENTRY || "";
@@ -87,18 +88,71 @@ Check any coin yourself: /gate 0x…
 Automated checks, not endorsements. Not financial advice.`;
 }
 
+/* ---------- the coin's logo ---------- */
+// Pons keeps each coin's logo URL on chain, almost always an IPFS CID. The image is fetched only from fixed public
+// gateways by CID (never from an arbitrary host, so no request can be pointed at our own network), checked for type and
+// size, and uploaded with the post; Telegram's file_id is then reused for the same logo. Anything else: text post.
+const IMAGES = process.env.SENTRY_IMAGES !== "0";
+const GATEWAYS = ["https://ipfs.io/ipfs/", "https://dweb.link/ipfs/", "https://gateway.pinata.cloud/ipfs/", "https://w3s.link/ipfs/"];
+const IMG_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+const MAX_IMG = 5 * 1024 * 1024;
+const fileIds = new Map();               // cid → Telegram file_id
+export function logoCid(logo) {
+  const m = /^(?:ipfs:\/\/(?:ipfs\/)?|https:\/\/[^/?#]+\/ipfs\/)([A-Za-z0-9]{46,100})(\/[A-Za-z0-9._-]{1,80})?$/.exec(String(logo || "").trim());
+  return m ? m[1] + (m[2] || "") : null;
+}
+async function fetchLogo(cid) {
+  for (const g of GATEWAYS) {
+    try {
+      const r = await fetch(g + cid, { redirect: "error", signal: AbortSignal.timeout(8000) });
+      const type = String(r.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+      if (!r.ok || !IMG_TYPES[type] || Number(r.headers.get("content-length") || 0) > MAX_IMG) continue;
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length < 100 || buf.length > MAX_IMG) continue;
+      return { buf, type };
+    } catch { /* next gateway */ }
+  }
+  return null;
+}
+export async function logoFor(token) {
+  if (!IMAGES) return null;
+  const p = await ponsProfile(token).catch(() => null);
+  const cid = logoCid(p?.logo);
+  if (!cid) return null;
+  if (fileIds.has(cid)) return { cid, fileId: fileIds.get(cid) };
+  const img = await fetchLogo(cid);
+  return img ? { cid, ...img } : null;
+}
+
 /* ---------- telegram ---------- */
 async function tg(method, payload) {
   const r = await fetch(`https://api.telegram.org/bot${TG}/${method}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(15000) });
   return r.json();
 }
-async function send(chat, text, markup) {
-  if (MODE === "dry") { await store.append("sentry-preview.jsonl", { t: Date.now(), chat, text, markup }); return { ok: true, dry: true }; }
+// a photo post: the cached file_id, or the image uploaded as multipart; null when Telegram won't take it
+async function sendPhoto(chat, logo, caption, markup) {
+  let j;
+  if (logo.fileId) j = await tg("sendPhoto", { chat_id: chat, photo: logo.fileId, caption, parse_mode: "HTML", reply_markup: markup });
+  else {
+    const f = new FormData();
+    f.set("chat_id", String(chat)); f.set("caption", caption); f.set("parse_mode", "HTML"); f.set("reply_markup", JSON.stringify(markup));
+    f.set("photo", new Blob([logo.buf], { type: logo.type }), `logo.${IMG_TYPES[logo.type]}`);
+    j = await fetch(`https://api.telegram.org/bot${TG}/sendPhoto`, { method: "POST", body: f, signal: AbortSignal.timeout(30000) }).then((r) => r.json()).catch((e) => ({ ok: false, description: e.message }));
+  }
+  if (j.ok) { const ph = j.result.photo; if (ph?.length) fileIds.set(logo.cid, ph[ph.length - 1].file_id); console.log(`[sentry] posted with logo ${logo.cid.slice(0, 16)}… to ${chat}`); if (fileIds.size > 500) fileIds.delete(fileIds.keys().next().value); return j; }
+  if (j.parameters?.retry_after) return j;
+  console.warn("[sentry] photo post failed, sending text:", j.description);
+  if (logo.fileId) fileIds.delete(logo.cid);
+  return null;
+}
+async function send(chat, text, markup, logo = null) {
+  if (MODE === "dry") { await store.append("sentry-preview.jsonl", { t: Date.now(), chat, text, markup, logo: logo?.cid || null }); return { ok: true, dry: true }; }
   const wait = lastPost + 4000 - Date.now();
   if (wait > 0) await new Promise((x) => setTimeout(x, wait));
   lastPost = Date.now();
-  const j = await tg("sendMessage", { chat_id: chat, text, parse_mode: "HTML", reply_markup: markup, link_preview_options: { is_disabled: true } });
-  if (!j.ok && j.parameters?.retry_after) { await new Promise((x) => setTimeout(x, (j.parameters.retry_after + 1) * 1000)); return tg("sendMessage", { chat_id: chat, text, parse_mode: "HTML", reply_markup: markup, link_preview_options: { is_disabled: true } }); }
+  const once = async () => (logo && text.length <= 1024 && (await sendPhoto(chat, logo, text, markup))) || tg("sendMessage", { chat_id: chat, text, parse_mode: "HTML", reply_markup: markup, link_preview_options: { is_disabled: true } });
+  const j = await once();
+  if (!j.ok && j.parameters?.retry_after) { await new Promise((x) => setTimeout(x, (j.parameters.retry_after + 1) * 1000)); return once(); }
   return j;
 }
 
@@ -154,9 +208,10 @@ async function work(s) {
       s.queue = s.queue.filter((x) => x !== q); bump(s, "nobuys"); continue;
     }
     s.queue = s.queue.filter((x) => x !== q);
-    const j = await send(CHANNEL, formatPost(r), buttons(r.token)).catch((e) => ({ ok: false, description: e.message }));
+    const logo = await logoFor(r.token).catch(() => null);
+    const j = await send(CHANNEL, formatPost(r), buttons(r.token), logo).catch((e) => ({ ok: false, description: e.message }));
     if (!j.ok) console.warn("[sentry] post failed:", j.description);
-    if (MODE !== "dry") holderDms(r).catch((e) => console.warn("[sentry] holder DMs:", e.message));
+    if (MODE !== "dry") holderDms(r, logo && fileIds.has(logo.cid) ? { cid: logo.cid, fileId: fileIds.get(logo.cid) } : null).catch((e) => console.warn("[sentry] holder DMs:", e.message));
     bump(s, r.v);
     recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, reason: r.why ? `${r.why.label}: ${r.why.detail}` : null, raised: r.pons?.raised ?? null, progressPct: r.pons?.progressPct ?? null, at: r.at, post: j.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${j.result.message_id}` : null });
     recent.length = Math.min(recent.length, 200);
@@ -165,11 +220,12 @@ async function work(s) {
 }
 
 // Phase 3: linked $TROYA holders get each result as a private message too (the bot can only DM people who started it)
-async function holderDms(r) {
+async function holderDms(r, logo) {
   const hp = await import("./holders.mjs").catch(() => null);
   if (!hp) return;
   for (const chat of await hp.holderChats()) {
-    await tg("sendMessage", { chat_id: chat, text: formatPost(r), parse_mode: "HTML", reply_markup: buttons(r.token), link_preview_options: { is_disabled: true } }).catch(() => {});
+    const sent = logo ? await sendPhoto(chat, logo, formatPost(r), buttons(r.token)).catch(() => null) : null;
+    if (!sent?.ok) await tg("sendMessage", { chat_id: chat, text: formatPost(r), parse_mode: "HTML", reply_markup: buttons(r.token), link_preview_options: { is_disabled: true } }).catch(() => {});
     await new Promise((x) => setTimeout(x, 60));
   }
 }

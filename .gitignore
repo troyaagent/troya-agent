@@ -25,6 +25,7 @@
 !/tools/hlfund-test.mjs
 !/tools/mcp-test.mjs
 !/tools/playbook-test.mjs
+!/tools/bridge-hl-ui-test.mjs
 node_modules/
 .DS_Store
 .env

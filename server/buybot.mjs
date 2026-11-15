@@ -82,6 +82,7 @@ export function formatMore(rest) {
 const buttons = (ca) => ({ inline_keyboard: [
   [{ text: "Buy through Troya Gate", url: `${SITE}/agent#/swap?in=eth&out=${ca}` }],
   [{ text: "Chart", url: `${SITE}/agent#/token/${ca}` }, { text: "DexScreener", url: `https://dexscreener.com/robinhood/${ca}` }],
+  [{ text: "Troya Sentry: every new Pons launch, checked", url: "https://t.me/troyasentry" }],
 ] });
 
 async function tg(method, payload) {

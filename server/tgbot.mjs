@@ -198,7 +198,8 @@ async function kick (tg, chat, user) {
   await tg('unbanChatMember', { chat_id: chat, user_id: user, only_if_banned: true })   // removed, free to rejoin
 }
 async function expel (tg, st) { await kick(tg, st.chat, st.user); for (const id of [st.msg, st.join]) if (id) await tg('deleteMessage', { chat_id: st.chat, message_id: id }).catch(() => {}) }
-const WELCOME = (name) => `Welcome to Troya Agent, ${name}.\nStart with the pinned post. App: <a href="${SITE}/agent">troya.codes/agent</a>\nThe team never messages first, and nobody here needs your recovery phrase.`
+const WELCOME = (name) => `Welcome to Troya Agent, ${name}.\nStart with the pinned post. App: <a href="${SITE}/agent">troya.codes/agent</a>\nTroya Sentry runs every new Pons launch through the Gate: <a href="https://t.me/troyasentry">t.me/troyasentry</a>\nThe team never messages first, and nobody here needs your recovery phrase.`
+const WELCOME_KB = { inline_keyboard: [[{ text: 'Open Troya', url: `${SITE}/agent` }, { text: 'Troya Sentry', url: 'https://t.me/troyasentry' }]] }
 
 export async function guardJoin (m, tg, me) {
   await loadPending()
@@ -228,7 +229,7 @@ export async function handleCallback (cq, tg) {
     pend.delete(key); save()
     await tg('restrictChatMember', { chat_id: st.chat, user_id: st.user, permissions: await groupPerms(tg, st.chat), use_independent_chat_permissions: true })
     await tg('answerCallbackQuery', { callback_query_id: cq.id, text: 'Verified. Welcome in.' })
-    await tg('editMessageText', { chat_id: st.chat, message_id: st.msg, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, text: WELCOME(st.name) })
+    await tg('editMessageText', { chat_id: st.chat, message_id: st.msg, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: WELCOME_KB, text: WELCOME(st.name) })
     const prev = lastWelcome.get(st.chat); if (prev && prev !== st.msg) tg('deleteMessage', { chat_id: st.chat, message_id: prev }).catch(() => {})
     lastWelcome.set(st.chat, st.msg)
     return

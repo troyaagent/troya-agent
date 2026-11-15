@@ -355,6 +355,17 @@ export const TOOLS = [
       if (!gate.pass) return { ok: false, gate, simulation: sim };
       return { ok: true, gate, simulation: sim, ...issueConfirmation(ctx.address, "perp", params, `${params.side} ${sim.coin} $${params.sizeUsd} at ${lev}x`) };
     } },
+  { name: "prepare_close_position", tier: "prepare", description: "Close all or part of an open Hyperliquid position on your account (reduce-only market order), then return a one-time confirmationId (120 s) for execute_intent.", schema: S({ coin: str("Perp with an open position, e.g. ETH"), sizePct: numS("Percent of the position to close (default 100)") }, ["coin"]),
+    run: async (a, ctx) => {
+      if (!ctx.address) throw new HttpError(401, "Sign in or use an API token.");
+      const hl = await import("./hl.mjs");
+      const st = await hl.hlUserState(ctx.address);
+      const pos = (st.positions || []).find((p) => String(p.coin).toUpperCase() === String(a.coin || "").toUpperCase() && p.size !== 0);
+      if (!pos) return { ok: false, reason: `No open ${untrusted(a.coin, 12)} position on your Hyperliquid account.`, positions: (st.positions || []).filter((p) => p.size !== 0).map((p) => ({ coin: p.coin, size: p.size, entryPx: p.entryPx })) };
+      const sizePct = Math.min(100, Math.max(1, Number(a.sizePct) || 100));
+      const params = { kind: "close", coin: pos.coin, sizePct, usd: 0 };
+      return { ok: true, position: { coin: pos.coin, size: pos.size, side: pos.size > 0 ? "long" : "short", entryPx: pos.entryPx, unrealizedPnl: pos.unrealizedPnl ?? null }, ...issueConfirmation(ctx.address, "close", params, `Close ${sizePct}% of ${pos.coin} ${pos.size > 0 ? "long" : "short"}`) };
+    } },
   { name: "prepare_swap", tier: "prepare", description: "Quote a swap on Robinhood Chain, run Troya Gate and your limits, then return a one-time confirmationId (valid 120 s).", schema: S({ tokenIn: str("Default ETH"), tokenOut: str("Token to receive"), amountIn: numS("Amount"), slippagePct: numS("Default 1") }, ["tokenOut", "amountIn"]),
     run: async (a, ctx) => {
       const q = await quoteSwap(a);

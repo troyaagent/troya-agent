@@ -91,11 +91,13 @@
 claude mcp add troya -e TROYA_BASE_URL={{base}} -- npx -y {{pkg}}
 
 <span class="c"># with Agent Wallet tools (create the token in the app: Agent → Wallet → API tokens)</span>
-claude mcp add troya -e TROYA_BASE_URL={{base}} -e TROYA_API_KEY=&lt;your-token&gt; -- npx -y {{pkg}}</pre>
+claude mcp add troya -e TROYA_BASE_URL={{base}} -e TROYA_API_KEY=&lt;your-token&gt; -- npx -y {{pkg}}
+
+<span class="c"># live orders: also pass -e TROYA_LIVE=1, after switching dry-run off for that token in the app</span></pre>
     </div>
     <div class="callout blue rv">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      <div>Execution over MCP starts in dry-run: orders are prepared and checked, then reported instead of sent. Switching dry-run off is a deliberate setting per API token in the app.</div>
+      <div>Execution over MCP starts in dry-run, behind two locks: switch dry-run off for that API token in the app, and start the MCP with <code>TROYA_LIVE=1</code>. Until both are set, orders are prepared and checked, then reported instead of sent. From the terminal you can fund Hyperliquid (<code>prepare_hl_funding</code>), open a perp (<code>prepare_perp_order</code>) and close it (<code>prepare_close_position</code>), each confirmed with <code>execute_intent</code>.</div>
     </div>
   </section>
 
@@ -161,7 +163,7 @@ curl -s -X POST <span class="s">"{{base}}/tools/execute_intent"</span> \
     <h2 id="tiers-h" class="h2 sm words" data-words style="margin-bottom:40px">What each tier is allowed to do</h2>
     <div class="tools">
       <div class="tool rv"><code>Tier 1 · Read</code><p>Look only: markets, quotes, balances, positions, token health, policy. Safe to call in a loop.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
-      <div class="tool rv"><code>Tier 2 · Prepare</code><p>Simulate an order and run Troya Gate. Returns a confirmationId that expires after 120 seconds and is bound to a hash of the exact parameters.</p><span class="tier"><span class="tier-pill prep">PREPARE</span></span></div>
+      <div class="tool rv"><code>Tier 2 · Prepare</code><p>Simulate an order (a perp, closing a position, a swap, funding Hyperliquid) and run Troya Gate. Returns a confirmationId that expires after 120 seconds and is bound to a hash of the exact parameters.</p><span class="tier"><span class="tier-pill prep">PREPARE</span></span></div>
       <div class="tool rv"><code>Tier 3 · Execute</code><p>Takes only a confirmationId, re-reads the policy and sends the order from the Agent Wallet. Dry-run by default; blocked entirely while Pause or the operator kill switch is on.</p><span class="tier"><span class="tier-pill exec">EXECUTE</span></span></div>
     </div>
   </section>

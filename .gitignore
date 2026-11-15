@@ -23,6 +23,7 @@
 !/tools/botcmds-test.mjs
 !/tools/security-test.mjs
 !/tools/hlfund-test.mjs
+!/tools/mcp-test.mjs
 node_modules/
 .DS_Store
 .env

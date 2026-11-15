@@ -142,7 +142,8 @@ async function aiAnswer(m, tg, me) {
   if (!reply) return false;
   mem.push({ role: "user", content: `${name}: ${text}`.slice(0, 500) }, { role: "assistant", content: reply.slice(0, 600) });
   chatMemory.set(chatId, mem.slice(-10));
-  await tg("sendMessage", { chat_id: chatId, text: toTgHtml(reply).slice(0, 3500), parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true } });
+  const sent = await tg("sendMessage", { chat_id: chatId, text: toTgHtml(reply).slice(0, 3500), parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true } });
+  if (m.chat.type !== "private") logChat({ id: sent?.result?.message_id || null, from: "Troya bot", user: me?.username || null, bot: true, text: reply.slice(0, 800), reply: m.message_id });
   return true;
 }
 
@@ -154,6 +155,15 @@ const lastWelcome = new Map();
 // the check are deleted. Bots added by anyone but an admin are removed at once. Admins are never checked. Pending checks
 // live in data/telegram-guard.json so a restart keeps the clock running.
 let gStore = null
+
+// Group chat log (data/telegram-log.jsonl, mode 600, server only): lets the owner and Claude read what the group is
+// talking about. Telegram's Bot API has no history call, so only messages seen from now on are kept; trimmed to 3000 lines.
+let logCount = 0
+async function logChat (rec) {
+  if (!gStore) return
+  await gStore.append('telegram-log.jsonl', { t: new Date().toISOString(), ...rec }).catch(() => {})
+  if (++logCount % 200 === 0) { const keep = await gStore.tail('telegram-log.jsonl', 3000); const { writeFile } = await import('node:fs/promises'); const { join } = await import('node:path'); if (keep.length >= 3000 && process.env.DATA_DIR) await writeFile(join(process.env.DATA_DIR, 'telegram-log.jsonl'), keep.reverse().map((r) => JSON.stringify(r)).join('\n') + '\n', { mode: 0o600 }).catch(() => {}) }
+}
 export function initBot (store) { gStore = store }
 const GUARD_SEC = 120
 const pend = new Map()
@@ -234,6 +244,7 @@ export async function handleBotMessage(m, tg, me) {
   const chatId = m.chat?.id;
   if (!chatId) return;
   const isGroup = m.chat.type === "group" || m.chat.type === "supergroup";
+  if (isGroup) logChat({ id: m.message_id, from: String(m.from?.first_name || "").slice(0, 40), user: m.from?.username || null, uid: m.from?.id, bot: !!m.from?.is_bot, text: String(m.text || m.caption || (m.new_chat_members ? "[joined]" : m.photo ? "[photo]" : m.sticker ? "[sticker]" : m.video ? "[video]" : "")).slice(0, 800), reply: m.reply_to_message?.message_id || null });
 
   if (isGroup && m.new_chat_members?.length) { await guardJoin(m, tg, me); return }
   if (isGroup && m.from && pendingFor(chatId, m.from.id)) { await tg("deleteMessage", { chat_id: chatId, message_id: m.message_id }).catch(() => {}); return }

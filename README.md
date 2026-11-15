@@ -1,3 +1,5 @@
+![Troya Agent](.github/banner.jpg)
+
 # Troya Agent
 
 An AI trading desk for **Robinhood Chain** (chain 4663) with **Hyperliquid** perps.

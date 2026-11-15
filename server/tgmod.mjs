@@ -15,7 +15,7 @@ const RULES = [
   // a Solana-style address (Troya never posts one)
   [3, /(?:^|[^A-Za-z0-9])[1-9A-HJ-NP-Za-km-z]{32,44}(?![A-Za-z0-9])/],
   // paid promotion, boosts, fake votes
-  [3, /promot(?:e|ing|ion)\s+(?:your|ur)\s+(?:project|token|coin)|grow\s+(?:your|ur)\s+project|boost\s+(?:your|ur)\s+(?:token|project|coin)|(?:dex|trending)\s*(?:boost|rocket|vote)|rocket\W.{0,40}vote|buying\s+(?:volume|activity|pressure)\s+(?:of|from|up)|\bkols?\b.{0,60}(?:promot|reach|volume)|volume\s+bot|(?:cmc|coinmarketcap)\s+(?:listing|trending|communit)|\d+\+?\s*(?:tg|telegram)\s+channels/i],
+  [3, /promot(?:e|ing|ion)\s+(?:for\s+)?(?:your|ur)\s+(?:project|token|coin)|professional\s+promotion|targeted\s+promotions?|reach\s+(?:genuine|real|active|organic)\s+(?:investors|holders|traders|buyers)|grow\s+(?:your|ur)\s+project|boost\s+(?:your|ur)\s+(?:token|project|coin)|(?:dex|trending)\s*(?:boost|rocket|vote)|rocket\W.{0,40}vote|buying\s+(?:volume|activity|pressure)\s+(?:of|from|up)|\bkols?\b.{0,60}(?:promot|reach|volume)|volume\s+bot|(?:cmc|coinmarketcap)\s+(?:listing|trending|communit)|\d+\+?\s*(?:tg|telegram)\s+channels/i],
   // call channels, "insider" and signal sellers
   [3, /insider\s+(?:calls?|printing|plays?)|next\s+(?:call|play|gem)|(?:my|our)\s+(?:next\s+)?calls?\b|call(?:ed)?\s+(?:this|it)\s+(?:one\s+)?(?:privately|early|at)|called\s+privately|\bvip\s+(?:calls?|group|channel)|verified\s+scanners?|(?:good|quality|best|free)\s+signals|signals?\s+(?:group|channel)|catch(?:ing)?\s+(?:all\s+)?(?:the\s+)?runners|call\s+the\s+big\s+investors/i],
   // scams (also a ban at once, see SCAM)
@@ -23,7 +23,7 @@ const RULES = [
   // gains brags: "106X", "(30K >1.1M)", "50k → 1.7m", "NOW AT $10M MC"
   [2, /\b\d{2,4}\s?x\b(?!\s*(?:lev|leverage|long|short))|\(\s*\d+(?:\.\d+)?\s*k\s*>\s*\d|\d+(?:\.\d+)?\s*k\s*(?:>|->|→|to)\s*\d+(?:\.\d+)?\s*m\b|\bnow\s+at\s+\$?\d/i],
   [2, /profit\s+upon\s+profit|make\s+(?:a\s+)?profit\s+of|invested\s+\$\d+.{0,60}profit|(?:made|making)\s+\$?\d+k?\s+(?:from|in|off)\s|turned\s+\$\d+\s+into/i],
-  [2, /\bdm\s+(?:me|now|👉|for)|\binbox\s+me|send\s+(?:me\s+)?a\s+dm|make\s+sure\s+you\s+follow|follow\s+(?:him|her)\b/i],
+  [2, /\bd\.?\s?m\s+(?:me|now|👉|for)|\bd\.m\.?\s+me|\binbox\s+me|send\s+(?:me\s+)?a\s+dm|make\s+sure\s+you\s+follow|follow\s+(?:him|her)\b/i],
   [1, /\bprinting\b|\bmilestone\b|don.?t\s+miss\s+(?:out|it)|\bgem\b|\b100x\b|\bmoon(?:ing|shot)?\b/i],
 ];
 

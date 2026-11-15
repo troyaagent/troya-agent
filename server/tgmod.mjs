@@ -9,6 +9,7 @@ const OWN_HANDLES = /^(trojantroya_bot|troyaagent|troyasentry|admin|admins)$/i;
 const OWN_CHATS = new Set([String(process.env.SENTRY_CHANNEL_ID || "-1004430431881")]);
 const MAJORS = /^(TROYA|ETH|WETH|BTC|WBTC|HYPE|SOL|USDC|USDT|USDG|NVDA|TSLA|AAPL|SPY|QQQ|AMZN|MSFT|GOOGL|META)$/i;
 
+export const BLACKLIST = /f[o0]urtis|fourvote|fourrank|gem\s?pump|dexvra|majorboost/i;
 const RULES = [
   // links to other chains' charts and launchpads, other groups and bots (Troya is Robinhood Chain only)
   [3, /dexscreener\.com\/(?!robinhood)|pump\.fun|birdeye\.so|dextools\.io|gmgn\.ai|photon-sol|axiom\.trade|bullx\.io|geckoterminal\.com\/(?!robinhood)|t\.me\/(?!troyaagent\b|troyasentry\b|trojantroya_bot\b)|telegram\.me\/|chat\.whatsapp\.com|discord\.gg\//i],
@@ -25,6 +26,8 @@ const RULES = [
   [2, /profit\s+upon\s+profit|make\s+(?:a\s+)?profit\s+of|invested\s+\$\d+.{0,60}profit|(?:made|making)\s+\$?\d+k?\s+(?:from|in|off)\s|turned\s+\$\d+\s+into/i],
   [2, /\bd\.?\s?m\s+(?:me|now|👉|for)|\bd\.m\.?\s+me|\binbox\s+me|send\s+(?:me\s+)?a\s+dm|make\s+sure\s+you\s+follow|follow\s+(?:him|her)\b/i],
   [1, /\bprinting\b|\bmilestone\b|don.?t\s+miss\s+(?:out|it)|\bgem\b|\b100x\b|\bmoon(?:ing|shot)?\b/i],
+  // blacklisted names: listing, vote and boost services the group asked to keep out (Fourtis / Fourvote, Gempump, Dexvra, MajorBoost)
+  [3, BLACKLIST],
 ];
 
 // how promotional a text reads: rule weights plus other people's @handles and other coins' tickers when they come with it

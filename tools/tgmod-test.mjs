@@ -30,7 +30,7 @@ const SPAM = [
 ];
 const LEGIT = [
   "troya bot communicates well. great tek", "@TrojanTroya_bot what’s the live price for $troya", "We should setup the skeleton bot for raids",
-  "holding nicely for past hrs is a green flag", "dex gempump listed update coming mate?", "Gempump listed next ?", "Ca", "X", "gm", "Gm gm guys",
+  "holding nicely for past hrs is a green flag", "Ca", "X", "gm", "Gm gm guys",
   "more people should take a look at what Troya is building. definitely worth checking out if you’re interested in AI and trading",
   "not worried about price movement. the utility works really well,good potential", "Dev you alive", "yurr, dev keeps posting updates and new features on x",
   "Let's push to bond. Good way to begin the week", "soon wen pons vol kicks back in, we will see a pump soon. still believe in pons", "hello there",
@@ -106,6 +106,17 @@ ok(!r, "normal chat passes");
 r = await mod.screen(msg(71, "", { text: undefined, caption: "new Sentry post", forward_origin: { type: "channel", chat: { id: -1004430431881 } } }), tg, me);
 ok(!r, "a forward from Troya Sentry passes");
 ok(/1FA81ddaAAc83240803B3F2d20595E40Edc1a074/.test(mod.rulesText()), "rules carry the official CA");
+
+// blacklist (Calvin, 15 Nov): every logged message naming these services is removed; ordinary words nearby are not
+const BL = ["dex gempump listed update coming mate?", "Gempump listed next ?", "Gempump incoming?", "when list on dexvra bro", "when fourtis listing?",
+  "heard about dexvra listing @dexvrabot", "can you list on dexvra.io? @dexvrabot", "fourvote soon?", "you should add the fourvote bot @fourtistechbot — more votes, more volume",
+  "@admin we need to keep momentum, start MajorBoostBot lets top 1-3 trending and get free post in fourtis announcement it will get more eyes and new buyers",
+  "🔥 $AKE has received a new Fourvote!\n\n🚀 Total Fourvotes: 349 💎\n📊 FourRank: #1", "gem pump when", "F0URTIS listing"];
+const blMiss = BL.filter((t) => mod.score(t) < 3);
+ok(!blMiss.length, `all ${BL.length} blacklisted messages score 3+ (removed)`, blMiss.join(" | "));
+const NEAR = ["we got four votes on the proposal", "that was a major boost for the project", "four times in a row", "dex paid is done", "is troya on dexscreener?"];
+const nearHit = NEAR.filter((t) => mod.score(t) >= 2);
+ok(!nearHit.length, `none of ${NEAR.length} near-miss messages are touched`, nearHit.join(" | "));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -12,11 +12,15 @@
 .dc-sec p { margin: 0 0 10px; color: var(--fg-2); font-size: 14px; line-height: 1.6; }
 .dc-sec ul, .dc-steps { margin: 0 0 12px; padding-left: 20px; color: var(--fg-2); font-size: 14px; line-height: 1.6; display: grid; gap: 4px; }
 .dc-sec b { color: var(--fg); font-weight: 500; }
+.dc-sec h3 { margin: 18px 0 8px; font-size: 15px; font-weight: 500; color: var(--fg); }
+.dc-sec a { color: var(--blue-2); }
+.dc-sec a:hover { text-decoration: underline; }
 .dc-sec code { font-family: var(--mono); font-size: 12px; background: var(--bg-3); border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 5px; }
 .dc-code { position: relative; margin: 0 0 12px; }
 .dc-code pre { margin: 0; padding: 14px 16px; padding-right: 80px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--bg-1); overflow-x: auto; }
 .dc-code pre code { background: none; border: 0; padding: 0; font-size: 12px; line-height: 1.6; color: var(--ice); white-space: pre; }
 .dc-code .btn { position: absolute; top: 8px; right: 8px; }
+.dc-ca pre code { white-space: pre-wrap; word-break: break-all; }
 .dc-tools { margin-top: 8px; }
 .dc-tools .dc-desc { white-space: normal; color: var(--fg-2); font-size: 12.5px; min-width: 260px; }
 .dc-dl { display: grid; grid-template-columns: 160px 1fr; gap: 8px 16px; margin: 0; font-size: 14px; }

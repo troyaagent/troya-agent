@@ -24,6 +24,30 @@ export async function mount(view) {
         [h("b", {}, "Agent: "), "chat, Agent Wallet, Autopilot and Playbooks."],
       ]),
     ]],
+    ["token", "$TROYA token", (() => {
+      // Facts read from chain on 15 Nov 2026 (mint log, totalSupply, burns to 0x0, curve state, owner()). Each links to a place to check it.
+      const ca = SITE.ca || "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074";
+      const BS = "https://robinhoodchain.blockscout.com";
+      const A = (href, text) => h("a", { href, target: "_blank", rel: "noopener" }, text);
+      return [
+        P("$TROYA is the Troya Agent token on Robinhood Chain. Everything below can be checked on chain; the links show where."),
+        h("div", { class: "dc-ca" }, code(ca, "Contract address")),
+        UL([
+          [h("b", {}, "Fair launch on Pons: "), "launched 14 Nov 2026 (UTC). All 1,000,000,000 tokens were minted once, straight into the Pons bonding curve. There was no presale and no pre-minted team allocation: every token in a wallet, the team's included, was bought from the curve."],
+          [h("b", {}, "No owner: "), "the token contract has no owner."],
+          [h("b", {}, "Burns: "), "the dev wallet has burned 26,884,853 $TROYA in 6 transactions to the zero address (as of 15 Nov 2026), so supply is now about 973.1M. ", A(`${BS}/token/${ca}`, "Live supply on Blockscout"), "."],
+          [h("b", {}, "Fees on the curve: "), "each curve trade pays 1% to Pons and a 1.9% creator tax to the ", A(`${BS}/address/0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4`, "creator wallet"), ". At 4.2 ETH raised the curve graduates to a Uniswap v4 pool."],
+          [h("b", {}, "Uniswap pool: "), "an ETH/TROYA Uniswap v4 pool (1% fee) has traded alongside the curve since 15 Nov 2026. It is the pair ", A(`https://dexscreener.com/robinhood/${ca}`, "DexScreener"), " tracks."],
+        ]),
+        h("h3", {}, "What holding it does"),
+        P("From 16 Nov 2026, 12:00 UTC, a wallet holding at least 1,000,000 $TROYA (your signed-in wallet plus its Agent Wallet, read from chain) gets:"),
+        UL(["200 assistant messages a day instead of 20", "100 active playbooks instead of 25", "Troya Sentry results by private message on Telegram"]),
+        P("Check your status with /wallet in a private chat with ", A("https://t.me/TrojanTroya_bot", "@TrojanTroya_bot"), "."),
+        h("h3", {}, "Not announced"),
+        P("Allocations beyond the above, vesting, buybacks, future burns and exchange listings have not been announced. Anything about $TROYA that is not here, on x.com/Troyaagent or in t.me/troyaagent is not from the team."),
+        P(A(`${BS}/token/${ca}`, "Blockscout"), " · ", A(`https://dexscreener.com/robinhood/${ca}`, "DexScreener"), " · ", A(`https://ponsfamily.com/launchpad/${ca}`, "Pons"), " · ", A("https://troya.codes/verify", "Proof log")),
+      ];
+    })()],
     ["flow", "How a request flows", [
       h("ol", { class: "dc-steps" },
         h("li", {}, h("b", {}, "Read. "), "Read tools fetch prices, books, funding, balances and contract code. They cannot move funds."),

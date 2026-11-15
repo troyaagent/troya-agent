@@ -15,7 +15,7 @@ export async function mount(view, ctx) {
   let alive = true;
   const stops = [];
   let tab = ctx.parts[0] === "inbox" ? "inbox" : ctx.parts[0] === "history" ? "history" : "overview";
-  const st = { rh: null, toks: null, hl: null, eth: null, key: null, journal: null, errors: {} };
+  const st = { rh: null, toks: null, hl: null, eth: null, key: null, journal: null, errors: {}, brief: null, briefSum: null };
 
   const body = h("div", {});
   const tabsEl = tabs([{ value: "overview", label: "Overview" }, { value: "inbox", label: "Inbox" }, { value: "history", label: "History" }], tab, (v) => {
@@ -43,6 +43,47 @@ export async function mount(view, ctx) {
     ]);
     if (alive && addr === wallet.address && tab === "overview") render();
   }
+  async function loadBrief() {
+    if (!wallet.session) { st.brief = null; return; }
+    try { st.brief = await api.get("brief/me"); st.briefErr = null; } catch (e) { st.brief = null; st.briefErr = e.message || "unavailable"; }
+    if (alive && tab === "overview") render();
+  }
+  // Phase 6: the same brief Telegram gets every day, with the same settings
+  function briefPanel() {
+    const b = st.brief;
+    if (!b) return h("div", { class: "panel pf-brief" }, h("h3", {}, "Today's brief"), st.briefErr
+      ? h("p", { class: "muted" }, `Could not load it right now (${st.briefErr}). `, h("button", { class: "link", type: "button", onclick: () => { st.briefErr = null; render(); loadBrief(); } }, "Try again"))
+      : h("p", { class: "muted" }, "Reading your desk, the market and Sentry…"));
+    const d = b.brief, p = b.prefs;
+    const fx = (v) => (v == null || !isFinite(v) ? "–" : v >= 1000 ? num(v, 0) : v >= 1 ? num(v, 3) : Number(v).toPrecision(4));
+    const ch = (v) => (v == null ? "" : ` (${v > 0 ? "+" : ""}${Number(v).toFixed(1)}%)`);
+    const rows = [];
+    for (const x of d.positions || []) rows.push(h("div", {}, h("span", {}, `${x.coin} ${x.side} ${x.size}`), h("span", {}, `PnL ${usd(x.pnl)}${x.liqAway != null ? ` · liq ${x.liqAway.toFixed(0)}% away` : ""}${x.fundingAgainst > 0 ? ` · funding ${x.fundingAgainst.toFixed(0)}%/yr against` : ""}`)));
+    if (d.guards?.[0]?.away != null) rows.push(h("div", {}, h("span", {}, "Nearest stop"), h("span", {}, `${d.guards[0].coin} ${fx(d.guards[0].trigger)} · ${d.guards[0].away.toFixed(1)}% away`)));
+    const m = d.market || {};
+    rows.push(h("div", {}, h("span", {}, "Market"), h("span", {}, [m.ETH && `ETH ${fx(m.ETH.px)}${ch(m.ETH.ch)}`, m.BTC && `BTC ${fx(m.BTC.px)}${ch(m.BTC.ch)}`, m.TROYA && `$TROYA${ch(m.TROYA.ch)}`].filter(Boolean).join(" · ") || "–")));
+    if (d.sentry?.day) rows.push(h("div", {}, h("span", {}, "Sentry, 24h"), h("span", {}, `${d.sentry.day.seen} launches · ${d.sentry.day.passed} passed · ${d.sentry.day.failed} failed`)));
+    const sumBox = h("p", { class: "pf-brief-sum" }, st.briefSum || "");
+    const write = h("button", { class: "btn sm", type: "button", onclick: async () => {
+      write.disabled = true; write.textContent = "Writing…";
+      try { const r = await api.post("brief/summary", {}); st.briefSum = r.summary || "The AI summary is unavailable right now; the numbers below are live."; sumBox.textContent = st.briefSum; }
+      catch (e) { toast(e.message, "error"); }
+      write.disabled = false; write.textContent = "AI summary";
+    } }, icon("spark"), "AI summary");
+    const save = async (patch) => { try { const r = await api.post("brief/settings", patch); st.brief.prefs = { ...st.brief.prefs, ...r.prefs }; toast("Saved", "ok"); render(); } catch (e) { toast(e.message, "error"); } };
+    const hourSel = h("select", { class: "pf-hour", "aria-label": "Brief hour (UTC)", onchange: (e) => save({ hour: Number(e.target.value) }) }, Array.from({ length: 24 }, (_, i) => h("option", { value: i, selected: i === p.hour }, `${String(i).padStart(2, "0")}:00 UTC`)));
+    const sendBtn = b.telegramLinked
+      ? h("button", { class: "btn sm", type: "button", onclick: async () => { try { const r = await api.post("brief/send", {}); toast(r.ok ? "Sent to your Telegram" : r.reason || "Could not send", r.ok ? "ok" : "error"); } catch (e) { toast(e.message, "error"); } } }, icon("arrowRight"), "Send to Telegram")
+      : h("a", { class: "btn sm", href: "#/settings" }, "Link Telegram for the daily brief");
+    return h("div", { class: "panel pf-brief" },
+      h("div", { class: "pf-brief-h" }, h("h3", {}, "Today's brief"), h("div", { class: "row" }, write, sendBtn)),
+      sumBox,
+      (b.alerts || []).length ? h("div", { class: "pf-alerts" }, b.alerts.map((a) => h("div", { class: "alert warn" }, a))) : null,
+      h("div", { class: "rows" }, rows),
+      h("div", { class: "pf-brief-set" },
+        h("label", { class: "row" }, h("input", { type: "checkbox", checked: p.on, onchange: (e) => save({ on: e.target.checked }) }), "Daily brief on Telegram"), hourSel,
+        h("label", { class: "row" }, h("input", { type: "checkbox", checked: p.alerts, onchange: (e) => save({ alerts: e.target.checked }) }), "Smart alerts (liquidation, stops, funding)")));
+  }
   async function loadJournal() {
     if (!wallet.session) { st.journal = null; return; }
     try { st.journal = asList(await api.get("journal?limit=100"), "entries", "items", "journal"); } catch { st.journal = null; }
@@ -63,6 +104,7 @@ export async function mount(view, ctx) {
       tile("Open PnL", connected && st.hl ? h("span", { class: st.hl.unrealizedPnl > 0 ? "up" : st.hl.unrealizedPnl < 0 ? "down" : "" }, `${st.hl.unrealizedPnl > 0 ? "+" : ""}${usd(st.hl.unrealizedPnl)}`) : "–", connected && st.hl ? `${st.hl.positions.length} open position${st.hl.positions.length === 1 ? "" : "s"}` : "", "Unrealised PnL across Hyperliquid perps."));
 
     const parts = [tiles];
+    if (connected && wallet.session) parts.push(briefPanel());
     if (!connected) parts.push(h("div", { class: "panel pf-connect" }, "Connect a wallet to see your balances.", h("button", { class: "btn primary", type: "button", onclick: () => openConnect() }, icon("wallet"), "Connect wallet")));
 
     // setup checklist: a step is ticked only when there is evidence for it
@@ -205,6 +247,7 @@ export async function mount(view, ctx) {
     if (!alive) return;
     render();
     loadBalances();
+    loadBrief();
   }));
   stops.push(every(15000, () => { if (wallet.address && tab === "overview") loadBalances(); }));
   return () => { alive = false; stops.forEach((f) => { try { f(); } catch {} }); };

@@ -19,6 +19,7 @@ const MODULES = [
   "./buybot.mjs",      // buy tracker: every $TROYA buy (Pons curve + Uniswap v4 ETH pools) → the Telegram group
   "./badge.mjs",       // Phase 4: live Troya Gate badge (SVG + JSON) for Pons devs to embed
   "./holders.mjs",     // Phase 3: $TROYA holder perks (more messages, more playbooks, Sentry DMs)
+  "./brief.mjs",       // Phase 6: daily AI brief + smart alerts (Telegram DM and the web)
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];
 

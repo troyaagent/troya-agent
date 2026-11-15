@@ -27,6 +27,7 @@
 !/tools/playbook-test.mjs
 !/tools/bridge-hl-ui-test.mjs
 !/tools/tgterm-test.mjs
+!/tools/brief-test.mjs
 node_modules/
 .DS_Store
 .env

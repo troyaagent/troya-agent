@@ -12,7 +12,7 @@ const NAV = [
 // route table: first path segment → page module; the rest is passed as ctx.parts
 const ROUTES = {
   "": "home", market: "market", token: "token", swap: "swap", perps: "perps", launch: "launchpad",
-  bridge: "bridge", agent: "agent", assistant: "agent", portfolio: "portfolio", docs: "docs",
+  bridge: "bridge", agent: "agent", assistant: "agent", portfolio: "portfolio", docs: "docs", start: "start", leaderboard: "leaderboard",
 };
 export const prefs = store("troya.prefs", { slippage: 1, density: "comfortable", motion: "system", lang: "auto" });
 

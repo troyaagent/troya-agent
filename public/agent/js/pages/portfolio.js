@@ -119,7 +119,7 @@ export async function mount(view, ctx) {
       ];
       const n = steps.filter((s) => s.done).length;
       parts.push(h("section", { class: "panel pf-setup", "aria-label": "Get set up" },
-        h("div", { class: "pf-setup-h" }, h("h2", {}, "Get set up"), h("span", { class: "ct" }, `${n} of ${steps.length}`), h("div", { class: "pf-bar", "aria-hidden": "true" }, h("i", { style: { width: `${(n / steps.length) * 100}%` } })),
+        h("div", { class: "pf-setup-h" }, h("h2", {}, "Get set up"), h("span", { class: "ct" }, `${n} of ${steps.length}`), h("a", { class: "link", href: "#/start", style: { fontSize: "12.5px" } }, "Start in 60 seconds"), h("div", { class: "pf-bar", "aria-hidden": "true" }, h("i", { style: { width: `${(n / steps.length) * 100}%` } })),
           h("button", { class: "icon-btn", type: "button", "aria-label": "Hide checklist", onclick: () => { hideSetup.set(true); render(); } }, icon("close"))),
         h("div", { class: "pf-steps" }, steps.map((s, i) => h("div", { class: `pf-step ${s.done ? "done" : ""}` },
           h("span", { class: "n" }, s.done ? icon("check") : i + 1), h("b", {}, s.t, h("i", { class: "info", title: s.tip, tabindex: "0" }, "i")), s.done ? null : h("div", { class: "act" }, s.act))))));

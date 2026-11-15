@@ -22,6 +22,9 @@ export async function mount(view) {
         [h("b", {}, "Bridge: "), "ETH between Robinhood Chain and Arbitrum, Base or Ethereum through LI.FI routes, or To Hyperliquid: ETH on Robinhood Chain becomes USDC on your own Hyperliquid account in one transaction."],
         [h("b", {}, "Telegram: "), "trade Robinhood Chain coins from a private chat with @TrojanTroya_bot (Gate first, then Confirm), and follow every new Pons launch through the Gate in t.me/troyasentry."],
         [h("b", {}, "Gate badge: "), "a live Troya Gate result Pons devs can embed on their site (troya.codes/badge)."],
+        [h("b", {}, "Daily brief: "), "positions, PnL, liquidation distance, funding, the nearest stop, the market and Sentry every morning, with smart alerts (Portfolio → Today's brief, /brief in Telegram)."],
+        [h("b", {}, "Sentry Autopilot: "), "your rules on every launch that passes the Gate, in practice mode first, with a leaderboard you can copy rules from (Agent → Sentry Autopilot, #/leaderboard, /autopilot)."],
+        [h("b", {}, "Start: "), "a guided 60-second setup at #/start."],
         [h("b", {}, "Launchpad: "), "new coins from Pons, Clanker, Bankr, Virtuals and more, and a form to launch your own on Pons."],
         [h("b", {}, "Agent: "), "chat, Agent Wallet, Autopilot and Playbooks."],
       ]),
@@ -63,6 +66,15 @@ export async function mount(view) {
         h("li", {}, h("b", {}, "Approve once. "), "Trade on the Perps page with a trade-only browser key, or let the Agent Wallet trade: Agent → Hyperliquid trading → Approve on Hyperliquid. It can place and cancel orders; it cannot withdraw."),
         h("li", {}, h("b", {}, "Trade. "), "Ask \"long ETH $50 at 3x, stop 3000\". Troya Gate and your caps run first, you confirm. Playbooks can guard the position: a stop-loss or a take-profit ladder checked every 20 seconds.")),
       P("From a terminal: prepare_hl_funding, prepare_perp_order and prepare_close_position, each confirmed with execute_intent. Live orders need two locks opened: dry-run off for that API token in the app, and the MCP started with TROYA_LIVE=1."),
+    ]],
+    ["autopilot", "Sentry Autopilot", [
+      P("Sentry checks every Pons launch about 90 seconds in. When a launch passes and its curve has raised at least what you set, Autopilot buys your amount, then sells at your take-profit or stop, or after 7 days. Exits are checked every 60 seconds."),
+      UL([
+        [h("b", {}, "Practice: "), "play money at real prices. Entries and exits are quoted on chain when they happen; nothing is sent."],
+        [h("b", {}, "Live: "), "buys and sells from your Agent Wallet, so Troya Gate and your caps run again on each trade. It opens after it passes a real-money test."],
+        [h("b", {}, "Rules: "), "curve raised at least (ETH), buy per coin (ETH), take profit (x), stop (% down), open at once, buys a day. In Telegram: /autopilot set min 1 buy 0.01 tp 2 sl 30 max 3, or plain words."],
+        [h("b", {}, "Leaderboard: "), "opt in to show your results with a shortened address; anyone can copy the rules of a trader on the board."],
+      ]),
     ]],
     ["gate", "Troya Gate", [
       P("Troya Gate runs before anything executes. A failed check blocks the action; a warning is shown on the ticket."),

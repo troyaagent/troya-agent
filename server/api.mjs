@@ -21,6 +21,7 @@ const MODULES = [
   "./holders.mjs",     // Phase 3: $TROYA holder perks (more messages, more playbooks, Sentry DMs)
   "./brief.mjs",       // Phase 6: daily AI brief + smart alerts (Telegram DM and the web)
   "./autopilot.mjs",   // Phase 7: Sentry Autopilot (practice mode with play money; live through the Agent Wallet)
+  "./onboard.mjs",     // Phase 8: 60-second start (setup status) · Phase 9: leaderboard + copy rules
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];
 

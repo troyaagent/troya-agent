@@ -29,6 +29,7 @@
 !/tools/tgterm-test.mjs
 !/tools/brief-test.mjs
 !/tools/autopilot-test.mjs
+!/tools/onboard-test.mjs
 node_modules/
 .DS_Store
 .env

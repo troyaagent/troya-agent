@@ -111,10 +111,13 @@ ok(/1FA81ddaAAc83240803B3F2d20595E40Edc1a074/.test(mod.rulesText()), "rules carr
 const BL = ["dex gempump listed update coming mate?", "Gempump listed next ?", "Gempump incoming?", "when list on dexvra bro", "when fourtis listing?",
   "heard about dexvra listing @dexvrabot", "can you list on dexvra.io? @dexvrabot", "fourvote soon?", "you should add the fourvote bot @fourtistechbot — more votes, more volume",
   "@admin we need to keep momentum, start MajorBoostBot lets top 1-3 trending and get free post in fourtis announcement it will get more eyes and new buyers",
-  "🔥 $AKE has received a new Fourvote!\n\n🚀 Total Fourvotes: 349 💎\n📊 FourRank: #1", "gem pump when", "F0URTIS listing"];
+  "would be nice to see this listed on @coin_trending.", "hello champ, CoinTrending could be a valuable platform for our coin Let's get this gem trending on coin_trendi",
+  "@admin,Boost your token with @MajorsBoostsBot\nIncrease your token’s DEX exposure and reach more potential traders.",
+  "Your dex rocket 🚀 vote is currently at 0 and flames 🔥 is at 0 I can add up the rocket 🚀 to 300 and flames 🔥 to 100 or any number of your choice not bot not fake users real people",
+  "🔥 TRENDING 🔥\n\nSymbol: $TROYA\nName: Troya Agent\n⏰ Age:  18 hours ago", "get it trending with @trendingsolbot", "🔥 $AKE has received a new Fourvote!\n\n🚀 Total Fourvotes: 349 💎\n📊 FourRank: #1", "gem pump when", "F0URTIS listing"];
 const blMiss = BL.filter((t) => mod.score(t) < 3);
 ok(!blMiss.length, `all ${BL.length} blacklisted messages score 3+ (removed)`, blMiss.join(" | "));
-const NEAR = ["we got four votes on the proposal", "that was a major boost for the project", "four times in a row", "dex paid is done", "is troya on dexscreener?"];
+const NEAR = ["we got four votes on the proposal", "go vote rocket on dexscreener guys", "when listing on coingecko?", "@Carl_NFT thanks for the listing tip", "troya is trending on dexscreener today", "@TrojanTroya_bot is troya listed on dexscreener?", "that was a major boost for the project", "four times in a row", "dex paid is done", "is troya on dexscreener?"];
 const nearHit = NEAR.filter((t) => mod.score(t) >= 2);
 ok(!nearHit.length, `none of ${NEAR.length} near-miss messages are touched`, nearHit.join(" | "));
 

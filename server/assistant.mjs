@@ -5,11 +5,13 @@
 // or the daily spend cap, falls back to the parser. Tests run without the key.
 import { randomBytes } from "node:crypto";
 import { isAddress } from "ethers";
-import { requireSession } from "./auth.mjs";
+import { requireSession, getSession } from "./auth.mjs";
 import { HttpError } from "./api.mjs";
 import { runTool, hlMarkets, resolveToken, quoteSwap, gateSwap, simulatePerp, gatePerp, getBalances, ethUsd, untrusted, TOOLS } from "./tools.mjs";
 import { initLlm, llmOn, underCap, chatWithTools, usageToday } from "./llm.mjs";
 import { createProposal } from "./inbox.mjs";
+// a guest (not signed in) gets the answer; tickets are only stored for a signed-in wallet
+const propose = (ctx, p) => (ctx.guest ? Promise.resolve({ id: `guest-${Date.now().toString(36)}`, ...p, guest: true }) : createProposal(ctx.address, p));
 import { checkAction, operatorPolicy } from "./policy.mjs";
 import { logAction } from "./journal.mjs";
 
@@ -81,7 +83,7 @@ async function swapTicket(ctx, { tin, tout, amount }, lang, text) {
   const gate = await gateSwap(q);
   const ep = (await ethUsd()) || 0;
   const usd = q.tokenIn.native ? q.amountIn * ep : (q.tokenIn.priceUsd || 0) * q.amountIn;
-  const pc = await checkAction(ctx.address, { kind: "swap", usd, token: q.tokenOut.native ? q.tokenIn.address : q.tokenOut.address });
+  const pc = ctx.guest ? { ok: true, reasons: [] } : await checkAction(ctx.address, { kind: "swap", usd, token: q.tokenOut.native ? q.tokenIn.address : q.tokenOut.address });
   gate.checks.push({ name: "Your limits", status: pc.ok ? "pass" : "fail", detail: pc.ok ? "Inside your caps" : pc.reasons.join(" ") });
   const fails = gate.checks.filter((c) => c.status === "fail");
   const lines = [
@@ -96,10 +98,10 @@ async function swapTicket(ctx, { tin, tout, amount }, lang, text) {
   else lines.push(T(lang, "- Troya Gate: every check passed.", "- Troya Gate: semua cek lolos."));
   if (fails.length) {
     lines.push(T(lang, "Troya Gate blocked this one, so there is no ticket to sign.", "Troya Gate menahan transaksi ini, jadi tidak ada tiket untuk ditandatangani."));
-    await logAction({ address: ctx.address, kind: "swap.blocked", summary: `${q.amountIn} ${q.tokenIn.symbol} → ${q.tokenOut.symbol}`, rationale: fails.map((f) => `${f.name}: ${f.detail}`).join(" "), status: "blocked", source: "assistant" });
+    if (!ctx.guest) await logAction({ address: ctx.address, kind: "swap.blocked", summary: `${q.amountIn} ${q.tokenIn.symbol} → ${q.tokenOut.symbol}`, rationale: fails.map((f) => `${f.name}: ${f.detail}`).join(" "), status: "blocked", source: "assistant" });
     return { text: lines.join("\n") };
   }
-  const p = await createProposal(ctx.address, {
+  const p = await propose(ctx, {
     kind: "swap",
     params: { chain: "robinhood", tokenIn: q.tokenIn.native ? "native" : q.tokenIn.address, tokenOut: q.tokenOut.native ? "native" : q.tokenOut.address, symbolIn: untrusted(q.tokenIn.symbol, 16), symbolOut: untrusted(q.tokenOut.symbol, 16), amountIn: q.amountIn, amountOut: q.amountOut, slippagePct: q.slippagePct, usd, executable: q.executable },
     summary: `Swap ${fnum(q.amountIn, 6)} ${untrusted(q.tokenIn.symbol, 16)} → ${untrusted(q.tokenOut.symbol, 16)}`,
@@ -135,7 +137,7 @@ async function perpTicket(ctx, { coin, side, size, lev, tp, sl }, lang, text) {
   if (!gate.pass) lines.push(...gate.checks.map((c) => `- ${c.status === "pass" ? "✓" : c.status === "warn" ? "!" : "✕"} ${c.name}: ${c.detail}`));
   else { const issues = gate.checks.filter((c) => c.status !== "pass"); lines.push(...(issues.length ? issues.map((c) => `- ! ${c.name}: ${c.detail}`) : [T(lang, "- Troya Gate: every check passed.", "- Troya Gate: semua cek lolos.")])); }
   if (!gate.pass) { lines.push(T(lang, "Blocked by Troya Gate or your limits. Nothing to sign.", "Ditahan Troya Gate atau batasmu. Tidak ada yang perlu ditandatangani.")); return { text: lines.join("\n") }; }
-  const p = await createProposal(ctx.address, { kind: "perp", params: { coin: sim.coin, side, sizeUsd: size, leverage: lev, tpPx: tp, slPx: sl, mid: sim.mid }, summary: `${side === "long" ? "Long" : "Short"} ${sim.coin} $${fnum(size)} at ${lev}x`, rationale: `Requested in chat: "${untrusted(text, 120)}"`, gate, source: "assistant" });
+  const p = await propose(ctx, { kind: "perp", params: { coin: sim.coin, side, sizeUsd: size, leverage: lev, tpPx: tp, slPx: sl, mid: sim.mid }, summary: `${side === "long" ? "Long" : "Short"} ${sim.coin} $${fnum(size)} at ${lev}x`, rationale: `Requested in chat: "${untrusted(text, 120)}"`, gate, source: "assistant" });
   lines.push(T(lang, "Ticket below. It expires in 10 minutes.", "Tiketnya di bawah, berlaku 10 menit."));
   return { text: lines.join("\n"), proposals: [p] };
 }
@@ -207,6 +209,7 @@ async function intentNew(ctx, lang) {
 }
 
 async function intentBalances(ctx, lang) {
+  if (ctx.guest) return { text: T(lang, "Connect a wallet and sign in to see your balances, positions and Agent Wallet. You can still ask about any coin, price or Gate check without signing in.", "Hubungkan wallet dan sign in untuk melihat saldo, posisi dan Agent Wallet. Tanpa sign in kamu tetap bisa bertanya soal koin, harga atau cek Gate.") };
   ctx.status(T(lang, "Reading your balances…", "Membaca saldomu…"));
   const b = await getBalances(ctx.address);
   ctx.tool("get_balances", true);
@@ -256,11 +259,12 @@ async function intentWatch(ctx, text, lang, type) {
     params = { type: "alert", target, direction, px: nums[nums.length - 1] };
     summary = `Alert ${addr ? "token" : coin} ${direction === "below" ? "≤" : "≥"} ${params.px}`;
   }
-  const p = await createProposal(ctx.address, { kind: "watch", params, summary, rationale: `Requested in chat: "${untrusted(text, 120)}"`, source: "assistant" });
+  const p = await propose(ctx, { kind: "watch", params, summary, rationale: `Requested in chat: "${untrusted(text, 120)}"`, source: "assistant" });
   return { text: T(lang, `**${summary}**\nThe server checks it every 20 seconds. If your Agent Wallet is on and inside its caps it acts on its own; otherwise you get a ticket to approve. Confirm below to switch it on.`, `**${summary}**\nServer memeriksanya tiap 20 detik. Kalau Agent Wallet aktif dan masih dalam batas, ia bertindak sendiri; kalau tidak, kamu dapat tiket untuk disetujui. Konfirmasi di bawah untuk menyalakannya.`), proposals: [p] };
 }
 
 async function intentProtect(ctx, lang) {
+  if (ctx.guest) return { text: T(lang, "Connect a wallet and sign in to see your balances, positions and Agent Wallet. You can still ask about any coin, price or Gate check without signing in.", "Hubungkan wallet dan sign in untuk melihat saldo, posisi dan Agent Wallet. Tanpa sign in kamu tetap bisa bertanya soal koin, harga atau cek Gate.") };
   const b = await getBalances(ctx.address);
   ctx.tool("get_balances", true);
   const pos = b.hyperliquid?.positions || [];
@@ -273,7 +277,7 @@ async function intentProtect(ctx, lang) {
     const mark = mids[p.coin] || p.entryPx;
     const trigger = Number((long ? mark * 0.95 : mark * 1.05).toPrecision(5));
     lines.push(`- ${p.coin} ${long ? "long" : "short"} · mark ${fpx(mark)} · ${T(lang, "stop", "stop")} ${long ? "≤" : "≥"} ${fpx(trigger)}${p.liquidationPx ? ` · liq ${fpx(p.liquidationPx)}` : ""}`);
-    props.push(await createProposal(ctx.address, { kind: "watch", params: { type: "stop_loss", coin: p.coin, triggerPx: trigger, direction: long ? "below" : "above", sizePct: 100 }, summary: `Stop-loss ${p.coin} ${long ? "≤" : "≥"} ${fpx(trigger)}`, rationale: "Suggested guard for an open position", source: "assistant" }));
+    props.push(await propose(ctx, { kind: "watch", params: { type: "stop_loss", coin: p.coin, triggerPx: trigger, direction: long ? "below" : "above", sizePct: 100 }, summary: `Stop-loss ${p.coin} ${long ? "≤" : "≥"} ${fpx(trigger)}`, rationale: "Suggested guard for an open position", source: "assistant" }));
   }
   return { text: lines.join("\n"), proposals: props };
 }
@@ -284,9 +288,21 @@ async function intentHlFund(ctx, amount, lang) {
     "**Isi saldo Hyperliquid untuk perps**\n- Satu rute LI.FI mengubah ETH di Robinhood Chain jadi USDC di akun Hyperliquid kamu sendiri, biasanya dalam satu menit.\n- **Sign in my wallet**: membuka Bridge → To Hyperliquid dengan jumlah ini; kamu tanda tangan satu transaksi di Robinhood Chain.\n- **Run with Agent Wallet**: Agent Wallet mengirim dari ETH miliknya, dan USDC tetap masuk ke akun Hyperliquid kamu (akun yang ia trade setelah kamu approve).");
   if (!(amount > 0)) return { text: msg + T(lang, "\nSay how much, e.g. **fund Hyperliquid with 0.02 ETH**.", "\nSebutkan jumlahnya, misalnya **isi Hyperliquid 0.02 ETH**.") };
   let est = null;
-  try { const rh = await import("./robinhood.mjs"); const q = await rh.hlFundQuote({ address: ctx.address, amountWei: BigInt(Math.round(amount * 1e9)) * 10n ** 9n }); est = Number(q.toAmount) / 10 ** q.toDecimals; } catch { /* the ticket still works; Bridge quotes again */ }
-  const p = await createProposal(ctx.address, { kind: "hl_fund", params: { fromChain: 4663, toChain: 1337, amount, asset: "ETH", usdcEstimate: est }, summary: `Fund Hyperliquid with ${amount} ETH${est ? ` (about ${est.toFixed(2)} USDC)` : ""}`, rationale: "Requested in chat", source: "assistant" });
+  try { if (ctx.guest) throw new Error("guest"); const rh = await import("./robinhood.mjs"); const q = await rh.hlFundQuote({ address: ctx.address, amountWei: BigInt(Math.round(amount * 1e9)) * 10n ** 9n }); est = Number(q.toAmount) / 10 ** q.toDecimals; } catch { /* the ticket still works; Bridge quotes again */ }
+  const p = await propose(ctx, { kind: "hl_fund", params: { fromChain: 4663, toChain: 1337, amount, asset: "ETH", usdcEstimate: est }, summary: `Fund Hyperliquid with ${amount} ETH${est ? ` (about ${est.toFixed(2)} USDC)` : ""}`, rationale: "Requested in chat", source: "assistant" });
   return { text: msg, proposals: [p] };
+}
+
+// Troya Gate on a coin, for anyone (guests too): the same checks the Swap page and the Agent Wallet run, on a 0.01 ETH buy
+async function intentGate(ctx, address, lang) {
+  ctx.status?.(T(lang, "Running Troya Gate…", "Menjalankan Troya Gate…"));
+  const q = await quoteSwap({ tokenIn: "ETH", tokenOut: address, amountIn: 0.01, slippagePct: 3 });
+  const g = await gateSwap(q);
+  const sym = untrusted(q.tokenOut?.symbol || "this coin", 16);
+  const lines = [T(lang, `**Troya Gate · $${sym}: ${g.pass ? "Passed" : "Blocked"}** (a 0.01 ETH buy, simulated, nothing sent)`, `**Troya Gate · $${sym}: ${g.pass ? "Lolos" : "Diblokir"}** (simulasi beli 0.01 ETH, tidak ada yang dikirim)`)];
+  for (const c of g.checks) lines.push(`- ${c.status === "pass" ? "✓" : c.status === "warn" ? "!" : c.status === "fail" ? "✕" : "·"} ${c.name}: ${c.detail}`);
+  lines.push(T(lang, "A snapshot of the coin right now, never a \"safe\" stamp. The Gate runs again before any trade.", "Ini potret kondisi koin saat ini, bukan cap \"aman\". Gate jalan lagi sebelum setiap trade."));
+  return { text: lines.join("\n") };
 }
 
 async function intentBridge(ctx, text, lang) {
@@ -299,7 +315,7 @@ async function intentBridge(ctx, text, lang) {
     "**Memindahkan ETH ke Robinhood Chain**\n- Dari Arbitrum, Base atau Ethereum: satu transaksi lewat rute LI.FI; biasanya sampai dalam hitungan menit. Biaya rute terlihat sebelum kamu tanda tangan.\n- Keluar lagi: halaman yang sama, arah sebaliknya.\n- Gas di Robinhood Chain dibayar pakai ETH.");
   if (amount > 0) {
     const params = { fromChain: out ? 4663 : other, toChain: out ? other : 4663, amount, asset: "ETH" };
-    const p = await createProposal(ctx.address, { kind: "bridge", params, summary: `Bridge ${amount} ETH ${out ? `Robinhood Chain → ${names[other]}` : `${names[other]} → Robinhood Chain`}`, rationale: `Requested in chat: "${untrusted(text, 120)}"`, source: "assistant" });
+    const p = await propose(ctx, { kind: "bridge", params, summary: `Bridge ${amount} ETH ${out ? `Robinhood Chain → ${names[other]}` : `${names[other]} → Robinhood Chain`}`, rationale: `Requested in chat: "${untrusted(text, 120)}"`, source: "assistant" });
     return { text: msg, proposals: [p] };
   }
   return { text: msg + T(lang, "\nOpen **Bridge** or say **bridge 0.05 ETH from Arbitrum**.", "\nBuka **Bridge** atau ketik **bridge 0.05 ETH dari Arbitrum**.") };
@@ -369,7 +385,7 @@ Rules:
 }
 
 async function agentAnswer(ctx, text, lang) {
-  const hist = (await store.readJson(`chats/${ctx.address.toLowerCase()}.json`, { messages: [] })).messages.slice(-8)
+  const hist = (ctx.guest ? { messages: [] } : await store.readJson(`chats/${ctx.address.toLowerCase()}.json`, { messages: [] })).messages.slice(-8)
     .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: String(m.text || "").slice(0, 800) + (m.tickets?.length ? `\n[Tickets created: ${m.tickets.join("; ")}]` : "") })).filter((m) => m.content);
   const proposals = [];
   const take = (r) => { if (r?.proposals?.length) proposals.push(...r.proposals); return { ticketCreated: !!r?.proposals?.length, result: r?.text || "" }; };
@@ -430,6 +446,7 @@ async function parserAnswer(ctx, text, lang) {
   if (/\b(protect|lindungi|amankan|guard)\b/i.test(t)) return intentProtect(ctx, lang);
   if (/\b(long|short)\b/i.test(t) && (await findCoin(t))) return intentPerp(ctx, t, lang);
   if (swapWords.test(t)) return intentSwap(ctx, t, lang);
+  if (addr && /\b(gate|check|safe|honeypot|rug|scan|audit|cek|aman)\b/i.test(t)) return intentGate(ctx, addr, lang);
   if (addr) return intentToken(ctx, addr, lang);
   if (/\b(fund|deposit|top[\s-]?up|isi|setor)\b.{0,40}\b(hyperliquid|hl)\b|\b(hyperliquid|hl)\b.{0,30}\b(fund|deposit|top[\s-]?up)\b/i.test(t)) return intentHlFund(ctx, parseNum((t.match(/(\d[\d.,]*)/) || [])[1]), lang);
   if (/\bbridge|jembatan|\bdeposit\b.*robinhood|pindah(kan)?\b.*robinhood/i.test(t)) return intentBridge(ctx, t, lang);
@@ -473,7 +490,38 @@ async function saveTurn(address, user, bot) {
   await store.update(`chats/${address.toLowerCase()}.json`, { messages: [] }, (c) => { c.messages.push(user, bot); c.messages = c.messages.slice(-60); });
 }
 
+const GUEST_PER_IP = 10, GUEST_PER_DAY = 400;
+async function takeGuest(req) {
+  const { createHash } = await import("node:crypto");
+  const ip = String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "?").split(",")[0].trim();
+  const k = createHash("sha256").update(ip + today()).digest("hex").slice(0, 16);
+  let used;
+  await store.update("guest-usage.json", {}, (u) => {
+    if (u.day !== today()) { u.day = today(); u.total = 0; u.ips = {}; }
+    u.ips ||= {};
+    if ((u.ips[k] || 0) >= GUEST_PER_IP) throw new HttpError(429, `Guests get ${GUEST_PER_IP} questions a day. Connect a wallet and sign in for more, and for tickets you can confirm.`);
+    if ((u.total || 0) >= GUEST_PER_DAY) throw new HttpError(429, "Guest questions are used up for today. Connect a wallet and sign in to keep going.");
+    u.ips[k] = (u.ips[k] || 0) + 1; u.total = (u.total || 0) + 1; used = u.ips[k];
+  });
+  return { used, limit: GUEST_PER_IP, guest: true };
+}
+async function runGuest(req, body, emit) {
+  const text = String(body.message || "").replace(/[\u0000-\u0008\u000b-\u001f]/g, " ").trim().slice(0, 600);
+  if (!text) throw new HttpError(400, "Write a message first.");
+  const usage = await takeGuest(req);
+  const lang = detectLang(text, body.lang && body.lang !== "auto" ? body.lang : undefined);
+  const ctx = { address: null, guest: true, via: "assistant", scopes: ["read"], slippage: Number(body.slippage) || 1,
+    status: (t) => emit("status", { text: t }), tool: (name, ok) => emit("tool", { name, ok }) };
+  let out;
+  try { out = await answer(ctx, text, lang); }
+  catch (e) { out = { text: T(lang, `Something failed while reading the markets: ${e.message}`, `Ada yang gagal saat membaca market: ${e.message}`) }; }
+  let reply = out.text;
+  if ((out.proposals || []).length) reply += T(lang, "\n\nConnect a wallet and sign in to turn this into a ticket you can confirm, or run with your Agent Wallet.", "\n\nHubungkan wallet dan sign in untuk menjadikannya tiket yang bisa kamu konfirmasi, atau jalankan dengan Agent Wallet.");
+  return { id: randomBytes(6).toString("hex"), lang, text: reply, proposals: [], usage, guest: true };
+}
+
 async function run(req, body, emit) {
+  if (!getSession(req)) return runGuest(req, body, emit);
   const s = requireSession(req);
   const text = String(body.message || "").replace(/[\u0000-\u0008\u000b-\u001f]/g, " ").trim().slice(0, 1000);
   if (!text) throw new HttpError(400, "Write a message first.");

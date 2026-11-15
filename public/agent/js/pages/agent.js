@@ -78,15 +78,15 @@ function mountChat(box, ctx) {
   let usage = null;
   async function refreshMeta() {
     const signed = !!wallet.session;
-    clear(gateBar, signed ? null : h("div", { class: "ag-signbar" }, h("span", {}, wallet.address ? "Sign in to chat." : "Connect a wallet, then sign in to chat.", h("i", { class: "info", title: "Signing a message proves the wallet is yours. It costs nothing and sends nothing." }, "i")),
+    clear(gateBar, signed ? null : h("div", { class: "ag-signbar" }, h("span", {}, wallet.address ? "Asking as a guest: answers and Gate checks. Sign in for tickets and your balances." : "Asking as a guest: answers and Gate checks, no wallet needed. Connect and sign in for tickets and your balances.", h("i", { class: "info", title: "Signing a message proves the wallet is yours. It costs nothing and sends nothing." }, "i")),
       h("button", { class: "btn sm primary", type: "button", onclick: async () => { try { if (!wallet.address) await openConnect(); if (wallet.address) await signIn(); } catch (e) { toast(e.message, "error"); } } }, icon("wallet"), "Sign in")));
     if (signed && !usage) { try { usage = await api.get("assistant/usage"); } catch {} }
     clear(meta,
       h("span", { class: "ag-chip" }, icon("wallet"), wallet.address ? short(wallet.address) : "No wallet"),
-      usage && signed ? h("span", { class: "faint" }, `${usage.used}/${usage.limit} free messages today`) : null,
+      usage && signed ? h("span", { class: "faint" }, `${usage.used}/${usage.limit} free messages today`) : usage?.guest ? h("span", { class: "faint" }, `Guest: ${usage.used}/${usage.limit} questions today`) : null,
       h("span", { class: "faint grow", style: { textAlign: "right" } }, "Proposals expire after 10 minutes"));
-    input.disabled = !signed;
-    sendBtn.disabled = !signed;
+    input.disabled = false;
+    sendBtn.disabled = false;
   }
 
   function addMsg(role, text) {
@@ -102,7 +102,7 @@ function mountChat(box, ctx) {
   async function send(text) {
     text = String(text || "").trim();
     if (!text || busy) return;
-    if (!wallet.session) { input.value = text; toast("Sign in first: the agent needs to know which wallet it works for.", ""); refreshMeta(); return; }
+    // not signed in: guest mode (answers and Gate checks, no tickets), see the note under the input
     busy = true;
     input.value = "";
     input.style.height = "auto";

@@ -31,6 +31,7 @@
 !/tools/autopilot-test.mjs
 !/tools/onboard-test.mjs
 !/tools/autopilot-live-test.mjs
+!/tools/guest-test.mjs
 node_modules/
 .DS_Store
 .env

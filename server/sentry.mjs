@@ -67,7 +67,11 @@ export function formatPost(r) {
   lines.push(`<code>${r.token}</code>`);
   return lines.join("\n");
 }
-const buttons = (a) => ({ inline_keyboard: [[{ text: "Check in Troya", url: `${SITE}/agent#/swap?in=eth&out=${a}` }, { text: "Pons", url: PONS + a.toLowerCase() }]] });
+const TRADE = process.env.TG_TRADE === "1";
+const buttons = (a) => ({ inline_keyboard: [
+  ...(TRADE ? [[{ text: "Trade in Telegram", url: `https://t.me/${process.env.TG_BOT_USERNAME || "TrojanTroya_bot"}?start=t_${a}` }]] : []),
+  [{ text: "Check in Troya", url: `${SITE}/agent#/swap?in=eth&out=${a}` }, { text: "Pons", url: PONS + a.toLowerCase() }],
+] });
 
 export function formatRecap(d, dayLabel) {
   const checked = d.passed + d.caution + d.failed;

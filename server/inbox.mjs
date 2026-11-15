@@ -78,6 +78,8 @@ async function onTelegramMessage(m) {
     await tg("sendMessage", { chat_id: m.chat.id, text: linked ? "Linked. Troya will send your alerts here." : "That link code expired. Make a new one in Troya: Settings → Telegram." }).catch(() => {});
     return;
   }
+  // Phase 2: trade messages in a private chat (TG_TRADE=1); everything else goes to the normal bot
+  if (await import("./tgtrade.mjs").then((t) => t.handleMessage(m, tg, store)).catch((e) => { console.warn("[telegram trade]", e.message); return false; })) return;
   const bot = await import("./tgbot.mjs");
   await bot.handleBotMessage(m, tg, tgMe);
 }
@@ -92,7 +94,10 @@ async function telegramLoop() {
       for (const u of r.result || []) {
         tgOffset = u.update_id + 1;
         if (u.message) await onTelegramMessage(u.message).catch((e) => console.warn("[telegram]", e.message));
-        if (u.callback_query) await import("./tgbot.mjs").then((b) => b.handleCallback(u.callback_query, tg)).catch((e) => console.warn("[telegram guard]", e.message));
+        if (u.callback_query) {
+          const traded = await import("./tgtrade.mjs").then((t) => t.handleCallback(u.callback_query, tg)).catch((e) => { console.warn("[telegram trade]", e.message); return false; });
+          if (!traded) await import("./tgbot.mjs").then((b) => b.handleCallback(u.callback_query, tg)).catch((e) => console.warn("[telegram guard]", e.message));
+        }
       }
     } catch { await new Promise((x) => setTimeout(x, 5000)); }
   }

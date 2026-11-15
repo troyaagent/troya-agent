@@ -561,7 +561,6 @@ export async function register(r, ctx) {
   r.post("/api/assistant/chat", async ({ req, body }) => run(req, body, () => {}));
 
   r.post("/api/assistant/stream", async ({ req, res, body }) => {
-    requireSession(req);
     res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no" });
     const emit = (type, data) => { if (!res.writableEnded) res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`); };
     try {

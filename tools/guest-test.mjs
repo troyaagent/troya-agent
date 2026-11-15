@@ -31,7 +31,10 @@ r = await ask(`buy 0.01 ETH of ${TROYA}`);
 ok(r.status === 200 && (r.body.proposals || []).length === 0 && /sign in to turn this into a ticket/i.test(r.body.text), "a guest's buy request gets the Gate answer and no ticket, with a pointer to sign in");
 r = await ask("show my balances");
 ok(r.status === 200 && /Connect a wallet and sign in to see your balances/.test(r.body.text), "balances need a wallet");
-for (let i = 0; i < 6; i++) await ask("price ETH");
+const st = await fetch(BASE + "/api/assistant/stream", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: "price ETH" }) });
+const stText = await st.text();
+ok(st.status === 200 && /event: done/.test(stText) && /event: text/.test(stText), "the web chat's stream works for a guest too (no 401)");
+for (let i = 0; i < 5; i++) await ask("price ETH");
 r = await ask("price BTC");
 ok(r.status === 429 && /10 questions a day/.test(r.body.error || ""), "the 11th question from the same IP in a day is refused", r.body.error?.slice(0, 70));
 

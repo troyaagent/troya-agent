@@ -15,6 +15,7 @@
 /public/_*/
 /tools/*
 !/tools/crawl.mjs
+!/tools/sentry-filter-test.mjs
 !/tools/rh-smoke.mjs
 !/tools/regate-test.mjs
 !/tools/tgtrade-test.mjs

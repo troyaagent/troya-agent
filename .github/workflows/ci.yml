@@ -26,6 +26,8 @@ jobs:
         run: node tools/security-test.mjs
       - name: Group moderation
         run: node tools/tgmod-test.mjs
+      - name: Sentry channel filter
+        run: node tools/sentry-filter-test.mjs
       - name: Holder perks
         run: node tools/holders-test.mjs
   live:

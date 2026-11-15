@@ -76,7 +76,8 @@ ok(w.settings.rules.minRaisedEth === 2 && w.stats.practice.closed === 1 && w.pos
 const live = await call("POST", "/api/autopilot/settings", { mode: "live" }).catch((e) => e);
 ok(live.status === 400, "live mode refused from the web too");
 await call("POST", "/api/autopilot/settings", { on: true, public: true });
-const o2 = await ap.onLaunch(launch(3));
+ok((await ap.onLaunch(launch(3))).length === 0, "a coin already bought once is never bought again, even after it closed");
+const o2 = await ap.onLaunch(launch(3, "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC"));
 const cl = await call("POST", "/api/autopilot/close", { id: o2[0]?.id });
 ok(cl.position?.status === "closed" && /closed by you/.test(cl.position.reason), "Close from the web");
 console.log(`\n${pass} passed, ${fail} failed`);

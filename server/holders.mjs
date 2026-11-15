@@ -1,7 +1,7 @@
 // Phase 3 · holder perks for $TROYA.
 //   HOLDER_MIN     tokens needed (default 1,000,000 = 0.1% of supply), counted across the signed-in wallet and its Agent Wallet
 //   HOLDER_START   ISO time the perks switch on (announced first, as the roadmap says); unset = on
-// Perks: more assistant messages a day, more active playbooks, and a private Telegram DM for every Troya Sentry result.
+// Perks: more assistant messages a day, more active playbooks, and a private Telegram DM for every coin Troya Sentry posts.
 // Balances are read from chain and cached for 10 minutes. Nothing here moves tokens or asks anyone to.
 import { readFileSync } from "node:fs";
 import { getBalances } from "./robinhood.mjs";

@@ -206,7 +206,7 @@ async function kick (tg, chat, user) {
   await tg('unbanChatMember', { chat_id: chat, user_id: user, only_if_banned: true })   // removed, free to rejoin
 }
 async function expel (tg, st) { await kick(tg, st.chat, st.user); for (const id of [st.msg, st.join]) if (id) await tg('deleteMessage', { chat_id: st.chat, message_id: id }).catch(() => {}) }
-const WELCOME = (name) => `Welcome to Troya Agent, ${name}.\nStart with the pinned post. App: <a href="${SITE}/agent">troya.codes/agent</a>\nTroya Sentry runs every new Pons launch through the Gate: <a href="https://t.me/troyasentry">t.me/troyasentry</a>\nThe team never messages first, and nobody here needs your recovery phrase.`
+const WELCOME = (name) => `Welcome to Troya Agent, ${name}.\nStart with the pinned post. App: <a href="${SITE}/agent">troya.codes/agent</a>\nTroya Sentry runs every new Pons launch through the Gate and posts the clean passes with real buying: <a href="https://t.me/troyasentry">t.me/troyasentry</a>\nThe team never messages first, and nobody here needs your recovery phrase.`
 const WELCOME_KB = { inline_keyboard: [[{ text: 'Open Troya', url: `${SITE}/agent` }, { text: 'Troya Sentry', url: 'https://t.me/troyasentry' }]] }
 
 export async function guardJoin (m, tg, me) {
@@ -329,15 +329,15 @@ const ago = (t) => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 
 const VERDICT = { passed: "Passed", caution: "Caution", failed: "Failed" };
 async function sentryText() {
   const se = await import("./sentry.mjs");
-  const list = se.recentResults(6);
+  const list = se.recentResults(200).filter((r) => r.posted !== false).slice(0, 6);
   const markup = { inline_keyboard: [[{ text: "Open Troya Sentry", url: "https://t.me/troyasentry" }]] };
-  if (!list.length) return { text: "Troya Sentry checks every new Pons launch through the Gate and posts each result to t.me/troyasentry.", markup };
+  if (!list.length) return { text: "Troya Sentry checks every new Pons launch through the Gate and posts the clean passes with at least 0.5 ETH of real buying to t.me/troyasentry.", markup };
   const rows = list.map((r) => {
     const sym = r.symbol ? `$${esc(r.symbol)}` : "unnamed";
     const head = `<b>${VERDICT[r.verdict] || esc(r.verdict)}</b> · ${r.post ? `<a href="${esc(r.post)}">${sym}</a>` : sym} · ${ago(r.at)}`;
     return r.reason && r.verdict !== "passed" ? `${head}\n${esc(String(r.reason).slice(0, 90))}` : head;
   });
-  return { text: `<b>Troya Sentry · latest checks</b>\n\n${rows.join("\n")}\n\nEvery Pons launch, checked about 90 seconds in. Automated checks, not endorsements.`, markup };
+  return { text: `<b>Troya Sentry · latest posts</b>\n\n${rows.join("\n")}\n\nEvery Pons launch is checked about 90 seconds in, then at 5, 15 and 60 minutes while quiet; the channel gets clean passes with at least 0.5 ETH of real buying. Every result: troya.codes/api/sentry/recent. Automated checks, not endorsements.`, markup };
 }
 async function badgeText(arg) {
   const a = (/0x[0-9a-fA-F]{40}/.exec(String(arg || "")) || [])[0];
@@ -359,7 +359,7 @@ async function perksText() {
 ${when} Hold at least ${n(Number(process.env.HOLDER_MIN || 1_000_000))} $TROYA, counted across your wallet and its Agent Wallet:
 • ${hp.PERKS.messagesPerDay} assistant messages a day instead of 20
 • ${hp.PERKS.playbooks} active playbooks instead of 25
-• every Troya Sentry result as a private message from this bot (link Telegram in the app first)
+• every coin Troya Sentry posts, as a private message from this bot (link Telegram in the app first)
 
 Check your status: /wallet in a private chat with me.`;
 }

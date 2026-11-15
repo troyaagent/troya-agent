@@ -1,4 +1,7 @@
-// Troya Sentry: every new Pons launch goes through Troya Gate and the result is posted to a Telegram channel.
+// Troya Sentry: every new Pons launch goes through Troya Gate. The channel gets only the ones worth a look: passed with no
+// warning AND real buying (at least SENTRY_MIN_POST_ETH, default 0.5 ETH, on the curve), re-checked at 5, 15 and 60 minutes
+// so a coin that picks up later still makes it. Failed, caution and dust-only results are kept in /api/sentry/recent and the
+// daily recap, never dropped from the record.
 // The group gets one recap a day. Results also feed GET /api/sentry/recent (public, read-only).
 //   SENTRY=1    watch + post        SENTRY=dry   watch, write posts to data/sentry-preview.jsonl, send nothing
 //   SENTRY_CHANNEL (default @troyasentry) · SENTRY_RECAP_CHAT (default @troyaagent) · SENTRY_RECAP_UTC_HOUR (default 13)
@@ -23,6 +26,8 @@ const TG = process.env.TELEGRAM_BOT_TOKEN || "";
 const SITE = "https://troya.codes";
 const PONS = "https://ponsfamily.com/launchpad/";
 const TEST_ETH = "0.01";
+const MIN_POST = Number(process.env.SENTRY_MIN_POST_ETH ?? 0.5); // the channel's bar: real money on the curve, not a dev test buy
+const TRACTION_S = [5 * 60, 10 * 60, 45 * 60];   // passed but quiet → look again at about 5, 15 and 60 minutes
 const MIN_RAISED = 0.002;                // below this a curve is dust: a "passed" there would mean nothing, so it waits like an empty one
 const FIRST_CHECK_S = 90;                 // past the launch snipe tax
 const RETRY_S = [5 * 60, 15 * 60];        // no buys yet → look again, then drop quietly
@@ -66,6 +71,19 @@ export function verdict(g) {
   return { v: "passed" };
 }
 
+// the channel's filter: passed with no warning, and real buying (graduated, or at least MIN_POST ETH raised on an ETH curve)
+export function worthPosting(r, minEth = MIN_POST) {
+  if (r?.v !== "passed") return false;
+  if (r.pons) {
+    if (r.pons.graduated) return true;
+    const ethPair = r.pons.pair?.address === "native" || /^W?ETH$/i.test(r.pons.pair?.symbol || "");
+    return ethPair && Number(r.pons.raised) >= minEth;
+  }
+  const depth = (r.checks || []).find((c) => c.key === "depth");
+  return depth?.status === "pass";                                    // a pool: at least 0.5 ETH of depth behind the Gate's quote
+}
+const mins = (ms) => (ms < 90e3 ? `${Math.max(1, Math.round(ms / 1000))} s` : `${Math.round(ms / 60e3)} min`);
+
 export function formatPost(r) {
   const head = r.v === "passed" ? "Passed" : r.v === "caution" ? "Caution" : "Failed";
   const sym = r.symbol ? `$${esc(r.symbol)}` : "unnamed";
@@ -73,6 +91,7 @@ export function formatPost(r) {
   const ck = Object.fromEntries(r.checks.map((c) => [c.key, c]));
   const lines = [`<b>${head}</b> · <b>${sym}</b>${name}`];
   if (r.source) lines.push(`New ${esc(r.source)} pool`);
+  if (r.ageMs > 0) lines.push(`Checked ${mins(r.ageMs)} after launch`);
   if (r.v === "failed" || r.v === "caution") lines.push(`${esc(r.why.label)}: ${esc(String(r.why.detail).slice(0, 140))}`);
   const bits = [];
   if (ck.sim) bits.push(`Sim ${ck.sim.status === "pass" ? "ok" : ck.sim.status === "fail" ? "failed" : "skipped"}`);
@@ -101,9 +120,10 @@ export function formatRecap(d, dayLabel) {
 
 ${d.seen} Pons launches${d.pools ? ` and ${d.pools} new Uniswap pools` : ""} seen. ${checked} had buyers and went through Troya Gate:
 ${d.passed} passed · ${d.caution} caution · ${d.failed} failed
+${d.posted} passed with real buying (at least ${MIN_POST} ETH on the curve) and were posted to the channel.
 ${d.nobuys} had an empty or dust-only curve (no real buys, or every buyer sold), so there was nothing to test.
 
-Every result, one line each: t.me/${CHANNEL.replace(/^@/, "")}
+The posted ones: t.me/${CHANNEL.replace(/^@/, "")} · every result as JSON: troya.codes/api/sentry/recent
 Check any coin yourself: /gate 0x…
 
 Automated checks, not endorsements.`;
@@ -179,7 +199,7 @@ async function send(chat, text, markup, logo = null) {
 
 /* ---------- state ---------- */
 const dayKey = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
-const blank = () => ({ seen: 0, pools: 0, passed: 0, caution: 0, failed: 0, nobuys: 0 });
+const blank = () => ({ seen: 0, pools: 0, passed: 0, caution: 0, failed: 0, nobuys: 0, posted: 0 });
 // one [time, kind] per event, kept 3 days, so the recap counts exactly the last 24 hours
 function bump(s, k) { s.events.push([Date.now(), k]); const cut = Date.now() - 3 * 86400e3; while (s.events.length && s.events[0][0] < cut) s.events.shift(); }
 export function countSince(events, since) { const d = blank(); for (const [t, k] of events) if (t >= since && k in d) d[k]++; return d; }
@@ -206,7 +226,7 @@ async function scan(s) {
       const token = "0x" + l.topics[1].slice(26);
       if (s.seen[token]) continue;
       s.seen[token] = Date.now();
-      s.queue.push({ token, due: Date.now() + FIRST_CHECK_S * 1000, tries: 0 });
+      s.queue.push({ token, due: Date.now() + FIRST_CHECK_S * 1000, tries: 0, seenAt: Date.now() });
       bump(s, "seen");
     }
     if (POOLS) await scanPools(s, from, to);
@@ -250,6 +270,12 @@ async function scanPools(s, from, to) {
   }
 }
 
+const recentlyPosted = (s, token) => (s.posted?.[token.toLowerCase()] || 0) > Date.now() - 86400e3;
+function markPosted(s, token) {
+  s.posted ||= {}; s.posted[token.toLowerCase()] = Date.now();
+  for (const [k, t] of Object.entries(s.posted)) if (t < Date.now() - 86400e3) delete s.posted[k];
+}
+
 async function work(s) {
   const now = Date.now();
   const due = s.queue.filter((q) => q.due <= now).slice(0, 4);
@@ -260,7 +286,7 @@ async function work(s) {
     if (q.kind === "pool") {
       if (r.pons) { s.queue = s.queue.filter((x) => x !== q); continue; }                 // a Pons coin: its launch is covered already
       const ck = Object.fromEntries(r.checks.map((c) => [c.key, c]));
-      const ready = ck.route?.status === "pass" && (ck.depth?.status === "pass" || ck.depth?.status === "warn");
+      const ready = ck.route?.status === "pass" && ck.depth?.status === "pass" && worthPosting(r) && !recentlyPosted(s, r.token);
       if (!ready || r.v === "nobuys") {
         if (q.tries < POOL_RETRY_S.length) { q.due = now + POOL_RETRY_S[q.tries] * 1000; q.tries++; continue; }
         s.queue = s.queue.filter((x) => x !== q); continue;                               // never reached real depth: dropped quietly
@@ -271,8 +297,8 @@ async function work(s) {
       const jp = await send(CHANNEL, formatPost(r), poolButtons(r.token), null).catch((e) => ({ ok: false, description: e.message }));
       if (!jp.ok) console.warn("[sentry] pool post failed:", jp.description);
       if (MODE !== "dry") holderDms(r, null).catch((e) => console.warn("[sentry] holder DMs:", e.message));
-      bump(s, r.v);
-      recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, source: r.source, reason: r.why ? `${r.why.label}: ${r.why.detail}` : null, raised: null, progressPct: null, at: r.at, post: jp.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${jp.result.message_id}` : null });
+      bump(s, r.v); bump(s, "posted"); markPosted(s, r.token);
+      recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, posted: true, source: r.source, reason: r.why ? `${r.why.label}: ${r.why.detail}` : null, raised: null, progressPct: null, at: r.at, post: jp.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${jp.result.message_id}` : null });
       recent.length = Math.min(recent.length, 200);
       s.recent = recent.slice(0, 200);
       continue;
@@ -282,15 +308,22 @@ async function work(s) {
       if (q.tries < RETRY_S.length) { q.due = now + RETRY_S[q.tries] * 1000; q.tries++; continue; }
       s.queue = s.queue.filter((x) => x !== q); bump(s, "nobuys"); continue;
     }
-    s.queue = s.queue.filter((x) => x !== q);
-    const logo = await logoFor(r.token).catch(() => null);
-    const j = await send(CHANNEL, formatPost(r), buttons(r.token), logo).catch((e) => ({ ok: false, description: e.message }));
-    if (!j.ok) console.warn("[sentry] post failed:", j.description);
-    if (MODE !== "dry") holderDms(r, logo && fileIds.has(logo.cid) ? { cid: logo.cid, fileId: fileIds.get(logo.cid) } : null).catch((e) => console.warn("[sentry] holder DMs:", e.message));
-    // Phase 7: Sentry Autopilot acts on every launch that passed
+    r.ageMs = r.at - (q.seenAt || s.seen[q.token] || r.at);
+    // Phase 7: Sentry Autopilot sees every passing check (it keeps its own rules and never buys the same coin twice)
     if (MODE !== "dry" && r.v === "passed") import("./autopilot.mjs").then((a) => a.onLaunch(r)).catch((e) => console.warn("[sentry] autopilot:", e.message));
+    const post = worthPosting(r) && !recentlyPosted(s, r.token);
+    if (!post && r.v === "passed" && (q.lt || 0) < TRACTION_S.length) { q.due = now + TRACTION_S[q.lt || 0] * 1000; q.lt = (q.lt || 0) + 1; continue; }
+    s.queue = s.queue.filter((x) => x !== q);
+    let j = { ok: false };
+    if (post) {
+      const logo = await logoFor(r.token).catch(() => null);
+      j = await send(CHANNEL, formatPost(r), buttons(r.token), logo).catch((e) => ({ ok: false, description: e.message }));
+      if (!j.ok) console.warn("[sentry] post failed:", j.description);
+      if (MODE !== "dry") holderDms(r, logo && fileIds.has(logo.cid) ? { cid: logo.cid, fileId: fileIds.get(logo.cid) } : null).catch((e) => console.warn("[sentry] holder DMs:", e.message));
+      bump(s, "posted"); markPosted(s, r.token);
+    }
     bump(s, r.v);
-    recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, reason: r.why ? `${r.why.label}: ${r.why.detail}` : null, raised: r.pons?.raised ?? null, progressPct: r.pons?.progressPct ?? null, at: r.at, post: j.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${j.result.message_id}` : null });
+    recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, posted: post, reason: r.why ? `${r.why.label}: ${r.why.detail}` : !post && r.v === "passed" ? `Passed, but under ${MIN_POST} ETH raised within an hour: not posted` : null, raised: r.pons?.raised ?? null, progressPct: r.pons?.progressPct ?? null, at: r.at, post: j.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${j.result.message_id}` : null });
     recent.length = Math.min(recent.length, 200);
     s.recent = recent.slice(0, 200);                                   // survives restarts
   }

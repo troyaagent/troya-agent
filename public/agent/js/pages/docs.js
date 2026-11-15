@@ -20,7 +20,7 @@ export async function mount(view) {
         [h("b", {}, "Swap: "), "any pair on Robinhood Chain through Pons curves and Uniswap v3/v4 pools. You sign in your own wallet."],
         [h("b", {}, "Perps: "), "Hyperliquid orders with leverage, take-profit and stop-loss, signed by a trade-only key you approve once."],
         [h("b", {}, "Bridge: "), "ETH between Robinhood Chain and Arbitrum, Base or Ethereum through LI.FI routes, or To Hyperliquid: ETH on Robinhood Chain becomes USDC on your own Hyperliquid account in one transaction."],
-        [h("b", {}, "Telegram: "), "trade Robinhood Chain coins from a private chat with @TrojanTroya_bot (Gate first, then Confirm), and follow every new Pons launch through the Gate in t.me/troyasentry."],
+        [h("b", {}, "Telegram: "), "trade Robinhood Chain coins from a private chat with @TrojanTroya_bot (Gate first, then Confirm), and follow t.me/troyasentry: every new Pons launch goes through the Gate, and the channel posts the clean passes with at least 0.5 ETH of real buying."],
         [h("b", {}, "Gate badge: "), "a live Troya Gate result Pons devs can embed on their site (troya.codes/badge)."],
         [h("b", {}, "Daily brief: "), "positions, PnL, liquidation distance, funding, the nearest stop, the market and Sentry every morning, with smart alerts (Portfolio → Today's brief, /brief in Telegram)."],
         [h("b", {}, "Sentry Autopilot: "), "your rules on every launch that passes the Gate, in practice mode first, with a leaderboard you can copy rules from (Agent → Sentry Autopilot, #/leaderboard, /autopilot)."],
@@ -46,7 +46,7 @@ export async function mount(view) {
         ]),
         h("h3", {}, "What holding it does"),
         P("From 16 Nov 2026, 12:00 UTC, a wallet holding at least 1,000,000 $TROYA (your signed-in wallet plus its Agent Wallet, read from chain) gets:"),
-        UL(["200 assistant messages a day instead of 20", "100 active playbooks instead of 25", "Troya Sentry results by private message on Telegram"]),
+        UL(["200 assistant messages a day instead of 20", "100 active playbooks instead of 25", "Every coin Troya Sentry posts, by private message on Telegram"]),
         P("Check your status with /wallet in a private chat with ", A("https://t.me/TrojanTroya_bot", "@TrojanTroya_bot"), "."),
         h("h3", {}, "Not announced"),
         P("Allocations beyond the above, vesting, buybacks, future burns and exchange listings have not been announced. Anything about $TROYA that is not here, on x.com/Troyaagent or in t.me/troyaagent is not from the team."),
@@ -68,7 +68,7 @@ export async function mount(view) {
       P("From a terminal: prepare_hl_funding, prepare_perp_order and prepare_close_position, each confirmed with execute_intent. Live orders need two locks opened: dry-run off for that API token in the app, and the MCP started with TROYA_LIVE=1."),
     ]],
     ["autopilot", "Sentry Autopilot", [
-      P("Sentry checks every Pons launch about 90 seconds in. When a launch passes and its curve has raised at least what you set, Autopilot buys your amount, then sells at your take-profit or stop, or after 7 days. Exits are checked every 60 seconds."),
+      P("Sentry checks every Pons launch about 90 seconds in, and again at 5, 15 and 60 minutes while it is quiet. When a launch passes and its curve has raised at least what you set, Autopilot buys your amount, then sells at your take-profit or stop, or after 7 days. Exits are checked every 60 seconds."),
       UL([
         [h("b", {}, "Practice: "), "play money at real prices. Entries and exits are quoted on chain when they happen; nothing is sent."],
         [h("b", {}, "Live: "), "buys and sells from your Agent Wallet, so Troya Gate and your caps run again on each trade. Tested with real money on 15 Nov 2026 (troya.codes/verify)."],

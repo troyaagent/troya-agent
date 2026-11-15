@@ -128,7 +128,7 @@ export async function onLaunch(r) {
     const rules = cleanRules(u.rules || {});
     if (raised < rules.minRaisedEth) continue;
     const mine = (s.positions || []).filter((p) => p.address === address);
-    if (mine.some((p) => p.status === "open" && p.token.toLowerCase() === r.token.toLowerCase())) continue;
+    if (mine.some((p) => p.token.toLowerCase() === r.token.toLowerCase())) continue;   // one buy per coin, ever (Sentry re-checks quiet launches)
     if (mine.filter((p) => p.status === "open").length >= rules.maxOpen) continue;
     if (mine.filter((p) => p.openedAt > Date.now() - 86400e3).length >= rules.maxBuysPerDay) continue;
     const pos = await open(address, u.mode === "live" && LIVE_OK ? "live" : "practice", r, rules).catch((e) => { console.warn("[autopilot] open", address.slice(0, 8), e.message); return null; });

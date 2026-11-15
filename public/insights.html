@@ -50,7 +50,7 @@
     <div class="eyebrow-line"><span id="posts-h">Latest notes</span></div>
     <div class="posts">
       <article class="post feature rv"><div class="meta"><i>Chain</i><span>10 Nov 2026</span><span>4 min</span></div><h3>Robinhood Chain in five minutes</h3><p>What chain 4663 is, why gas is paid in ETH, how ETH gets in and out, and why Troya treats it as home.</p><a class="ulink" href="#robinhood-chain">Read the note</a></article>
-      <article class="post rv"><div class="meta"><i>Safety</i><span>10 Nov 2026</span><span>3 min</span></div><h3>How Troya Gate reads a pool</h3><p>The five questions asked before any swap, and what a failed answer looks like.</p><a class="ulink" href="#gate">Read the note</a></article>
+      <article class="post rv"><div class="meta"><i>Safety</i><span>10 Nov 2026</span><span>3 min</span></div><h3>How Troya Gate reads a pool</h3><p>The seven checks run before any swap, and what a failed one looks like.</p><a class="ulink" href="#gate">Read the note</a></article>
       <article class="post rv"><div class="meta"><i>Design</i><span>10 Nov 2026</span><span>3 min</span></div><h3>Why the limits live outside the model</h3><p>A prompt is a suggestion. A policy file read on every call is a wall.</p><a class="ulink" href="#limits">Read the note</a></article>
       <article class="post rv"><div class="meta"><i>Wallets</i><span>10 Nov 2026</span><span>2 min</span></div><h3>Agent Wallet: pocket money, not a vault</h3><p>What the optional custodial wallet is for, and how much belongs in it.</p><a class="ulink" href="#pocket">Read the note</a></article>
       <article class="post rv"><div class="meta"><i>Data</i><span>10 Nov 2026</span><span>2 min</span></div><h3>Prices in ETH, and why USD is an estimate</h3><p>Reading the Robinhood Chain board without fooling yourself about market caps.</p><a class="ulink" href="#prices">Read the note</a></article>
@@ -73,7 +73,7 @@
         <div class="article-sep"></div>
         <h2>How Troya Gate reads a pool</h2>
         <div class="by">Safety · 10 Nov 2026</div>
-        <p>Before a swap is shown to you, and again before the Agent Wallet would sign it, Troya Gate asks five questions. Is the route made of pools that exist right now? How far does this order push the price? Is there enough liquidity behind the quote to get back out? Does a test sell go through, or does it revert? Is there a fee or creator tax hidden from the quote?</p>
+        <p>Before a swap is shown to you, and again before the Agent Wallet would sign it, Troya Gate runs seven checks. Is the route made of a pool or curve that exists right now? How far does this order push the price? Is there enough ETH behind the quote to get back out? How much do the pool and launch fees take? Does the exact swap succeed in a simulation? Does a test sell straight after go through, or does it revert? Does the token lose part of a transfer to a hidden tax?</p>
         <p>The checks are deliberately boring. They catch the most common ways a fresh token takes your ETH: a honeypot that cannot be sold, a pool too shallow to exit, a contract that quietly keeps a cut on every transfer.</p>
         <p>When a check fails, Troya does not argue with you or quietly adjust the order. It stops, names the check that failed and shows the number behind it. What you do next is your decision.</p>
       </article>

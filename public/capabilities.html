@@ -57,12 +57,12 @@
       <p class="lead rv">These tools only look. They pull live data, score it and explain it in plain words. Run them as often as you like: nothing they do can sign, send or spend.</p>
     </div>
     <div class="tools">
-      <div class="tool rv"><code>analyze_ticker</code><p>A snapshot of any Hyperliquid perp: mark and oracle price, 24h volume, open interest, hourly funding and the liquidity resting near the top of the book.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
-      <div class="tool rv"><code>get_movers</code><p>The biggest risers and fallers across Hyperliquid perps and Robinhood Chain tokens, with volume, volume against open interest and 24h change side by side.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+      <div class="tool rv"><code>analyze_ticker</code><p>A snapshot of any Hyperliquid perp: mark, mid and oracle price, 24h change and volume, open interest, funding per hour and per year, and the best bid, best ask and spread from the live book.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+      <div class="tool rv"><code>get_movers</code><p>The biggest 24h risers and fallers among liquid Hyperliquid perps (over $1M of daily volume), with price, change, volume and open interest. Robinhood Chain coins have their own tool, <code>robinhood_tokens</code>.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
       <div class="tool rv"><code>get_robinhood_tokens</code><p>The Robinhood Chain token board: launches and pools on chain 4663 from on-chain reads and GeckoTerminal, with price, 24h volume and the launchpad each one came from.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
       <div class="tool rv"><code>analyze_token_health</code><p>Reads a token contract's bytecode on Robinhood Chain and flags mint, pause, blacklist, fee-switch and owner powers. A fast heuristic, not an audit.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
       <div class="tool rv"><code>quote_swap</code><p>Prices a swap across Pons curves and Uniswap v3 and v4 pools on Robinhood Chain, with price impact, pool or curve fee and the minimum amount you would receive after slippage.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
-      <div class="tool rv"><code>get_new_pairs</code><p>A feed of freshly launched pairs on Robinhood Chain. It needs a dedicated indexer that is still being built, so this tool is not live yet.</p><span class="tier"><span class="tier-pill soon">IN DEVELOPMENT</span></span></div>
+      <div class="tool rv"><code>get_new_pairs</code><p>The newest pools and Pons launches on Robinhood Chain, with price, liquidity and volume, read from GeckoTerminal and the chain's own RPC.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
     </div>
   </section>
 
@@ -74,7 +74,7 @@
       <p class="lead rv">No single call can jump from an idea to a filled order. Each step hands a token to the next, and every step reads your limits again before it lets anything through.</p>
     </div>
     <div class="flow rv" role="list">
-      <div class="node" role="listitem"><span>simulate_trade</span><b>Simulate</b><p>Walks the live order book or pool curve to estimate fill price and slippage. Still read-only.</p></div>
+      <div class="node" role="listitem"><span>simulate_trade</span><b>Simulate</b><p>Walks the live Hyperliquid order book to estimate fill price and slippage. Swaps get the same from <code>quote_swap</code>. Still read-only.</p></div>
       <div class="arrow" aria-hidden="true"><svg viewBox="0 0 28 12"><path d="M0 6h26M21 1l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></div>
       <div class="node" role="listitem"><span>prepare_order</span><b>Prepare</b><p>Runs Troya Gate against your policy, then returns a one-time confirmationId tied to the exact parameters.</p></div>
       <div class="arrow" aria-hidden="true"><svg viewBox="0 0 28 12"><path d="M0 6h26M21 1l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></div>

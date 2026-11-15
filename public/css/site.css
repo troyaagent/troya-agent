@@ -246,6 +246,13 @@ body.site { overflow-x: hidden; }
 .checks .c span { font-family: var(--mono); font-size: 10.5px; color: var(--blue); display: block; margin-bottom: 18px; }
 .checks .c b { display: block; font-weight: 500; font-size: 15px; margin-bottom: 6px; }
 .checks .c p { margin: 0; font-size: 12.5px; color: var(--muted); }
+@media (min-width: 1101px) {
+  .checks.seven { grid-template-columns: repeat(4, 1fr); }
+  .checks.seven .c:nth-child(5) { border-left: 0; }
+  .checks.seven .c:nth-child(n+5) { border-top: 1px solid var(--line-2); }
+  .checks.seven .c:nth-child(4) { border-bottom: 1px solid var(--line-2); margin-bottom: -1px; }
+  .plans.three { grid-template-columns: 1.3fr 1fr 1fr; }
+}
 
 /* data sources */
 .sources { display: grid; gap: 0; }

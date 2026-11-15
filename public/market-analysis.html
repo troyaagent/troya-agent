@@ -66,9 +66,9 @@
       <p class="lead rv">Prices on their own say little. Troya pairs them with the context a trader would check next: volume, open interest, funding, depth and the shape of the book.</p>
     </div>
     <div class="tools">
-      <div class="tool rv"><code>analyze_ticker</code><p>Mark, oracle, 24h change and volume, open interest, funding per hour and per year, and the liquidity near the touch for any Hyperliquid perp.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
-      <div class="tool rv"><code>get_movers</code><p>Ranks perps and Robinhood Chain tokens by move, volume and volume against open interest, and points out funding that looks stretched.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
-      <div class="tool rv"><code>simulate_trade</code><p>Walks the live order book or pool curve to estimate the fill and the slippage of an order you are only thinking about. It prepares nothing.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+      <div class="tool rv"><code>analyze_ticker</code><p>Mark, oracle, 24h change and volume, open interest, funding per hour and per year, and the best bid, best ask and spread for any Hyperliquid perp.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+      <div class="tool rv"><code>get_movers</code><p>Ranks liquid Hyperliquid perps (over $1M of daily volume) by 24h move and counts how many are up. Stretched funding comes from <code>get_funding_extremes</code>, Robinhood Chain coins from <code>robinhood_tokens</code>.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
+      <div class="tool rv"><code>simulate_trade</code><p>Walks the live Hyperliquid order book to estimate the fill and the slippage of a perp order you are only thinking about. It prepares nothing.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>
     </div>
   </section>
 
@@ -81,7 +81,7 @@
     <div class="steps">
       <article class="step rv"><span class="n">01</span><h3>Token health</h3><p><code class="mono">analyze_token_health</code> reads the contract's bytecode for mint, pause, blacklist, fee-switch and owner powers, and tells you which ones it found. It is a heuristic; a clean result is not a guarantee.</p></article>
       <article class="step rv"><span class="n">02</span><h3>Social</h3><p><code class="mono">get_social_info</code> searches X for a token or ticker. It needs an X API bearer token configured by the operator, and every post it returns is fenced as untrusted text.</p></article>
-      <article class="step rv"><span class="n">03</span><h3>Discovery <span class="tier-pill soon">IN DEVELOPMENT</span></h3><p><code class="mono">get_new_pairs</code> will list pairs the moment they launch. It depends on an indexer that is not finished, so for now the Launchpad page sorts by age instead.</p></article>
+      <article class="step rv"><span class="n">03</span><h3>Discovery</h3><p><code class="mono">get_new_pairs</code> lists the newest pools and Pons launches on Robinhood Chain with price, liquidity and volume. Troya Sentry checks every new Pons launch about 90 seconds in and posts the result to <a class="ulink" href="https://t.me/s/troyasentry" target="_blank" rel="noopener">a public channel</a>.</p></article>
     </div>
   </section>
 

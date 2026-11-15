@@ -110,7 +110,7 @@
       <article class="step rv"><span class="n">A</span><h3>Per-trade cap</h3><p>The most one order can be worth in USD, whoever signs it.</p></article>
       <article class="step rv"><span class="n">B</span><h3>Daily USD cap</h3><p>A ceiling on what the Agent Wallet may spend or open in a rolling day.</p></article>
       <article class="step rv"><span class="n">C</span><h3>Leverage cap</h3><p>The highest leverage the agent may use on any perp, below the venue's own maximum if you choose.</p></article>
-      <article class="step rv"><span class="n">D</span><h3>Allowlist</h3><p>Only the coins and tokens you allow can be traded by the agent. Everything else is read-only for it.</p></article>
+      <article class="step rv"><span class="n">D</span><h3>Allowlist</h3><p>Perps: list the Hyperliquid markets the agent may trade, and every other market is refused (an empty list means every perp). Robinhood Chain tokens: each one must pass Troya Gate, and the operator can block tokens or limit trading to a list; you can only make it stricter.</p></article>
     </div>
   </section>
 
@@ -118,15 +118,17 @@
     <canvas class="sec-fx" data-fx="wisps" aria-hidden="true"></canvas>
     <div class="eyebrow-line"><span>04 / Troya Gate</span></div>
     <div class="split" style="margin-bottom:48px">
-      <h2 id="gate-h" class="h2 words" data-words>Five questions before every swap</h2>
-      <p class="lead rv">Troya Gate is the pre-trade check. It runs before a proposal is shown to you and again before the Agent Wallet signs. If any answer is bad, the order is not offered, and you see which check failed and why.</p>
+      <h2 id="gate-h" class="h2 words" data-words>Seven checks before every swap</h2>
+      <p class="lead rv">Troya Gate is the pre-trade check. It runs before a proposal is shown to you and again before the Agent Wallet signs. If any check fails, the order is not offered, and you see which check failed and the number behind it. The same checks as JSON: <a class="ulink" href="/api/swap/gate?tokenIn=ETH&amp;tokenOut=0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074&amp;amountIn=0.01" target="_blank" rel="noopener">Gate on $TROYA</a>.</p>
     </div>
-    <div class="checks rv">
-      <div class="c"><span>01</span><b>Route</b><p>Is the path real, through pools that exist on the chain right now?</p></div>
-      <div class="c"><span>02</span><b>Price impact</b><p>How far does this order move the price, and is that within your slippage?</p></div>
-      <div class="c"><span>03</span><b>Pool depth</b><p>Is there enough liquidity behind the quote to exit later?</p></div>
-      <div class="c"><span>04</span><b>Sell simulation</b><p>Can the token actually be sold back, or would a sell revert?</p></div>
-      <div class="c"><span>05</span><b>Transfer tax</b><p>Does the token skim a fee on transfer that the quote does not show?</p></div>
+    <div class="checks seven rv">
+      <div class="c"><span>01</span><b>Route</b><p>Is the path real, through a pool or Pons curve that exists on the chain right now? No route, no order.</p></div>
+      <div class="c"><span>02</span><b>Price impact</b><p>How far this order moves the price. Above 5% is a warning; above 15% the order is not offered.</p></div>
+      <div class="c"><span>03</span><b>Pool depth</b><p>ETH behind the quote. Under 0.5 ETH is a warning; under 0.05 ETH the order is not offered.</p></div>
+      <div class="c"><span>04</span><b>Fees and taxes</b><p>Pool and launch fees inside the quote. Above 5% is a warning; above 10% the order is not offered.</p></div>
+      <div class="c"><span>05</span><b>Transaction simulation</b><p>The exact swap is run against the current pool first. If it would revert, it is not offered.</p></div>
+      <div class="c"><span>06</span><b>Test sell</b><p>A simulated sell straight after the buy. If the token cannot be sold back, the order is not offered.</p></div>
+      <div class="c"><span>07</span><b>Transfer tax</b><p>What the test sell loses on transfer. Above 0.5% is a warning; above 10% the order is not offered.</p></div>
     </div>
   </section>
 

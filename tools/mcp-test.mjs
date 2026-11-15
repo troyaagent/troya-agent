@@ -2,7 +2,7 @@
 //   node tools/mcp-test.mjs                                  dry: tools listed, prepare works, execute stays a dry run
 //   LIVE=1 DATA=<data dir with an Agent Wallet approved on Hyperliquid> node tools/mcp-test.mjs
 //        real money (test wallet only): open a $12 ETH long from the terminal, then close it from the terminal
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
@@ -28,7 +28,11 @@ async function call(method, path, body) {
 let pass = 0, fail = 0;
 const ok = (c, name, extra = "") => { c ? pass++ : fail++; console.log(`  ${c ? "✓" : "✗"} ${name}${extra ? "  " + extra : ""}`); };
 
-const env = Object.fromEntries(readFileSync(`${homedir()}/.config/troya/test-wallet.env`, "utf8").split("\n").filter((l) => /^[A-Z_]+=/.test(l)).map((l) => [l.split("=")[0], l.slice(l.indexOf("=") + 1).replace(/^"|"$/g, "")]));
+// the real test wallet for LIVE runs; a dry run (and CI, which has no key file) signs in with a throwaway wallet
+const ENV_FILE = `${homedir()}/.config/troya/test-wallet.env`;
+const env = existsSync(ENV_FILE) ? Object.fromEntries(readFileSync(ENV_FILE, "utf8").split("\n").filter((l) => /^[A-Z_]+=/.test(l)).map((l) => [l.split("=")[0], l.slice(l.indexOf("=") + 1).replace(/^"|"$/g, "")])) : {};
+if (LIVE && !env.TEST_WALLET_KEY) throw new Error(`LIVE needs the test wallet key in ${ENV_FILE}`);
+if (!env.TEST_WALLET_KEY) env.TEST_WALLET_KEY = Wallet.createRandom().privateKey;
 const me = new Wallet(env.TEST_WALLET_KEY);
 const n = await call("POST", "/api/auth/nonce", { address: me.address });
 await call("POST", "/api/auth/verify", { address: me.address, message: n.message, signature: await me.signMessage(n.message) });

@@ -4,7 +4,7 @@
 //   node tools/tgtrade-test.mjs                      dry run: every path, no transaction
 //   LIVE=1 FUND=0.012 node tools/tgtrade-test.mjs    real money (test wallet only): fund a fresh Agent Wallet, buy 0.01 ETH of
 //                                                    $TROYA through the Telegram flow, sell 100% back, withdraw everything
-import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
@@ -40,7 +40,11 @@ const ME = 777, OTHER = 999, GROUP = -100123;
 const TROYA = "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074";
 const YOUNG = process.env.YOUNG || "0x5239b9e9f986f63794d8f8e55282c0895dd99590";
 
-const env = Object.fromEntries(readFileSync(`${homedir()}/.config/troya/test-wallet.env`, "utf8").split("\n").filter((l) => /^[A-Z_]+=/.test(l)).map((l) => [l.split("=")[0], l.slice(l.indexOf("=") + 1).replace(/^"|"$/g, "")]));
+// the real test wallet for LIVE runs; a dry run (and CI, which has no key file) signs in with a throwaway wallet
+const ENV_FILE = `${homedir()}/.config/troya/test-wallet.env`;
+const env = existsSync(ENV_FILE) ? Object.fromEntries(readFileSync(ENV_FILE, "utf8").split("\n").filter((l) => /^[A-Z_]+=/.test(l)).map((l) => [l.split("=")[0], l.slice(l.indexOf("=") + 1).replace(/^"|"$/g, "")])) : {};
+if (LIVE && !env.TEST_WALLET_KEY) throw new Error(`LIVE needs the test wallet key in ${ENV_FILE}`);
+if (!env.TEST_WALLET_KEY) env.TEST_WALLET_KEY = Wallet.createRandom().privateKey;
 const prov = new JsonRpcProvider(process.env.RPC || "https://robinhood-rpc.publicnode.com", 4663, { staticNetwork: true });
 const me = new Wallet(env.TEST_WALLET_KEY, prov);
 console.log(`${LIVE ? "LIVE (real money)" : "dry run (no broadcast)"} · owner = test wallet ${me.address.slice(0, 8)}… · data ${data}`);

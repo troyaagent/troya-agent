@@ -288,11 +288,17 @@ async function measure(token, { deep = true } = {}) {
   const washPct = trades ? (washTrades / trades) * 100 : 0;
   if (trades >= 50 && washPct >= 70) flag("red", "wash", "Mostly round-trip trading", `${washers.length} wallets that buy and sell the same amounts (bots or wash trading) made ${washPct.toFixed(0)}% of all trades: the volume looks bigger than real demand.`);
   else if (trades >= 50 && washPct >= 40) flag("amber", "wash", "Round-trip trading", `${washers.length} wallets that buy and sell the same amounts (bots or wash trading) made ${washPct.toFixed(0)}% of all trades.`);
-  const sh = funding?.shared?.[0];
-  if (sh) {
+  // wallets that share a funder with the dev: red while they still hold a real share, amber once they are empty
+  for (const sh of (funding?.shared || []).slice(0, 2)) {
     const p = pct(sh.holds, supply);
-    if (sh.withDev && (sh.wallets.length >= 2 || p >= 3)) flag("red", "funder", "Same funder as the dev", `${sh.devIsFunder ? "The dev funded" : `${short(sh.funder)} funded the dev and`} ${sh.wallets.length} of the wallets checked${p ? `, holding ${p.toFixed(1)}%` : ""}.`);
-    else if (sh.wallets.length >= 3 || p >= 10) flag(p >= 10 ? "red" : "amber", "funder", "Shared funder", `${short(sh.funder)} funded ${sh.wallets.length} of the biggest or earliest wallets${p ? `, holding ${p.toFixed(1)}%` : ""}.`);
+    const others = sh.wallets.filter((w) => !devs.has(w)).length;
+    if (sh.withDev && others >= 1) {
+      const who = sh.devIsFunder ? `The dev funded ${others} of the biggest or earliest wallets` : `${short(sh.funder)} funded the dev and ${others} other ${others === 1 ? "wallet" : "wallets"} among the biggest or earliest`;
+      if (p >= 3) flag("red", "funder", "Same funder as the dev", `${who}; together they hold ${p.toFixed(1)}% of the supply.`);
+      else flag("amber", "funder", "Dev-linked wallets", `${who}; they hold ${p.toFixed(1)}% of the supply now.`);
+      break;
+    }
+    if (!sh.withDev && (sh.wallets.length >= 3 || p >= 10)) { flag(p >= 10 ? "red" : "amber", "funder", "Shared funder", `${short(sh.funder)} funded ${sh.wallets.length} of the biggest or earliest wallets; they hold ${p.toFixed(1)}% of the supply.`); break; }
   }
   if (ps && ps.snipeBps > 0n) flag("amber", "snipe", "Snipe tax active", `A ${(Number(ps.snipeBps) / 100).toFixed(1)}% launch snipe tax still applies to buys.`);
 

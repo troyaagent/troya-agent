@@ -49,7 +49,7 @@ export async function mount(view) {
           [h("b", {}, "Uniswap pool: "), "an ETH/TROYA Uniswap v4 pool (1% fee) has traded alongside the curve since 15 Nov 2026. It is the pair ", A(`https://dexscreener.com/robinhood/${ca}`, "DexScreener"), " tracks. Its liquidity position (Uniswap v4 NFT #4293939) was burned by the creator wallet on 15 Nov 2026, so nobody, the team included, can remove that liquidity: ", A(`${BS}/tx/0xfe7f12591df9b9f53a0366a31cf36d1cf00b8200b6ae05fb8eeb7989afc24ea0`, "burn transaction"), "."],
         ]),
         h("h3", {}, "What holding it does"),
-        P("From 16 Nov 2026, 12:00 UTC, a wallet holding at least 1,000,000 $TROYA (your signed-in wallet plus its Agent Wallet, read from chain) gets:"),
+        P("Live since 16 Nov 2026, 12:00 UTC: a wallet holding at least 1,000,000 $TROYA (your signed-in wallet plus its Agent Wallet, read from chain) gets:"),
         UL(["200 assistant messages a day instead of 20", "100 active playbooks instead of 25", "Every coin Troya Sentry posts, by private message on Telegram"]),
         P("Check your status with /wallet in a private chat with ", A("https://t.me/TrojanTroya_bot", "@TrojanTroya_bot"), "."),
         h("h3", {}, "Not announced"),

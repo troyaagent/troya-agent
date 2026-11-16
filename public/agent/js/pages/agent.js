@@ -70,7 +70,38 @@ function mountChat(box, ctx) {
   const meta = h("div", { class: "ag-meta" });
   const gateBar = h("div", { class: "ag-gatebar" });
   const composer = h("div", { class: "ag-composer" }, h("div", { class: "ag-box" }, input, sendBtn), meta);
-  clear(box, hero, log, h("div", { class: "ag-dock" }, gateBar, composer));
+  // chats: New chat starts fresh (the old one is kept under Chats); a guest's chat lives in this browser
+  const GUEST_KEY = "troya.guestChat";
+  const guestLog = { get() { try { return JSON.parse(localStorage.getItem(GUEST_KEY) || "[]"); } catch { return []; } }, set(v) { try { localStorage.setItem(GUEST_KEY, JSON.stringify(v.slice(-30))); } catch {} } };
+  const head = h("div", { class: "ag-head" });
+  let chatInfo = null;
+  async function paintHead() {
+    const signed = !!wallet.session;
+    if (signed) { try { chatInfo = await api.get("assistant/threads"); } catch { chatInfo = null; } }
+    const has = signed ? (chatInfo?.current?.count || 0) > 0 || log.children.length > 0 : guestLog.get().length > 0 || log.children.length > 0;
+    clear(head,
+      h("span", { class: "ag-head-t" }, signed ? (chatInfo?.current?.title || "New chat") : "Guest chat",
+        h("small", {}, signed ? (chatInfo?.current?.remembers ? "Troya remembers this chat, older parts as a summary" : "Troya remembers this chat") : "Kept in this browser only")),
+      signed && chatInfo?.archive?.length ? h("button", { class: "btn sm ghost", type: "button", onclick: openChats }, icon("clock"), `Chats (${chatInfo.archive.length})`) : null,
+      has ? h("button", { class: "btn sm", type: "button", onclick: startNew }, icon("plus"), "New chat") : null);
+  }
+  function resetView() { clear(log); hero.hidden = false; }
+  async function startNew() {
+    if (busy) return;
+    if (wallet.session) { try { await api.post("assistant/new", {}); } catch (e) { return toast(e.message, "error"); } }
+    else guestLog.set([]);
+    resetView(); paintHead(); input.focus();
+  }
+  function openChats() {
+    const list = chatInfo?.archive || [];
+    const m = modal({ title: "Your chats", body: h("div", { class: "ag-chats" },
+      list.map((t) => h("div", { class: "ag-chat-row" },
+        h("button", { class: "ag-chat-open", type: "button", onclick: async () => { try { await api.post("assistant/open", { id: t.id }); m.close(); resetView(); await loadHistory(true); paintHead(); } catch (e) { toast(e.message, "error"); } } },
+          h("b", {}, t.title), h("small", {}, `${t.count} messages · ${ago(t.updatedAt)} ago`)),
+        h("button", { class: "icon-btn", type: "button", "aria-label": "Delete this chat", onclick: async (e) => { e.stopPropagation(); try { await api.post("assistant/delete-chat", { id: t.id }); e.currentTarget.closest(".ag-chat-row").remove(); paintHead(); } catch (er) { toast(er.message, "error"); } } }, icon("trash")))),
+      h("p", { class: "note" }, "Up to 20 earlier chats are kept for your wallet. Opening one puts the current chat in this list.")) });
+  }
+  clear(box, head, hero, log, h("div", { class: "ag-dock" }, gateBar, composer));
 
   input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(160, input.scrollHeight) + "px"; });
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input.value); } });
@@ -114,12 +145,14 @@ function mountChat(box, ctx) {
     let acc = "";
     abort = new AbortController();
     try {
-      await stream("assistant/stream", { message: text, lang: ctx.prefs.get().lang, slippage: ctx.prefs.get().slippage }, (type, data) => {
+      const guest = !wallet.session;
+      const prior = guest ? guestLog.get().slice(-8) : undefined;
+      await stream("assistant/stream", { message: text, lang: ctx.prefs.get().lang, slippage: ctx.prefs.get().slippage, ...(guest ? { history: prior } : {}) }, (type, data) => {
         if (type === "status") status.lastChild.textContent = data.text;
         else if (type === "tool") tools.append(h("span", { class: `ag-tool ${data.ok ? "" : "bad"}` }, icon(data.ok ? "check" : "close"), data.name));
         else if (type === "text") { acc += data.delta; body.innerHTML = md(acc); el.scrollIntoView({ block: "end" }); }
         else if (type === "proposal") el.querySelector(".ag-bubble").append(ticket(data.proposal));
-        else if (type === "done") { usage = data.usage ? { ...usage, ...data.usage } : usage; }
+        else if (type === "done") { usage = data.usage ? { ...usage, ...data.usage } : usage; if (guest && acc) guestLog.set([...guestLog.get(), { role: "user", text }, { role: "assistant", text: acc }]); }
         else if (type === "error") body.innerHTML = md(`**${data.error}**`);
       }, abort.signal);
     } catch (e) {
@@ -130,6 +163,7 @@ function mountChat(box, ctx) {
       if (!tools.children.length) tools.remove();
       busy = false;
       refreshMeta();
+      paintHead();
     }
   }
 
@@ -213,8 +247,12 @@ function mountChat(box, ctx) {
     } catch (e) { toast(e.message, "error", 6000); }
   }
 
-  async function loadHistory() {
-    if (!wallet.session || log.children.length) return;
+  async function loadHistory(force = false) {
+    if (!wallet.session) {
+      if (!log.children.length) for (const m of guestLog.get().slice(-16)) addMsg(m.role, m.text);
+      return;
+    }
+    if (log.children.length && !force) return;
     try {
       const [hist, props] = await Promise.all([api.get("assistant/history"), api.get("inbox/proposals")]);
       const pm = new Map((props.items || []).map((p) => [p.id, p]));
@@ -225,7 +263,14 @@ function mountChat(box, ctx) {
     } catch {}
   }
 
-  const off = onWallet(() => { refreshMeta(); loadHistory(); });
+  // signing in or out swaps between the guest chat (this browser) and the wallet's saved chat
+  let mode = wallet.session ? "signed" : "guest";
+  const off = onWallet(() => {
+    const now = wallet.session ? "signed" : "guest";
+    if (now !== mode) { mode = now; resetView(); loadHistory(true); } else loadHistory();
+    refreshMeta(); paintHead();
+  });
+  loadHistory(); paintHead();
   if (ctx.query.q) {
     const q = ctx.query.q;
     history.replaceState(null, "", "#/agent");

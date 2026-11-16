@@ -132,3 +132,16 @@
   .ag-dock { bottom: 56px; }
   .ag-meta .grow { display: none; }
 }
+
+/* chat header: title, memory note, Chats, New chat */
+.ag-head { display: flex; align-items: center; gap: 8px; max-width: 760px; margin: 0 auto 10px; padding: 4px 2px 10px; border-bottom: 1px solid var(--line); }
+.ag-head-t { display: grid; gap: 2px; min-width: 0; margin-right: auto; font-size: 13.5px; font-weight: 500; color: var(--fg); }
+.ag-head-t small { font-size: 11.5px; font-weight: 400; color: var(--muted); }
+.ag-head .btn svg { width: 14px; height: 14px; }
+.ag-chats { display: grid; gap: 4px; }
+.ag-chat-row { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line-2); border-radius: 9px; padding: 2px 4px 2px 0; }
+.ag-chat-open { flex: 1; min-width: 0; display: grid; gap: 3px; padding: 9px 12px; text-align: left; }
+.ag-chat-open b { font-weight: 500; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ag-chat-open small { font-size: 11.5px; color: var(--muted); }
+.ag-chat-row:hover { border-color: var(--line-3); background: var(--bg-2); }
+.d-drawer-b .ag-head { margin: 0 0 8px; padding: 2px 0 8px; }

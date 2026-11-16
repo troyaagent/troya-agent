@@ -12,6 +12,42 @@ const NOTE = {
   untested: "There is no route to test yet, so nothing could be checked.",
 };
 
+/* ---------- The Assay (F14): dev, holders, bundles, clusters, wash trades, funders ---------- */
+const pc = (x) => (x == null ? "–" : `${x < 0.1 && x > 0 ? x.toFixed(2) : x.toFixed(1)}%`);
+function assayBox(addr, compact) {
+  const box = h("section", { class: "dk-assay", "aria-live": "polite" },
+    h("div", { class: "dk-assay-h" }, h("b", {}, "The Assay"), h("span", { class: "fine" }, "who is behind this coin")),
+    h("div", { class: "dk-assay-b" }, h("span", { class: "ag-spin" }), h("span", { class: "fine" }, "Reading the coin's whole history and who funded its wallets…")));
+  let tries = 0;
+  const load = async () => {
+    if (!box.isConnected && tries > 0) return;
+    tries++;
+    let d;
+    try { d = await api.get(`/api/assay/${addr}`); } catch (e) { d = { status: "error", error: e.message }; }
+    if (d.status === "running" && tries < 30) { setTimeout(load, 6000); return; }
+    const body = box.querySelector(".dk-assay-b");
+    if (d.status !== "done") { clear(body, h("span", { class: "fine" }, d.status === "running" ? "Still reading. Open the Gate again in a minute." : `The Assay could not run: ${d.error || "try again later"}.`)); return; }
+    const flags = d.flags || [];
+    const lines = [
+      ["Dev", d.dev?.wallets?.length ? `holds ${pc(d.dev.holdsPct)} · sold ${pc(d.dev.soldPct)} of what it received${d.dev.liquidityAddedPct > 1 ? ` · put ${pc(d.dev.liquidityAddedPct)} into liquidity` : ""}` : "not identified"],
+      ["Top 10 wallets", `${pc(d.holders?.top10Pct)} of supply${d.holders?.count != null ? ` · ${d.holders.count.toLocaleString("en-US")} holders` : ""}`],
+      ["First 30 seconds", `${d.launch?.earlyBuyers ?? 0} buyers · still hold ${pc(d.launch?.earlyHoldPct)}`],
+      ["Round-trip trading", d.wash?.trades ? `${pc(d.wash.washPct)} of ${d.wash.trades.toLocaleString("en-US")} trades` : "no trades yet"],
+    ];
+    const f = d.funding?.dev?.find((x) => x.funder || x.via);
+    if (f) lines.push(["Dev funded by", f.funder ? short(f.funder) : `a contract call (${short(f.via)})`]);
+    else if (d.funding) lines.push(["Dev funded by", "not found"]);
+    clear(body,
+      flags.length
+        ? h("ul", { class: "dk-assay-flags" }, flags.map((x) => h("li", { class: `af-${x.level}` }, h("b", {}, x.title), h("span", {}, x.detail))))
+        : h("p", { class: "dk-assay-clear" }, "No red or amber flags in what was measured. Not a safe stamp: it means nothing showed up."),
+      compact ? null : h("dl", { class: "dk-assay-facts" }, lines.map(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])),
+      h("p", { class: "fine dk-assay-foot" }, `${(d.coverage?.transfers || 0).toLocaleString("en-US")} transfers read${d.coverage?.partial ? " (most recent only)" : " since launch"} · ${ago(d.at)}`));
+  };
+  setTimeout(load, 50);
+  return box;
+}
+
 export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
   const SITE = window.SITE || {};
   const input = h("input", { class: "input dk-gate-in", type: "text", spellcheck: "false", autocomplete: "off", placeholder: "Paste a Robinhood Chain coin address, 0x…", "aria-label": "Coin address", maxlength: "80" });
@@ -59,6 +95,7 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
         h("span", { class: "dk-ck-d" }, c.detail || "")))),
       r.curve && r.curve.progressPct != null ? h("div", { class: "dk-curve" }, h("span", {}, `Pons curve · ${Number(r.curve.raised || 0).toFixed(2)} ${r.curve.pair || "ETH"} raised`), h("div", { class: "dk-bar", style: { "--p": `${Math.min(100, r.curve.progressPct)}%` } }, h("i")), h("span", { class: "fine" }, `${r.curve.progressPct.toFixed(1)}% to graduation`)) : null,
       h("p", { class: `note dk-gate-note v-${r.verdict}` }, r.reason && r.verdict !== "passed" ? r.reason : NOTE[r.verdict] || ""),
+      assayBox(a, compact),
       h("div", { class: "dk-gate-a" },
         failed ? null : h("a", { class: "btn primary sm", href: `#/swap?out=${a}` }, icon("swap"), "Swap"),
         h("a", { class: "btn sm", href: `#/token/${a}` }, "Token page"),

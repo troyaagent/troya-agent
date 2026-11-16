@@ -210,9 +210,11 @@ export function formatPost(r) {
   if (ck.fee) bits.push(`Fees ${esc(ck.fee.detail)}`);
   if (bits.length) lines.push(bits.join(" · "));
   if (r.pons) lines.push(`Curve ${eth(r.pons.raised)} ${esc(r.pons.pair?.symbol || "ETH")} raised · ${r.pons.progressPct != null ? r.pons.progressPct.toFixed(r.pons.progressPct < 1 ? 2 : 1) : "–"}% to graduation · creator tax ${(r.pons.fees.creatorTaxBps / 100).toFixed(2)}%`);
+  if (r.assay?.length) for (const l of r.assay) lines.push(esc(l));
   lines.push(`<code>${r.token}</code>`);
   return lines.join("\n");
 }
+const quickAssay = async (token) => { try { const m = await import("./assay.mjs"); return m.assayLines(await m.assay(token, { deep: false, waitMs: 12000 })); } catch { return []; } };
 const TRADE = process.env.TG_TRADE === "1";
 const buttons = (a) => ({ inline_keyboard: [
   ...(TRADE ? [[{ text: "Trade in Telegram", url: `https://t.me/${process.env.TG_BOT_USERNAME || "TrojanTroya_bot"}?start=t_${a}` }]] : []),
@@ -441,6 +443,7 @@ async function work(s) {
       s.queue = s.queue.filter((x) => x !== q);
       if (why) { bump(s, r.v); record(s, r, false, why, null); continue; }                 // deep enough, but bots, a copy or too few buyers
       if (POOLS === "dry") { await store.append("sentry-pools-preview.jsonl", { t: Date.now(), token: r.token, pool: q.pool, text: formatPost(r) }); continue; }
+      r.assay = await quickAssay(r.token);
       const jp = await send(CHANNEL, formatPost(r), poolButtons(r.token), null).catch((e) => ({ ok: false, description: e.message }));
       if (!jp.ok) console.warn("[sentry] pool post failed:", jp.description);
       if (MODE !== "dry") holderDms(r, null).catch((e) => console.warn("[sentry] holder DMs:", e.message));
@@ -465,6 +468,7 @@ async function work(s) {
     let j = { ok: false };
     if (post) {
       const logo = await logoFor(r.token).catch(() => null);
+      r.assay = await quickAssay(r.token);
       j = await send(CHANNEL, formatPost(r), buttons(r.token), logo).catch((e) => ({ ok: false, description: e.message }));
       if (!j.ok) console.warn("[sentry] post failed:", j.description);
       if (MODE !== "dry") holderDms(r, logo && fileIds.has(logo.cid) ? { cid: logo.cid, fileId: fileIds.get(logo.cid) } : null).catch((e) => console.warn("[sentry] holder DMs:", e.message));

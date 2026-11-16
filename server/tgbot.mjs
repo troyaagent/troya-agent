@@ -41,6 +41,7 @@ Or just write it: "long ETH $20 at 3x" gets you a ticket to confirm.
 
 <b>Check</b>
 /gate 0x… · Troya Gate token check
+/assay 0x… · The Assay: dev, holders, bundles, wash trades
 /price NVDA · live price (a symbol or a 0x address)
 /sentry · the latest launches through the Gate
 /badge 0x… · a coin's live Gate badge for its website
@@ -87,8 +88,24 @@ async function gate(arg) {
   lines.push(`<b>Troya Gate ${h.score}/100.</b> ${esc(h.verdict || "")}`);
   for (const f of (h.flags || []).slice(0, 5)) lines.push(`${f.level === "high" ? "✕" : f.level === "medium" ? "!" : "·"} ${esc(f.text)}`);
   if (h.owner) lines.push(h.ownerRenounced ? "Owner: renounced." : `Owner: ${esc(h.owner.slice(0, 8))}…${esc(h.owner.slice(-4))} (still active).`);
-  lines.push(`<i>Bytecode check, not an audit.</i> Full check with a sell test: <a href="${SITE}/agent#/token/${a}">open in Troya</a>`);
+  const as = await assayText(a, 9000).catch(() => null);
+  if (as) lines.push(as);
+  lines.push(`<i>Bytecode check, not an audit.</i> Full check with a sell test: <a href="${SITE}/agent#/gate/${a}">open in Troya</a>`);
   return lines.join("\n");
+}
+// The Assay (F14) in Telegram: fast read (no funder lookups), the full one is on the Gate page
+async function assayText(a, waitMs = 25000) {
+  const m = await import("./assay.mjs");
+  const d = await m.assay(a, { deep: false, waitMs });
+  if (d.status === "running") return "The Assay is still reading this coin's history. Ask again in a minute.";
+  if (d.status !== "done") return null;
+  return m.assayLines(d).map((l) => esc(l)).join("\n");
+}
+async function assayCmd(arg) {
+  const a = (String(arg || "").match(/0x[0-9a-fA-F]{40}/) || [])[0];
+  if (!a) return "Usage: /assay 0x… (a coin on Robinhood Chain)";
+  const t = await assayText(a);
+  return `<b>The Assay</b> · <code>${a}</code>\n${t || "Could not read this coin right now."}\n<i>Red and amber flags only, never a safe stamp.</i> Full report with who funded the dev: <a href="${SITE}/agent#/gate/${a}">open in Troya</a>`;
 }
 
 
@@ -288,7 +305,7 @@ export async function handleBotMessage(m, tg, me) {
   const [, cmdRaw, at, arg = ""] = cm;
   if (at && me?.username && at.toLowerCase() !== me.username.toLowerCase()) return;
   const cmd = cmdRaw.toLowerCase();
-  if (!["start", "help", "links", "ca", "price", "p", "gate", "check", "rules", "sentry", "badge", "perks"].includes(cmd)) return;
+  if (!["start", "help", "links", "ca", "price", "p", "gate", "check", "assay", "rules", "sentry", "badge", "perks"].includes(cmd)) return;
   // one answer per person every 3 s keeps the group readable
   const who = `${chatId}:${m.from?.id}`;
   if (Date.now() - (lastReply.get(who) || 0) < 3000) return;
@@ -305,6 +322,7 @@ export async function handleBotMessage(m, tg, me) {
     else if (cmd === "rules") text = (await import("./tgmod.mjs")).rulesText(siteCa());
     else if (cmd === "ca") { const ca = siteCa(); text = ca ? `<b>Troya Agent CA</b> (Robinhood Chain)\n<code>${ca}</code>` : "The CA is not live yet. It will be announced here and on X at launch. Any address posted before that is fake."; }
     else if (cmd === "price" || cmd === "p") text = await price(arg);
+    else if (cmd === "assay") text = await assayCmd(arg);
     else text = await gate(arg);
   } catch (e) { text = `Could not read that right now (${esc(String(e.message || e).slice(0, 80))}). Try again in a moment.`; }
   await tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true }, ...(markup ? { reply_markup: markup } : {}) });

@@ -397,3 +397,22 @@ html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color:
 .sp-acct { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 10px; font-size: 12.5px; color: var(--muted); }
 .sp-acct b { color: var(--fg); font-weight: 500; }
 .sp-acct .btn:first-of-type { margin-left: auto; }
+
+
+/* The Assay (F14) under the Gate checks */
+.dk-assay { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); display: grid; gap: 10px; }
+.dk-assay-h { display: flex; align-items: baseline; gap: 10px; }
+.dk-assay-h b { font-size: 13px; letter-spacing: .02em; }
+.dk-assay-b { display: grid; gap: 10px; }
+.dk-assay-b > .ag-spin + .fine { margin-left: 8px; }
+.dk-assay-flags { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dk-assay-flags li { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); }
+.dk-assay-flags li.af-red { border-left-color: var(--down); background: color-mix(in srgb, var(--down) 9%, transparent); }
+.dk-assay-flags li b { font-size: 12.5px; }
+.dk-assay-flags li span { color: var(--muted); }
+.dk-assay-clear { margin: 0; font-size: 12.5px; color: var(--muted); }
+.dk-assay-facts { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 6px 14px; margin: 0; font-size: 12.5px; }
+.dk-assay-facts dt { color: var(--muted); }
+.dk-assay-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.dk-assay-foot { margin: 0; }
+@media (max-width: 520px) { .dk-assay-facts { grid-template-columns: 1fr; } .dk-assay-facts dd { margin-bottom: 6px; } }

@@ -133,7 +133,8 @@ export async function mount(view) {
       catch (e) { if (i === 2) { toast(`Signed, but the log could not be written yet (${e.message}). It is on chain; refresh later.`, "error", 8000); return null; } await new Promise((r) => setTimeout(r, 3000)); }
     }
   }
-  const run = async (fn) => { try { await fn(); } catch (e) { toast(errText(e), "error", 8000); } st.busy = null; await refresh(); };
+  // one step at a time: a double click must not start the same transaction twice
+  const run = async (fn) => { if (st.busy) return; st.busy = "Working…"; paintPanel(); try { await fn(); } catch (e) { toast(errText(e), "error", 8000); } st.busy = null; await refresh(); };
 
   const doClaim = () => run(async () => {
     const c = st.cyc || (plan() ? ensureCycle() : { id: `c${Date.now()}`, startedAt: Date.now(), plan: null, steps: {} });

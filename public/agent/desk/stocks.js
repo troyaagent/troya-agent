@@ -29,6 +29,9 @@ const SAFE_HEALTH = 1.5, MIN_HEALTH = 1.25;
 export async function mount(view, ctx) {
   useCss("perps"); useCss("swap");
   let alive = true;
+  // one wallet action at a time: a double click must not start the same transaction twice
+  let acting = false;
+  const guarded = async (fn) => { if (acting) return; acting = true; try { return await fn(); } finally { acting = false; } };
   const st = { tab: ctx.parts[0] || "stocks", desk: null, loans: null, q: "", basket: 0, basketEth: "", busy: null, mk: 0, coll: "", borrow: "", repay: "" };
   const body = h("div", { class: "sd-body" });
   const tabs = h("div", { class: "sd-tabs" });
@@ -104,7 +107,8 @@ export async function mount(view, ctx) {
       toast(`Playbook on: ${r.item.title}`, "ok", 6000);
     } catch (e) { toast(e.message, "error"); }
   }
-  async function buyBasket(legs) {
+  async function buyBasket(legs) { return guarded(() => _buyBasket(legs)); }
+  async function _buyBasket(legs) {
     if (!wallet.address) return openConnect();
     const total = Number(st.basketEth);
     if (!(total > 0) || !legs.length) return toast("Enter the ETH to spend.", "error");
@@ -176,7 +180,8 @@ export async function mount(view, ctx) {
     const raw = await reader("robinhood").call({ to: token, data: ERC.encodeFunctionData("allowance", [wallet.address, MORPHO]) });
     if (BigInt(raw) < amount) await step(label, { to: token, data: ERC.encodeFunctionData("approve", [MORPHO, amount]), value: "0" });
   }
-  async function doBorrow(m, params) {
+  async function doBorrow(m, params) { return guarded(() => _doBorrow(m, params)); }
+  async function _doBorrow(m, params) {
     if (!wallet.address) return openConnect();
     try {
       const coll = Number(st.coll) || 0, bor = Number(st.borrow) || 0;
@@ -200,7 +205,8 @@ export async function mount(view, ctx) {
     } catch (e) { toast(errText(e), "error", 7000); }
     st.busy = null; await load();
   }
-  async function doRepay(m, params, loan, all = false) {
+  async function doRepay(m, params, loan, all = false) { return guarded(() => _doRepay(m, params, loan, all)); }
+  async function _doRepay(m, params, loan, all = false) {
     try {
       const amt = all ? loan.borrowUsdg : Math.min(Number(st.repay) || 0, loan.borrowUsdg);
       if (!(amt > 0)) throw new Error("Enter USDG to repay, or use Repay all.");
@@ -219,7 +225,8 @@ export async function mount(view, ctx) {
     st.busy = null; await load();
   }
   function owes(loan) { return BigInt(loan?.borrowShares || 0) > 0n; }
-  async function doWithdraw(m, params, loan) {
+  async function doWithdraw(m, params, loan) { return guarded(() => _doWithdraw(m, params, loan)); }
+  async function _doWithdraw(m, params, loan) {
     try {
       await step("Withdrawing collateral…", { to: MORPHO, data: MO.encodeFunctionData("withdrawCollateral", [params, BigInt(loan.collateralRaw), wallet.address, wallet.address]), value: "0" });
       toast(`${tiny(loan.collateral)} ${m.symbol} back in your wallet`, "ok");

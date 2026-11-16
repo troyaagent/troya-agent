@@ -95,6 +95,9 @@ function rangeBar(lo, hi, now) {
 export async function mount(view, ctx) {
   useCss("perps"); useCss("swap");
   let alive = true;
+  // one wallet action at a time: a double click must not start the same transaction twice
+  let acting = false;
+  const guarded = async (fn) => { if (acting) return; acting = true; try { return await fn(); } finally { acting = false; } };
   const first = ctx.parts[0] || "";
   const st = { tab: first === "positions" ? "positions" : "new", pools: [], q: "", pool: ADDR_RE.test(first) ? lc(first) : null, sug: null, sugErr: null, days: 7, preset: "balanced", custom: null,
     a: ["", ""], edit: 0, bal: {}, health: {}, positions: null, busy: null, err: null, prefill: null, watched: new Set(), watching: null };
@@ -316,7 +319,8 @@ export async function mount(view, ctx) {
   }
   const said = (e) => { const m = errText(e); return /Price slippage check/i.test(m) ? "The price moved while this was being added. Refresh and try again." : m; };
 
-  async function doMint() {
+  async function doMint() { return guarded(_doMint); }
+  async function _doMint() {
     if (!wallet.address) return openConnect();
     const g = gate(), n = need();
     if (!n) return toast("Enter an amount.", "error");
@@ -360,14 +364,16 @@ export async function mount(view, ctx) {
     }
     return calls.length > 1 ? NP.encodeFunctionData("multicall", [calls]) : calls[0];
   }
-  async function doCollect(x) {
+  async function doCollect(x) { return guarded(() => _doCollect(x)); }
+  async function _doCollect(x) {
     try {
       await step("Collecting fees…", { to: NPM, data: exitData(x, 0n, 0n, 0n), value: "0" });
       toast(`Fees from #${x.tokenId} are in your wallet.`, "ok");
     } catch (e) { toast(said(e), "error", 8000); }
     st.busy = null; await loadPositions();
   }
-  async function doRemove(x, rebalance = false) {
+  async function doRemove(x, rebalance = false) { return guarded(() => _doRemove(x, rebalance)); }
+  async function _doRemove(x, rebalance = false) {
     const amt = `${fx(x.amount0 + x.fees0)} ${x.token0.label} + ${fx(x.amount1 + x.fees1)} ${x.token1.label}`;
     const ok = await review({ title: rebalance ? `Rebalance #${x.tokenId}` : `Remove #${x.tokenId}`,
       summary: rebalance ? `Step 1 of 2: remove everything and collect the fees (about ${amt}). Step 2: a new balanced range around today's price, filled with what comes back, for you to check and sign.` : `Remove everything and collect the fees: about ${amt} back to your wallet.`,

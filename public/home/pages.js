@@ -13,7 +13,7 @@ const BIG = [["Troya", "/"], ["Open the desk", "/agent"], ["Capabilities", PAGE(
 const SMALL = [
   ["Market", "/agent#/market"], ["Swap", "/agent#/swap"], ["Perps", "/agent#/perps"], ["Bridge", "/agent#/bridge"],
   ["Launchpad", "/agent#/launch"], ["Assistant", "/agent#/agent"], ["Docs", "/agent#/docs"],
-  ["Market Analysis", PAGE("market-analysis")], ["API and MCP", PAGE("api-and-mcp")], ["Risk Controls", PAGE("risk-controls")], ["Verify", PAGE("verify")], ["The Record", PAGE("record")], ["Flywheel", PAGE("flywheel")], ["Gate badge", PAGE("badge")], ["Insights", PAGE("insights")],
+  ["Market Analysis", PAGE("market-analysis")], ["API and MCP", PAGE("api-and-mcp")], ["Risk Controls", PAGE("risk-controls")], ["Verify", PAGE("verify")], ["The Record", PAGE("record")], ["Flywheel", PAGE("flywheel")], ["Community", PAGE("community")], ["Gate badge", PAGE("badge")], ["Insights", PAGE("insights")],
 ];
 const PAGES = [["Capabilities", "capabilities"], ["Plans", "plans"], ["Gate badge", "badge"], ["API and MCP", "api-and-mcp"], ["Market analysis", "market-analysis"], ["Insights", "insights"], ["Philosophy", "philosophy"], ["Risk controls", "risk-controls"]];
 const ok = (re, u) => (re.test(u || "") ? u : "");
@@ -53,7 +53,7 @@ if (foot) {
   foot.innerHTML = `
   <nav class="pn-pages" aria-label="Pages">${PAGES.map(([t, p]) => `<a href="${PAGE(p)}"${cur(PAGE(p))}>${t}</a>`).join("")}</nav>
   <div class="pn-row">
-    <div class="pn-l">${ext(TG, "Telegram")}${ext(X, "X")}${ext(GH, "GitHub")}<a href="${PAGE("privacy")}">Privacy policy</a></div>
+    <div class="pn-l"><a href="${PAGE("community")}">Community</a>${ext(TG, "Telegram")}${ext(X, "X")}${ext(GH, "GitHub")}<a href="${PAGE("privacy")}">Privacy policy</a></div>
     <button class="pn-ca" type="button" data-pn-ca><b>CA</b><span data-pn-ca-full></span></button>
     <div class="pn-rr"><a href="${PAGE("terms")}">Terms of service</a><a href="${PAGE("verify")}">Verify</a><a href="/agent#/docs">Docs</a></div>
   </div>

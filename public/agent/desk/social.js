@@ -26,18 +26,21 @@ const ago = (t) => { if (!t) return "never"; const m = Math.round((Date.now() - 
 export async function mount(view, ctx) {
   useCss("perps"); useCss("swap");
   let alive = true;
-  const st = { tab: ["x", "pass", "votes", "agents"].includes(ctx.parts[0]) ? ctx.parts[0] : "x", agentSlug: ctx.parts[0] === "agents" ? ctx.parts[1] || null : null, agents: null, mineA: null, agent: null, tpl: null, form: { template: "accumulator" }, me: undefined, status: null, log: null, pass: null, votes: null, busy: null };
+  const st = { tab: ["x", "pass", "votes", "agents", "reports"].includes(ctx.parts[0]) ? ctx.parts[0] : "x", reports: null, rFilter: "open", isAdmin: false, agentSlug: ctx.parts[0] === "agents" ? ctx.parts[1] || null : null, agents: null, mineA: null, agent: null, tpl: null, form: { template: "accumulator" }, me: undefined, status: null, log: null, pass: null, votes: null, busy: null };
   const body = h("div", { class: "so-body" }), tabs = h("div", { class: "sd-tabs" });
   clear(view, h("div", { class: "dk so" },
     pageHead("Social", "Your X account on Troya, Troya answering on X, the Holder Pass, holder votes and the agent factory."),
     tabs, body));
-  const paintTabs = () => clear(tabs, seg([{ value: "x", label: "X" }, { value: "pass", label: "Holder pass" }, { value: "votes", label: "Votes" }, { value: "agents", label: "Agents" }], st.tab, (v) => { st.tab = v; st.agentSlug = null; history.replaceState(null, "", `#/social/${v}`); paint(); load(); }));
+  const paintTabs = () => clear(tabs, seg([{ value: "x", label: "X" }, { value: "pass", label: "Holder pass" }, { value: "votes", label: "Votes" }, { value: "agents", label: "Agents" }, ...(st.isAdmin || st.tab === "reports" ? [{ value: "reports", label: "Reports" }] : [])], st.tab, (v) => { st.tab = v; st.agentSlug = null; history.replaceState(null, "", `#/social/${v}`); paint(); load(); }));
   const q = ctx.query?.x;
   if (q === "notbot") toast(`That was @${ctx.query.as || "another account"}. Only @Troyaagent can connect Troya on X.`, "error", 8000);
   else if (NOTE[q]) toast(NOTE[q][0], NOTE[q][1], 7000);
   if (q) history.replaceState(null, "", "#/social");
 
+  // admins see the community inbox as a fifth tab (the server decides who is an admin)
+  if (wallet.session) api.get("community/reports?limit=1").then(() => { st.isAdmin = true; if (alive) paintTabs(); }).catch(() => {});
   async function load() {
+    if (st.tab === "reports") return loadReports();
     if (st.tab === "pass" || st.tab === "votes") return loadHolders();
     if (st.tab === "agents") return loadAgents();
     const [me, status] = await Promise.all([
@@ -51,12 +54,45 @@ export async function mount(view, ctx) {
 
   function paint() {
     paintTabs();
+    if (st.tab === "reports") return reportsTab();
     if (st.tab === "pass") return passTab();
     if (st.tab === "votes") return votesTab();
     if (st.tab === "agents") return agentsTab();
     const s = st.status;
     if (!s) return clear(body, h("div", { class: "sk", style: { height: "240px" } }));
     clear(body, mine(s), troya(s), st.log ? logBox() : null);
+  }
+
+  /* ---------- community inbox (admins): web form + Telegram /bug /idea /report ---------- */
+  async function loadReports() {
+    try { st.reports = await api.get("community/reports"); st.isAdmin = true; } catch (e) { st.reports = { error: e.message }; }
+    if (alive) paint();
+  }
+  const KIND_TAG = { bug: "Bug", idea: "Idea", scam: "Suspicious", other: "Other" };
+  const ago = (t) => { const s = Math.max(1, Math.round((Date.now() - t) / 1000)); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86400)}d ago`; };
+  function reportsTab() {
+    const d = st.reports;
+    if (!d) return clear(body, h("div", { class: "sk", style: { height: "240px" } }));
+    if (d.error) return clear(body, h("div", { class: "panel", style: { padding: "20px" } }, h("b", {}, "Reports are for admins."), h("p", { class: "muted" }, wallet.session ? d.error : "Sign in with an admin wallet to read them.")));
+    const open = (r) => ["new", "seen", "working"].includes(r.status);
+    const list = d.reports.filter((r) => st.rFilter === "all" ? true : st.rFilter === "open" ? open(r) : r.kind === st.rFilter);
+    const setStatus = async (r, status) => { try { await api.post(`community/reports/${r.id}`, { status }); r.status = status; paint(); } catch (e) { toast(e.message, "error"); } };
+    clear(body,
+      h("div", { class: "panel", style: { padding: "16px 18px", display: "flex", flexWrap: "wrap", gap: "10px 18px", alignItems: "center" } },
+        seg([{ value: "open", label: `Open (${(d.counts.new || 0) + (d.counts.seen || 0) + (d.counts.working || 0)})` }, { value: "bug", label: "Bugs" }, { value: "idea", label: "Ideas" }, { value: "scam", label: "Suspicious" }, { value: "all", label: "All" }], st.rFilter, (v) => { st.rFilter = v; paint(); }),
+        h("span", { class: "fine muted" }, `From troya.codes/community and Telegram (/bug, /idea, /report). ${d.team ? "Each new report also goes to the team Telegram group." : "Only here: no personal chat gets them."}`)),
+      list.length ? list.map((r) => h("div", { class: "panel", style: { padding: "16px 18px", marginTop: "10px", display: "grid", gap: "10px" } },
+        h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px 12px", alignItems: "center" } },
+          h("span", { class: `badge-s ${r.kind === "scam" ? "warn" : r.kind === "bug" ? "blue" : ""}` }, KIND_TAG[r.kind] || r.kind),
+          h("b", {}, `#${r.id}`), h("span", { class: "fine muted" }, `${ago(r.at)} · ${r.source}${r.contact ? ` · ${r.contact}` : ""}${r.wallet ? ` · ${short(r.wallet)}` : ""}`),
+          h("span", { class: "fine", style: { marginLeft: "auto" } }, r.status)),
+        h("p", { style: { margin: 0, whiteSpace: "pre-wrap" } }, r.message),
+        r.reported ? h("p", { class: "fine", style: { margin: 0 } }, `Reported message from ${r.reported.user || r.reported.id}: `, h("span", { class: "muted" }, r.reported.text || "(no text)")) : null,
+        r.page ? h("p", { class: "fine muted", style: { margin: 0 } }, `Page: ${r.page}`) : null,
+        r.images?.length ? h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } }, r.images.map((n) => h("a", { href: `/api/community/file/${n}`, target: "_blank", rel: "noopener" }, h("img", { src: `/api/community/file/${n}`, alt: "Screenshot", style: { width: "180px", height: "120px", objectFit: "cover", borderRadius: "10px", border: "1px solid var(--line-2, rgba(255,255,255,.12))" } })))) : null,
+        h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
+          [["seen", "Seen"], ["working", "Working on it"], ["fixed", "Fixed"], ["wontfix", "Won't fix"], ["spam", "Spam"]].map(([v, l]) => h("button", { class: `btn sm ${r.status === v ? "blue" : ""}`, type: "button", onclick: () => setStatus(r, v) }, l)))))
+        : h("p", { class: "muted", style: { padding: "18px 4px" } }, "Nothing here yet."));
   }
 
   /* ---------- holder pass ---------- */

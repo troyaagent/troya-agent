@@ -5,6 +5,10 @@
   transition: opacity .25s, background .25s, color .25s, transform .35s cubic-bezier(.2, .8, .2, 1); }
 .bb-soc a:hover { opacity: 1; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); transform: translateY(-1px); }
 .bb-soc svg { width: 16px; height: 16px; fill: currentColor; }
+.bb-soc a.bb-com { width: auto; height: 34px; padding: 0 14px; margin-right: 4px; font: 700 11px/1 var(--sans, system-ui); letter-spacing: .1em; text-transform: uppercase;
+  border: 1px solid var(--line-2, var(--line)); opacity: .92; }
+.bb-soc a.bb-com:hover { border-color: var(--accent); }
+.bb-soc a.bb-com[aria-current="page"] { border-color: var(--accent); color: var(--accent); opacity: 1; }
 
 .bb-buy { position: relative; }
 .bb-btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px 0 6px; border-radius: 999px;

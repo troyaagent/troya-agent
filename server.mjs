@@ -35,6 +35,7 @@ const ROUTES = {
   "/verify": "/verify.html",
   "/record": "/record.html",
   "/flywheel": "/flywheel.html",
+  "/community": "/community.html",
   "/badge": "/badge.html",
   "/agent": "/agent/index.html",
 };

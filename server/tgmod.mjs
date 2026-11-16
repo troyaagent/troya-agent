@@ -212,6 +212,7 @@ export async function screen(m, tg, me) {
     if (t.from.is_bot || adm.has(t.from.id) || t.from.id === m.from.id) return true;
     if (isAdm && cmd[1].toLowerCase() === "ban") { await del(tg, chat, t.message_id); await ban(tg, chat, t.from, `admin /ban by ${m.from.id}`); return true; }
     const rk = `${chat}:${t.message_id}`;
+    if (!reports.has(rk)) import("./community.mjs").then((c) => c.addFromTelegram({ kind: "scam", text: "Reported in the group", from: m.from, chat: m.chat, reported: { ...t.from, text: body(t) } })).catch(() => {});
     const set = reports.get(rk) || new Set(); set.add(m.from.id); reports.set(rk, set);
     if (reports.size > 500) reports.delete(reports.keys().next().value);
     const v = verdict(t), flagged = (caught.get(`${chat}:${t.from.id}`) || 0) > Date.now();

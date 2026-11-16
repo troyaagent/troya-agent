@@ -15,20 +15,24 @@ const pxDecimals = (p) => (!p ? 2 : p >= 10000 ? 0 : p >= 1000 ? 1 : p >= 100 ? 
 const fmtPx = (p) => (p == null || !isFinite(p) ? "–" : num(p, pxDecimals(p)));
 
 function readPolicy(p) {
-  const src = p?.policy || p?.limits || p || {};
+  // /api/policy returns { operator, user, effective: { maxLeverage, perTradeUsd, dailyUsd, allowedPerps, paused, killSwitch }, usedTodayUsd }
+  const src = p?.effective || p?.policy || p?.limits || p || {};
   const pick = (...keys) => { for (const k of keys) { const v = src[k] ?? p?.[k]; if (v != null && v !== "") return v; } return null; };
-  const lev = Number(pick("maxLeverage", "leverageCap", "max_leverage"));
-  const per = Number(pick("perTradeUsd", "maxTradeUsd", "maxOrderUsd", "per_trade_usd"));
-  const daily = Number(pick("dailyUsd", "dailyCapUsd", "daily_usd"));
-  const left = Number(pick("dailyLeftUsd", "remainingTodayUsd", "leftTodayUsd"));
-  const coins = pick("allowedCoins", "allowedMarkets", "markets");
+  const n = (v) => (v == null ? NaN : Number(v));                 // a missing value is unknown, never 0
+  const lev = n(pick("maxLeverage", "leverageCap", "max_leverage"));
+  const per = n(pick("perTradeUsd", "maxTradeUsd", "maxOrderUsd", "per_trade_usd"));
+  const daily = n(pick("dailyUsd", "dailyCapUsd", "daily_usd"));
+  const used = n(p?.usedTodayUsd);
+  const leftRaw = n(pick("dailyLeftUsd", "remainingTodayUsd", "leftTodayUsd"));
+  const left = isFinite(leftRaw) ? leftRaw : daily > 0 && isFinite(used) ? Math.max(0, daily - used) : NaN;
+  const coins = pick("allowedCoins", "allowedMarkets", "allowedPerps", "markets");
   return {
     maxLeverage: lev > 0 ? lev : DEFAULT_LIMITS.maxLeverage,
     perTradeUsd: per > 0 ? per : DEFAULT_LIMITS.perTradeUsd,
     dailyUsd: daily > 0 ? daily : null,
     dailyLeftUsd: left >= 0 && isFinite(left) ? left : null,
     allowedCoins: Array.isArray(coins) && coins.length ? coins.map((c) => String(c).toUpperCase()) : null,
-    paused: !!pick("paused"),
+    paused: !!pick("paused") || !!pick("killSwitch"),
     source: "your policy",
   };
 }

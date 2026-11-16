@@ -96,7 +96,8 @@ export async function mount(view, ctx) {
     const chips = wallet.address && bal > 0 ? [25, 50, 75, 100].map((x) => h("button", { class: "chip", type: "button", onclick: () => { st.amount = String(Math.floor(bal * x / 100 * 1e6) / 1e6); paint(); } }, x === 100 ? "Max" : `${x}%`)) : [];
     const checks = gateChecks(est), blocked = checks.some((c) => c.s === "fail");
     const keyOk = st.key?.state === "approved";
-    const needUsdc = st.side === "buy" && Number(st.amount) > usdc && perpUsdc() > 0;
+    // show the transfer as soon as spot is short (not only after typing an amount)
+    const needUsdc = st.side === "buy" && perpUsdc() > 0 && (Number(st.amount) > usdc || usdc < 10);
     let btn;
     if (!wallet.address) btn = h("button", { class: "btn primary big", type: "button", onclick: () => openConnect() }, "Connect wallet");
     else if (!keyOk) btn = h("button", { class: "btn primary big", type: "button", onclick: enable }, icon("key"), "Enable trading (one signature)");

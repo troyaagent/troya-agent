@@ -10,6 +10,7 @@ const SITE = window.SITE || {};
 /* ---------- icons for the sidebar (stroke, 24 grid) ---------- */
 const SI = {
   spot: "M4 19h16M7 15l3-3 3 2 5-6M17 8h2v2",
+  lighter: "M13 2 4 14h7l-1 8 9-12h-7l1-8z",
   sun: "M12 3v1.5M12 19.5V21M3 12h1.5M19.5 12H21M5.6 5.6l1.1 1.1M17.3 17.3l1.1 1.1M5.6 18.4l1.1-1.1M17.3 6.7l1.1-1.1M12 7.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z",
   moon: "M20.5 13.2A8.5 8.5 0 1 1 10.8 3.5a6.6 6.6 0 0 0 9.7 9.7z",
   desk: "M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z",
@@ -50,7 +51,7 @@ export function si(name, cls = "") {
 /* ---------- navigation: every page of the app, grouped by what you came to do ---------- */
 export const GROUPS = [
   [null, [["Desk", "#/", "desk"]]],
-  ["Trade", [["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Bridge", "#/bridge", "bridge"]]],
+  ["Trade", [["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Perps · Lighter (Robinhood)", "#/lighter", "lighter"], ["Bridge", "#/bridge", "bridge"]]],
   ["Discover", [["Gate a coin", "#/gate", "gate"], ["Market", "#/market", "market"], ["Launchpad", "#/launch", "launch"], ["Create a token", "#/launch/create", "create"], ["Leaderboard", "#/leaderboard", "leaderboard"]]],
   ["Agent", [["Chat", "#/agent", "chat"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Sentry Autopilot", "#/agent/sentry", "sentry"], ["Playbooks", "#/agent/playbooks", "playbooks"]]],
   ["You", [["Portfolio", "#/portfolio", "portfolio"], ["Inbox", "#/portfolio/inbox", "inbox"], ["History", "#/portfolio/history", "history"]]],
@@ -60,9 +61,9 @@ const FLAT = GROUPS.flatMap(([g, items]) => items.map(([t, href, ic]) => ({ g, t
 // route table: first path segment → page module (same as /agent) plus the Desk's own Gate page
 const ROUTES = {
   "": "home", market: "market", token: "token", swap: "swap", perps: "perps", launch: "launchpad",
-  bridge: "bridge", agent: "agent", assistant: "agent", portfolio: "portfolio", docs: "docs", start: "start", leaderboard: "leaderboard", gate: "gate", spot: "spot",
+  bridge: "bridge", agent: "agent", assistant: "agent", portfolio: "portfolio", docs: "docs", start: "start", leaderboard: "leaderboard", gate: "gate", spot: "spot", lighter: "lighter",
 };
-const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js" };
+const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js" };
 export const prefs = store("troya.prefs", { slippage: 1, density: "comfortable", motion: "system", lang: "auto" });
 
 const view = $("#view");

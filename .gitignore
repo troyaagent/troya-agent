@@ -17,6 +17,7 @@
 !/tools/crawl.mjs
 !/tools/sentry-filter-test.mjs
 !/tools/rh-smoke.mjs
+!/tools/fetch-lighter-signer.sh
 !/tools/regate-test.mjs
 !/tools/tgtrade-test.mjs
 !/tools/holders-test.mjs
@@ -40,3 +41,7 @@ node_modules/
 .env.*
 !/.env.example
 *.log
+# Lighter's official signer (lighter-go v1.0.12, lighter-signer-web.wasm, sha256 95c9dd38373405691498c52c0feb72338e6bb00e90362227efe59fb12523c5ae)
+# is 7.6 MB: fetch it with tools/fetch-lighter-signer.sh instead of keeping it in git
+/public/vendor/lighter/*.wasm
+/public/vendor/lighter/*.wasm.gz

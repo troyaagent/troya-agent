@@ -17,6 +17,7 @@ const TYPES = {
   ".css": "text/css; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png",
   ".jpg": "image/jpeg", ".webp": "image/webp", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8",
   ".mp4": "video/mp4", ".glb": "model/gltf-binary", ".ico": "image/x-icon", ".md": "text/markdown; charset=utf-8", ".xml": "application/xml; charset=utf-8",
+  ".wasm": "application/wasm",
 };
 
 // clean URLs for the marketing pages; the app lives at /agent (hash routes inside)
@@ -37,7 +38,8 @@ const ROUTES = {
   "/agent": "/agent/index.html",
 };
 
-const EXTRA_CONNECT = (process.env.CSP_CONNECT || "").split(/[\s,]+/).filter(Boolean).join(" ");
+// F16: Lighter on Robinhood Chain is called from the browser (its API answers CORS; keys never touch this server)
+const EXTRA_CONNECT = ["https://api.rh.lighter.xyz", "wss://api.rh.lighter.xyz", ...(process.env.CSP_CONNECT || "").split(/[\s,]+/)].filter(Boolean).join(" ");
 // Wallets talk to chains through our own /api/rpc proxy, so connect-src can stay 'self'.
 function csp(path, data) {
   if (!path.endsWith(".html") || path.split("/").some((seg) => seg.startsWith("_"))) return "frame-ancestors 'none'";
@@ -75,6 +77,11 @@ async function serve(req, res) {
   try {
     if (!(await stat(file)).isFile()) throw 0;
     const type = TYPES[extname(file)] || "application/octet-stream";
+    // the Lighter signer (7.6 MB) goes out pre-gzipped (2.4 MB) when the browser accepts it
+    if (file.endsWith(".wasm") && /\bgzip\b/.test(req.headers["accept-encoding"] || "")) {
+      const gz = await readFile(file + ".gz").catch(() => null);
+      if (gz) { res.writeHead(200, { ...headers(type, path, gz), "content-encoding": "gzip", vary: "accept-encoding" }); res.end(req.method === "HEAD" ? undefined : gz); return; }
+    }
     const data = await readFile(file);
     res.writeHead(200, headers(type, path, data));
     res.end(req.method === "HEAD" ? undefined : data);

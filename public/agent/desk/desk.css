@@ -416,3 +416,16 @@ html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color:
 .dk-assay-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
 .dk-assay-foot { margin: 0; }
 @media (max-width: 520px) { .dk-assay-facts { grid-template-columns: 1fr; } .dk-assay-facts dd { margin-bottom: 6px; } }
+
+/* F16: Lighter on Robinhood Chain */
+.lt-acct { display: grid; gap: 10px; padding: 14px 16px; margin-bottom: 14px; }
+.lt-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.lt-row .input { max-width: 140px; }
+.lt-steps { display: grid; gap: 10px; }
+.lt-steps p { margin: 4px 0 0; }
+.lt-pos { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 13px; }
+.lt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.lt-head b { font-size: 15px; }
+.lt-book { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font: 400 12px/1.6 var(--mono); font-variant-numeric: tabular-nums; }
+.lt-book > div > div { display: flex; justify-content: space-between; }
+.lt-legal { margin-top: 14px; max-width: 900px; }

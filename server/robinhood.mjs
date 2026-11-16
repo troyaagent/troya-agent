@@ -627,6 +627,12 @@ export async function quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slip
   const c = r.best.c;
   let feePct = c.venue === "v3" ? c.hops.reduce((s, h) => s + h.fee / 10000, 0) : c.hops.reduce((s, h) => s + (h.key.fee < 0x800000 ? h.key.fee / 10000 : 0), 0);
   if (ps?.graduated) feePct += Number(ps.feeBps + ps.taxBps) / 100; // the Pons hook keeps the 1% fee + creator tax after graduation
+  // best execution: when Troya's own route is poor (a thin or odd pool: big impact or fees), ask KyberSwap too and take
+  // whichever gives more. A healthy Pons or Uniswap route is kept as it is.
+  if (KYBER_ON && ((r.impact ?? 0) > 0.02 || feePct > 3)) {
+    const kq = await kyberQuote(tin, tout, amt, coin, ethUsd, warnings, _sim).catch(() => null);
+    if (kq && kq.out * 1000n > r.best.out * 1005n) return finish(kq);
+  }
   const row = await liquidityFor(coin || tout);
   const depthEth = row?.liquidityUsd && ethUsd ? row.liquidityUsd / ethUsd / 2 : null;
   return finish({

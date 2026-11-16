@@ -3,6 +3,9 @@
 // Everything here is read-only and cached in memory; when a source fails the last good copy is served with `stale: true`.
 // GeckoTerminal's public API allows about 30 calls a minute, so every call goes through one paced queue
 // (user-facing reads jump ahead of the background index refresh).
+import { readFileSync } from "node:fs";
+import { writeFile, rename } from "node:fs/promises";
+import path from "node:path";
 import { KYBER_ON } from "./kyber.mjs";
 import { noteV4, ponsState, ponsPublic, ponsProfile, STOCKS, ADDR as RH } from "./robinhood.mjs";
 
@@ -65,21 +68,25 @@ const hl = (body, timeout = 10000) => getJson(HL, { method: "POST", body, timeou
 const gq = { hi: [], lo: [], busy: false, last: 0 };
 function gecko(pathQs, { hi = false } = {}) {
   return new Promise((resolve, reject) => {
-    (hi ? gq.hi : gq.lo).push({ pathQs, resolve, reject, hi });
+    (hi ? gq.hi : gq.lo).push({ pathQs, resolve, reject, hi, queuedAt: Date.now() });
     pumpGecko();
   });
 }
+// a background job that has waited this long goes next, so a steady stream of high-priority calls (chart loads, the
+// Record back-fill every 8 s) cannot starve the board
+const LO_MAX_WAIT = 30_000;
+const loOverdue = () => gq.lo.length && Date.now() - gq.lo[0].queuedAt > LO_MAX_WAIT;
 async function pumpGecko() {
   if (gq.busy) return;
   gq.busy = true;
   try {
     while (gq.hi.length || gq.lo.length) {
       // user-facing calls go 4 s after the previous one; the background board waits 10 s and steps aside for user calls
-      let job = gq.hi.length ? gq.hi.shift() : gq.lo.shift();
+      let job = gq.hi.length && !loOverdue() ? gq.hi.shift() : gq.lo.shift();
       for (;;) {
         const wait = gq.last + (job.hi ? 4000 : 10000) - Date.now();
         if (wait <= 0) break;
-        if (!job.hi && gq.hi.length) { gq.lo.unshift(job); job = gq.hi.shift(); continue; }
+        if (!job.hi && gq.hi.length && Date.now() - job.queuedAt <= LO_MAX_WAIT) { gq.lo.unshift(job); job = gq.hi.shift(); continue; }
         await new Promise((r) => setTimeout(r, Math.min(wait, 250)));
       }
       gq.last = Date.now();
@@ -204,6 +211,33 @@ export async function getHypeUsd() {
 /* ---------------- Robinhood Chain board (GeckoTerminal) ---------------- */
 const HUBS = new Set([lc(RH.weth), lc(RH.usdg), "0x0000000000000000000000000000000000000000"]);
 const board = { rows: new Map(), updatedAt: 0, refreshing: null, error: null, volumeUsd: 0 };
+// The board is saved to data/board.json and read back at boot: a full pass takes minutes at GeckoTerminal's pace, so a
+// restart (or a 429 spell) would otherwise leave the Market with only the first page or nothing at all.
+const BOARD_FILE = process.env.DATA_DIR ? path.join(process.env.DATA_DIR, "board.json") : null;
+const BOARD_MAX_AGE = 6 * 3600_000;
+let boardSaveTimer = null;
+(function loadBoard() {
+  if (!BOARD_FILE) return;
+  try {
+    const s = JSON.parse(readFileSync(BOARD_FILE, "utf8"));
+    if (!(Date.now() - (s.updatedAt || 0) < BOARD_MAX_AGE) || !Array.isArray(s.rows)) return;
+    board.rows = new Map(s.rows.filter((t) => t?.address).map((t) => [t.address, t]));
+    board.updatedAt = s.updatedAt; board.volumeUsd = s.volumeUsd || 0;
+    for (const t of board.rows.values()) if (t.image) IMAGES.set(t.address, t.image);
+  } catch {}
+})();
+function saveBoard() {
+  if (!BOARD_FILE || boardSaveTimer) return;
+  boardSaveTimer = setTimeout(async () => {
+    boardSaveTimer = null;
+    try {
+      const tmp = BOARD_FILE + ".tmp";
+      await writeFile(tmp, JSON.stringify({ updatedAt: board.updatedAt, volumeUsd: board.volumeUsd, rows: [...board.rows.values()].map(clean) }));
+      await rename(tmp, BOARD_FILE);
+    } catch (e) { console.warn("[market] board save:", e.message); }
+  }, 5000);
+  boardSaveTimer.unref?.();
+}
 
 function poolRow(p, inc) {
   const a = p.attributes || {};
@@ -292,19 +326,24 @@ async function refreshBoard() {
       } catch (e) { board.error = e.message; if (e.status === 429) await new Promise((r) => setTimeout(r, 30_000)); }
     }
     if (!ok) throw new Error(board.error || "GeckoTerminal did not answer");
-    publish(map);
+    publish(map, { full: ok >= PAGES.length * 0.75 });
     try { noteV4(v4seen); } catch {}
     board.error = null;
   })().finally(() => { board.refreshing = null; });
   return board.refreshing;
 }
-function publish(map) {
-  // keep tokens from the previous pass that this pass did not reach (pages shift as volume moves)
-  for (const [a, t] of board.rows) if (!map.has(a) && Date.now() - (t.seenAt || 0) < 30 * 60_000) map.set(a, t);
-  for (const t of map.values()) if (!t.seenAt || t._main) t.seenAt = Date.now();
-  board.rows = map;
-  board.updatedAt = Date.now();
-  board.volumeUsd = [...map.values()].reduce((s, t) => s + (t.volume24hUsd || 0), 0);
+function publish(map, { full = false } = {}) {
+  const now = Date.now();
+  for (const t of map.values()) t.seenAt = now;          // rows this pass reached
+  // keep tokens from earlier passes that this pass did not reach (pages shift as volume moves); after a complete pass
+  // they go once unseen for 30 minutes, while a pass is still running or was cut short by 429s they stay up to 6 hours
+  const keep = full ? 30 * 60_000 : BOARD_MAX_AGE;
+  const next = new Map(map);
+  for (const [a, t] of board.rows) if (!next.has(a) && now - (t.seenAt || 0) < keep) next.set(a, t);
+  board.rows = next;
+  board.updatedAt = now;
+  board.volumeUsd = [...next.values()].reduce((s, t) => s + (t.volume24hUsd || 0), 0);
+  saveBoard();
 }
 let boardTimer = null;
 function startBoard() {

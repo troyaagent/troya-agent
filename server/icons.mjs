@@ -16,7 +16,7 @@ const UA = { "user-agent": "troya-agent/0.1 (+icons)", accept: "image/*,applicat
 
 // brand logos for well-known Robinhood Chain contracts (served from /img/logos)
 const KNOWN = {
-  "0x0bd7d308f8e1639fab988df18a8011f41eacad73": "eth.svg",   // WETH
+  "0x0bd7d308f8e1639fab988df18a8011f41eacad73": "eth-color.svg",   // WETH
   "0x5fc5360d0400a0fd4f2af552add042d716f1d168": "usdg.png",  // USDG
 };
 const EXT = { "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg", "image/avif": "avif" };
@@ -58,7 +58,7 @@ export async function register(r, ctx) {
 const OTHER = new Set(["base", "arbitrum", "solana"]);
 const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const KNOWN_OTHER = {
-  "base:0x4200000000000000000000000000000000000006": "eth.svg", "arbitrum:0x82af49447d8a07e3bd95bd0d56f35241523fbab1": "eth.svg",
+  "base:0x4200000000000000000000000000000000000006": "eth-color.svg", "arbitrum:0x82af49447d8a07e3bd95bd0d56f35241523fbab1": "eth-color.svg",
   "base:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "usdc.svg", "arbitrum:0xaf88d065e77c8cc2239327c5edb3a432268e5831": "usdc.svg",
   "arbitrum:0x912ce59144191c1204e64559fe8253a0e49e6548": "arbitrum.png",
 };

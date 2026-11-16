@@ -11,7 +11,9 @@ import { splitLoss } from "./kyber.mjs";
 const JUP = process.env.JUP_BASE || "https://lite-api.jup.ag";
 const RPCS = String(process.env.SOLANA_RPCS || "https://api.mainnet-beta.solana.com,https://solana-rpc.publicnode.com").split(",").map((s) => s.trim()).filter(Boolean);
 export const SOL_MINT = "So11111111111111111111111111111111111111112";
-export const SOLANA_LIVE = process.env.SOLANA_LIVE ? process.env.SOLANA_LIVE === "1" : false; // opens after its real-money test
+// Solana swaps passed their real-money test on 16 Nov 2026 (0.01 SOL → 311,929 BONK through Jupiter and all of it back:
+// signatures 4EeusuHe…, 2AaWM94S…). SOLANA_LIVE=0 closes signing again; quotes and the Gate keep working.
+export const SOLANA_LIVE = process.env.SOLANA_LIVE !== "0";
 const NATIVE = { address: "native", symbol: "SOL", name: "Solana", decimals: 9 };
 const MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const MAX_SLIP = Math.max(10, Math.min(5000, Number(process.env.MAX_SLIPPAGE_BPS) || 500));

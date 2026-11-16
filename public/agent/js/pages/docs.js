@@ -30,7 +30,8 @@ export async function mount(view) {
         [h("b", {}, "Launchpad: "), "new coins from Pons, Long.xyz, Bankr, Frontier.fun, Abyss, Virtuals and more, and a form to launch your own on Pons."],
         [h("b", {}, "Agent: "), "chat, Agent Wallet, Autopilot and Playbooks."],
         [h("b", {}, "Arbitrum and Base: "), "pick the network above the Swap card; KyberSwap routes, the same Troya Gate, your own wallet signs (live since 16 Nov 2026, each tested with real money)."],
-        [h("b", {}, "Next (Roadmap v3, in build): "), "Solana and Hyperliquid spot."],
+        [h("b", {}, "Solana: "), "pick Solana above the Swap card: Jupiter routes (pump.fun and every other Solana launchpad), a Solana Gate (who can freeze or mint the coin, Token-2022 traps, the swap simulated from your address, a sell route), signed in your own Solana wallet (live since 16 Nov 2026)."],
+        [h("b", {}, "Next: "), "Hyperliquid spot (the Spot page already shows prices and the Spot Gate)."],
       ]),
     ]],
     ["token", "$TROYA token", (() => {

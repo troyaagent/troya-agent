@@ -285,7 +285,7 @@ export async function register(r) {
 
   // Relay for payloads already signed in the browser (CSP keeps the page same-origin).
   // We only forward; keys never reach this server. Shape is checked so it cannot be used as an open proxy.
-  const RELAY_TYPES = new Set(["order", "cancel", "updateLeverage", "approveAgent", "scheduleCancel", "modify", "batchModify", "usdClassTransfer"]);
+  const RELAY_TYPES = new Set(["order", "cancel", "updateLeverage", "approveAgent", "scheduleCancel", "modify", "batchModify", "usdClassTransfer", "withdraw3"]);
   r.post("/api/hl/exchange", async ({ body }) => {
     const a = body?.action;
     if (!a || typeof a !== "object" || !RELAY_TYPES.has(a.type)) throw new HlError(400, "Unsupported Hyperliquid action.");

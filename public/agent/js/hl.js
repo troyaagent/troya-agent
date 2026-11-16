@@ -237,6 +237,28 @@ export async function transferUsdClass(owner, eip, amount, toPerp) {
   const action = { type: "usdClassTransfer", signatureChainId: "0xa4b1", hyperliquidChain: "Mainnet", amount: amt, toPerp: !!toPerp, nonce };
   return relay({ action, nonce, signature: { r: sig.r, s: sig.s, v: sig.v }, vaultAddress: null });
 }
+/** Withdraws USDC from the Hyperliquid account to the same address on Arbitrum (Hyperliquid "withdraw3", $1 fee taken by
+ *  Hyperliquid). The destination is always the signer's own address; the user's wallet signs. */
+export async function withdrawUsdc(owner, eip, amount) {
+  const time = nextNonce();
+  const amt = String(Math.floor(Number(amount) * 1e6) / 1e6);
+  if (!(Number(amt) > 1)) throw new Error("Withdrawals must be above 1 USDC (Hyperliquid keeps 1 USDC as the fee).");
+  const destination = getAddress(owner);
+  const message = { hyperliquidChain: "Mainnet", destination, amount: amt, time };
+  const typed = {
+    domain: { name: "HyperliquidSignTransaction", version: "1", chainId: 42161, verifyingContract: ZERO },
+    types: {
+      EIP712Domain: [{ name: "name", type: "string" }, { name: "version", type: "string" }, { name: "chainId", type: "uint256" }, { name: "verifyingContract", type: "address" }],
+      "HyperliquidTransaction:Withdraw": [{ name: "hyperliquidChain", type: "string" }, { name: "destination", type: "string" }, { name: "amount", type: "string" }, { name: "time", type: "uint64" }],
+    },
+    primaryType: "HyperliquidTransaction:Withdraw",
+    message,
+  };
+  const raw = await eip.request({ method: "eth_signTypedData_v4", params: [owner, JSON.stringify(typed)] });
+  const sig = Signature.from(raw);
+  const action = { type: "withdraw3", signatureChainId: "0xa4b1", hyperliquidChain: "Mainnet", destination, amount: amt, time };
+  return relay({ action, nonce: time, signature: { r: sig.r, s: sig.s, v: sig.v }, vaultAddress: null });
+}
 export async function setLeverage({ owner, market, leverage, isCross = true }) {
   const lev = Math.round(Number(leverage));
   if (!(lev >= 1 && lev <= market.maxLeverage)) throw new Error(`${market.coin} allows 1–${market.maxLeverage}x.`);

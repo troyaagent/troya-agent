@@ -5,7 +5,7 @@
 import { h, clear, icon, useCss, toast, tiny, num, usd, pctEl, coinIcon, seg, pageHead } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
 import { wallet, onWallet, openConnect, ensureChain } from "/agent/js/wallet.js";
-import { tradingKeyStatus, approveTradingKey, placeSpotOrder, transferUsdClass } from "/agent/js/hl.js";
+import { tradingKeyStatus, approveTradingKey, placeSpotOrder, transferUsdClass, withdrawUsdc } from "/agent/js/hl.js";
 
 const SLIP = 0.01;
 
@@ -110,6 +110,11 @@ export async function mount(view, ctx) {
     clear(card,
       h("div", { class: "sp-head" }, coinIcon(`${p.base}_spot`), h("div", {}, h("b", {}, p.label), h("small", {}, `$${tiny(p.mark)} · `, pctEl(p.change24h))),
         h("a", { class: "link fine", href: `https://app.hyperliquid.xyz/trade/${encodeURIComponent(p.pair)}`, target: "_blank", rel: "noopener" }, "On Hyperliquid")),
+      // the user's Hyperliquid USDC: move between spot and perps, or take it home to the same address on Arbitrum
+      wallet.address && st.user ? h("div", { class: "sp-acct" },
+        h("span", {}, "Perps ", h("b", {}, `${tiny(perpUsdc())} USDC`)), h("span", {}, "Spot ", h("b", {}, `${tiny(spotBal("USDC"))} USDC`)),
+        spotBal("USDC") > 0 ? h("button", { class: "btn sm", type: "button", onclick: moveToPerps }, "Move to perps") : null,
+        perpUsdc() > 1 ? h("button", { class: "btn sm", type: "button", onclick: withdrawHome, title: "To your own address on Arbitrum; Hyperliquid keeps 1 USDC as the fee" }, "Withdraw to my wallet") : null) : null,
       seg([{ value: "buy", label: "Buy" }, { value: "sell", label: "Sell" }], st.side, (v) => { st.side = v; st.amount = ""; paint(); }, "sp-seg"),
       h("div", { class: "sp-leg" }, h("div", { class: "sp-leg-top" }, h("span", {}, st.side === "buy" ? "Spend (USDC)" : `Sell (${p.base})`),
         wallet.address ? h("span", { class: "muted" }, `Spot balance ${tiny(bal)} ${st.side === "buy" ? "USDC" : p.base}`) : null), input, h("div", { class: "sw-quick" }, chips),
@@ -129,6 +134,22 @@ export async function mount(view, ctx) {
   async function enable() {
     try { await ensureChain("arbitrum"); await approveTradingKey(wallet.address, wallet.eip); toast("Trading enabled for Perps and Spot", "ok"); await loadUser(); }
     catch (e) { toast(e.message || "Could not enable trading", "error", 6000); }
+  }
+  async function withdrawHome() {
+    const amt = Math.floor(perpUsdc() * 1e6) / 1e6;
+    try {
+      await ensureChain("arbitrum");
+      await withdrawUsdc(wallet.address, wallet.eip, amt);
+      toast(`Withdrawing ${tiny(amt)} USDC to your wallet on Arbitrum (about ${tiny(amt - 1)} after Hyperliquid's 1 USDC fee). It usually lands within a few minutes.`, "ok", 9000);
+      await loadUser();
+    } catch (e) { toast(e.message || "The withdrawal failed", "error", 7000); }
+  }
+  // all spot USDC back to the perps (main) account, one signature, no gas
+  async function moveToPerps() {
+    const amt = Math.floor(spotBal("USDC") * 1e6) / 1e6;
+    if (!(amt > 0)) return toast("No USDC in the spot account.", "");
+    try { await ensureChain("arbitrum"); await transferUsdClass(wallet.address, wallet.eip, amt, true); toast(`Moved ${tiny(amt)} USDC to perps`, "ok"); await loadUser(); }
+    catch (e) { toast(e.message || "The transfer failed", "error", 6000); }
   }
   async function moveUsdc() {
     const need = Math.max(0, Number(st.amount) - spotBal("USDC"));

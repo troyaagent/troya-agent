@@ -388,3 +388,7 @@ html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color:
 .sp-leg-top { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--fg-2); }
 .sp-amt { font-size: 26px; height: 50px; border: 0; background: transparent; padding: 0; }
 @container shell (max-width: 900px) { .sp-grid { grid-template-columns: 1fr; } .sp-side { position: static; max-height: 360px; } }
+
+.sp-acct { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 10px; font-size: 12.5px; color: var(--muted); }
+.sp-acct b { color: var(--fg); font-weight: 500; }
+.sp-acct .btn:first-of-type { margin-left: auto; }

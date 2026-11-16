@@ -2,7 +2,7 @@
 
 # Troya Agent
 
-An AI trading desk for **Robinhood Chain** (chain 4663) with **Hyperliquid** perps.
+An AI trading desk for **Robinhood Chain** (chain 4663), with swaps on **Base**, **Arbitrum** and **Solana** and **Hyperliquid** perps and spot.
 Ask in plain words, read what Troya Gate found, then sign. Live at **[troya.codes](https://troya.codes)**.
 
 **$TROYA CA (Robinhood Chain):** `0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074`
@@ -16,9 +16,11 @@ The same address is shown on [troya.codes](https://troya.codes). Trade it on [Po
 
 | Area | What runs |
 |---|---|
-| Swap | Any pair on Robinhood Chain: Pons bonding curves, Uniswap v3 (SwapRouter02) and Uniswap v4 (Universal Router + Permit2). Tokenized stocks and ETFs (NVDA, TSLA, SPY…) included. |
+| Swap | Any pair on Robinhood Chain: Pons bonding curves, Uniswap v3 (SwapRouter02) and Uniswap v4 (Universal Router + Permit2), and coins from the other Robinhood Chain launchpads through KyberSwap. Tokenized stocks and ETFs (NVDA, TSLA, SPY…) included. |
+| More chains | The same Swap page on Base and Arbitrum (KyberSwap routes) and Solana (Jupiter routes, any Wallet Standard wallet), each with its own Gate run on that chain. |
 | Troya Gate | Pre-trade checks on every swap, see below. |
 | Perps | Hyperliquid order book, fills simulated level by level before you place an order. |
+| Spot | Hyperliquid spot coins (HYPE, UBTC, UETH…) from your own Hyperliquid account; a Spot Gate reads the live book and orders are capped 1% from the price. |
 | Bridge | ETH between Robinhood Chain and Arbitrum through LI.FI. |
 | Launch | Create a coin on Pons from the app. |
 | Agent chat | Plain-language requests become a ticket you review and sign. The model never holds a key. |

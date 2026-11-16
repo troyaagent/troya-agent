@@ -334,8 +334,8 @@ async function intentWatchlist(ctx, lang) {
 
 function helpText(lang) {
   return T(lang,
-    "I read Robinhood Chain and Hyperliquid and line up orders for you to approve. Try:\n- **What's moving?**\n- **Funding BTC** or **funding extremes**\n- **Swap 0.01 ETH to NVDA**\n- **Long ETH 5x $100 sl 3000**\n- **Is 0x… safe?**\n- **Stop loss ETH at 3000** · **DCA 0.01 ETH weekly into NVDA**\n- **My balance** · **Bridge 0.05 ETH from Arbitrum**",
-    "Aku membaca Robinhood Chain dan Hyperliquid lalu menyiapkan order untuk kamu setujui. Coba:\n- **Apa yang lagi naik?**\n- **Funding BTC** atau **funding ekstrem**\n- **Tukar 0.01 ETH ke NVDA**\n- **Long ETH 5x $100 sl 3000**\n- **0x… aman?**\n- **Stop loss ETH di 3000** · **DCA 0.01 ETH tiap minggu ke NVDA**\n- **Saldo saya** · **Bridge 0.05 ETH dari Arbitrum**");
+    "I read Robinhood Chain and Hyperliquid and line up orders for you to approve. Try:\n- **What's moving?**\n- **Funding BTC** or **funding extremes**\n- **Swap 0.01 ETH to NVDA**\n- **Long ETH 5x $100 sl 3000**\n- **Is 0x… safe?**\n- **Stop loss ETH at 3000** · **DCA 0.01 ETH weekly into NVDA**\n- **My balance** · **Bridge 0.05 ETH from Arbitrum**\n\nBase, Arbitrum and Solana swaps and Hyperliquid spot are on the Swap and Spot pages.",
+    "Aku membaca Robinhood Chain dan Hyperliquid lalu menyiapkan order untuk kamu setujui. Coba:\n- **Apa yang lagi naik?**\n- **Funding BTC** atau **funding ekstrem**\n- **Tukar 0.01 ETH ke NVDA**\n- **Long ETH 5x $100 sl 3000**\n- **0x… aman?**\n- **Stop loss ETH di 3000** · **DCA 0.01 ETH tiap minggu ke NVDA**\n- **Saldo saya** · **Bridge 0.05 ETH dari Arbitrum**\n\nSwap di Base, Arbitrum dan Solana serta spot Hyperliquid ada di halaman Swap dan Spot.");
 }
 
 /* ---------- LLM agent (OpenRouter) ---------- */

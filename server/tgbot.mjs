@@ -25,7 +25,7 @@ const LINKS = `<b>Troya Agent</b>
 • Docs: <a href="${SITE}/agent#/docs">troya.codes/agent#/docs</a>`;
 
 const HELP = `<b>Troya Agent bot</b>
-Troya is an AI trading desk for Robinhood Chain and Hyperliquid. Troya Gate simulates each trade before you sign.
+Troya is an AI trading desk for Robinhood Chain, Base, Arbitrum, Solana and Hyperliquid (perps and spot). Troya Gate simulates each trade before you sign.
 
 <b>Trade</b> (private chat)
 /trade 0x… · buy or sell a coin from your Agent Wallet, Gate first

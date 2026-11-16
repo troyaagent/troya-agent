@@ -111,6 +111,10 @@ export async function createWatch(address, input) {
   const hp = await import("./holders.mjs").catch(() => null);
   const cap = hp && (await hp.hasPerks(address).catch(() => false)) ? hp.PERKS.playbooks : MAX_PER_USER;
   await store.update("watches.json", [], (list) => {
+    // a position or a loan is watched once: a second watch would only send the same note twice
+    const same = (rec.type === "lp_range" || rec.type === "loan_guard") && list.find((x) => x.address === rec.address && x.type === rec.type && x.status !== "done"
+      && (rec.type === "lp_range" ? x.params.tokenId === rec.params.tokenId : x.params.marketId === rec.params.marketId));
+    if (same) { const e = new HttpError(409, rec.type === "lp_range" ? `Position #${rec.params.tokenId} is already watched.` : `This loan already has an alert.`); e.existingId = same.id; throw e; }
     if (list.filter((x) => x.address === rec.address && x.status === "active").length >= cap) throw new HttpError(400, `You can keep up to ${cap} active playbooks.`);
     list.push(rec);
   });

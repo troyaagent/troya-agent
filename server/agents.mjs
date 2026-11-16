@@ -33,7 +33,10 @@ let store = null;
 
 async function playbooksFor(address, t, p, name) {
   const out = [];
-  const add = async (input) => out.push((await createWatch(address, input)).id);
+  const add = async (input) => {
+    try { out.push((await createWatch(address, input)).id); }
+    catch (e) { if (e.existingId) out.push(e.existingId); else throw e; }
+  };
   if (t === "accumulator") {
     if (!isAddress(String(p.token || ""))) throw new HttpError(400, "Pick the coin to accumulate (its address).");
     const amountEth = num(p.amountEth), everyHours = num(p.everyHours) || 24, runs = num(p.runs) || 14;

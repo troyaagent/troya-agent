@@ -42,6 +42,7 @@ export async function mount(view, ctx) {
   async function load() {
     try { st.desk = await api.get("stocks/desk"); } catch (e) { st.err = e.message; }
     try { st.loans = await api.get(`stocks/loans${wallet.address ? `?address=${wallet.address}` : ""}`); } catch {}
+    if (wallet.session) { const w = await api.get("watches").catch(() => null); if (w) st.alerts = new Set(w.items.filter((x) => x.type === "loan_guard" && x.status !== "done").map((x) => x.params.marketId)); }
     if (alive) paint();
   }
   const bySym = (s) => st.desk?.assets.find((a) => a.symbol === s);
@@ -157,7 +158,7 @@ export async function mount(view, ctx) {
         !wallet.address ? h("button", { class: "btn primary sm", type: "button", onclick: openConnect }, "Connect wallet")
           : mine.length ? mine.map((x) => h("div", { class: "sd-row" }, h("b", {}, x.symbol), h("span", {}, `${tiny(x.collateral)} posted`), h("span", {}, `${tiny(x.borrowUsdg)} USDG owed`),
             h("span", { class: x.health < SAFE_HEALTH ? "down" : "up" }, `health ${x.health ? x.health.toFixed(2) : "–"}`), h("span", { class: "muted" }, x.liquidationPriceUsd ? `liq $${tiny(x.liquidationPriceUsd)}` : ""),
-            h("button", { class: "btn sm ghost", type: "button", onclick: () => guard(x) }, "Alert me")))
+            st.alerts?.has(x.marketId) ? h("button", { class: "btn sm", type: "button", disabled: true }, "Alert on ✓") : h("button", { class: "btn sm ghost", type: "button", disabled: st.guarding === x.marketId, onclick: () => guard(x) }, st.guarding === x.marketId ? "Saving…" : "Alert me")))
           : h("p", { class: "muted" }, "No Morpho loans on stock tokens from this wallet.")),
       h("div", { class: "panel sd-panel" },
         seg(L.markets.map((x, i) => ({ value: String(i), label: `${x.symbol} · ${x.lltvPct}% · ${usd(x.liquidityUsdg, { compact: true })} free` })), String(st.mk), (v) => { st.mk = +v; st.coll = st.borrow = ""; paint(); }, "sd-mk"),
@@ -226,12 +227,17 @@ export async function mount(view, ctx) {
     st.busy = null; await load();
   }
   async function guard(x) {
-    if (!wallet.session) return toast("Sign in first (Agent → Chat) so the alert can reach your inbox.", "error", 6000);
+    if (!wallet.session) return toast("Sign in first (Social → Sign in) so the alert can reach your inbox.", "error", 6000);
+    if (st.guarding || st.alerts?.has(x.marketId)) return;
+    st.guarding = x.marketId; paint();
     try {
       const r = await api.post("watches", { type: "loan_guard", params: { marketId: x.marketId, symbol: x.symbol, healthBelow: 1.3 } });
       toast(`Alert on: ${r.item.title}`, "ok");
-    } catch (e) { toast(e.message, "error"); }
+      (st.alerts ||= new Set()).add(x.marketId);
+    } catch (e) { if (/already has an alert/i.test(e.message)) (st.alerts ||= new Set()).add(x.marketId); toast(e.message, "error"); }
+    st.guarding = null; paint();
   }
+
 
   const off = onWallet(() => load());
   await load();

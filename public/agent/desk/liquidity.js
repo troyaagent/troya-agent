@@ -97,7 +97,7 @@ export async function mount(view, ctx) {
   let alive = true;
   const first = ctx.parts[0] || "";
   const st = { tab: first === "positions" ? "positions" : "new", pools: [], q: "", pool: ADDR_RE.test(first) ? lc(first) : null, sug: null, sugErr: null, days: 7, preset: "balanced", custom: null,
-    a: ["", ""], edit: 0, bal: {}, health: {}, positions: null, busy: null, err: null, prefill: null };
+    a: ["", ""], edit: 0, bal: {}, health: {}, positions: null, busy: null, err: null, prefill: null, watched: new Set(), watching: null };
   const tabs = h("div", { class: "sd-tabs" });
   const body = h("div", { class: "lq-body" });
   clear(view, h("div", { class: "dk lq" },
@@ -148,6 +148,7 @@ export async function mount(view, ctx) {
   async function loadPositions() {
     if (!wallet.address) { st.positions = null; return st.tab === "positions" && paint(); }
     try { st.positions = (await api.get(`lp/positions?address=${wallet.address}`)).positions; st.posErr = null; } catch (e) { st.posErr = e.message; }
+    if (wallet.session) { const w = await api.get("watches").catch(() => null); if (w) st.watched = new Set(w.items.filter((x) => x.type === "lp_range" && x.status !== "done").map((x) => String(x.params.tokenId))); }
     if (alive && st.tab === "positions") paint();
   }
 
@@ -406,11 +407,15 @@ export async function mount(view, ctx) {
     toast("Step 2: check the new range and sign Add liquidity.", "", 7000);
   }
   async function doWatch(x) {
-    if (!wallet.session) return toast("Sign in first (Agent → Chat) so the watch can reach your inbox and Telegram.", "error", 6000);
+    if (!wallet.session) return toast("Sign in first (Social → Sign in) so the watch can reach your inbox and Telegram.", "error", 6000);
+    if (st.watching || st.watched.has(x.tokenId)) return;
+    st.watching = x.tokenId; paint();
     try {
       const r = await api.post("watches", { type: "lp_range", params: { tokenId: x.tokenId, name: x.name, edgePct: 5 } });
       toast(`Watching: ${r.item.title}`, "ok", 6000);
-    } catch (e) { toast(e.message, "error"); }
+      st.watched.add(x.tokenId);
+    } catch (e) { if (/already watched/i.test(e.message)) st.watched.add(x.tokenId); toast(e.message, "error"); }
+    st.watching = null; paint();
   }
 
   /* ---------- my positions ---------- */
@@ -434,7 +439,8 @@ export async function mount(view, ctx) {
           h("button", { class: "btn sm", type: "button", disabled: !!st.busy || !(x.fees0 > 0 || x.fees1 > 0), onclick: () => doCollect(x) }, "Collect fees"),
           x.closed ? null : h("button", { class: "btn sm", type: "button", disabled: !!st.busy, onclick: () => doRemove(x) }, "Remove all"),
           x.closed ? null : h("button", { class: "btn sm blue", type: "button", disabled: !!st.busy, onclick: () => doRemove(x, true), title: "Remove it, then open a new balanced range around today's price" }, "Rebalance"),
-          x.closed ? null : h("button", { class: "btn sm", type: "button", onclick: () => doWatch(x), title: "A note in your inbox and Telegram when the price leaves the range or comes within 5% of an edge" }, "Watch it")));
+          x.closed ? null : st.watched.has(x.tokenId) ? h("button", { class: "btn sm", type: "button", disabled: true, title: "Range watch on: inbox and Telegram" }, "Watching ✓")
+            : h("button", { class: "btn sm", type: "button", disabled: st.watching === x.tokenId, onclick: () => doWatch(x), title: "A note in your inbox and Telegram when the price leaves the range or comes within 5% of an edge" }, st.watching === x.tokenId ? "Saving…" : "Watch it")));
     })), st.busy ? h("p", { class: "fine" }, st.busy) : null);
   }
 

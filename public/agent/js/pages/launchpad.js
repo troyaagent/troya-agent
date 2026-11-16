@@ -74,7 +74,7 @@ export async function mount(view, ctx) {
       clear(notice, d.notice ? h("div", { class: "alert warn", style: { marginBottom: "10px" } }, d.notice) : null);
       clear(more, state.next < d.total ? h("button", { class: "btn", type: "button", onclick: (e) => { e.target.disabled = true; load(state.next); } }, "Load more") : null);
       clear(foot,
-        h("p", {}, `${Number(d.counts?.all ?? d.total).toLocaleString()} coins Troya can route`, d.hiddenTotal ? `, ${Number(d.hiddenTotal).toLocaleString()} more trade on venues Troya does not route yet` : "", ` · ${updatedText(d.updatedAt)}.`),
+        h("p", {}, `${Number(d.counts?.all ?? d.total).toLocaleString()} coins Troya can route`, d.hiddenTotal ? `, ${Number(d.hiddenTotal).toLocaleString()} more have no route Troya can use yet` : "", ` · ${updatedText(d.updatedAt)}.`),
         h("p", {}, "Pools and prices from GeckoTerminal; ETH figures use the live ETH price. Pools with almost no liquidity are left out."),
         state.tab === "gainers" ? h("p", {}, "Gainers leave out coins with under $5K of 24h volume, so dust trades do not top the list.") : null);
     } catch (e) {

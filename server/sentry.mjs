@@ -228,7 +228,7 @@ export function formatRecap(d, dayLabel) {
   const checked = d.passed + d.caution + d.failed;
   return `<b>Troya Sentry · ${esc(dayLabel)}</b>
 
-${d.seen} Pons launches${d.pools ? ` and ${d.pools} new Uniswap pools` : ""} seen. ${checked} had buyers and went through Troya Gate:
+${d.seen} Pons launches${d.pools ? ` and ${d.pools} new pools on Uniswap and the other launchpads` : ""} seen. ${checked} had buyers and went through Troya Gate:
 ${d.passed} passed · ${d.caution} caution · ${d.failed} failed
 ${d.posted} passed with real buying (at least ${MIN_POST} ETH from ${MIN_BUYERS}+ independent wallets, no copies) and were posted to the channel.
 ${d.nobuys} had an empty or dust-only curve (no real buys, or every buyer sold), so there was nothing to test.
@@ -521,7 +521,7 @@ export async function register(r, ctx) {
   walletsDirty = false;
   r.get("/api/sentry/recent", ({ query }) => ({ items: recent.slice(0, Math.min(100, Number(query.limit) || 30)), channel: `https://t.me/${CHANNEL.replace(/^@/, "")}`, live: !!MODE }));
   if (!MODE || (MODE !== "dry" && !TG)) return;
-  console.log(`[sentry] watching Pons launches → ${MODE === "dry" ? "data/sentry-preview.jsonl (dry)" : CHANNEL}`);
+  console.log(`[sentry] watching Pons launches${POOLS ? ", new pools and the other launchpads" : ""} → ${MODE === "dry" ? "data/sentry-preview.jsonl (dry)" : CHANNEL}`);
   setTimeout(() => store.readJson(STATE, {}).then(warmUp).catch((e) => console.warn("[sentry] warm-up:", e.message)), 3000).unref();
   setTimeout(() => tick().catch(() => {}), 5000).unref();
   setInterval(() => tick().catch(() => {}), 15000).unref();

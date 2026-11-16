@@ -28,7 +28,7 @@ export async function mount(view, { parts, go }) {
   let chart = null, ro = null, chartStop = false;
 
   const head = h("div", { class: "tk-head" },
-    h("div", { class: "tk-id" }, tokenIcon(t),
+    h("div", { class: "tk-id" }, tokenIcon({ ...t, chain: "robinhood" }),
       h("div", { style: { minWidth: 0 } },
         h("h1", {}, t.name || t.symbol, h("span", { class: "sym" }, `$${t.symbol}`), t.stock ? h("span", { class: "badge-s pad-badge" }, padLogo("stocks", 14), "Tokenized stock") : h("span", { class: "badge-s pad-badge" }, padLogo(t.launchpad, 14), padName(t.launchpad)),
           pons ? h("span", { class: `badge-s ${pons.graduated ? "blue" : ""}` }, pons.graduated ? "Graduated" : `Curve ${pons.progressPct != null ? pons.progressPct.toFixed(1) : "?"}%`) : null,

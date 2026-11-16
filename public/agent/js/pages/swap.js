@@ -1,4 +1,5 @@
-// Swap (#/swap?in=&out=): any pair on Robinhood Chain through Pons curves and Uniswap v3 / v4 pools.
+// Swap (#/swap?in=&out=): any pair on Robinhood Chain through Pons curves and Uniswap v3 / v4 pools, and the other
+// Robinhood Chain venues through KyberSwap (the server asks Kyber only when its own route finds nothing).
 // Quotes and the Troya Gate come from the server; every transaction is signed in the user's wallet.
 import { h, clear, pageHead, seg, icon, modal, review, toast, tokenIcon, chainLogo, venueLogo, tiny, num, short, useCss, debounce, infoTip } from "../ui.js";
 import { wallet, onWallet, openConnect, CHAINS } from "../wallet.js";
@@ -272,7 +273,7 @@ export async function mount(view, ctx) {
     }, 250);
     input.addEventListener("input", search);
     const m = modal({ title: side === "sell" ? "Sell which token?" : "Buy which token?", body: h("div", { class: "tp" }, input, list,
-      h("p", { class: "note" }, "Troya routes Pons curves and Uniswap v3/v4 pools. A coin still on its Pons curve trades against its curve pair (usually ETH).")) });
+      h("p", { class: "note" }, "Troya routes Pons curves and Uniswap v3/v4 pools, and the other Robinhood Chain launchpads through KyberSwap. Paste any Robinhood Chain coin address to find it. A coin still on its Pons curve trades against its curve pair (usually ETH).")) });
     search();
     setTimeout(() => input.focus(), 40);
   }

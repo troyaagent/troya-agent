@@ -153,7 +153,7 @@ export async function mount(view, { go, ask: askDrawer }) {
   /* ---------- Sentry: latest results ---------- */
   const senBody = h("div", { class: "dk-sentry-b" }, h("div", { class: "sk", style: { height: "120px" } }));
   const sentry = h("section", { class: "panel dk-sentry" },
-    h("div", { class: "panel-h" }, h("h2", {}, "Sentry", infoTip("Every new Pons launch and fresh Uniswap pool goes through the Gate. Only clean passes with real buying reach the channel; every result stays here.")),
+    h("div", { class: "panel-h" }, h("h2", {}, "Sentry", infoTip("Every new Pons launch, and every new pool on Uniswap and the other Robinhood Chain launchpads, goes through the Gate. Only clean passes with real buying reach the channel; every result stays here.")),
       h("span", { class: "row" }, h("a", { class: "link fine", href: "#/agent/sentry" }, "Sentry Autopilot"), h("a", { class: "link fine", href: "https://t.me/troyasentry", target: "_blank", rel: "noopener" }, "Channel"))),
     senBody);
 

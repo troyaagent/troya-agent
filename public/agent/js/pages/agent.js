@@ -150,7 +150,7 @@ function mountChat(box, ctx) {
       const statusText = p.status !== "pending" ? p.status : left > 0 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} left` : "expired";
       clear(card,
         h("div", { class: "tk-h" }, h("span", { class: "badge-s blue" }, { swap: "Swap", perp: "Perp", bridge: "Bridge", watch: "Playbook", hl_fund: "Fund Hyperliquid" }[p.kind] || p.kind),
-          p.kind === "perp" && pr.coin ? coinIcon(pr.coin, "sm") : p.kind === "swap" ? tokenIcon(pr.symbolIn && pr.symbolIn !== "ETH" ? { symbol: pr.symbolIn, address: pr.tokenIn } : { symbol: pr.symbolOut, address: pr.tokenOut }, "sm") : p.kind === "bridge" ? chainLogo("robinhood", 20) : p.kind === "hl_fund" ? chainLogo("hyperliquid", 20) : null,
+          p.kind === "perp" && pr.coin ? coinIcon(pr.coin, "sm") : p.kind === "swap" ? tokenIcon(pr.symbolIn && pr.symbolIn !== "ETH" ? { symbol: pr.symbolIn, address: pr.tokenIn, chain: "robinhood" } : { symbol: pr.symbolOut, address: pr.tokenOut, chain: "robinhood" }, "sm") : p.kind === "bridge" ? chainLogo("robinhood", 20) : p.kind === "hl_fund" ? chainLogo("hyperliquid", 20) : null,
           h("b", {}, p.summary), h("span", { class: `tk-st ${live ? "" : "off"}` }, statusText)),
         h("div", { class: "rows" }, rows.filter(Boolean).map(([k, v]) => h("div", {}, h("span", {}, k), h("span", {}, String(v))))),
         p.gate?.checks?.length ? h("ul", { class: "tk-gate" }, h("li", { class: "tk-gh" }, icon("shield"), "Troya Gate"), p.gate.checks.map((c) => h("li", { class: c.status === "skip" ? "skipped" : c.status }, h("span", {}, c.name || c.label), h("b", {}, c.status === "pass" ? "pass" : c.status === "warn" ? "check" : c.status === "skip" ? "later" : "fail"), h("small", {}, c.detail)))) : null,

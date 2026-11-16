@@ -14,6 +14,7 @@ const ROLES = {
   "0x86030ce2975432227ede83027a31a16f33d68b80": "Agent Wallet of the test wallet (created by the Troya server; funded by the test wallet, pays back only to it)",
   "0x2fc617e933a52713247ce25730f6695920b3befe": "bridge relayer: delivers the funds on the destination chain",
   "0x57b09fe6dab0a7d3776e56e6388c773d6c4d09e4": "$TROYA creator wallet",
+  "0x45611870017682ec781edb9f71fa72fa91159350": "team wallet: signs in its own browser wallet",
 };
 const P = (step, chain, hash, what) => ({ step, chain, hash, what });
 const LIST = [
@@ -39,6 +40,9 @@ const LIST = [
   P("10 Sentry Autopilot, live", "arbitrum", "0xd767ae3732a2d5dcce2c201d96155619e0b3f0ab79c54dcbcbe225a3539985be", "the test wallet's USDC (withdrawn from Hyperliquid) bridged back as ETH to its Agent Wallet on Robinhood Chain"),
   P("10 Sentry Autopilot, live", "robinhood", "0xe4a7165b256ad28e7af67119b7305981e8de8d34ee7acf3f663b4ffd5c76f5ca", "Autopilot buy from the Agent Wallet"),
   P("10 Sentry Autopilot, live", "robinhood", "0x1eae52db4926b2bc7449fcd6c38eb09b065d4f1cd024aeef2cdd9fef656f31d3", "Autopilot sells it all back"),
+  P("11 Other launchpads through KyberSwap", "robinhood", "0x53dde2747f8138fa34de7ca4ebbf9fc6015cc8c58e188d58db822443d5346a24", "buy ABYSS (Abyss launchpad) through the KyberSwap router from the Swap page"),
+  P("11 Other launchpads through KyberSwap", "robinhood", "0xaf498861e6e1c53592eca2c5a8e9869e45e1591560e7a951e79840fc99b9842b", "approve ABYSS for the KyberSwap router (the exact amount)"),
+  P("11 Other launchpads through KyberSwap", "robinhood", "0xf5f46c779faf0c80fe2ac107a3c1fbfea6c671b4454be5faddc344c9cc197c4b", "sell it all back to ETH"),
 
   P("LP burn", "robinhood", "0xfe7f12591df9b9f53a0366a31cf36d1cf00b8200b6ae05fb8eeb7989afc24ea0", "Uniswap v4 position NFT #4293939 (ETH/TROYA pool) sent to 0x…dEaD: that liquidity can never be removed"),
 ];

@@ -338,7 +338,7 @@ export const TOOLS = [
     run: (a) => robinhoodStocks(a) },
   { name: "analyze_token_health", tier: "read", description: "Bytecode heuristics on Robinhood Chain: mint, pause, blacklist, fee setters, proxy and owner status, plus Pons curve and creator tax. Not an audit.", schema: S({ address: str("Token contract address") }, ["address"]),
     run: ({ address }) => tokenHealth(address) },
-  { name: "quote_swap", tier: "read", description: "Quote a swap on Robinhood Chain (Pons curves, Uniswap v3/v4). tokenIn/tokenOut: ETH, a symbol or an address. Runs Troya Gate on the result.", schema: S({ tokenIn: str("Default ETH"), tokenOut: str("Token to receive"), amountIn: numS("Amount of tokenIn"), slippagePct: numS("Default 1") }, ["tokenOut", "amountIn"]),
+  { name: "quote_swap", tier: "read", description: "Quote a swap on Robinhood Chain (Pons curves, Uniswap v3/v4, and the other Robinhood Chain launchpads through KyberSwap). tokenIn/tokenOut: ETH, a symbol or an address. Runs Troya Gate on the result.", schema: S({ tokenIn: str("Default ETH"), tokenOut: str("Token to receive"), amountIn: numS("Amount of tokenIn"), slippagePct: numS("Default 1") }, ["tokenOut", "amountIn"]),
     run: async (a) => { const q = await quoteSwap(a); return { ...q, quote: { ...q.quote, plan: undefined }, gate: await gateSwap(q) }; } },
   { name: "get_balances", tier: "read", description: "ETH and tokens on Robinhood Chain plus the Hyperliquid account for an address (defaults to yours).", schema: S({ address: str("Wallet address (optional when signed in)") }),
     run: ({ address }, ctx) => getBalances(address || ctx.address) },

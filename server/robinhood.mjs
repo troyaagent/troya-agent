@@ -668,7 +668,7 @@ export async function buildSwapTx({ from, tokenIn, tokenOut, amountIn, amountInR
       built = { to: p.curve, data: iface.ponsCurve.encodeFunctionData("sell", [amt, min, who]), value: 0n, approvals: [{ kind: "erc20", token: p.token, spender: p.curve, amount: amt }] };
     }
   } else if (p.venue === "kyber") {
-    if (!KYBER_LIVE && !_sim && !_gate) throw new HttpError(403, "Swaps through KyberSwap (for coins outside Pons and Uniswap) are in their real-money test and open shortly. The Gate result is already live.", { code: "KYBER_TESTING" });
+    if (!KYBER_LIVE && !_sim && !_gate) throw new HttpError(403, "Swaps through KyberSwap (for coins outside Pons and Uniswap) are switched off on this server right now. The Gate result still works.", { code: "KYBER_TESTING" });
     // slippage that lands Kyber's own minimum at or above Troya's floor (the quote's minimum, or a stricter one from the client)
     const quoted = BigInt(p.routeSummary.amountOut);
     const slip = quoted > min ? Number(((quoted - min) * 10000n) / quoted) : 1;

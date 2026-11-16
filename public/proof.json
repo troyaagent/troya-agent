@@ -1,7 +1,7 @@
 {
   "name": "Troya Agent proof log",
   "site": "https://troya.codes/verify",
-  "generated": "2026-11-15T16:13:55.031Z",
+  "generated": "2026-11-16T11:45:29.898Z",
   "testWallet": "0x12a05719851c8375342DE65c9105329c81f57054",
   "note": "Every transaction is read from the chain. Agent Wallets are created by the Troya server for a signed-in wallet; each one here was funded by the test wallet and paid back only to it. Hyperliquid fills: https://troya.codes/api/proof/hl-fills (from Hyperliquid's own info API).",
   "transactions": [
@@ -311,6 +311,48 @@
       "to": "0x0e580Fe5F0AdaFE1C2c2fE3Ee84021664E9A2128",
       "block": 115056901,
       "timeUtc": "2026-11-15T15:22:53.000Z",
+      "status": "success"
+    },
+    {
+      "step": "11 Other launchpads through KyberSwap",
+      "chain": "robinhood",
+      "hash": "0x53dde2747f8138fa34de7ca4ebbf9fc6015cc8c58e188d58db822443d5346a24",
+      "what": "buy ABYSS (Abyss launchpad) through the KyberSwap router from the Swap page",
+      "chainId": 4663,
+      "explorer": "https://robinhoodchain.blockscout.com/tx/0x53dde2747f8138fa34de7ca4ebbf9fc6015cc8c58e188d58db822443d5346a24",
+      "signer": "0x45611870017682Ec781EDb9F71fA72fA91159350",
+      "signerRole": "team wallet: signs in its own browser wallet",
+      "to": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
+      "block": 115727295,
+      "timeUtc": "2026-11-16T11:30:21.000Z",
+      "status": "success"
+    },
+    {
+      "step": "11 Other launchpads through KyberSwap",
+      "chain": "robinhood",
+      "hash": "0xaf498861e6e1c53592eca2c5a8e9869e45e1591560e7a951e79840fc99b9842b",
+      "what": "approve ABYSS for the KyberSwap router (the exact amount)",
+      "chainId": 4663,
+      "explorer": "https://robinhoodchain.blockscout.com/tx/0xaf498861e6e1c53592eca2c5a8e9869e45e1591560e7a951e79840fc99b9842b",
+      "signer": "0x45611870017682Ec781EDb9F71fA72fA91159350",
+      "signerRole": "team wallet: signs in its own browser wallet",
+      "to": "0x15f3385625D7e364C5a6216FBbceadf10fa90e7d",
+      "block": 115730726,
+      "timeUtc": "2026-11-16T11:36:20.000Z",
+      "status": "success"
+    },
+    {
+      "step": "11 Other launchpads through KyberSwap",
+      "chain": "robinhood",
+      "hash": "0xf5f46c779faf0c80fe2ac107a3c1fbfea6c671b4454be5faddc344c9cc197c4b",
+      "what": "sell it all back to ETH",
+      "chainId": 4663,
+      "explorer": "https://robinhoodchain.blockscout.com/tx/0xf5f46c779faf0c80fe2ac107a3c1fbfea6c671b4454be5faddc344c9cc197c4b",
+      "signer": "0x45611870017682Ec781EDb9F71fA72fA91159350",
+      "signerRole": "team wallet: signs in its own browser wallet",
+      "to": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
+      "block": 115730922,
+      "timeUtc": "2026-11-16T11:36:40.000Z",
       "status": "success"
     },
     {

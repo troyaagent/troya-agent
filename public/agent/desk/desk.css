@@ -341,3 +341,28 @@ html[data-theme="light"] .d-side, html[data-theme="light"] .d-drawer { scrollbar
 }
 .d-mode svg { width: 17px; height: 17px; }
 html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color: var(--fg); box-shadow: 0 10px 30px rgba(20, 18, 16, .12); }
+
+/* ---------- Ask palette (⌘K) ---------- */
+.d-pal-box { width: min(640px, calc(100vw - 24px)); padding: 0; overflow: hidden; border-radius: 14px; }
+.d-pal { display: flex; flex-direction: column; max-height: min(620px, calc(100dvh - 80px)); }
+.d-pal svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.d-pal-top { display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--line-2); }
+.d-pal-spark { color: var(--blue); display: grid; }
+.d-pal-in { flex: 1; min-width: 0; height: 56px; border: 0; outline: none; background: transparent; color: var(--fg); font: 400 15.5px/1 var(--sans); }
+.d-pal-in::placeholder { color: var(--muted); }
+.d-pal-list { overflow: auto; padding: 8px; }
+.d-pal-sec + .d-pal-sec { margin-top: 6px; }
+.d-pal-h { padding: 8px 10px 6px; font: 600 10.5px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.d-pal-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; padding: 8px 10px; border-radius: 9px; text-align: left; color: var(--fg-2); }
+.d-pal-row.sel { background: var(--bg-3); color: var(--fg); }
+.d-pal-ic { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; border: 1px solid var(--line-2); background: var(--bg-2); color: var(--fg-2); }
+.d-pal-ic.ask { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, var(--line-2)); background: var(--up-bg); }
+.d-pal-t { display: grid; gap: 3px; min-width: 0; }
+.d-pal-t b { font-weight: 500; font-size: 14px; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-pal-t small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-pal-row kbd { opacity: 0; }
+.d-pal-row.sel kbd { opacity: 1; }
+.d-pal-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 10px 16px; border-top: 1px solid var(--line-2); font-size: 11.5px; color: var(--muted); }
+.d-pal-foot kbd { margin-right: 3px; }
+.d-pal-note { margin-left: auto; }
+@media (max-width: 560px) { .d-pal-note { display: none; } .d-pal-in { font-size: 16px; } }

@@ -305,37 +305,56 @@ function closeDrawer() {
 $("[data-ask-fab]").addEventListener("click", () => openDrawer());
 
 /* ---------- Ask palette (⌘K): ask the agent, gate a pasted coin, or jump to any page ---------- */
-const QUICK = [
-  ["What is moving on Robinhood Chain right now?", "Ask"], ["Show funding extremes on Hyperliquid", "Ask"], ["Is this token safe? (paste an address)", "Ask"],
-  ...FLAT.map((it) => [`Open ${it.t}`, it.href]),
-];
+const ASKS = ["What is moving on Robinhood Chain right now?", "Show funding extremes on Hyperliquid", "What should I watch today?"];
 function openAsk(prefill = "") {
-  const input = h("input", { placeholder: "Ask Troya, paste a coin, or jump to a page…", value: prefill, "aria-label": "Ask Troya" });
-  let sel = 0;
-  const opts = h("div", { class: "opts" });
-  const items = () => {
+  const input = h("input", { class: "d-pal-in", placeholder: "Ask Troya anything, paste a coin address, or type a page name", value: prefill, "aria-label": "Ask Troya", autocomplete: "off", spellcheck: "false" });
+  let sel = 0, flat = [];
+  const opts = h("div", { class: "d-pal-list", role: "listbox" });
+  // rows: { kind: "ask" | "coin" | "page", title, hint, icon, target }
+  const sections = () => {
     const raw = input.value.trim(), q = raw.toLowerCase();
-    const list = QUICK.filter(([t]) => !q || t.toLowerCase().includes(q));
     const ca = (/0x[0-9a-fA-F]{40}/.exec(raw) || [])[0];
-    if (ca) list.unshift([`Gate ${short(ca)} · seven checks`, `#/gate/${ca}`], [`Open the token page for ${short(ca)}`, `#/token/${ca}`]);
-    if (raw) list.unshift([raw, "Ask"]);
-    return list.slice(0, 9);
+    const out = [];
+    const asks = [];
+    if (raw && !ca) asks.push({ kind: "ask", title: raw, hint: "Ask Troya: the answer opens beside this page", icon: "spark", target: raw });
+    for (const a of ASKS) if (!q || a.toLowerCase().includes(q)) asks.push({ kind: "ask", title: a, hint: "Ask Troya", icon: "spark", target: a });
+    if (ca) out.push(["Check this coin", [
+      { kind: "page", title: `Run Troya Gate on ${short(ca)}`, hint: "Seven checks: route, impact, depth, fees, simulation, test sell, tax", icon: "gate", target: `#/gate/${ca}` },
+      { kind: "page", title: `Open the token page`, hint: "Price, chart, pools and trades", icon: "market", target: `#/token/${ca}` },
+      { kind: "ask", title: `Ask Troya about ${short(ca)}`, hint: "Is it safe to buy? The agent reads the checks and explains", icon: "spark", target: `Is this token safe? ${ca}` },
+      { kind: "page", title: `Swap into it`, hint: "Opens Swap with the coin selected", icon: "swap", target: `#/swap?out=${ca}` },
+    ]]);
+    const pages = FLAT.filter((it) => !q || it.t.toLowerCase().includes(q) || String(it.g || "").toLowerCase().includes(q))
+      .map((it) => ({ kind: "page", title: it.t, hint: it.g || "Desk", icon: it.ic, target: it.href }));
+    const goTo = ["Go to", q ? pages.slice(0, 6) : pages.slice(0, 8)];
+    // a single word that names a page ("swap", "perps") jumps there first; anything longer reads as a question
+    const pageFirst = q && !/\s/.test(q) && pages.some((p) => p.title.toLowerCase().startsWith(q));
+    if (pageFirst && pages.length) out.push(goTo);
+    if (asks.length) out.push(["Ask Troya", asks.slice(0, 4)]);
+    if (!pageFirst && pages.length) out.push(goTo);
+    return out;
   };
-  const run = ([t, target]) => { m.close(); if (target === "Ask") openDrawer(t); else if (target.startsWith("/")) location.href = target; else go(target); };
+  const run = (it) => { m.close(); if (it.kind === "ask") openDrawer(it.target); else if (it.target.startsWith("/")) location.href = it.target; else go(it.target); };
   const render = () => {
-    const list = items();
-    sel = Math.min(sel, list.length - 1);
-    clear(opts, list.map((it, i) => h("button", { class: `opt ${i === sel ? "sel" : ""}`, type: "button", onclick: () => run(it) }, icon(it[1] === "Ask" ? "spark" : "arrowRight"), it[0], h("small", {}, it[1] === "Ask" ? "Ask the agent" : "Go"))));
+    const secs = sections();
+    flat = secs.flatMap(([, rows]) => rows);
+    sel = Math.max(0, Math.min(sel, flat.length - 1));
+    let i = 0;
+    clear(opts, secs.map(([label, rows]) => h("div", { class: "d-pal-sec" }, h("div", { class: "d-pal-h" }, label),
+      rows.map((it) => { const idx = i++; return h("button", { class: `d-pal-row ${idx === sel ? "sel" : ""}`, type: "button", role: "option", "aria-selected": String(idx === sel), onclick: () => run(it), onmousemove: () => { if (sel !== idx) { sel = idx; render(); } } },
+        h("span", { class: `d-pal-ic ${it.kind}` }, si(it.icon || "desk")), h("span", { class: "d-pal-t" }, h("b", {}, it.title), h("small", {}, it.hint)), h("kbd", {}, "↵")); }))));
+    opts.querySelector(".sel")?.scrollIntoView({ block: "nearest" });
   };
   input.addEventListener("input", () => { sel = 0; render(); });
   input.addEventListener("keydown", (e) => {
-    const list = items();
-    if (e.key === "ArrowDown") { sel = (sel + 1) % list.length; render(); e.preventDefault(); }
-    else if (e.key === "ArrowUp") { sel = (sel - 1 + list.length) % list.length; render(); e.preventDefault(); }
-    else if (e.key === "Enter" && list[sel]) run(list[sel]);
+    if (e.key === "ArrowDown") { sel = (sel + 1) % Math.max(1, flat.length); render(); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { sel = (sel - 1 + flat.length) % Math.max(1, flat.length); render(); e.preventDefault(); }
+    else if (e.key === "Enter" && flat[sel]) { e.preventDefault(); run(flat[sel]); }
   });
-  const m = modal({ body: h("div", { class: "palette" }, input, opts) });
-  m.box.classList.add("palette");
+  const foot = h("div", { class: "d-pal-foot" }, h("span", {}, h("kbd", {}, "↑"), h("kbd", {}, "↓"), " move"), h("span", {}, h("kbd", {}, "↵"), " open"), h("span", {}, h("kbd", {}, "esc"), " close"),
+    h("span", { class: "d-pal-note" }, "Answers open beside the page you are on"));
+  const m = modal({ body: h("div", { class: "d-pal" }, h("div", { class: "d-pal-top" }, h("span", { class: "d-pal-spark" }, si("spark")), input), opts, foot) });
+  m.box.classList.add("palette", "d-pal-box");
   m.body.style.padding = "0";
   render();
   setTimeout(() => input.focus(), 30);

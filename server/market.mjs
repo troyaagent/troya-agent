@@ -516,7 +516,8 @@ export async function getHlSpot() {
       const base = tok.get(u.tokens[0]), quote = tok.get(u.tokens[1]);
       const mark = fnum(c.markPx), prev = fnum(c.prevDayPx), supply = fnum(c.circulatingSupply);
       return { pair: u.name, base: base?.name, quote: quote?.name, label: `${base?.name || "?"}/${quote?.name || "?"}`, mark, change24h: mark && prev ? (mark / prev - 1) * 100 : null,
-        volumeUsd: fnum(c.dayNtlVlm), mcapUsd: mark && supply ? mark * supply : null, evm: base?.evmContract?.address || null, canonical: !!u.isCanonical };
+        volumeUsd: fnum(c.dayNtlVlm), mcapUsd: mark && supply ? mark * supply : null, evm: base?.evmContract?.address || null, canonical: !!u.isCanonical,
+        index: u.index, asset: 10000 + u.index, szDecimals: base?.szDecimals ?? 2, mid: fnum(c.midPx) ?? mark };
     }).filter((p) => p.mark != null);
     return { pairs, updatedAt: Date.now() };
   });

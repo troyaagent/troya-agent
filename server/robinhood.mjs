@@ -1167,6 +1167,11 @@ export async function register(r, ctx) {
   r.get("/api/token/health", ({ query }) => tokenHealth(query.address), { perMin: 120 });
   r.get("/api/token/meta", ({ query }) => isSol(query.chain) ? sol().then((m) => m.solTokenMeta(query.address)) : isEvm(query.chain) ? evm().then((m) => m.evmTokenMeta(query.chain, query.address)) : tokenMeta(query.address).then(pub), { perMin: 240 });
   r.get("/api/swap/tokens", ({ query }) => (isSol(query.chain) ? sol().then((m) => m.solSearch({ q: query.q })) : evm().then((m) => m.evmSearch({ chain: query.chain, q: query.q }))), { perMin: 120 });
+  // which F11/F12 pieces are open for signing on this server (each opens after its real-money test)
+  r.get("/api/features", async () => {
+    const [e, so] = await Promise.all([evm(), sol()]);
+    return { arbitrum: e.evmLive("arbitrum"), base: e.evmLive("base"), solana: so.SOLANA_LIVE, spot: process.env.SPOT_LIVE === "1" };
+  });
   r.get("/api/sol/balance", ({ query }) => sol().then((m) => m.solBalance({ owner: query.owner, mint: query.mint })), { perMin: 240 });
   r.get("/api/sol/status", ({ query }) => sol().then((m) => m.solStatus({ sig: query.sig })), { perMin: 240 });
   r.get("/api/token/pons", async ({ query }) => {

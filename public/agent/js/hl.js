@@ -202,6 +202,41 @@ export async function placeOrder({ owner, market, isBuy, size, limitPx = null, r
   const res = await sendL1(owner, { type: "order", orders, grouping: orders.length > 1 ? "normalTpsl" : "na" });
   return { res, px, size: sz, text: describeStatuses(res) };
 }
+/**
+ * Spot order (F12). pair = an entry from /api/market/hl/spot ({pair, label, asset, szDecimals, mid}). Same trade-only key as
+ * perps; spot prices take up to 8 decimals. limitPx null → IOC at mid ± slippage (a market order that never fills worse).
+ */
+export async function placeSpotOrder({ owner, pair, isBuy, size, limitPx = null, slippage = 0.01, refPx }) {
+  const sz = roundSz(size, pair.szDecimals);
+  if (!(sz > 0)) throw new Error(`Size rounds to zero: ${pair.label} trades in steps of ${10 ** -pair.szDecimals}.`);
+  const isMarket = limitPx == null;
+  const base = refPx || pair.mid;
+  if (!(base > 0)) throw new Error("No price for this pair right now.");
+  const px = isMarket ? roundPx(base * (isBuy ? 1 + slippage : 1 - slippage), pair.szDecimals, 8) : roundPx(limitPx, pair.szDecimals, 8);
+  const orders = [orderWire({ asset: pair.asset, isBuy, limitPx: px, size: sz, reduceOnly: false, orderType: { limit: { tif: isMarket ? "Ioc" : "Gtc" } } })];
+  const res = await sendL1(owner, { type: "order", orders, grouping: "na" });
+  return { res, px, size: sz, text: describeStatuses(res) };
+}
+/** Moves USDC between the perps and the spot account (Hyperliquid usdClassTransfer); signed by the user's own wallet. */
+export async function transferUsdClass(owner, eip, amount, toPerp) {
+  const nonce = nextNonce();
+  const amt = String(Math.floor(Number(amount) * 1e6) / 1e6);
+  if (!(Number(amt) > 0)) throw new Error("Enter an amount of USDC.");
+  const message = { hyperliquidChain: "Mainnet", amount: amt, toPerp: !!toPerp, nonce };
+  const typed = {
+    domain: { name: "HyperliquidSignTransaction", version: "1", chainId: 42161, verifyingContract: ZERO },
+    types: {
+      EIP712Domain: [{ name: "name", type: "string" }, { name: "version", type: "string" }, { name: "chainId", type: "uint256" }, { name: "verifyingContract", type: "address" }],
+      "HyperliquidTransaction:UsdClassTransfer": [{ name: "hyperliquidChain", type: "string" }, { name: "amount", type: "string" }, { name: "toPerp", type: "bool" }, { name: "nonce", type: "uint64" }],
+    },
+    primaryType: "HyperliquidTransaction:UsdClassTransfer",
+    message,
+  };
+  const raw = await eip.request({ method: "eth_signTypedData_v4", params: [owner, JSON.stringify(typed)] });
+  const sig = Signature.from(raw);
+  const action = { type: "usdClassTransfer", signatureChainId: "0xa4b1", hyperliquidChain: "Mainnet", amount: amt, toPerp: !!toPerp, nonce };
+  return relay({ action, nonce, signature: { r: sig.r, s: sig.s, v: sig.v }, vaultAddress: null });
+}
 export async function setLeverage({ owner, market, leverage, isCross = true }) {
   const lev = Math.round(Number(leverage));
   if (!(lev >= 1 && lev <= market.maxLeverage)) throw new Error(`${market.coin} allows 1–${market.maxLeverage}x.`);

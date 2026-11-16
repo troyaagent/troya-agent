@@ -271,7 +271,8 @@ export async function register(r) {
 
   r.get("/api/hl/book", async ({ query }) => {
     const coin = String(query.coin || "BTC").toUpperCase();
-    await hlAsset(coin);
+    // spot books (F12) are "@<index>" or "PURR/USDC"; anything else must be a known perp
+    if (!/^@\d{1,5}$|^[A-Z0-9]{1,12}\/USDC$/.test(coin)) await hlAsset(coin);
     const b = await cached(`book:${coin}`, 1000, () => hlInfo({ type: "l2Book", coin }));
     const side = (lv) => (lv || []).slice(0, 20).map((x) => ({ px: +x.px, sz: +x.sz, n: x.n }));
     return { coin, time: b?.time || Date.now(), bids: side(b?.levels?.[0]), asks: side(b?.levels?.[1]) };
@@ -284,7 +285,7 @@ export async function register(r) {
 
   // Relay for payloads already signed in the browser (CSP keeps the page same-origin).
   // We only forward; keys never reach this server. Shape is checked so it cannot be used as an open proxy.
-  const RELAY_TYPES = new Set(["order", "cancel", "updateLeverage", "approveAgent", "scheduleCancel", "modify", "batchModify"]);
+  const RELAY_TYPES = new Set(["order", "cancel", "updateLeverage", "approveAgent", "scheduleCancel", "modify", "batchModify", "usdClassTransfer"]);
   r.post("/api/hl/exchange", async ({ body }) => {
     const a = body?.action;
     if (!a || typeof a !== "object" || !RELAY_TYPES.has(a.type)) throw new HlError(400, "Unsupported Hyperliquid action.");

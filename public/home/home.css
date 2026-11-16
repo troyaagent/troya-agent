@@ -32,7 +32,10 @@ em { font-family: var(--serif); font-style: var(--serif-style); font-weight: 400
 em, .fact b, .mega .script, .mega .l2 > span:last-child .ch-l {
   background-image: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
   -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-em, .mega .script { padding-right: .04em; }
+em { padding-right: .12em; margin-right: -.08em; }
+.mega .script { padding: 0 .16em .06em .04em; }
+.mega .l2 > span:last-child .ch-l { padding: .04em .08em; margin: -.04em -.08em; }
+.fact b { padding-right: .06em; margin-right: -.06em; }
 .mega .script { text-shadow: none; filter: drop-shadow(0 2px 24px rgba(0, 0, 0, .45)); }
 
 /* type */

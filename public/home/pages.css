@@ -63,7 +63,7 @@ body.pn .page-hero > canvas.rain, body.pn .nf > canvas.rain { position: absolute
 .page-hero .eyebrow .dot, .dot { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: none; }
 .page-hero h1, .nf h1 { margin: 0 0 26px; font: 700 clamp(42px, 6vw, 104px)/.9 var(--sans); letter-spacing: -0.045em; text-transform: uppercase; max-width: 12em; }
 .acc, .w.acc > i { font-family: var(--serif); font-style: italic; font-weight: 400; text-transform: none; letter-spacing: -0.01em; color: var(--accent); font-size: 1.1em; line-height: .8; }
-.acc, .w.acc > i { background-image: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-box-decoration-break: clone; box-decoration-break: clone; padding-right: .04em; }
+.acc, .w.acc > i { background-image: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-box-decoration-break: clone; box-decoration-break: clone; padding-right: .12em; margin-right: -.08em; }
 .page-hero .lead { font-size: 16px; line-height: 1.6; color: var(--fg-2); max-width: 36em; }
 .page-hero .hero-act { gap: 18px 30px; margin-top: 34px; }
 .page-hero .meta { color: var(--muted); }

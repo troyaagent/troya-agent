@@ -19,7 +19,7 @@ const KNOWN = {
   [ZERO]: "zero address", [DEAD]: "dead address",
 };
 const LP_MANAGERS = new Set(["0x73991a25c818bf1f1128deaab1492d45638de0d3", "0x58daec3116aae6d93017baaea7749052e8a04fa7"]);   // Uniswap v3 NPM, v4 PositionManager
-const CACHE_MS = 10 * 60e3;
+const CACHE_MS = 15 * 60e3;
 let store;
 const cache = new Map(), inflight = new Map();
 
@@ -323,7 +323,8 @@ export async function assay(token, { deep = true, waitMs = 20000 } = {}) {
   const t = lc(token);
   const key = `${t}:${deep ? 1 : 0}`;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit;
+  // a busy coin (history capped) takes minutes to read, so it is kept for an hour; others for 15 minutes
+  if (hit && Date.now() - hit.at < (hit.coverage?.partial ? 60 * 60e3 : CACHE_MS)) return hit;
   if (!inflight.has(key)) {
     inflight.set(key, oneAtATime(() => measure(t, { deep })).then((r) => { cache.set(key, r); if (cache.size > 500) cache.delete(cache.keys().next().value); return r; })
       .catch((e) => ({ token: t, status: "error", error: e.message, at: Date.now() })).finally(() => inflight.delete(key)));

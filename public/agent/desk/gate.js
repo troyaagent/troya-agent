@@ -4,6 +4,7 @@ import { h, clear, icon, useCss, short, ago, tokenIcon, toast } from "/agent/js/
 import { api } from "/agent/js/api.js";
 
 const ADDR = /0x[0-9a-fA-F]{40}/;
+const EXAMPLE = "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC";   // NVDA (Robinhood stock token)
 const WORD = { passed: "Passed", caution: "Caution", failed: "Failed", untested: "Not tested yet", error: "Unavailable" };
 const NOTE = {
   passed: "Every check passed at this moment. A snapshot, never a safe stamp: a coin can change after a check.",
@@ -88,7 +89,7 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
         h("div", { class: "dk-gate-v" },
           h("span", { class: `dk-v v-${r.verdict}` }, WORD[r.verdict] || r.verdict),
           h("span", { class: "fine" }, `${tally}${r.checkedAt ? ` · ${ago(r.checkedAt)}` : ""}`))),
-      example ? h("p", { class: "fine dk-gate-ex" }, "Live example: the $TROYA token. Paste any coin above to check it.") : null,
+      example ? h("p", { class: "fine dk-gate-ex" }, "Live example: NVDA, a Robinhood stock token. Paste any coin above to check it.") : null,
       h("ol", { class: "dk-checks" }, r.checks.map((c) => h("li", { class: `c-${c.status}` },
         h("span", { class: "dk-ck" }, c.status === "pass" ? icon("check") : c.status === "fail" ? icon("close") : h("b", {}, c.status === "warn" ? "!" : "–")),
         h("span", { class: "dk-ck-l" }, c.label),
@@ -114,8 +115,7 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
     out);
 
   if (ADDR.test(start)) run(start);
-  else if (SITE.ca) run(SITE.ca, { example: true });
-  else clear(out, h("p", { class: "muted" }, "Paste a coin to see its seven checks."));
+  else run(EXAMPLE, { example: true });                 // the Desk's live example: a Robinhood stock token
   return { el, run, stop: () => { alive = false; } };
 }
 

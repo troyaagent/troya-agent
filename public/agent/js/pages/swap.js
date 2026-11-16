@@ -8,6 +8,7 @@ import { ETH, isNative, balanceOf, toRaw, fromRaw, inputNum, rawInput, sendTx, w
 
 const SLIPS = [{ value: 100, label: "1%" }, { value: 300, label: "3%" }, { value: 500, label: "5%" }];
 const NETS = [{ key: "robinhood", label: "Robinhood" }, { key: "base", label: "Base" }, { key: "arbitrum", label: "Arbitrum" }];
+const GAS_KEEP = 10n ** 14n; // 0.0001 ETH left for gas by Max (a swap costs well under that on these L2s)
 
 export async function mount(view, ctx) {
   useCss("swap");
@@ -123,7 +124,8 @@ export async function mount(view, ctx) {
       sellBal.disabled = false;
     } else { clear(sellBal, wallet.address ? "Balance …" : ""); sellBal.disabled = true; }
     clear(quick, isNative(st.sell)
-      ? ["0.005", "0.01", "0.05", "0.1"].map((v) => h("button", { type: "button", class: "chip", onclick: () => { sellInput.value = v; sellInput.dispatchEvent(new Event("input")); } }, `${v} ETH`))
+      ? [...["0.005", "0.01", "0.05", "0.1"].map((v) => h("button", { type: "button", class: "chip", onclick: () => { sellInput.value = v; sellInput.dispatchEvent(new Event("input")); } }, `${v} ETH`)),
+        wallet.address && st.bal?.raw > GAS_KEEP ? h("button", { type: "button", class: "chip", title: "Everything but a little ETH kept for gas", onclick: () => setMax() }, "Max") : null]
       : wallet.address && st.bal?.raw > 0n ? [25, 50, 75, 100].map((p) => h("button", { type: "button", class: "chip", onclick: () => setPct(p) }, p === 100 ? "Max" : `${p}%`)) : []);
     // output
     const q = st.quote;
@@ -235,7 +237,7 @@ export async function mount(view, ctx) {
   function setMax() {
     if (!st.bal) return;
     let raw = st.bal.raw;
-    if (isNative(st.sell)) raw = raw > 3n * 10n ** 14n ? raw - 3n * 10n ** 14n : 0n; // keep a little ETH for gas
+    if (isNative(st.sell)) raw = raw > GAS_KEEP ? raw - GAS_KEEP : 0n; // keep a little ETH for gas
     sellInput.value = rawInput(raw, st.sell.decimals ?? 18, 8);
     sellInput.dispatchEvent(new Event("input"));
   }

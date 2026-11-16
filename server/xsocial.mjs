@@ -18,7 +18,7 @@ import { getSession, requireSession } from "./auth.mjs";
 
 const API = "https://api.x.com";
 const REDIRECT = process.env.X_REDIRECT || "https://troya.codes/api/x/callback";
-const BOT = String(process.env.X_BOT_USERNAME || "Troyaagent").replace(/^@/, "").toLowerCase();
+const BOT_NAME = String(process.env.X_BOT_USERNAME || "Troyaagent").replace(/^@/, ""), BOT = BOT_NAME.toLowerCase();
 const CAPS = { reads: Number(process.env.X_DAILY_READS) || 200, posts: Number(process.env.X_DAILY_POSTS) || 20, search: Number(process.env.X_DAILY_SEARCH) || 30, users: Number(process.env.X_DAILY_USERS) || 100 };
 const POLL_MIN = Math.max(5, Number(process.env.X_POLL_MIN) || 10);
 const admins = () => String(process.env.X_ADMINS || "").split(",").map((a) => a.trim().toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a));
@@ -204,7 +204,7 @@ export async function register(r, ctx) {
   r.get("/api/x/status", async ({ req }) => {
     const b = await store.readJson("x-bot.json", null), st = await store.readJson("x-state.json", {});
     const log = await store.readJson("x-log.json", []);
-    return { configured: on(), bot: b ? { username: b.username, connectedAt: b.connectedAt } : null, expected: BOT, mode: await mode(), pollEveryMin: POLL_MIN, lastPoll: st.lastPoll || null, lastError: st.lastError || null,
+    return { configured: on(), bot: b ? { username: b.username, connectedAt: b.connectedAt } : null, expected: BOT_NAME, mode: await mode(), pollEveryMin: POLL_MIN, lastPoll: st.lastPoll || null, lastError: st.lastError || null,
       usage: await usage(), caps: CAPS, posted: log.filter((x) => x.status === "posted").slice(-10).reverse().map((x) => ({ at: x.at, author: x.author, replyId: x.replyId })), admin: isAdmin(req) };
   });
   r.get("/api/x/log", async ({ req }) => { if (!isAdmin(req)) throw new HttpError(403, "Admins only."); return { log: (await store.readJson("x-log.json", [])).slice(-100).reverse() }; });

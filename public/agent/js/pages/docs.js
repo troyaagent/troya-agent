@@ -20,7 +20,7 @@ export async function mount(view) {
         [h("b", {}, "Swap: "), "any pair on Robinhood Chain through Pons curves and Uniswap v3/v4 pools. You sign in your own wallet."],
         [h("b", {}, "Perps: "), "Hyperliquid orders with leverage, take-profit and stop-loss, signed by a trade-only key you approve once."],
         [h("b", {}, "Bridge: "), "ETH between Robinhood Chain and Arbitrum, Base or Ethereum through LI.FI routes, or To Hyperliquid: ETH on Robinhood Chain becomes USDC on your own Hyperliquid account in one transaction."],
-        [h("b", {}, "Telegram: "), "trade Robinhood Chain coins from a private chat with @TrojanTroya_bot (Gate first, then Confirm), and follow t.me/troyasentry: every new Pons launch goes through the Gate, and the channel posts the clean passes with at least 0.5 ETH of real buying."],
+        [h("b", {}, "Telegram: "), "trade Robinhood Chain coins from a private chat with @TrojanTroya_bot (Gate first, then Confirm), and follow t.me/troyasentry: every new Pons launch goes through the Gate, and the channel posts the clean passes with at least 0.5 ETH of real buying from 25 or more independent wallets (no bots, farms or copies)."],
         [h("b", {}, "Gate badge: "), "a live Troya Gate result Pons devs can embed on their site (troya.codes/badge)."],
         [h("b", {}, "Daily brief: "), "positions, PnL, liquidation distance, funding, the nearest stop, the market and Sentry every morning, with smart alerts (Portfolio → Today's brief, /brief in Telegram)."],
         [h("b", {}, "Sentry Autopilot: "), "your rules on every launch that passes the Gate, in practice mode first, with a leaderboard you can copy rules from (Agent → Sentry Autopilot, #/leaderboard, /autopilot)."],

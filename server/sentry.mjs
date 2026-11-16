@@ -1,18 +1,20 @@
 // Troya Sentry: every new Pons launch goes through Troya Gate. The channel gets only the ones worth a look: passed with no
-// warning AND real buying (at least SENTRY_MIN_POST_ETH, default 0.5 ETH, on the curve), re-checked at 5, 15 and 60 minutes
-// so a coin that picks up later still makes it. Failed, caution and dust-only results are kept in /api/sentry/recent and the
+// warning AND real buying (at least SENTRY_MIN_POST_ETH, default 0.5 ETH, on the curve, from SENTRY_MIN_BUYERS, default 25,
+// independent wallets), re-checked at 5, 15 and 60 minutes so a coin that picks up later still makes it. A wallet that
+// bought SENTRY_BOT_COINS (default 8) other new coins in the last 24 hours is a bot or a farm and is not counted. A ticker
+// already posted that day (look-alike letters folded) and a name mixing Cyrillic or Greek into Latin letters are held. Failed, caution and dust-only results are kept in /api/sentry/recent and the
 // daily recap, never dropped from the record.
 // The group gets one recap a day. Results also feed GET /api/sentry/recent (public, read-only).
 //   SENTRY=1    watch + post        SENTRY=dry   watch, write posts to data/sentry-preview.jsonl, send nothing
 //   SENTRY_CHANNEL (default @troyasentry) · SENTRY_RECAP_CHAT (default @troyaagent) · SENTRY_RECAP_UTC_HOUR (default 13)
 //   SENTRY_IMAGES=0 turns off the coin's logo on posts (on by default; posts fall back to text when a logo can't be fetched)
 //   SENTRY_POOLS=1 also checks coins that launch outside Pons: every new hookless Uniswap v3/v4 pool against ETH, WETH or USDG.
-//   They are posted only once the Gate finds a route and at least 0.05 ETH of depth (checked at 5 min, 15 min, 1 h), so empty
-//   or dust pools never reach the channel. SENTRY_POOLS=dry writes those posts to data/sentry-pools-preview.jsonl instead.
+//   They are checked at about 5, 20 and 80 minutes and posted under the same rules, with 0.5 ETH of pool depth in place of
+//   the curve, so empty, dust or farm-traded pools never reach the channel. SENTRY_POOLS=dry writes those posts to data/sentry-pools-preview.jsonl instead.
 // Launch log: PonsFactory event, topics = [sig, token, curve, deployer]. Token names come from the internet: they are
 // stripped of links and handles and HTML-escaped before they reach Telegram. Wording stays factual: check results,
 // never "scam" or "safe".
-import { ADDR, rpc, gateCheck, ponsState, ponsPublic, ponsProfile } from "./robinhood.mjs";
+import { ADDR, CHAINS, rpc, gateCheck, ponsState, ponsPublic, ponsProfile } from "./robinhood.mjs";
 import { readFileSync } from "node:fs";
 import { AbiCoder, getAddress } from "ethers";
 import { addV4Key } from "./robinhood.mjs";
@@ -27,7 +29,11 @@ const SITE = "https://troya.codes";
 const PONS = "https://ponsfamily.com/launchpad/";
 const TEST_ETH = "0.01";
 const MIN_POST = Number(process.env.SENTRY_MIN_POST_ETH ?? 0.5); // the channel's bar: real money on the curve, not a dev test buy
+const MIN_BUYERS = Number(process.env.SENTRY_MIN_BUYERS ?? 25);   // …from at least this many independent wallets
+const BOT_COINS = Number(process.env.SENTRY_BOT_COINS ?? 8);      // a wallet that bought this many other new coins in 24 h is a bot or a farm: not counted
 const TRACTION_S = [5 * 60, 10 * 60, 45 * 60];   // passed but quiet → look again at about 5, 15 and 60 minutes
+const T_TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+const WALLETS = "sentry-wallets.json";
 const MIN_RAISED = 0.002;                // below this a curve is dust: a "passed" there would mean nothing, so it waits like an empty one
 const FIRST_CHECK_S = 90;                 // past the launch snipe tax
 const RETRY_S = [5 * 60, 15 * 60];        // no buys yet → look again, then drop quietly
@@ -42,7 +48,7 @@ const POOL_FIRST_S = 300, POOL_RETRY_S = [15 * 60, 60 * 60];
 const coder = AbiCoder.defaultAbiCoder();
 const STOCKS = (() => { try { return new Set(JSON.parse(readFileSync(new URL("./data/robinhood-stocks.json", import.meta.url), "utf8")).stocks.map((x) => x.address.toLowerCase())); } catch { return new Set(); } })();
 
-let store, busy = false, lastPost = 0;
+let store, busy = false, lastPost = 0, lastWalletSave = 0;
 const recent = [];                        // newest first, for /api/sentry/recent
 export const recentResults = (n = 5) => recent.slice(0, n);   // for the bot's /sentry
 
@@ -71,17 +77,116 @@ export function verdict(g) {
   return { v: "passed" };
 }
 
-// the channel's filter: passed with no warning, and real buying (graduated, or at least MIN_POST ETH raised on an ETH curve)
-export function worthPosting(r, minEth = MIN_POST) {
-  if (r?.v !== "passed") return false;
+// real money behind the coin: graduated, at least MIN_POST ETH raised on an ETH curve, or (a pool) 0.5 ETH of depth
+function moneyIn(r, minEth) {
   if (r.pons) {
     if (r.pons.graduated) return true;
     const ethPair = r.pons.pair?.address === "native" || /^W?ETH$/i.test(r.pons.pair?.symbol || "");
     return ethPair && Number(r.pons.raised) >= minEth;
   }
-  const depth = (r.checks || []).find((c) => c.key === "depth");
-  return depth?.status === "pass";                                    // a pool: at least 0.5 ETH of depth behind the Gate's quote
+  return (r.checks || []).find((c) => c.key === "depth")?.status === "pass";
 }
+
+// copies and impersonations: Cyrillic or Greek letters mixed into a Latin name ("Nеil" with a Cyrillic е), and one ticker
+// per day (the first coin posted under a ticker keeps it for 24 hours)
+const MIXED = /[Ͱ-ϿЀ-ԯ]/;
+export const lookAlike = (r) => [r?.symbol, r?.name].some((x) => x && /[A-Za-z]/.test(x) && MIXED.test(x));
+const FOLD_FROM = [..."аеорсухіјѕԁһԛԝкмнтвαβεζηικμνορτυχ"], FOLD_TO = [..."aeopcyxijsdhqwkmhtbabezhikmnoptyx"];
+export function tickerKey(sym) {
+  const t = String(sym || "").normalize("NFKC").toLowerCase().replace(/./gu, (c) => { const i = FOLD_FROM.indexOf(c); return i < 0 ? c : FOLD_TO[i]; });
+  return t.replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+// the channel's filter. null = post it; otherwise the reason it is held back (kept in /api/sentry/recent)
+export function holdReason(r, { minEth = MIN_POST, minBuyers = MIN_BUYERS, copy = null } = {}) {
+  if (r?.v !== "passed") return r?.why ? `${r.why.label}: ${r.why.detail}` : "Did not pass";
+  if (lookAlike(r)) return "Name mixes look-alike letters (Cyrillic or Greek with Latin): not posted";
+  if (copy) return `Same ticker as ${copy.symbol ? "$" + copy.symbol : "a coin"} (${short(copy.token)}), posted in the last 24 hours: not posted`;
+  if (!moneyIn(r, minEth)) return r.pons ? `Passed, but under ${minEth} ETH raised within an hour: not posted` : `Passed, but under ${minEth} ETH of pool depth: not posted`;
+  if (!r.buyers) return "Passed, but its buyers could not be counted: not posted";
+  if (r.buyers.organic < minBuyers) return `Passed, but only ${r.buyers.organic} independent buyers of ${r.buyers.all} within an hour (${minBuyers} needed; wallets that bought ${BOT_COINS}+ other new coins in 24 hours are not counted): not posted`;
+  return null;
+}
+export const worthPosting = (r, minEth = MIN_POST, minBuyers = MIN_BUYERS) => !holdReason(r, { minEth, minBuyers });
+const permanent = (r, copy) => lookAlike(r) || !!copy;   // held for good: no point looking again
+
+/* ---------- buyers ---------- */
+// who bought: wallets that received the coin from its curve or pool. Whoever it was minted to (the creator, the curve)
+// and the deployer are left out. The busiest sender is taken as the venue, plus any venue we already know.
+export function buyerSet(logs, { venues = [], exclude = [] } = {}) {
+  const a = (t) => ("0x" + String(t).slice(26)).toLowerCase();
+  const minted = new Set(), fan = new Map();
+  for (const l of logs || []) {
+    const f = a(l.topics[1]), to = a(l.topics[2]);
+    if (f === NULL_ADDR) { minted.add(to); continue; }
+    if (!fan.has(f)) fan.set(f, new Set());
+    fan.get(f).add(to);
+  }
+  const top = [...fan.entries()].sort((x, y) => y[1].size - x[1].size)[0]?.[0];
+  const src = new Set([top, ...venues].filter(Boolean).map((x) => x.toLowerCase()));
+  const skip = new Set([...minted, ...src, ...exclude.filter(Boolean).map((x) => x.toLowerCase()), NULL_ADDR]);
+  const out = new Set();
+  for (const f of src) for (const to of fan.get(f) || []) if (!skip.has(to)) out.add(to);
+  return [...out];
+}
+// a day of buyer wallets per coin (40-bit ids), so a wallet buying every new coin is recognised as a bot or a farm
+const hist = new Map(), wcount = new Map();
+let walletsDirty = false;
+const wid = (a) => a.slice(2, 12);
+function remember(token, ids, t = Date.now()) {
+  const old = hist.get(token);
+  if (old) for (const w of old.w) { const n = (wcount.get(w) || 1) - 1; n > 0 ? wcount.set(w, n) : wcount.delete(w); }
+  const w = new Set(ids.slice(0, 800));
+  hist.set(token, { t: old?.t || t, w });
+  for (const x of w) wcount.set(x, (wcount.get(x) || 0) + 1);
+  walletsDirty = true;
+}
+function pruneWallets() {
+  const cut = Date.now() - 86400e3;
+  for (const [k, v] of hist) if (v.t < cut) { remember(k, []); hist.delete(k); }
+}
+export const rememberBuyers = (token, wallets) => remember(token.toLowerCase(), wallets.map(wid));   // tests
+export function organicOf(token, wallets) {
+  const mine = hist.get(token.toLowerCase())?.w;
+  return wallets.filter((a) => { const id = wid(a); return (wcount.get(id) || 0) - (mine?.has(id) ? 1 : 0) < BOT_COINS; }).length;
+}
+const hex = (n) => "0x" + n.toString(16);
+// every transfer of a coin since its launch block. The official RPC takes the whole range in one call; the fallbacks cap a
+// range at 10,000 blocks, so there it is read in pieces
+export async function transfersOf(token, fromBlock, sinceMs = null) {
+  const head = Number(BigInt(await rpc("robinhood", "eth_blockNumber", [])));
+  const from = Math.max(fromBlock || head - (sinceMs ? Math.ceil((Date.now() - sinceMs) / 1000 + 3600) * 12 : 400000), 0);
+  const q = { address: token, topics: [T_TRANSFER], fromBlock: hex(from), toBlock: hex(head) };
+  try { return await rpc("robinhood", "eth_getLogs", [q], { timeoutMs: 20000, only: CHAINS.robinhood.upstreams[0] }); } catch { /* next */ }
+  try { return await rpc("robinhood", "eth_getLogs", [q], { timeoutMs: 20000 }); }
+  catch (e) {
+    if (head - from > 60 * 9000) throw e;
+    const out = [];
+    for (let b = from; b <= head; b += 9000) out.push(...((await rpc("robinhood", "eth_getLogs", [{ address: token, topics: [T_TRANSFER], fromBlock: hex(b), toBlock: hex(Math.min(head, b + 8999)) }], { timeoutMs: 20000 })) || []));
+    return out;
+  }
+}
+async function measureBuyers(r, q) {
+  try {
+    const venues = [r.pons?.curve, ADDR.poolManager, q?.source === "Uniswap v3" ? q.pool : null];
+    const all = buyerSet(await transfersOf(r.token, q?.block), { venues, exclude: [r.pons?.deployer, r.pons?.creatorFeeRecipient] });
+    remember(r.token.toLowerCase(), all.map(wid));
+    r.buyers = { all: all.length, organic: organicOf(r.token, all) };
+  } catch (e) { r.buyers = null; console.warn("[sentry] buyers", r.token, e.message); }
+}
+// first start with no wallet history: learn the last day's buyers from the coins already in the record
+async function warmUp(s) {
+  if (hist.size >= 20) return;
+  const since = Date.now() - 86400e3;
+  for (const it of (s.recent || []).filter((x) => x.at > since).slice(0, 150)) {
+    if (hist.has(it.token.toLowerCase())) continue;
+    try { remember(it.token.toLowerCase(), buyerSet(await transfersOf(it.token, null, it.at)).map(wid), it.at); } catch { /* skip */ }
+    await new Promise((x) => setTimeout(x, 2500));                    // gentle on the RPC: about 6 minutes for a full day
+  }
+  if (walletsDirty) { walletsDirty = false; await saveWallets(); }
+  console.log(`[sentry] wallet history: ${hist.size} coins, ${wcount.size} wallets`);
+}
+const saveWallets = () => store.writeJson(WALLETS, { coins: Object.fromEntries([...hist].map(([k, v]) => [k, { t: v.t, w: [...v.w] }])) });
 const mins = (ms) => (ms < 90e3 ? `${Math.max(1, Math.round(ms / 1000))} s` : `${Math.round(ms / 60e3)} min`);
 
 export function formatPost(r) {
@@ -92,6 +197,8 @@ export function formatPost(r) {
   const lines = [`<b>${head}</b> · <b>${sym}</b>${name}`];
   if (r.source) lines.push(`New ${esc(r.source)} pool`);
   if (r.ageMs > 0) lines.push(`Checked ${mins(r.ageMs)} after launch`);
+  if (r.buyers) lines.push(`${r.buyers.organic} independent buyers (wallets that buy every new coin not counted)`);
+  if (r.alsoTicker) lines.push(`Another coin used this ticker earlier today (${short(r.alsoTicker.token)}): check the address`);
   if (r.v === "failed" || r.v === "caution") lines.push(`${esc(r.why.label)}: ${esc(String(r.why.detail).slice(0, 140))}`);
   const bits = [];
   if (ck.sim) bits.push(`Sim ${ck.sim.status === "pass" ? "ok" : ck.sim.status === "fail" ? "failed" : "skipped"}`);
@@ -120,7 +227,7 @@ export function formatRecap(d, dayLabel) {
 
 ${d.seen} Pons launches${d.pools ? ` and ${d.pools} new Uniswap pools` : ""} seen. ${checked} had buyers and went through Troya Gate:
 ${d.passed} passed · ${d.caution} caution · ${d.failed} failed
-${d.posted} passed with real buying (at least ${MIN_POST} ETH on the curve) and were posted to the channel.
+${d.posted} passed with real buying (at least ${MIN_POST} ETH from ${MIN_BUYERS}+ independent wallets, no copies) and were posted to the channel.
 ${d.nobuys} had an empty or dust-only curve (no real buys, or every buyer sold), so there was nothing to test.
 
 The posted ones: t.me/${CHANNEL.replace(/^@/, "")} · every result as JSON: troya.codes/api/sentry/recent
@@ -226,7 +333,7 @@ async function scan(s) {
       const token = "0x" + l.topics[1].slice(26);
       if (s.seen[token]) continue;
       s.seen[token] = Date.now();
-      s.queue.push({ token, due: Date.now() + FIRST_CHECK_S * 1000, tries: 0, seenAt: Date.now() });
+      s.queue.push({ token, due: Date.now() + FIRST_CHECK_S * 1000, tries: 0, seenAt: Date.now(), block: Number(l.blockNumber) });
       bump(s, "seen");
     }
     if (POOLS) await scanPools(s, from, to);
@@ -259,21 +366,40 @@ async function scanPools(s, from, to) {
     const q0 = QUOTES.has(c0), q1 = QUOTES.has(c1);
     if (q0 === q1) continue;
     addV4Key(l.topics[1], { c0: getAddress(c0), c1: getAddress(c1), fee: Number(fee), ts: Number(ts), hooks: getAddress(hooks), liq: 1 });
-    notePool(s, q0 ? c1 : c0, { source: "Uniswap v4", pool: l.topics[1] });
+    notePool(s, q0 ? c1 : c0, { source: "Uniswap v4", pool: l.topics[1], block: Number(l.blockNumber) });
   }
   for (const l of v3 || []) {
     const t0 = "0x" + l.topics[1].slice(26), t1 = "0x" + l.topics[2].slice(26);
     const q0 = QUOTES.has(t0), q1 = QUOTES.has(t1);
     if (q0 === q1) continue;
     const [, pool] = coder.decode(["int24", "address"], l.data);
-    notePool(s, q0 ? t1 : t0, { source: "Uniswap v3", pool });
+    notePool(s, q0 ? t1 : t0, { source: "Uniswap v3", pool, block: Number(l.blockNumber) });
   }
 }
 
 const recentlyPosted = (s, token) => (s.posted?.[token.toLowerCase()] || 0) > Date.now() - 86400e3;
-function markPosted(s, token) {
-  s.posted ||= {}; s.posted[token.toLowerCase()] = Date.now();
-  for (const [k, t] of Object.entries(s.posted)) if (t < Date.now() - 86400e3) delete s.posted[k];
+function markPosted(s, r) {
+  const now = Date.now(), token = r.token, symbol = r.symbol;
+  s.posted ||= {}; s.posted[token.toLowerCase()] = now;
+  for (const [k, t] of Object.entries(s.posted)) if (t < now - 86400e3) delete s.posted[k];
+  s.tickers ||= {};
+  const k = tickerKey(symbol);
+  if (k) s.tickers[k] = { token: token.toLowerCase(), symbol, t: now, organic: r.buyers?.organic ?? null };
+  for (const [x, v] of Object.entries(s.tickers)) if (v.t < now - 86400e3) delete s.tickers[x];
+}
+// another coin already posted under the same ticker (look-alike letters folded) in the last 24 hours. A later coin with
+// more than twice its independent buyers is still posted (the first one was the copy), with a line naming the other.
+export function copyOf(s, r) {
+  const k = tickerKey(r.symbol), e = k ? s.tickers?.[k] : null;
+  if (!e || e.token === r.token.toLowerCase() || e.t <= Date.now() - 86400e3) return null;
+  if (r.buyers && e.organic != null && r.buyers.organic > 2 * e.organic) { r.alsoTicker = e; return null; }
+  return e;
+}
+const postUrl = (j) => (j?.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${j.result.message_id}` : null);
+function record(s, r, posted, reason, j) {
+  recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, posted, ...(r.source ? { source: r.source } : {}), reason, raised: r.pons?.raised ?? null, progressPct: r.pons?.progressPct ?? null, buyers: r.buyers ? r.buyers.organic : null, at: r.at, post: postUrl(j) });
+  recent.length = Math.min(recent.length, 200);
+  s.recent = recent.slice(0, 200);                                   // survives restarts
 }
 
 async function work(s) {
@@ -286,21 +412,23 @@ async function work(s) {
     if (q.kind === "pool") {
       if (r.pons) { s.queue = s.queue.filter((x) => x !== q); continue; }                 // a Pons coin: its launch is covered already
       const ck = Object.fromEntries(r.checks.map((c) => [c.key, c]));
-      const ready = ck.route?.status === "pass" && ck.depth?.status === "pass" && worthPosting(r) && !recentlyPosted(s, r.token);
-      if (!ready || r.v === "nobuys") {
+      const deep = r.v === "passed" && ck.route?.status === "pass" && ck.depth?.status === "pass" && !recentlyPosted(s, r.token);
+      if (!deep) {
         if (q.tries < POOL_RETRY_S.length) { q.due = now + POOL_RETRY_S[q.tries] * 1000; q.tries++; continue; }
         s.queue = s.queue.filter((x) => x !== q); continue;                               // never reached real depth: dropped quietly
       }
-      s.queue = s.queue.filter((x) => x !== q);
       r.source = q.source;
+      await measureBuyers(r, q);
+      const copy = copyOf(s, r), why = holdReason(r, { copy });
+      if (why && !permanent(r, copy) && q.tries < POOL_RETRY_S.length) { q.due = now + POOL_RETRY_S[q.tries] * 1000; q.tries++; continue; }
+      s.queue = s.queue.filter((x) => x !== q);
+      if (why) { bump(s, r.v); record(s, r, false, why, null); continue; }                 // deep enough, but bots, a copy or too few buyers
       if (POOLS === "dry") { await store.append("sentry-pools-preview.jsonl", { t: Date.now(), token: r.token, pool: q.pool, text: formatPost(r) }); continue; }
       const jp = await send(CHANNEL, formatPost(r), poolButtons(r.token), null).catch((e) => ({ ok: false, description: e.message }));
       if (!jp.ok) console.warn("[sentry] pool post failed:", jp.description);
       if (MODE !== "dry") holderDms(r, null).catch((e) => console.warn("[sentry] holder DMs:", e.message));
-      bump(s, r.v); bump(s, "posted"); markPosted(s, r.token);
-      recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, posted: true, source: r.source, reason: r.why ? `${r.why.label}: ${r.why.detail}` : null, raised: null, progressPct: null, at: r.at, post: jp.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${jp.result.message_id}` : null });
-      recent.length = Math.min(recent.length, 200);
-      s.recent = recent.slice(0, 200);
+      bump(s, r.v); bump(s, "posted"); markPosted(s, r);
+      record(s, r, true, null, jp);
       continue;
     }
     if (r.snipe && q.tries < 3) { q.due = now + 60000; q.tries++; continue; }
@@ -311,8 +439,11 @@ async function work(s) {
     r.ageMs = r.at - (q.seenAt || s.seen[q.token] || r.at);
     // Phase 7: Sentry Autopilot sees every passing check (it keeps its own rules and never buys the same coin twice)
     if (MODE !== "dry" && r.v === "passed") import("./autopilot.mjs").then((a) => a.onLaunch(r)).catch((e) => console.warn("[sentry] autopilot:", e.message));
-    const post = worthPosting(r) && !recentlyPosted(s, r.token);
-    if (!post && r.v === "passed" && (q.lt || 0) < TRACTION_S.length) { q.due = now + TRACTION_S[q.lt || 0] * 1000; q.lt = (q.lt || 0) + 1; continue; }
+    await measureBuyers(r, q);                                          // every checked coin feeds the wallet history
+    const copy = r.v === "passed" ? copyOf(s, r) : null;
+    const why = r.v === "passed" && recentlyPosted(s, r.token) ? "Posted already in the last 24 hours" : holdReason(r, { copy });
+    const post = !why;
+    if (!post && r.v === "passed" && !permanent(r, copy) && (q.lt || 0) < TRACTION_S.length) { q.due = now + TRACTION_S[q.lt || 0] * 1000; q.lt = (q.lt || 0) + 1; continue; }
     s.queue = s.queue.filter((x) => x !== q);
     let j = { ok: false };
     if (post) {
@@ -320,12 +451,10 @@ async function work(s) {
       j = await send(CHANNEL, formatPost(r), buttons(r.token), logo).catch((e) => ({ ok: false, description: e.message }));
       if (!j.ok) console.warn("[sentry] post failed:", j.description);
       if (MODE !== "dry") holderDms(r, logo && fileIds.has(logo.cid) ? { cid: logo.cid, fileId: fileIds.get(logo.cid) } : null).catch((e) => console.warn("[sentry] holder DMs:", e.message));
-      bump(s, "posted"); markPosted(s, r.token);
+      bump(s, "posted"); markPosted(s, r);
     }
     bump(s, r.v);
-    recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, posted: post, reason: r.why ? `${r.why.label}: ${r.why.detail}` : !post && r.v === "passed" ? `Passed, but under ${MIN_POST} ETH raised within an hour: not posted` : null, raised: r.pons?.raised ?? null, progressPct: r.pons?.progressPct ?? null, at: r.at, post: j.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${j.result.message_id}` : null });
-    recent.length = Math.min(recent.length, 200);
-    s.recent = recent.slice(0, 200);                                   // survives restarts
+    record(s, r, post, why, j);
   }
 }
 
@@ -361,6 +490,8 @@ async function tick() {
     s.events ||= [];
     await scan(s).catch((e) => console.warn("[sentry] scan:", e.message));
     await work(s);
+    pruneWallets();
+    if (walletsDirty && Date.now() - lastWalletSave > 60000) { walletsDirty = false; lastWalletSave = Date.now(); await saveWallets().catch((e) => console.warn("[sentry] wallets:", e.message)); }
     await recap(s).catch((e) => console.warn("[sentry] recap:", e.message));
     await store.writeJson(STATE, s);
   } finally { busy = false; }
@@ -369,9 +500,13 @@ async function tick() {
 export async function register(r, ctx) {
   store = ctx.store;
   recent.push(...((await store.readJson(STATE, {})).recent || []));
+  const wf = await store.readJson(WALLETS, { coins: {} });
+  for (const [k, v] of Object.entries(wf.coins || {})) if (v.t > Date.now() - 86400e3) remember(k, v.w, v.t);
+  walletsDirty = false;
   r.get("/api/sentry/recent", ({ query }) => ({ items: recent.slice(0, Math.min(100, Number(query.limit) || 30)), channel: `https://t.me/${CHANNEL.replace(/^@/, "")}`, live: !!MODE }));
   if (!MODE || (MODE !== "dry" && !TG)) return;
   console.log(`[sentry] watching Pons launches → ${MODE === "dry" ? "data/sentry-preview.jsonl (dry)" : CHANNEL}`);
+  setTimeout(() => store.readJson(STATE, {}).then(warmUp).catch((e) => console.warn("[sentry] warm-up:", e.message)), 3000).unref();
   setTimeout(() => tick().catch(() => {}), 5000).unref();
   setInterval(() => tick().catch(() => {}), 15000).unref();
 }

@@ -331,13 +331,13 @@ async function sentryText() {
   const se = await import("./sentry.mjs");
   const list = se.recentResults(200).filter((r) => r.posted !== false).slice(0, 6);
   const markup = { inline_keyboard: [[{ text: "Open Troya Sentry", url: "https://t.me/troyasentry" }]] };
-  if (!list.length) return { text: "Troya Sentry checks every new Pons launch through the Gate and posts the clean passes with at least 0.5 ETH of real buying to t.me/troyasentry.", markup };
+  if (!list.length) return { text: "Troya Sentry checks every new Pons launch through the Gate and posts the clean passes with at least 0.5 ETH of real buying from 25 or more independent wallets (no bots, farms or copies) to t.me/troyasentry.", markup };
   const rows = list.map((r) => {
     const sym = r.symbol ? `$${esc(r.symbol)}` : "unnamed";
     const head = `<b>${VERDICT[r.verdict] || esc(r.verdict)}</b> · ${r.post ? `<a href="${esc(r.post)}">${sym}</a>` : sym} · ${ago(r.at)}`;
     return r.reason && r.verdict !== "passed" ? `${head}\n${esc(String(r.reason).slice(0, 90))}` : head;
   });
-  return { text: `<b>Troya Sentry · latest posts</b>\n\n${rows.join("\n")}\n\nEvery Pons launch is checked about 90 seconds in, then at 5, 15 and 60 minutes while quiet; the channel gets clean passes with at least 0.5 ETH of real buying. Every result: troya.codes/api/sentry/recent. Automated checks, not endorsements.`, markup };
+  return { text: `<b>Troya Sentry · latest posts</b>\n\n${rows.join("\n")}\n\nEvery Pons launch is checked about 90 seconds in, then at 5, 15 and 60 minutes while quiet; the channel gets clean passes with at least 0.5 ETH of real buying from 25 or more independent wallets, no bots, farms or copies. Every result: troya.codes/api/sentry/recent. Automated checks, not endorsements.`, markup };
 }
 async function badgeText(arg) {
   const a = (/0x[0-9a-fA-F]{40}/.exec(String(arg || "")) || [])[0];

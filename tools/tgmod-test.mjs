@@ -171,5 +171,21 @@ reset();
 r = await mod.screen(msg(93, "is the whales chat real?", { from: { id: 93, first_name: "Born" } }), tg, me);
 ok(!r && !did("deleteMessage").length, "a holder asking whether the whales chat is real is left alone");
 
+// 16 Nov evening: a member renamed to "Troya Agent" (our logo as avatar), "send a dlrect prlvate mesage ... regarding your h0ldings"
+const BAIT = "Urgent ann0uncement for all H0LDERS! \nPlease send a dlrect prlvate mesage for lmportant lnformation regarding your h0ldings.";
+ok(mod.score(BAIT) >= 3, `the disguised "private message about your holdings" bait scores 3+ [${mod.score(BAIT)}]`);
+ok(mod.score("don't send a private message to anyone claiming to be the team") < 3 && mod.score("urgent announcement?") < 3, "a holder warning others, or half the bait, is not removed on sight");
+const POSE = ["Troya Agent", "TROYA AGENT", "Tr0ya Ag3nt", "Troya | Agent", "Troya Support", "Тroya Agent", "Troya", "troya official", "$TROYA AGENT"];
+const NOT = ["Troya Fan", "Mike | $TROYA", "Born", "Troyan", "Calvin", "The Remnant", "Dev Patel", "Troy Agentson"];
+const poseMiss = POSE.filter((n) => !mod.posesAsProject({ id: 1, first_name: n })), notHit = NOT.filter((n) => mod.posesAsProject({ id: 1, first_name: n }));
+ok(!poseMiss.length && !notHit.length, `names posing as the project are caught (${POSE.length}), others are not (${NOT.length})`, [...poseMiss, ...notHit].join(" | "));
+ok(mod.posesAsProject({ id: 1, first_name: "x", username: "TroyaAgent_support" }) && !mod.posesAsProject({ id: 9, is_bot: true, first_name: "Troya Agent", username: "TrojanTroya_bot" }), "a look-alike username is caught; our own bot is never");
+reset();
+r = await mod.screen(msg(95, "gm everyone", { from: { id: 95, first_name: "Troya Agent", username: "dev_00000001" } }), tg, me);
+ok(r && did("deleteMessage").length === 1 && did("banChatMember", (c) => c.user_id === 95).length === 1, "a member named Troya Agent is removed and banned, whatever they post");
+reset();
+r = await mod.screen(msg(ADMIN, "gm, update coming", { from: { id: ADMIN, first_name: "Troya Agent" } }), tg, me);
+ok(!r && !did("banChatMember").length, "an admin named Troya Agent is never touched");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -31,7 +31,7 @@ const IMPOSTOR = new RegExp([
   String.raw`@(?!trojantroya_bot\b)[A-Za-z0-9_]*(?:d[e3]x[a-z0-9_]{0,8}n[e3]r|tr[o0]ya|claim|airdrop|migrat|rectif|validat|walletconnect)[A-Za-z0-9_]*bot\b`,
 ].join("|"), "iu");
 // "private holders group / whales chat" and "hit me up, I'll get you added": each half alone is a question, together the scam
-const DM_ASK = /\bhit\s+me\s+up\b|\bsend\s+me\s+a\s+(?:message|msg|pm|text)\b|\b(?:message|msg|pm|text)\s+me\b|\bget\s+(?:you\s+)?added\b|\bi.?ll\s+(?:get\s+you\s+)?add(?:ed)?\s+you\b/i;
+const DM_ASK = /\b(?:send|drop|shoot)\s+(?:me\s+|us\s+)?(?:a\s+)?(?:d[il1]rect\s+|pr[il1]vate\s+){1,2}(?:mess?age|msg|dm|pm)\b|\bhit\s+me\s+up\b|\bsend\s+me\s+a\s+(?:message|msg|pm|text)\b|\b(?:message|msg|pm|text)\s+me\b|\bget\s+(?:you\s+)?added\b|\bi.?ll\s+(?:get\s+you\s+)?add(?:ed)?\s+you\b/i;
 const PRIVATE_CHAT = /\b(?:private|exclusive|secret|inner|vip)\s+(?:holders?|whales?|alpha|investors?|community)\s+(?:group|chat|channel|circle)\b|\bwhales?\s+(?:chat|group|channel|circle)\b|\bholders?\s+only\s+(?:group|chat)\b/i;
 // "I am co-founder of X, I have a partnership offer, who is the best person to discuss this with?"
 const PARTNERSHIP = /\b(?:partnership|collaboration|collab)\s+(?:offer|proposal|opportunit\w*|deal)\b|\bbest\s+person\s+to\s+(?:discuss|talk|speak|contact|reach)\b|\b(?:discuss|talk\s+about)\s+(?:a\s+|this\s+|the\s+|potential\s+)?(?:partnership|collaboration|collab)\b/i;
@@ -42,9 +42,23 @@ const FOLD_FROM = [..."аеорсухіјѕԁһԛԝкмнтвαβεζηικμν�
 const FOLD = new Map(FOLD_FROM.map((c, i) => [c, FOLD_TO[i]]));
 export const fold = (x) => String(x || "").normalize("NFKC")
   .replace(/[Ͱ-ϿЀ-ԯ]/g, (c) => FOLD.get(c) ?? (FOLD.has(c.toLowerCase()) ? FOLD.get(c.toLowerCase()).toUpperCase() : c))
-  .replace(/(?<=[a-z])I(?=[a-z])/g, "l");
+  .replace(/(?<=[a-z])I(?=[a-z])/g, "l")
+  .replace(/(?<=[A-Za-z])0(?=[A-Za-z])/g, "o");
 const nameOf = (u) => fold([u?.first_name, u?.last_name].filter(Boolean).join(" "));
 const fakeName = (u) => IMPOSTOR_NAME.test(nameOf(u));
+// "urgent announcement for all holders, important information regarding your holdings": the bait half of a DM scam
+const HOLDINGS_BAIT = /\b[il1]mportant\s+[il1]nformat[il1]on\s+(?:regarding|about|on|for)\s+(?:your|ur)\b|\burgent\s+ann[o0]uncement\b|\bregarding\s+(?:your|ur)\s+(?:h[o0][il1]dings|wallets?|tokens|funds|bags)\b/i;
+// a member named as the project or its bot ("Troya Agent", "Tr0ya Ag3nt", "Troya | Agent", "Troya Support"): Troya never posts
+// as a member, so any message from one is removed and the account banned. Checked on every message, since scammers join under
+// another name and rename later.
+const squeeze = (x) => fold(x).toLowerCase().replace(/0/g, "o").replace(/1/g, "i").replace(/3/g, "e").replace(/[4@]/g, "a").replace(/[5$]/g, "s").replace(/7/g, "t").replace(/[^a-z]/g, "");
+export function posesAsProject(u) {
+  if (!u || u.is_bot) return false;
+  const n = squeeze([u.first_name, u.last_name].filter(Boolean).join(" ")), h = squeeze(u.username);
+  return /troyaagent|trojantroya|troyasentry/.test(n)
+    || /^troya(?:team|support|official|admin|dev|mod|bot|news|updates?|announcements?|help|helpdesk|care|ai)?$/.test(n)
+    || /troyaagent|trojantroya|troyasentry|troya(?:support|admin|official|team|help|dev|mod)/.test(h);
+}
 // selling listings, trending spots, boosts or votes: "listed on @x", "boost your token with @x", "I can add the rocket to 300", trending-bot posts
 const SERVICES = /\b(?:list(?:ed|ing)?|trend(?:ing)?|votes?|boost(?:s|ed|ing)?)\b[^\n@]{0,40}\b(?:on|at|with|via|by|in|from)\s+@(?!(?:trojantroya_bot|troyaagent|troyasentry|admin|admins)\b)[A-Za-z0-9_]{4,32}|\bI\s+can\s+(?:add|get|give|push|bring|increase)\b[^\n]{0,60}\b(?:votes?|rockets?|flames?|holders|volume|trending|views|members)\b|\b(?:add|increase)\s+(?:up\s+)?the\s+(?:rockets?|flames?|votes?)|🔥\s*TRENDING\s*🔥/i;
 const RULES = [
@@ -72,6 +86,7 @@ const RULES = [
   [2, DM_ASK],
   [2, PRIVATE_CHAT],
   [3, PARTNERSHIP],
+  [2, HOLDINGS_BAIT],
 ];
 
 // how promotional a text reads: rule weights plus other people's @handles and other coins' tickers when they come with it
@@ -172,7 +187,7 @@ async function offence(tg, chat, msgId, user, { severe = false, why = "" } = {})
   await brief(tg, chat, `${who(user)}, this is a warning: promotions, calls and ads for other coins are not allowed here. Next time is a ban. Group rules: /rules`, 60000);
   return false;
 }
-const severeOf = (m, v) => v >= 6 || SCAM.test(fold(body(m))) || IMPOSTOR.test(fold(body(m))) || (fakeName(m.from) && v >= 2) || (foreignForward(m) && score(body(m)) >= 3);
+const severeOf = (m, v) => v >= 6 || SCAM.test(fold(body(m))) || IMPOSTOR.test(fold(body(m))) || (fakeName(m.from) && v >= 2) || posesAsProject(m.from) || (foreignForward(m) && score(body(m)) >= 3);
 
 export async function screen(m, tg, me) {
   const chat = m.chat?.id;
@@ -180,6 +195,12 @@ export async function screen(m, tg, me) {
   if (m.sender_chat && (String(m.sender_chat.id) === String(chat) || OWN_CHATS.has(String(m.sender_chat.id)))) return false;   // anonymous admin / our channel
   const adm = await admins(tg, chat);
   const isAdm = adm.has(m.from.id);
+  if (!isAdm && posesAsProject(m.from)) {
+    await del(tg, chat, m.message_id);
+    console.log(`[mod] removed ${m.message_id} from ${m.from.id} (name poses as Troya)`);
+    await ban(tg, chat, m.from, "name poses as Troya");
+    return true;
+  }
   const mine = (at) => !at || at.toLowerCase() === String(me?.username || "").toLowerCase();
 
   // /report (also /spam, and /ban from members): reply to the message you want checked. An admin's /ban bans at once.
@@ -194,7 +215,7 @@ export async function screen(m, tg, me) {
     const set = reports.get(rk) || new Set(); set.add(m.from.id); reports.set(rk, set);
     if (reports.size > 500) reports.delete(reports.keys().next().value);
     const v = verdict(t), flagged = (caught.get(`${chat}:${t.from.id}`) || 0) > Date.now();
-    if (isAdm || v >= 2 || flagged || set.size >= 2) {
+    if (isAdm || v >= 2 || flagged || set.size >= 2 || posesAsProject(t.from)) {
       const banned = await offence(tg, chat, t.message_id, t.from, { severe: severeOf(t, v), why: `report by ${m.from.id}` });
       if (!banned) await brief(tg, chat, `Removed. Thanks for the report, ${who(m.from)}.`);
     } else {

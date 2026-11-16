@@ -25,20 +25,47 @@
 <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/css/base.css">
 <link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/agent/desk/desk.css">
 <script type="importmap">{"imports":{"ethers":"/vendor/ethers.min.js","three":"/vendor/three/three.module.min.js","lightweight-charts":"/vendor/lightweight-charts.mjs"}}</script>
 <script src="/config.js"></script>
 </head>
-<body class="app">
+<body class="app desk">
 <a class="skip" href="#view">Skip to content</a>
-<header class="a-top">
-  <a class="a-brand" href="/" aria-label="Troya Agent home"><i class="mark"></i>Troya Agent</a>
-  <nav class="a-nav" aria-label="App" data-nav></nav>
-  <div class="a-right" data-right></div>
-</header>
-<main class="a-main" id="view" tabindex="-1"></main>
-<footer class="a-foot" data-foot></footer>
-<button class="ask-fab" type="button" data-ask><i class="mark"></i>Ask <kbd>⌘K</kbd></button>
+
+<aside class="d-side" data-side aria-label="Sidebar">
+  <a class="d-brand" href="/" aria-label="Troya Agent home">
+    <img src="/img/logo-3d-128.png" alt="" width="128" height="128">
+    <span><b>Troya</b><i>Agent</i></span>
+  </a>
+  <button class="d-ask-side" type="button" data-ask><span class="d-ask-ico"></span>Ask Troya<kbd>⌘K</kbd></button>
+  <nav class="d-nav" data-nav aria-label="App"></nav>
+  <div class="d-side-foot" data-side-foot></div>
+</aside>
+<div class="d-scrim" data-scrim hidden></div>
+
+<div class="d-shell">
+  <header class="d-top">
+    <button class="icon-btn d-burger" type="button" aria-label="Menu" data-burger></button>
+    <div class="d-crumb" data-crumb><b>Desk</b></div>
+    <button class="d-search" type="button" data-ask><span class="d-search-ico"></span><span class="d-search-t">Ask Troya, paste a coin, or jump to a page</span><kbd>⌘K</kbd></button>
+    <div class="d-right" data-right></div>
+  </header>
+  <main class="a-main d-main" id="view" tabindex="-1"></main>
+  <footer class="a-foot d-foot" data-foot></footer>
+</div>
+
+<aside class="d-drawer" data-drawer aria-label="Troya agent" hidden>
+  <div class="d-drawer-h">
+    <span class="d-drawer-t"><img src="/img/logo-3d-128.png" alt="" width="128" height="128">Troya agent<small>You ask · Troya checks · you sign</small></span>
+    <a class="icon-btn" href="#/agent" title="Open full chat" aria-label="Open full chat" data-drawer-full></a>
+    <button class="icon-btn" type="button" aria-label="Close" data-drawer-close></button>
+  </div>
+  <div class="d-drawer-b" data-drawer-body></div>
+</aside>
+
+<nav class="d-tabbar" data-tabbar aria-label="Quick tabs"></nav>
+<button class="ask-fab d-fab" type="button" data-ask-fab><i class="mark"></i>Ask <kbd>⌘K</kbd></button>
 <div class="toasts" aria-live="polite" data-toasts></div>
-<script type="module" src="/agent/js/main.js"></script>
+<script type="module" src="/agent/desk/desk.js"></script>
 </body>
 </html>

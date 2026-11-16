@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-t="A" data-s="instrument">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -23,170 +23,178 @@
 <link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
 <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/css/base.css">
-<link rel="stylesheet" href="/css/site.css">
+<link rel="preload" href="/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<link rel="stylesheet" href="/home/home.css">
 <script src="/config.js"></script>
 </head>
-<body class="site">
-<a class="skip" href="#main">Skip to content</a>
+<body>
 
-<header class="s-head">
-  <a class="brand" href="/" aria-label="Troya Agent home"><i class="mark"></i>Troya Agent</a>
-  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="s-menu" data-menu>Menu</button>
+<header class="nav" data-nav>
+  <a class="logo" href="/" aria-label="Troya Agent home"><span>Troya</span><b>Agent</b><small>MMXXVI</small></a>
+  <div class="nav-r">
+    <button class="ca" type="button" data-ca title="Copy contract address"><b>CA</b><span data-ca-short>0x1FA8…a074</span></button>
+    <a class="pill" href="/agent">Open app</a>
+    <button class="burger" type="button" aria-label="Menu" aria-expanded="false" data-burger><i></i><i></i></button>
+  </div>
 </header>
-<nav class="s-menu" id="s-menu" aria-label="Site" data-menu-panel></nav>
 
-<main id="main">
-  <section class="hero" aria-labelledby="hero-h">
-    <canvas class="hero-canvas" data-hero-troy aria-hidden="true"></canvas>
-    <div class="hero-shade"></div>
-    <div class="hero-in">
-      <h1 id="hero-h" class="words" data-words>Your agent, inside the walls</h1>
-      <div class="hero-cta rv">
-        <a class="ulink" href="/agent">Launch app</a>
-        <div class="ca-chip" data-ca><b>CA</b><span class="sep">:</span><span class="addr" data-ca-addr>TBA</span><button type="button" data-ca-copy>COPY</button></div>
+<nav class="menu" aria-label="Menu" data-menu>
+  <ol>
+    <li><a href="/agent"><span>01</span>Open the desk</a></li>
+    <li><a href="#gate"><span>02</span>The Gate</a></li>
+    <li><a href="#telegram"><span>03</span>Telegram</a></li>
+    <li><a href="#sentry"><span>04</span>Sentry</a></li>
+    <li><a href="#autopilot"><span>05</span>Autopilot</a></li>
+    <li><a href="#desk"><span>06</span>The desk</a></li>
+    <li><a href="#proof"><span>07</span>Receipts</a></li>
+    <li><a href="/agent#/docs"><span>08</span>Docs</a></li>
+  </ol>
+  <div class="menu-foot"><a href="https://t.me/troyaagent" target="_blank" rel="noopener">Telegram</a><a href="https://t.me/troyasentry" target="_blank" rel="noopener">Sentry</a><a href="https://x.com/Troyaagent" target="_blank" rel="noopener">X</a><a href="https://github.com/troyaagent/troya-agent" target="_blank" rel="noopener">GitHub</a></div>
+</nav>
+
+<aside class="count" aria-hidden="true" data-count><span data-count-n>I</span><i></i><span>V</span></aside>
+
+<main>
+  <!-- HERO -->
+  <section class="hero" aria-labelledby="h1">
+    <canvas class="rain" data-rain aria-hidden="true"></canvas>
+    <p class="q q1">the gift is not<br>the danger</p>
+    <p class="q q2">beware of Greeks<br>bearing gifts</p>
+    <p class="q q3">every coin,<br>opened at the gate</p>
+    <p class="q q4">nothing moves<br>until you sign</p>
+    <p class="q q5">the night watch<br>never sleeps</p>
+    <p class="q q6">you keep<br>the keys</p>
+    <h1 id="h1" class="mega" data-blur>
+      <span class="l1">Your agent,</span>
+      <span class="l2"><span>Inside the</span><span class="gap"></span><span>walls</span></span>
+      <em class="script">Troya</em>
+    </h1>
+    <figure class="horse3d" data-horse aria-hidden="true"><img src="/img/logo-3d-hd.png" alt="" width="1024" height="1024"><canvas data-horse3d></canvas></figure>
+    <a class="down" href="#inside" aria-label="Scroll"><i></i></a>
+  </section>
+
+  <!-- INSIDE THE WALLS · everything in one section -->
+  <section class="iw" id="inside" aria-labelledby="iw-h">
+    <div class="iw-head">
+      <div class="iw-copy">
+        <p class="tag">Inside the walls</p>
+        <h2 id="iw-h" class="big rv-blur">The story is old. <em>A gift at the gate,</em> and something inside it.</h2>
+        <p class="lead">On Robinhood Chain, every new coin is a gift at the gate. Troya opens it before you do, and an agent you control works from the inside. Talk to it like a trader sitting next to you: it pulls the Robinhood Chain tape, Pons curves, Uniswap pools and Hyperliquid perps into one desk, then hands you a ticket that is ready to sign.</p>
+        <p class="iw-chain">Robinhood Chain · chain 4663 · gas in ETH<br>Swap · Perps · Bridge · Launch · MCP</p>
+        <div class="iw-acts"><button class="watch" type="button" data-play><span class="tri"></span>Watch the film · 30 sec</button><a class="ulink" href="/agent">Open the app</a></div>
+      </div>
+      <button class="iw-film rv" type="button" data-play aria-label="Play the film">
+        <img src="/home/art/p5-final.webp" alt="The Troya chrome horse rearing on a marble pedestal among clouds and broken columns, warriors kneeling below" width="2800" height="1563" loading="lazy">
+        <span class="play"><i></i></span>
+      </button>
+    </div>
+
+    <div class="facts">
+      <div class="fact rv"><b data-num="7">7</b><span>Gate checks before every order</span></div>
+      <div class="fact rv"><b data-num="18">18</b><span>Tools in the Troya MCP server</span></div>
+      <div class="fact rv"><b data-num="26884853">26,884,853</b><span>$TROYA burned by the dev wallet</span></div>
+      <div class="fact rv"><b>#4293939</b><span>LP position sent to the dead address</span></div>
+    </div>
+
+    <div class="iw-split" data-iw>
+      <ol class="iw-list">
+        <li class="iw-item on" id="gate" data-i="0">
+          <picture class="iw-art-m"><source media="(max-width: 699px)" srcset="/home/art/p5-gate-sm.webp"><img src="/home/art/p5-gate.webp" alt="A marble gatekeeper studying a gold coin through a lens before a bronze gate" width="2800" height="1563" loading="lazy"></picture>
+          <p class="tag">I <i></i> Troya Gate</p>
+          <h3 class="iw-t">Every coin, <em>opened</em> at the gate</h3>
+          <p class="lead">Before a swap is shown, and again before the Agent Wallet signs, Troya Gate reads seven things: route, price impact, depth, fees and taxes, a simulation, a test sell and transfer tax. Fail one, no order. It runs again when you press Confirm, and whatever happens next is written to your journal.</p>
+          <a class="ulink" href="/agent#/gate">Gate a coin</a>
+        </li>
+        <li class="iw-item" id="telegram" data-i="1">
+          <picture class="iw-art-m"><source media="(max-width: 699px)" srcset="/home/art/p5-telegram-sm.webp"><img src="/home/art/p5-telegram.webp" alt="Marble figures on sea rocks under the moon, one raising a glowing phone" width="2800" height="1563" loading="lazy"></picture>
+          <p class="tag">II <i></i> Telegram</p>
+          <h3 class="iw-t">A trading desk <em>in every chat</em></h3>
+          <p class="lead">Paste a coin in a private chat with @TrojanTroya_bot, or tap Trade in Telegram on a Sentry post. /long, /short, /close or plain words like "long ETH $20 at 3x". The Gate runs first, Buy only appears when it passes, and nothing goes through until you tap Confirm. It trades from your Agent Wallet, inside your caps.</p>
+          <a class="ulink" href="https://t.me/TrojanTroya_bot" target="_blank" rel="noopener">Open @TrojanTroya_bot</a>
+        </li>
+        <li class="iw-item" id="sentry" data-i="2">
+          <picture class="iw-art-m"><source media="(max-width: 699px)" srcset="/home/art/p5-storm-sm.webp"><img src="/home/art/p5-storm.webp" alt="The chrome horse rearing on the walls of Troy in a night storm, a watchman with a lantern" width="2800" height="1192" loading="lazy"></picture>
+          <p class="tag">III <i></i> Troya Sentry</p>
+          <h3 class="iw-t">The night watch <em>never sleeps</em></h3>
+          <p class="lead">Every new Pons launch goes through the Gate about 90 seconds in, and again at 5, 15 and 60 minutes. Only clean passes with real buying reach the channel: at least 0.5 ETH on the curve and 25 or more independent buyers. Farm wallets and copies are left out. Checks, never an endorsement.</p>
+          <a class="ulink" href="https://t.me/troyasentry" target="_blank" rel="noopener">Follow t.me/troyasentry</a>
+        </li>
+        <li class="iw-item" id="autopilot" data-i="3">
+          <picture class="iw-art-m"><source media="(max-width: 699px)" srcset="/home/art/p5-beach-sm.webp"><img src="/home/art/p5-beach.webp" alt="The chrome horse on a misty beach at dawn, pulled on ropes by a line of soldiers" width="2800" height="1563" loading="lazy"></picture>
+          <p class="tag">IV <i></i> Sentry Autopilot</p>
+          <h3 class="iw-t">Your rules, <em>around the clock</em></h3>
+          <p class="lead">Give the agent your rules, like "launches that pass the Gate above 1 ETH raised, 0.01 ETH each, take profit at 2x, stop at -30%". Start in practice with play money at real prices, go live from your Agent Wallet when you are ready. The best results show on a leaderboard you can copy from.</p>
+          <a class="ulink" href="/agent#/agent/sentry">Try it in practice</a>
+        </li>
+      </ol>
+      <div class="iw-stage" aria-hidden="true">
+        <div class="iw-frame">
+          <img class="on" src="/home/art/p5-gate.webp" alt="" width="2800" height="1563" loading="lazy">
+          <img src="/home/art/p5-telegram.webp" alt="" width="2800" height="1563" loading="lazy">
+          <img src="/home/art/p5-storm.webp" alt="" width="2800" height="1192" loading="lazy">
+          <img src="/home/art/p5-beach.webp" alt="" width="2800" height="1563" loading="lazy">
+        </div>
+        <div class="iw-dots"><button type="button" class="on" data-go="0" tabindex="-1"><b>I</b>Gate</button><button type="button" data-go="1" tabindex="-1"><b>II</b>Telegram</button><button type="button" data-go="2" tabindex="-1"><b>III</b>Sentry</button><button type="button" data-go="3" tabindex="-1"><b>IV</b>Autopilot</button></div>
       </div>
     </div>
-    <div class="hero-foot">
-      <span class="live"><i class="dot"></i>Robinhood Chain · chain 4663 · gas in ETH</span>
-      <span>Swap · Perps · Bridge · Launch · MCP</span>
+
+    <div class="iw-more" id="desk">
+      <div class="iw-more-h">
+        <p class="tag">Also in the desk</p>
+        <h3 class="iw-t">Everything else, <em>one click in</em></h3>
+      </div>
+      <div class="iw-grid">
+        <article class="iw-card rv"><h4>Ask and quote</h4><p>Point at a token, a pool or a perp and ask. Live numbers (price, depth, funding, your balances) plus a contract risk read, in whatever language you typed.</p><a class="ulink" href="/agent#/agent">Ask Troya</a></article>
+        <article class="iw-card rv"><h4>Swaps</h4><p>Coins and tokenized stocks route through Pons curves and Uniswap v3 and v4 pools. Thin, new or misbehaving pools are skipped, and the quote is refreshed once more before your wallet opens.</p><a class="ulink" href="/agent#/swap">Swap</a></article>
+        <article class="iw-card rv"><h4>Perps ticket</h4><p>Any Hyperliquid perp, either side, with leverage, take-profit and stop-loss in the same ticket. Funding takes one transaction: ETH on Robinhood Chain becomes USDC on your own Hyperliquid account.</p><a class="ulink" href="/agent#/perps">Perps</a></article>
+        <article class="iw-card rv"><h4>Agent Wallet</h4><p>A small wallet Troya can act from without a popup every time, never past the daily caps you set. Withdrawals only go back to your own wallet. It is custodial, so fund it like pocket money.</p><a class="ulink" href="/agent#/agent/wallet">Agent Wallet</a></article>
+        <article class="iw-card rv"><h4>Autopilot and playbooks</h4><p>Write a playbook once (a stop-loss guard, a take-profit ladder, a weekly DCA) and the server checks it every 20 seconds, tab open or not. Without the Agent Wallet it leaves you a ticket to approve.</p><a class="ulink" href="/agent#/agent/playbooks">Playbooks</a></article>
+        <article class="iw-card rv"><h4>Daily AI brief</h4><p>Every morning: your positions, PnL, liquidation distance, funding, the nearest stop, the market and the day's Sentry, with a two-line summary. Smart alerts when a stop is close.</p><a class="ulink" href="/agent">See today's brief</a></article>
+        <article class="iw-card rv"><h4>Gate badge</h4><p>Pons devs can show a live Gate result on their own site: paste the contract, copy one line. Checked again at most every 10 minutes, a snapshot and never a "safe" stamp.</p><a class="ulink" href="/badge">Get a badge</a></article>
+        <article class="iw-card rv"><h4>$TROYA holder perks</h4><p>A wallet holding at least 1,000,000 $TROYA (with its Agent Wallet) gets 200 assistant messages a day, 100 active playbooks and every coin Sentry posts by private message.</p><a class="ulink" href="/agent#/agent/wallet">Connect a wallet</a></article>
+        <article class="iw-card rv"><h4>API and MCP</h4><p>Wire Troya into Claude Desktop, Cursor or Claude Code with one command, or call the REST API. The same tools, caps and journal sit behind every door.</p><button class="iw-cmd" type="button" data-copy="npx -y @troyaagent/mcp"><span>$</span>npx -y @troyaagent/mcp<b>Copy</b></button></article>
+      </div>
+      <div class="iw-rules">
+        <p class="iw-rules-h"><b>High walls.</b> <em>Your rules at the gate.</em></p>
+        <div><h4>Real markets</h4><p>Mainnet only: Robinhood Chain and Hyperliquid. Each action passes a check before it runs, an operator kill switch can freeze everything, and MCP execution ships in dry-run.</p></div>
+        <div><h4>Risk first</h4><p>Order size, leverage, a market allowlist and a daily USD ceiling are tested before every action. Pause freezes the Agent Wallet on the spot.</p></div>
+        <div><h4>Full audit trail</h4><p>Every move is logged with the reasoning behind it, and the whole journal is readable inside the app.</p></div>
+      </div>
     </div>
   </section>
 
-  <section class="sec desk" aria-labelledby="desk-h">
-    <canvas class="sec-fx" data-fx="wisps" aria-hidden="true"></canvas>
-    <div class="eyebrow-line"><span>Capabilities</span></div>
-    <div class="split">
-      <div>
-        <h2 id="desk-h" class="h2 words" data-words>Robinhood Chain Desk</h2>
-        <p class="lead rv">Talk to it the way you would talk to a trader sitting next to you. Troya pulls the Robinhood Chain tape, Pons curves, Uniswap pools and Hyperliquid perps into one desk, then hands you a ticket that is ready to sign.</p>
+  <!-- V · WHAT BURNS (paper finale) -->
+  <section class="burn" id="proof" aria-labelledby="c5">
+    <div class="burn-stage">
+      <figure class="burn-art rv"><picture><source media="(max-width: 899px)" srcset="/home/art/p5-burn-sm.webp"><img src="/home/art/p5-burn.webp" alt="Marble Greek warriors with torches and shields emerging from torn paper" width="2800" height="1563" loading="lazy"></picture></figure>
+      <div class="burn-in">
+        <p class="tag"><i></i>V · What burns<i></i></p>
+        <h2 id="c5" class="big rv-blur">What burns, <em>stays burned</em></h2>
+        <p class="credits">26,884,853 $TROYA burned in six transactions<br>Uniswap v4 LP · NFT #4293939 · dead address<br>block 115,074,999 · 15 Nov 2026<br>no presale · no pre-minted team allocation · no owner</p>
+        <div class="links"><a class="ulink" href="https://robinhoodchain.blockscout.com/tx/0xfe7f12591df9b9f53a0366a31cf36d1cf00b8200b6ae05fb8eeb7989afc24ea0" target="_blank" rel="noopener">The LP burn</a><a class="ulink" href="https://robinhoodchain.blockscout.com/token/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" target="_blank" rel="noopener">The token</a><a class="ulink" href="/verify">Verify</a></div>
+        <div class="acts"><a class="oval" href="/agent">Open the app</a><a class="ulink" href="https://t.me/troyaagent" target="_blank" rel="noopener">Join Telegram</a></div>
       </div>
-      <div class="cards">
-        <article class="card rv">
-          <h3>Ask &amp; Quote</h3>
-          <p>Point at a token, a pool or a perp and ask. Troya answers with live numbers (price, depth, funding, your balances) plus a contract risk read, in whatever language you typed.</p>
-          <a class="ulink" href="/market-analysis">Learn more</a>
-        </article>
-        <article class="card rv">
-          <h3>Robinhood Chain Swaps <span class="tag">Live on Robinhood Chain</span></h3>
-          <p>Orders for coins and tokenized stocks route through Pons curves and Uniswap v3 and v4 pools on chain 4663. Pools that are too thin, too new or misbehaving are skipped, and the quote is refreshed once more before your wallet opens.</p>
-        </article>
-        <article class="card rv">
-          <h3>Perps Ticket</h3>
-          <p>Any Hyperliquid perp, either side, with leverage, take-profit and stop-loss set in the same ticket. Funding it takes one transaction: ETH on Robinhood Chain becomes USDC on your own Hyperliquid account, from the Bridge page, the chat or a terminal.</p>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <section class="sec wallet" aria-labelledby="wallet-h">
-    <canvas class="sec-fx" data-fx="vortex" aria-hidden="true"></canvas>
-    <div class="eyebrow-line"><span>Agent Wallet</span></div>
-    <div class="split">
-      <div>
-        <h2 id="wallet-h" class="h2 words" data-words>Agent Wallet</h2>
-        <p class="lead rv">Want it hands-free? Spin up a small Agent Wallet and Troya can act from chat (swaps, perps, funding Hyperliquid, and withdrawals that only go back to your own wallet) without a popup every time, and never past the daily caps you set. It is custodial: the operator keeps its key encrypted, so fund it like pocket money. Your own wallet stays out of reach.</p>
-      </div>
-      <div></div>
-    </div>
-    <div class="cards-2">
-      <article class="card rv">
-        <h3>Autopilot &amp; Playbooks</h3>
-        <p>Write a playbook once (a stop-loss guard, a take-profit ladder, a weekly DCA) and the server checks it every 20 seconds, tab open or not. With the Agent Wallet on it acts inside your caps; otherwise it leaves you a ticket to approve. The in-app Autopilot, which runs your chat tickets for you, is opt-in and only runs while your tab is open.</p>
-      </article>
-      <article class="card rv">
-        <h3>Troya Gate</h3>
-        <p>Nothing moves until the Gate clears it: route, price impact, pool depth, any fee or creator tax, a simulation of the exact transaction and a test sell. Whatever happens next is written to your journal.</p>
-      </article>
-    </div>
-  </section>
-
-  <section class="sec reach" aria-labelledby="reach-h">
-    <div class="eyebrow-line"><span>Beyond the app</span></div>
-    <div class="split">
-      <div>
-        <h2 id="reach-h" class="h2 words" data-words>Where Troya meets you</h2>
-        <p class="lead rv">The desk follows you into Telegram, watches every new Pons launch, and gives coin devs a live Gate result for their own site.</p>
-      </div>
-      <div></div>
-    </div>
-    <div class="cards-2">
-      <article class="card rv">
-        <h3>Trade in Telegram</h3>
-        <p>Paste a coin in a private chat with @TrojanTroya_bot, or tap Trade in Telegram on a Sentry post. The Gate runs first, Buy only appears when it passes, and nothing goes through until you tap Confirm. It trades from your Agent Wallet, inside your caps.</p>
-        <a class="ulink" href="https://t.me/TrojanTroya_bot" target="_blank" rel="noopener">Open the bot</a>
-      </article>
-      <article class="card rv">
-        <h3>Troya Sentry</h3>
-        <p>Every new Pons launch goes through Troya Gate about 90 seconds in, and again at 5, 15 and 60 minutes while it is quiet. Only clean passes with real buying (at least 0.5 ETH on the curve and 25 or more independent buyers; bot and farm wallets that buy every new coin are not counted, and copies are left out) land in the Sentry channel, with the coin's logo; failed and caution results stay in the public record. Automated checks, never an endorsement.</p>
-        <a class="ulink" href="https://t.me/troyasentry" target="_blank" rel="noopener">Follow Sentry</a>
-      </article>
-      <article class="card rv">
-        <h3>Gate badge</h3>
-        <p>Pons devs can show a live Troya Gate result on their own site: paste the contract, copy one line. It is checked again at most every 10 minutes, a snapshot and never a "safe" stamp.</p>
-        <a class="ulink" href="/badge">Get a badge</a>
-      </article>
-      <article class="card rv">
-        <h3>Daily AI brief</h3>
-        <p>Every morning, by private message and in the app: your positions, PnL, liquidation distance, funding, the nearest stop, the market and the day's Sentry, with a two-line AI summary written from those numbers. Smart alerts when a stop is close or funding turns against you.</p>
-        <a class="ulink" href="/agent#/portfolio">See today's brief</a>
-      </article>
-      <article class="card rv">
-        <h3>Sentry Autopilot</h3>
-        <p>Give the agent your rules, like "launches that pass the Gate above 1 ETH raised, 0.01 ETH each, take profit at 2x, stop at -30%", and it runs them around the clock. Start in practice mode with play money at real prices, switch to live when you are ready; the best results show on a leaderboard you can copy from.</p>
-        <a class="ulink" href="/agent#/agent/sentry">Try it in practice</a>
-      </article>
-      <article class="card rv">
-        <h3>$TROYA holder perks</h3>
-        <p>From 16 Nov 2026, 12:00 UTC, a wallet holding at least 1,000,000 $TROYA (with its Agent Wallet) gets 200 assistant messages a day, 100 active playbooks and every coin Sentry posts by private message.</p>
-      </article>
-    </div>
-  </section>
-
-  <section class="sec integr" aria-labelledby="integr-h">
-    <canvas class="sec-fx" data-fx="burst" aria-hidden="true"></canvas>
-    <div class="eyebrow-line"><span>Integrations</span></div>
-    <div class="integr-in">
-      <h2 id="integr-h" class="h2 words" data-words>The agent suggests, the walls decide, you keep the keys</h2>
-      <p class="lead rv">Wire Troya into Claude Desktop, Cursor or Claude Code with one MCP command, or call the REST API from your own code. Whichever door you use, the same tools, caps and journal sit behind it.</p>
-      <div class="cmd rv"><span>$</span><code data-mcp-cmd>npx -y @troyaagent/mcp</code><button type="button" data-copy-cmd>COPY</button></div>
-      <div class="integr-act rv">
-        <a class="ulink" href="/api-and-mcp">Set up the MCP</a>
-        <a class="ulink" href="/agent">Launch app <svg class="arr" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 8 8 2M3.5 2H8v4.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></a>
-      </div>
-    </div>
-  </section>
-
-  <section class="sec princ" aria-labelledby="princ-h">
-    <div class="eyebrow-line"><span>Principles</span></div>
-    <h2 id="princ-h" class="h2 words" data-words>High walls. Your rules at the gate.</h2>
-    <div class="princ-grid">
-      <article class="princ-item rv">
-        <svg class="princ-ico" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="gK" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#bfeefb"/><stop offset="1" stop-color="#3fb7d4"/></linearGradient></defs>
-          <path fill="url(#gK)" d="M19 58h28l-2-6H21zM22 50h22c0-7-3-11-3-17 0-3 1-5 3-7l-2-9-4 3-2-8-3 6c-9 2-15 9-18 17l2 5 5-3 6 1-6 6c-1 2 0 4 0 6z"/>
-          <circle cx="31" cy="21" r="1.6" fill="#03191d"/></svg>
-        <div class="body"><h3>Real Markets</h3><p>Mainnet only: Robinhood Chain and Hyperliquid, with real money. Each action passes a check before it runs, an operator kill switch can freeze everything, and MCP execution ships in dry-run.</p></div>
-      </article>
-      <article class="princ-item rv">
-        <svg class="princ-ico" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="gS" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#c9f4ff"/><stop offset="1" stop-color="#2a7487"/></linearGradient></defs>
-          <path fill="url(#gS)" d="M32 5 54 13v17c0 14-9 24-22 29C19 54 10 44 10 30V13z"/><path fill="#03191d" opacity=".55" d="M32 11v42c10-4 16-12 16-23V17z"/></svg>
-        <div class="body"><h3>Risk First</h3><p>Order size, leverage, a market allowlist and a daily USD ceiling are tested before every action. The Agent Wallet lives inside them, and Pause freezes it on the spot.</p></div>
-      </article>
-      <article class="princ-item rv">
-        <svg class="princ-ico" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="gL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#bfeefb"/><stop offset="1" stop-color="#3fb7d4"/></linearGradient></defs>
-          <path fill="url(#gL)" d="M14 8h30l8 8v40H14z"/><path fill="#03191d" opacity=".6" d="M20 22h24v3H20zm0 8h24v3H20zm0 8h17v3H20zm0 8h20v3H20z"/><path fill="#8ee6ff" d="M44 8v8h8z"/></svg>
-        <div class="body"><h3>Full Audit Trail</h3><p>Every move is logged with the reasoning behind it, and the whole journal is readable inside the app.</p></div>
-      </article>
     </div>
   </section>
 </main>
 
-<footer class="s-foot" data-footer></footer>
+<footer class="foot">
+  <nav class="foot-pages" aria-label="Pages"><a href="/capabilities">Capabilities</a><a href="/plans">Plans</a><a href="/badge">Gate badge</a><a href="/api-and-mcp">API and MCP</a><a href="/market-analysis">Market analysis</a><a href="/insights">Insights</a><a href="/philosophy">Philosophy</a><a href="/risk-controls">Risk controls</a></nav>
+  <div class="foot-l"><a href="https://t.me/troyaagent" target="_blank" rel="noopener">Telegram</a><a href="https://x.com/Troyaagent" target="_blank" rel="noopener">X</a><a href="https://github.com/troyaagent/troya-agent" target="_blank" rel="noopener">GitHub</a><a href="/privacy">Privacy policy</a></div>
+  <button class="ca" type="button" data-ca><b>CA</b><span data-ca-full>0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074</span></button>
+  <div class="foot-r"><a href="/terms">Terms of service</a><a href="/verify">Verify</a><a href="/agent#/docs">Docs</a></div>
+</footer>
 
-<div class="toasts" aria-live="polite" data-toasts></div>
-<script type="module" src="/js/site.js"></script>
-<script type="module" src="/js/hero-troy.js"></script>
-<script type="module" src="/js/fx.js"></script>
+<div class="modal" data-modal hidden>
+  <button class="modal-x" type="button" data-close aria-label="Close">Close</button>
+  <video data-video src="/home/art/film.mp4" playsinline controls preload="none"></video>
+</div>
+
+<div class="toast" role="status" aria-live="polite" data-toast></div>
+<script src="/home/home.js" defer></script>
+<script src="/home/rain.js" defer></script>
+<script src="/home/inside.js" defer></script>
+<script type="module" src="/home/horse.js"></script>
 </body>
 </html>

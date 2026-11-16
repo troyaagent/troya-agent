@@ -60,6 +60,16 @@ function normalize(input) {
     return { type, params: { token: String(p.token).toLowerCase(), symbol: sym, side, total, slices, everyMinutes, maxImpactPct, done: 0, filled: 0, waits: 0, nextAt: Date.now() + 30_000 },
       title: `TWAP ${side === "buy" ? `${total} ETH → ${sym}` : `${total} ${sym} → ETH`} · ${slices} slices every ${everyMinutes} min` };
   }
+  if (type === "rebalance") {
+    // F17: keep a basket in the Agent Wallet near its target weights
+    const tokens = (Array.isArray(p.tokens) ? p.tokens : []).filter((t) => isAddress(String(t.token || ""))).slice(0, 10)
+      .map((t) => ({ token: String(t.token).toLowerCase(), symbol: untrusted(t.symbol || "stock", 12), weight: Math.max(0, num(t.weight) || 1) }));
+    if (tokens.length < 2) throw new HttpError(400, "A rebalance needs at least two stock tokens.");
+    const sum = tokens.reduce((a, t) => a + t.weight, 0);
+    tokens.forEach((t) => { t.weight = +(t.weight / sum).toFixed(4); });
+    const driftPct = Math.min(50, Math.max(2, num(p.driftPct) || 5)), everyHours = Math.min(168, Math.max(1, num(p.everyHours) || 24));
+    return { type, params: { tokens, driftPct, everyHours, nextAt: Date.now() + 60_000, name: untrusted(p.name || "Basket", 30) }, title: `Rebalance ${untrusted(p.name || "basket", 30)} (${tokens.length} stocks) at ${driftPct}% drift` };
+  }
   if (type === "loan_guard") {
     // F17: a Morpho loan against a stock token; fires when its health factor falls under the line (no funds move)
     const id = String(p.marketId || "");
@@ -74,7 +84,7 @@ function normalize(input) {
     const direction = p.direction === "below" ? "below" : "above";
     return { type, params: { target, direction, px, unit: isAddress(target) ? "ETH" : "USD" }, title: `Alert ${isAddress(target) ? untrusted(p.symbol || target.slice(0, 8), 20) : target} ${direction === "below" ? "≤" : "≥"} ${px}` };
   }
-  throw new HttpError(400, "Unknown playbook type. Use stop_loss, take_profit, dca, twap, loan_guard or alert.");
+  throw new HttpError(400, "Unknown playbook type. Use stop_loss, take_profit, dca, twap, rebalance, loan_guard or alert.");
 }
 
 export async function createWatch(address, input) {
@@ -115,6 +125,46 @@ async function fire(w, price, action, note) {
   }
   await logAction({ address: w.address, kind: `watch.${w.type}`, summary: `${w.title} fired at ${price}`, rationale: note, status: outcome, source: "playbook" });
   return outcome;
+}
+
+/* ---------- F17 · rebalance a basket held in the Agent Wallet ---------- */
+// Reads the Agent Wallet's balances and the pool prices; when any stock is more than driftPct away from its target
+// weight, sells the overweight part for ETH first, then buys the underweight ones with that ETH (each swap through
+// the Gate and the caps; without the Agent Wallet on, each leg becomes a ticket).
+async function rebalanceStep(w) {
+  const p = w.params, now = Date.now(), next = { ...p, nextAt: now + p.everyHours * 3600_000 };
+  const aw = await (await import("./agentwallet.mjs")).getAgentWallet(w.address);
+  if (!aw?.address) return { params: { ...next, lastNote: "No Agent Wallet yet: the basket is read from it." } };
+  const { stockDesk } = await import("./stocks.mjs");
+  const { rpc } = await import("./robinhood.mjs");
+  const desk = await stockDesk();
+  const bal = async (t) => BigInt(await rpc("robinhood", "eth_call", [{ to: t, data: "0x70a08231" + aw.address.slice(2).toLowerCase().padStart(64, "0") }, "latest"]).catch(() => "0x0")) ;
+  const rows = [];
+  for (const t of p.tokens) {
+    const px = desk.assets.find((a) => a.address === t.token)?.priceUsd;
+    const units = Number(await bal(t.token)) / 1e18;
+    rows.push({ ...t, px, units, value: px ? units * px : 0 });
+  }
+  const total = rows.reduce((a, r) => a + r.value, 0);
+  if (!(total > 5)) return { params: { ...next, lastNote: `The Agent Wallet holds ${total.toFixed(2)} USD of this basket: nothing to rebalance yet.` } };
+  rows.forEach((r) => { r.now = r.value / total; r.drift = (r.now - r.weight) * 100; });
+  const worst = Math.max(...rows.map((r) => Math.abs(r.drift)));
+  if (worst < p.driftPct) return { params: { ...next, lastNote: `Largest drift ${worst.toFixed(1)}% (line ${p.driftPct}%): no trade.` } };
+  const { getEthUsd } = await import("./market.mjs");
+  const ethUsd = Number(await getEthUsd()) || 0;
+  const outcomes = [];
+  for (const r of rows.filter((x) => x.drift > 0.5 && x.px)) {          // sell the overweight part first
+    const sellUnits = +(((r.now - r.weight) * total) / r.px).toPrecision(6);
+    if (sellUnits * r.px < 2) continue;
+    outcomes.push(await fire(w, `drift ${r.drift.toFixed(1)}%`, { kind: "swap", params: { tokenIn: r.token, tokenOut: "native", amountIn: sellUnits, slippagePct: 1 } }, `Rebalance: ${r.symbol} is ${r.drift.toFixed(1)}% over its weight; selling ${sellUnits} for ETH.`));
+  }
+  for (const r of rows.filter((x) => x.drift < -0.5 && x.px)) {         // then buy the underweight ones
+    const usdAmt = (r.weight - r.now) * total;
+    if (usdAmt < 2 || !ethUsd) continue;
+    const eth = +(usdAmt / ethUsd).toPrecision(6);
+    outcomes.push(await fire(w, `drift ${r.drift.toFixed(1)}%`, { kind: "swap", params: { tokenIn: "native", tokenOut: r.token, amountIn: eth, slippagePct: 1 } }, `Rebalance: ${r.symbol} is ${(-r.drift).toFixed(1)}% under its weight; buying with ${eth} ETH.`));
+  }
+  return { params: { ...next, lastNote: `Rebalanced at ${worst.toFixed(1)}% drift: ${outcomes.join(", ") || "nothing to do"}` }, fires: [...w.fires, { t: now, drift: worst, outcome: outcomes.join(",") }].slice(-30) };
 }
 
 /* ---------- F15 · silent execution ---------- */
@@ -167,7 +217,7 @@ async function tick() {
     const active = list.filter((w) => w.status === "active");
     if (!active.length) return;
     let mids = null;
-    const needPerp = active.some((w) => !["dca", "twap", "loan_guard"].includes(w.type) && !(w.type === "alert" && isAddress(w.params.target)));
+    const needPerp = active.some((w) => !["dca", "twap", "loan_guard", "rebalance"].includes(w.type) && !(w.type === "alert" && isAddress(w.params.target)));
     if (needPerp) mids = Object.fromEntries((await hlMarkets()).map((m) => [m.coin.toUpperCase(), m.midPx || m.markPx]));
     const updates = new Map();
     for (const w of active) {
@@ -206,6 +256,8 @@ async function tick() {
             } else u.params = { ...w.params, done };
             if (done >= w.params.runs || (u.params.spent || 0) >= w.params.budget - 1e-9) u.status = "done";
           }
+        } else if (w.type === "rebalance") {
+          if (Date.now() >= w.params.nextAt) Object.assign(u, await rebalanceStep(w));
         } else if (w.type === "loan_guard") {
           // once a minute is enough for a loan; re-arms when the health factor recovers
           if (Date.now() - (w.lastCheck || 0) >= 60_000) {

@@ -445,3 +445,14 @@ html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color:
 .sd-pend { color: var(--warn); }
 .sd-legs { display: flex; flex-wrap: wrap; gap: 6px; }
 @media (max-width: 720px) { .sd-row { grid-template-columns: 1fr auto; } .sd-row > span:nth-child(3), .sd-row > span:nth-child(4) { display: none; } }
+
+/* gate lists on the Desk's own pages (Lighter, Stock desk) */
+.dk .sw-gate { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.dk .sw-gate .gh { font-size: 12.5px; font-weight: 600; }
+.dk .sw-gate ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.dk .sw-gate li { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+.dk .sw-gate li span { color: var(--muted); }
+.dk .sw-gate li.pass b { color: var(--up); }
+.dk .sw-gate li.warn b { color: var(--warn); }
+.dk .sw-gate li.fail b { color: var(--down); }
+.sd-mk { flex-wrap: wrap; }

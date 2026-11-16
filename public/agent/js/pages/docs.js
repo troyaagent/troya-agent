@@ -34,6 +34,8 @@ export async function mount(view) {
         [h("b", {}, "Spot (Hyperliquid): "), "buy and sell HYPE, UBTC, UETH and every Hyperliquid spot coin from your own Hyperliquid account; a Spot Gate reads the live book first and orders never fill more than 1% from the price (live since 16 Nov 2026)."],
         [h("b", {}, "The Assay: "), "under every Gate result: what the dev bought, sold and holds, liquidity pulled, top-10 concentration, the first 30 seconds of buyers, wallet clusters, round-trip trading and who funded the dev. Red and amber flags only, never a safe stamp."],
         [h("b", {}, "TWAP and Smart DCA: "), "Agent → Playbooks. TWAP splits a big buy or sell into slices that each stay under a price-impact cap (a slice waits for depth instead of going through); Smart DCA buys 0.5–1.5× the base by the 7-day average, within the total budget."],
+        [h("b", {}, "More perps: "), "the Perps page also lists trade.xyz stock, index and metal perps (same Hyperliquid key; USDC moves into the trade.xyz balance with one signature), and Perps · Lighter (Robinhood) trades Lighter's exchange on Robinhood Chain with USDG and a key made in your browser."],
+        [h("b", {}, "Stock desk: "), "stock tokens with their dividend and split multiplier, the corporate actions calendar, baskets in one go, a rebalance playbook, and USDG loans against your stocks on Morpho Blue with a Loan Gate and alerts."],
         [h("b", {}, "The Record: "), "troya.codes/record grades every Sentry call: the price at the call, an hour later, a day later and the peak."],
       ]),
     ]],

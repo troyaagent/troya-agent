@@ -8,6 +8,8 @@ import { Interface } from "ethers";
 import { rpc, ADDR } from "./robinhood.mjs";
 import { dsPairs, dsRows, getEthUsd } from "./market.mjs";
 import { HttpError } from "./api.mjs";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
 
 const RH_API = "https://api.robinhood.com/rhj";
 const lc = (s) => String(s || "").toLowerCase();
@@ -130,7 +132,37 @@ export async function stockLoans(address) {
   return out;
 }
 
-export async function register(r) {
+const logos = new Map();
+let logoDir = null;
+async function logo(addr) {
+  const a = lc(addr);
+  if (!/^0x[0-9a-f]{40}$/.test(a)) throw new HttpError(400, "Bad address.");
+  if (logos.has(a)) return logos.get(a);
+  const file = logoDir && join(logoDir, `${a}.png`);
+  let buf = file ? await readFile(file).catch(() => null) : null;
+  if (!buf) {
+    const desk = await stockDesk();
+    const x = desk.assets.find((s) => s.address === a);
+    if (!x?.logo || !/^https:\/\/cdn\.robinhood\.com\//.test(x.logo)) throw new HttpError(404, "No logo.");
+    const res = await fetch(x.logo, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok || !/^image\//.test(res.headers.get("content-type") || "")) throw new HttpError(404, "No logo.");
+    buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > 200_000) throw new HttpError(404, "No logo.");
+    if (file) await writeFile(file, buf).catch(() => {});
+  }
+  logos.set(a, buf);
+  return buf;
+}
+
+export async function register(r, ctx) {
+  logoDir = join(ctx.dataDir, "stock-logos");
+  await mkdir(logoDir, { recursive: true }).catch(() => { logoDir = null; });
+  r.get("/api/stocks/logo/:address", async ({ params, res }) => {
+    const buf = await logo(params.address);
+    res.writeHead(200, { "content-type": "image/png", "cache-control": "public, max-age=604800", "x-content-type-options": "nosniff" });
+    res.end(buf);
+    return undefined;
+  }, { weight: 1 });
   r.get("/api/stocks/desk", () => stockDesk(), { weight: 1 });
   r.get("/api/stocks/loans", ({ query }) => stockLoans(query.address || null), { weight: 1 });
 }

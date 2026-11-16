@@ -37,7 +37,8 @@ export async function mount(view, ctx) {
     tabs, body,
     h("p", { class: "fine lt-legal" }, "Stock tokens are issued by Robinhood Assets (Jersey) Limited and are not offered to US persons. Data from Robinhood's stock token API, DexScreener and Morpho Blue on chain. Not financial advice.")));
 
-  const paintTabs = () => clear(tabs, seg([["stocks", "Stocks"], ["actions", "Dividends & splits"], ["baskets", "Baskets"], ["borrow", "Borrow"]], st.tab, (v) => { st.tab = v; history.replaceState(null, "", `#/stocks/${v}`); paint(); }));
+  const opts = (xs) => xs.map(([value, label]) => ({ value, label }));
+  const paintTabs = () => clear(tabs, seg(opts([["stocks", "Stocks"], ["actions", "Dividends & splits"], ["baskets", "Baskets"], ["borrow", "Borrow"]]), st.tab, (v) => { st.tab = v; history.replaceState(null, "", `#/stocks/${v}`); paint(); }));
   async function load() {
     try { st.desk = await api.get("stocks/desk"); } catch (e) { st.err = e.message; }
     try { st.loans = await api.get(`stocks/loans${wallet.address ? `?address=${wallet.address}` : ""}`); } catch {}
@@ -58,7 +59,7 @@ export async function mount(view, ctx) {
     const tbl = h("div", { class: "sd-tbl" });
     const draw = () => clear(tbl, h("div", { class: "sd-row sd-hd" }, h("span", {}, "Stock"), h("span", {}, "Price"), h("span", {}, "24h"), h("span", {}, "Multiplier"), h("span", {}, "")),
       st.desk.assets.filter((a) => !st.q || a.symbol.toLowerCase().includes(st.q) || a.name.toLowerCase().includes(st.q)).slice(0, 120).map((a) => h("div", { class: "sd-row" },
-        h("span", { class: "sd-name" }, a.logo ? h("img", { src: a.logo, alt: "", width: 22, height: 22, loading: "lazy", referrerpolicy: "no-referrer" }) : null, h("b", {}, a.symbol), h("small", {}, a.name)),
+        h("span", { class: "sd-name" }, a.logo ? h("img", { src: `/api/stocks/logo/${a.address}`, alt: "", width: 22, height: 22, loading: "lazy", onerror: (e) => e.target.remove() }) : null, h("b", {}, a.symbol), h("small", {}, a.name)),
         h("span", {}, a.priceUsd ? `$${tiny(a.priceUsd)}` : h("span", { class: "muted" }, "no pool")), h("span", {}, a.change24h != null ? pctEl(a.change24h) : "–"),
         h("span", { title: "Dividends are reinvested and splits multiply it: each token stands for this many shares" }, `${a.multiplier.toFixed(4)}×`, a.pendingMultiplier ? h("small", { class: "sd-pend" }, ` → ${a.pendingMultiplier.toFixed(4)}× soon`) : null),
         a.priceUsd ? h("a", { class: "btn sm", href: `#/swap?in=eth&out=${a.address}` }, "Buy") : h("span", {}))));
@@ -87,11 +88,20 @@ export async function mount(view, ctx) {
     amtIn.addEventListener("input", () => { st.basketEth = amtIn.value; });
     const each = Number(st.basketEth) / (legs.length || 1);
     clear(body, h("div", { class: "panel sd-panel" },
-      seg(BASKETS.map(([n], i) => [String(i), n]), String(st.basket), (v) => { st.basket = +v; paint(); }),
+      seg(BASKETS.map(([n], i) => ({ value: String(i), label: n })), String(st.basket), (v) => { st.basket = +v; paint(); }),
       h("p", { class: "fine" }, `${name}: equal parts, one swap per stock. Each leg is quoted and checked by Troya Gate before your wallet signs it; a leg that fails the Gate is skipped, the rest go on. Stocks without a deep enough pool are left out.`),
       h("div", { class: "sd-legs" }, legs.map((a) => h("span", { class: "chip-s" }, a.symbol, h("small", {}, ` $${tiny(a.priceUsd)}`)))),
       h("div", { class: "lt-row" }, amtIn, h("button", { class: "btn primary", type: "button", disabled: !!st.busy, onclick: () => buyBasket(legs) }, st.busy || `Buy ${legs.length} stocks`)),
-      Number(st.basketEth) > 0 ? h("p", { class: "fine" }, `About ${tiny(each)} ETH into each of ${legs.length} stocks.`) : null));
+      Number(st.basketEth) > 0 ? h("p", { class: "fine" }, `About ${tiny(each)} ETH into each of ${legs.length} stocks.`) : null,
+      h("div", { class: "lt-row" }, h("button", { class: "btn sm ghost", type: "button", onclick: () => keepBalanced(name, legs) }, "Keep it balanced"),
+        h("span", { class: "fine" }, "A playbook watches this basket in your Agent Wallet and rebalances to equal weights when one stock drifts 5% away (checked daily)."))));
+  }
+  async function keepBalanced(name, legs) {
+    if (!wallet.session) return toast("Sign in first (Agent → Chat): the playbook belongs to your account.", "error", 6000);
+    try {
+      const r = await api.post("watches", { type: "rebalance", params: { name, driftPct: 5, everyHours: 24, tokens: legs.map((a) => ({ token: a.address, symbol: a.symbol, weight: 1 })) } });
+      toast(`Playbook on: ${r.item.title}`, "ok", 6000);
+    } catch (e) { toast(e.message, "error"); }
   }
   async function buyBasket(legs) {
     if (!wallet.address) return openConnect();
@@ -150,7 +160,7 @@ export async function mount(view, ctx) {
             h("button", { class: "btn sm ghost", type: "button", onclick: () => guard(x) }, "Alert me")))
           : h("p", { class: "muted" }, "No Morpho loans on stock tokens from this wallet.")),
       h("div", { class: "panel sd-panel" },
-        seg(L.markets.map((x, i) => [String(i), `${x.symbol} · ${x.lltvPct}%`]), String(st.mk), (v) => { st.mk = +v; st.coll = st.borrow = ""; paint(); }),
+        seg(L.markets.map((x, i) => ({ value: String(i), label: `${x.symbol} · ${x.lltvPct}%` })), String(st.mk), (v) => { st.mk = +v; st.coll = st.borrow = ""; paint(); }, "sd-mk"),
         h("p", { class: "fine" }, `Morpho market ${short(m.id)} · LLTV ${m.lltvPct}% · ${usd(m.borrowUsdg, { compact: true })} borrowed of ${usd(m.supplyUsdg, { compact: true })} · oracle $${tiny(m.priceUsd)}`),
         h("div", { class: "lt-row" }, collIn, borIn, h("button", { class: "btn primary", type: "button", disabled: !!st.busy, onclick: () => doBorrow(m, params) }, st.busy || "Post and borrow")),
         gateBox,

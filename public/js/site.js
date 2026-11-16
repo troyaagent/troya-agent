@@ -13,7 +13,7 @@ export const NAV_BIG = [
 export const NAV_SMALL = [
   ["Market", "/agent#/market"], ["Swap", "/agent#/swap"], ["Perps", "/agent#/perps"], ["Bridge", "/agent#/bridge"],
   ["Launchpad", "/agent#/launch"], ["Assistant", "/agent#/agent"], ["Docs", "/agent#/docs"],
-  ["Market Analysis", "/market-analysis"], ["API and MCP", "/api-and-mcp"], ["Risk Controls", "/risk-controls"], ["Verify", "/verify"], ["The Record", "/record"], ["Gate badge", "/badge"], ["Insights", "/insights"],
+  ["Market Analysis", "/market-analysis"], ["API and MCP", "/api-and-mcp"], ["Risk Controls", "/risk-controls"], ["Verify", "/verify"], ["The Record", "/record"], ["Flywheel", "/flywheel"], ["Gate badge", "/badge"], ["Insights", "/insights"],
 ];
 const here = location.pathname.replace(/\/$/, "") || "/";
 const cur = (href) => (href === here ? ' aria-current="page"' : "");

@@ -27,6 +27,7 @@ const MODULES = [
   "./assay.mjs",       // F14: The Assay, dev, holders, bundles, clusters, wash trades and funders of a coin
   "./stocks.mjs",      // F17: Stock desk, multipliers, dividends and splits, Morpho loans against stock tokens
   "./liquidity.mjs",   // F18: Liquidity desk, Uniswap v3 ranges from volatility, positions, fees
+  "./flywheel.mjs",    // F19: $TROYA flywheel, creator fees into buyback, burn and locked liquidity, read from the chain
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];
 

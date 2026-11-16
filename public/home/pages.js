@@ -13,7 +13,7 @@ const BIG = [["Troya", "/"], ["Open the desk", "/agent"], ["Capabilities", PAGE(
 const SMALL = [
   ["Market", "/agent#/market"], ["Swap", "/agent#/swap"], ["Perps", "/agent#/perps"], ["Bridge", "/agent#/bridge"],
   ["Launchpad", "/agent#/launch"], ["Assistant", "/agent#/agent"], ["Docs", "/agent#/docs"],
-  ["Market Analysis", PAGE("market-analysis")], ["API and MCP", PAGE("api-and-mcp")], ["Risk Controls", PAGE("risk-controls")], ["Verify", PAGE("verify")], ["The Record", PAGE("record")], ["Gate badge", PAGE("badge")], ["Insights", PAGE("insights")],
+  ["Market Analysis", PAGE("market-analysis")], ["API and MCP", PAGE("api-and-mcp")], ["Risk Controls", PAGE("risk-controls")], ["Verify", PAGE("verify")], ["The Record", PAGE("record")], ["Flywheel", PAGE("flywheel")], ["Gate badge", PAGE("badge")], ["Insights", PAGE("insights")],
 ];
 const PAGES = [["Capabilities", "capabilities"], ["Plans", "plans"], ["Gate badge", "badge"], ["API and MCP", "api-and-mcp"], ["Market analysis", "market-analysis"], ["Insights", "insights"], ["Philosophy", "philosophy"], ["Risk controls", "risk-controls"]];
 const ok = (re, u) => (re.test(u || "") ? u : "");

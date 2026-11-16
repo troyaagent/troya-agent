@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | The $TROYA flywheel</title>
+<meta name="description" content="Creator fees on $TROYA buy $TROYA back, burn it and lock liquidity for good. Every cycle is signed by the creator wallet and read back from the chain.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | The $TROYA flywheel">
+<meta property="og:description" content="Creator fees into buyback, burn and locked liquidity. Every cycle read back from the chain.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/flywheel">
+<meta property="og:url" content="https://troya.codes/flywheel">
+<meta property="og:image" content="https://troya.codes/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
+<meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<meta name="theme-color" content="#0d0c0b">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<link rel="preload" href="/home/fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/home/pages.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+</head>
+<body class="site pn">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="pn-nav" data-pn-nav>
+  <a class="pn-logo" href="/" aria-label="Troya Agent home"><span>Troya</span><b>Agent</b><small>MMXXVI</small></a>
+  <div class="pn-r">
+    <button class="pn-ca" type="button" data-pn-ca title="Copy contract address"><b>CA</b><span data-pn-ca-short>0x1FA8…a074</span></button>
+    <a class="pn-pill" href="/agent">Open app</a>
+    <button class="pn-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="pn-menu" data-pn-burger><i></i><i></i></button>
+  </div>
+</header>
+<nav class="pn-menu" id="pn-menu" aria-label="Site" data-pn-menu></nav>
+
+<main id="main">
+  <section class="page-hero" aria-labelledby="ph">
+    <canvas class="rain" data-rain aria-hidden="true"></canvas>
+    <span class="eyebrow"><i class="dot"></i>$TROYA flywheel</span>
+    <h1 id="ph" class="words" data-words>The flywheel</h1>
+    <p class="lead rv">Creator fees on $TROYA buy $TROYA back, burn it, and lock liquidity in the pool where nobody can remove it. Every cycle is signed by the creator wallet, and every number on this page is read back from the chain.</p>
+  </section>
+
+  <section class="ip" aria-labelledby="st-h">
+    <div class="eyebrow-line"><span>00 / The numbers</span></div>
+    <div class="split" style="margin-bottom:40px">
+      <h2 id="st-h" class="h2 words" data-words>Fees in, supply out</h2>
+      <p class="lead rv" data-fw-rules>Reading the chain…</p>
+    </div>
+    <div class="rec-stats" data-fw-stats></div>
+  </section>
+
+  <section class="ip" aria-labelledby="how-h">
+    <div class="eyebrow-line"><span>01 / One cycle</span></div>
+    <div class="split" style="margin-bottom:40px">
+      <h2 id="how-h" class="h2 words" data-words>Four signatures</h2>
+      <p class="lead rv">The creator wallet signs each step in its own browser wallet. Troya builds the transactions and checks them; it holds no key and moves nothing.</p>
+    </div>
+    <div class="steps">
+      <article class="step rv"><span class="n">01</span><h3>Claim</h3><p>The creator's share of every $TROYA trade (70% of the 1% Pons fee plus the 1.9% creator tax) is credited to the creator wallet in the Pons fee escrow. The cycle claims it.</p></article>
+      <article class="step rv"><span class="n">02</span><h3>Buy back</h3><p>Part of the ETH buys $TROYA in its pool, through Troya Gate first: route, price impact, a simulated swap and a test sell.</p></article>
+      <article class="step rv"><span class="n">03</span><h3>Burn</h3><p>The bought $TROYA is burned with the token's own burn(): the total supply goes down, on chain, for good.</p></article>
+      <article class="step rv"><span class="n">04</span><h3>Lock liquidity</h3><p>The rest goes into the $TROYA pool as a full-range Uniswap v4 position minted straight to 0x…dEaD. No one holds that NFT, so no one can ever take the liquidity out.</p></article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="cy-h">
+    <div class="eyebrow-line"><span>02 / Every cycle</span></div>
+    <div class="split" style="margin-bottom:28px">
+      <h2 id="cy-h" class="h2 words" data-words>Cycle by cycle</h2>
+      <p class="lead rv">Newest first. Each step links to its transaction on Robinhood Chain.</p>
+    </div>
+    <div class="rec-wrap"><table class="rec-tbl"><thead><tr><th>Cycle</th><th>Claimed</th><th>Bought back</th><th>Burned</th><th>Locked</th></tr></thead><tbody data-fw-cycles><tr><td colspan="5" class="rec-empty">Loading…</td></tr></tbody></table></div>
+  </section>
+
+  <section class="ip" aria-labelledby="lk-h">
+    <div class="eyebrow-line"><span>03 / Locked liquidity</span></div>
+    <div class="split" style="margin-bottom:28px">
+      <h2 id="lk-h" class="h2 words" data-words>Owned by no one</h2>
+      <p class="lead rv">Uniswap v4 positions in $TROYA/ETH pools whose NFT sits at 0x…dEaD, valued at today's price.</p>
+    </div>
+    <div class="rec-wrap"><table class="rec-tbl"><thead><tr><th>Position</th><th>Pool</th><th>Range</th><th>Holds now</th><th>Value</th><th>Locked in</th></tr></thead><tbody data-fw-locked><tr><td colspan="6" class="rec-empty">Loading…</td></tr></tbody></table></div>
+  </section>
+
+  <section class="ip" aria-labelledby="bn-h">
+    <div class="eyebrow-line"><span>04 / Burns</span></div>
+    <div class="split" style="margin-bottom:28px">
+      <h2 id="bn-h" class="h2 words" data-words>Gone for good</h2>
+      <p class="lead rv" data-fw-burnlead>$TROYA burned by the creator wallet.</p>
+    </div>
+    <div class="rec-wrap"><table class="rec-tbl"><thead><tr><th>Block</th><th>Burned</th><th>Transaction</th></tr></thead><tbody data-fw-burns><tr><td colspan="3" class="rec-empty">Loading…</td></tr></tbody></table></div>
+    <p class="rec-note" data-fw-contracts></p>
+    <p class="rec-note">Sources: the Pons fee escrow (its Credited and Claimed events for the creator wallet), the $TROYA contract (total supply and transfers) and the Uniswap v4 PositionManager. Burns, locked positions and cycles cannot be edited after the fact: they are on chain. Not financial advice.</p>
+  </section>
+
+  <section class="ip" aria-labelledby="no-h">
+    <div class="cta-band">
+      <h2 id="no-h" class="h2 sm words" data-words>Fees in. Supply out.</h2>
+      <div class="acts rv"><a class="ulink" href="/verify">Verify</a><a class="ulink" href="/record">The Record</a><a class="ulink" href="/agent#/flywheel">Open in the app</a></div>
+    </div>
+  </section>
+</main>
+
+<footer class="pn-foot" data-pn-foot></footer>
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/home/pages.js"></script>
+<script src="/home/rain.js" defer></script>
+<script src="/home/flywheel.js" defer></script>
+</body>
+</html>

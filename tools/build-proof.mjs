@@ -16,6 +16,8 @@ const ROLES = {
   "0x2fc617e933a52713247ce25730f6695920b3befe": "bridge relayer: delivers the funds on the destination chain",
   "0x57b09fe6dab0a7d3776e56e6388c773d6c4d09e4": "$TROYA creator wallet",
   "0x45611870017682ec781edb9f71fa72fa91159350": "team wallet: signs in its own browser wallet",
+  "0xb584fc6073d541150cbb7b5b25223326b7b3041e": "Agent Wallet of the team wallet (created by the Troya server; funded by the team wallet, pays back only to it)",
+  "0xe3d9bba49c856edadc2051c5a49a1be9435ac1f3": "Lighter's operator: settles Lighter withdrawals on Robinhood Chain",
 };
 const P = (step, chain, hash, what) => ({ step, chain, hash, what });
 const LIST = [
@@ -50,6 +52,22 @@ const LIST = [
   P("12 Arbitrum and Base", "base", "0x8d06b5f72fe6425150844966998bc0b0daf1b1459a173f605019211005fdf180", "buy AERO on Base through the KyberSwap router from the Swap page"),
   P("12 Arbitrum and Base", "base", "0x5753629f0e8456a4c701ced613d30c68497dda77964788f26b92b65664ec6b4e", "approve AERO for the KyberSwap router (the exact amount)"),
   P("12 Arbitrum and Base", "base", "0x5af7272242e14a3d183279db8e831c886433cec850d62ac6b5e07c9a49b317c3", "sell it all back to ETH"),
+  P("15 Stock basket", "robinhood", "0x2f2de2e44f9933293bc84aa666c3ec6ef32b6b36a90bc9bba5c4a399b46de055", "Index core basket, leg 1: ETH to SPY (tokenized stock) after Troya Gate"),
+  P("15 Stock basket", "robinhood", "0x9e0b37341fde2461f074150b27973c24ecc9af01e34b09f690c781d5ea9e2aaa", "Index core basket, leg 2: ETH to QQQ after Troya Gate"),
+  P("16 TWAP through the Agent Wallet", "robinhood", "0xb98f3fa142123629d806fed0d1c9cb0d69e90ff0417cb4c3f2594c90bcb210df", "the team wallet funds its Agent Wallet with 0.006 ETH"),
+  P("16 TWAP through the Agent Wallet", "robinhood", "0x3b5982b6de64469bc12dfe4aa6fb7c8135aedce24c98db2517780710b4fd85aa", "TWAP slice 1: ETH to NVDA, under the 0.4% impact cap"),
+  P("16 TWAP through the Agent Wallet", "robinhood", "0x0bf91409d5eb2d7d9bfeb9b9e546fddda4e2935a7ef7759f22eebb0372154f3a", "TWAP slice 2, two minutes later"),
+  P("18 Lighter on Robinhood Chain", "robinhood", "0xe3f0d48c7d3d663d2bc2ac8814cd9253191874a74615d4c9c2e36bcb3317a217", "ETH to USDG on the Swap page"),
+  P("18 Lighter on Robinhood Chain", "robinhood", "0x2aa0faad2f17ee2d397d61af60c49dfe775c74776cd845641b3e718b5e7a2912", "approve 11 USDG for Lighter's contract (the exact amount)"),
+  P("18 Lighter on Robinhood Chain", "robinhood", "0x2e2763df0a403cac9f0f2580fcf68b34f1b521beda28c440b6b4f4bfb9a2b091", "deposit 11 USDG into Lighter: opens account #55518"),
+  P("18 Lighter on Robinhood Chain", "robinhood", "0xec4b83ddd11b9c0a9139cd6d656482bf08eab049b05e72c001882b132f26a91f", "Lighter pays the 11 USDG withdrawal back to the team wallet"),
+  P("19 Borrow on Morpho", "robinhood", "0xfcd12c7dc8d5114080dfea4449830e0b9d7e5ad89fa1a37f13ba040fd56f6849", "ETH to NVDA for collateral, on the Swap page"),
+  P("19 Borrow on Morpho", "robinhood", "0x7c1e70e029356fc1bf94f68ba0d5ceaed13dfcfe38b4ec37996a093324a7f816", "approve 0.051 NVDA for Morpho Blue (the exact amount)"),
+  P("19 Borrow on Morpho", "robinhood", "0x800093c6ce2e14bd59ac92e42ad1ddc4aa7c602d01e9582a71ef7b5eda6aa956", "post 0.051 NVDA as collateral (NVDA/USDG market, LLTV 62.5%)"),
+  P("19 Borrow on Morpho", "robinhood", "0x3c210216885d549c44c68b0dade6d958a4b06c7827eca110dc6d533a9b09452f", "borrow 1 USDG at health factor 4.99"),
+  P("19 Borrow on Morpho", "robinhood", "0x6e0be035db00455fa5a898be4c42b13de54b5b7faab372ddef41435bf7c4ad7c", "approve USDG for the repayment"),
+  P("19 Borrow on Morpho", "robinhood", "0xc24560f5eae62167e178a4f9772c303cf3a7f1b5943585df457f8a2c139ecf5a", "repay all by borrow shares: 1.000001 USDG, no dust left"),
+  P("19 Borrow on Morpho", "robinhood", "0xb0e66f9040197c5e7edaf8863510982c14366dd181c4f415b8fc874a1aedaad7", "withdraw the exact 0.051 NVDA collateral"),
 
   P("LP burn", "robinhood", "0xfe7f12591df9b9f53a0366a31cf36d1cf00b8200b6ae05fb8eeb7989afc24ea0", "Uniswap v4 position NFT #4293939 (ETH/TROYA pool) sent to 0x…dEaD: that liquidity can never be removed"),
 ];
@@ -65,7 +83,7 @@ for (const x of LIST) {
 }
 const doc = {
   name: "Troya Agent proof log", site: "https://troya.codes/verify", generated: new Date().toISOString(),
-  testWallet: TEST, note: "Every transaction is read from the chain. Agent Wallets are created by the Troya server for a signed-in wallet; each one here was funded by the test wallet and paid back only to it. Hyperliquid fills: https://troya.codes/api/proof/hl-fills (from Hyperliquid's own info API).",
+  testWallet: TEST, note: "Every transaction is read from the chain. Agent Wallets are created by the Troya server for a signed-in wallet; each one here was funded by the test wallet and paid back only to it. Hyperliquid fills: https://troya.codes/api/proof/hl-fills (from Hyperliquid's own info API). From 16 Nov the team wallet 0x45611870017682Ec781EDb9F71fA72fA91159350 signs too; its Agent Wallet pays back only to it. Lighter trades of account 55518: https://api.rh.lighter.xyz/api/v1/trades?account_index=55518&sort_by=timestamp&limit=10",
   transactions: out,
 };
 writeFileSync(join(import.meta.dirname, "..", "public", "proof.json"), JSON.stringify(doc, null, 2) + "\n");

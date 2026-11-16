@@ -390,3 +390,6 @@ ${when} Hold at least ${n(Number(process.env.HOLDER_MIN || 1_000_000))} $TROYA, 
 
 Check your status: /wallet in a private chat with me.`;
 }
+
+// F20: Troya on X answers with the same knowledge and tools as the Telegram bot
+export { TG_SYSTEM, TG_TOOLS, tgExec };

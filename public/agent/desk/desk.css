@@ -524,3 +524,23 @@ html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color:
 .fw-step.done .fw-n { border-color: rgba(142, 223, 245, .5); color: var(--blue); background: var(--up-bg); }
 @container shell (max-width: 900px) { .fw-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container shell (max-width: 520px) { .fw-tiles { grid-template-columns: 1fr; } .fw-step { grid-template-columns: 28px minmax(0, 1fr); } .fw-step .btn { grid-column: 2; justify-self: start; } }
+
+/* ---------- F20 · Social ---------- */
+.so-card { max-width: 760px; margin-bottom: 14px; }
+.so-card h3 { margin: 0; }
+.so-who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.so-who img { border-radius: 50%; }
+.so-who > div { display: grid; gap: 2px; }
+.so-uses { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.so-use { position: relative; display: flex; justify-content: space-between; gap: 8px; padding: 9px 12px; border-radius: 9px; background: var(--bg-2); overflow: hidden; font-size: 12.5px; color: var(--fg-2); }
+.so-use b { color: var(--fg); font-weight: 500; font-variant-numeric: tabular-nums; }
+.so-use i { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--blue); }
+.so-admin, .so-posted { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.so-log { display: grid; gap: 10px; }
+.so-li { padding: 10px 12px; border-radius: 10px; background: var(--bg-2); display: grid; gap: 4px; }
+.so-li-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.so-li.posted .chip { color: var(--blue); border-color: rgba(142, 223, 245, .45); }
+.so-li.failed .chip { color: var(--down); }
+.so-q { margin: 0; font-size: 13px; color: var(--fg-2); overflow-wrap: anywhere; }
+.so-a { margin: 0; font-size: 13px; padding-left: 10px; border-left: 2px solid var(--blue); overflow-wrap: anywhere; }
+@container shell (max-width: 560px) { .so-uses { grid-template-columns: 1fr; } }

@@ -28,6 +28,7 @@ const MODULES = [
   "./stocks.mjs",      // F17: Stock desk, multipliers, dividends and splits, Morpho loans against stock tokens
   "./liquidity.mjs",   // F18: Liquidity desk, Uniswap v3 ranges from volatility, positions, fees
   "./flywheel.mjs",    // F19: $TROYA flywheel, creator fees into buyback, burn and locked liquidity, read from the chain
+  "./xsocial.mjs",     // F20: Sign in with X, Troya answering on X (draft first), one daily X budget
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];
 

@@ -416,6 +416,9 @@ async function newPairs(limit = 10) {
 async function socialInfo(query) {
   const bearer = process.env.X_BEARER_TOKEN || "";
   if (!bearer) return { configured: false, note: "Social search is not configured on this server (X_BEARER_TOKEN is not set)." };
+  // X is pay-per-use: every search counts against the server's daily X budget (X_DAILY_SEARCH)
+  const xs = await import("./xsocial.mjs");
+  if (!(await xs.spend("search"))) return { configured: true, note: "Today's X search budget on this server is used up. Try again tomorrow." };
   const q = untrusted(query, 120);
   const url = `https://api.x.com/2/tweets/search/recent?max_results=10&tweet.fields=created_at,public_metrics&query=${encodeURIComponent(q + " -is:retweet")}`;
   const j = await getJson(url, { headers: { authorization: `Bearer ${bearer}` } });

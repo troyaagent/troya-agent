@@ -68,6 +68,16 @@ const LIST = [
   P("19 Borrow on Morpho", "robinhood", "0x6e0be035db00455fa5a898be4c42b13de54b5b7faab372ddef41435bf7c4ad7c", "approve USDG for the repayment"),
   P("19 Borrow on Morpho", "robinhood", "0xc24560f5eae62167e178a4f9772c303cf3a7f1b5943585df457f8a2c139ecf5a", "repay all by borrow shares: 1.000001 USDG, no dust left"),
   P("19 Borrow on Morpho", "robinhood", "0xb0e66f9040197c5e7edaf8863510982c14366dd181c4f415b8fc874a1aedaad7", "withdraw the exact 0.051 NVDA collateral"),
+  P("20 Liquidity range", "robinhood", "0x4061866c6707bd801cd074899311cda0f3304bad166ac624189b8b04ca79c9e4", "approve 0.02 NVDA for Uniswap's position manager (the exact amount)"),
+  P("20 Liquidity range", "robinhood", "0x33c7db8fff2b24a5dcb494c36dd398c58142ff800660402810352a6ea3a63a38", "approve 3.136111 USDG (the exact amount)"),
+  P("20 Liquidity range", "robinhood", "0xa2c5c8678a17df140d5e346eb4e0d1288c9c3913504823a3f5ccbc42fa5f07b9", "mint position #1601697, Balanced range set from volatility"),
+  P("20 Liquidity range", "robinhood", "0x40f8f122c52a80a00b033d545783292dd25faa0287dc2acc31404d3de69cfab3", "remove all: liquidity and fees back in one transaction"),
+  P("21 $TROYA flywheel", "robinhood", "0x1d2079d3789ac8ab35e0d22725906017699cc9c5b4e40b69acd8a08f838b3d7b", "buyback: creator fees to TROYA through Troya Gate"),
+  P("21 $TROYA flywheel", "robinhood", "0x0648b92fc5b4334351b8e5506d3f2c794f761a9f225d3efd0df3df21f2b32118", "burn() 85,071.17 TROYA: supply goes down"),
+  P("21 $TROYA flywheel", "robinhood", "0x40ca4e36fc7421754e455f416d130a026bad265612a900a0c1cd989e69ea225f", "lock: full-range v4 position in the Pons pool, minted to 0x…dEaD"),
+  P("22 Holder Pass", "robinhood", "0x52f9c91e8b64dd127251740f7dd9f5bdd457a5fec0c98ebbc6b311fbe5f752c2", "buy 1,070,663 TROYA on the Swap page"),
+  P("22 Holder Pass", "robinhood", "0xfb8a8cf04f93d5fe82ec6bd41da52935989ce50c4ff80b96bbdfae3ecb325375", "deploy TroyaPass (soulbound, no owner, 1,000,000 TROYA to hold)"),
+  P("22 Holder Pass", "robinhood", "0xe42f48b7c8377060d0d88ca0fabd37ae4cfca8d75cb813aeb1720f7e962c942f", "mint pass #1"),
 
   P("LP burn", "robinhood", "0xfe7f12591df9b9f53a0366a31cf36d1cf00b8200b6ae05fb8eeb7989afc24ea0", "Uniswap v4 position NFT #4293939 (ETH/TROYA pool) sent to 0x…dEaD: that liquidity can never be removed"),
 ];

@@ -445,13 +445,15 @@ em, .mega .script { padding-right: .04em; }
 .wk-viewport { overflow: hidden; -webkit-mask: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); padding: 14px 0 34px; }
 .wk-track { display: flex; gap: 34px; width: max-content; margin: 0; padding: 0; list-style: none; animation: wk-roll 60s linear infinite; }
 .wk:hover .wk-track { animation-play-state: paused; }
-.wk-track li { display: inline-flex; align-items: center; gap: 10px; font: 500 14px/1 var(--sans); color: color-mix(in srgb, var(--fg) 72%, transparent); white-space: nowrap; transition: color .3s; }
+.wk-track li { display: inline-flex; align-items: center; gap: 10px; font: 500 14px/1 var(--sans); color: color-mix(in srgb, var(--fg) 86%, transparent); white-space: nowrap; transition: color .3s, transform .35s; }
 .wk-ic { width: 26px; height: 26px; display: grid; place-items: center; flex: none; }
-.wk-ic img { width: 24px; height: 24px; object-fit: contain; border-radius: 50%; filter: grayscale(1); opacity: .8; transition: filter .3s, opacity .3s; }
-.wk-svg { width: 22px; height: 22px; background: currentColor; -webkit-mask: var(--m) center / contain no-repeat; mask: var(--m) center / contain no-repeat; }
-.wk-mono { border: 1px solid var(--line); border-radius: 50%; font: 700 12px/1 var(--sans); color: var(--fg); }
+.wk-ic img { width: 24px; height: 24px; object-fit: contain; border-radius: 50%; transition: transform .35s; }
+.wk-svg { width: 22px; height: 22px; background: var(--c, currentColor); -webkit-mask: var(--m) center / contain no-repeat; mask: var(--m) center / contain no-repeat; }
+.wk-mono { border-radius: 50%; font: 700 12px/1 var(--sans); background: var(--c, transparent); color: var(--on, var(--fg)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); }
+.wk-mono.sm { font-size: 8.5px; letter-spacing: -0.02em; }
 .wk-track li:hover { color: var(--fg); }
-.wk-track li:hover .wk-ic img { filter: none; opacity: 1; }
+.wk-track li:hover .wk-ic { transform: translateY(-1px) scale(1.06); }
+.wk-ic { transition: transform .35s cubic-bezier(.2, .8, .2, 1); }
 @keyframes wk-roll { to { transform: translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) {
   .wk-track { animation: none; flex-wrap: wrap; width: auto; max-width: 1400px; margin: 0 auto; padding: 0 var(--gut); row-gap: 18px; }

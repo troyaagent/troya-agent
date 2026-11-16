@@ -9,7 +9,27 @@ const OWN_HANDLES = /^(trojantroya_bot|troyaagent|troyasentry|admin|admins)$/i;
 const OWN_CHATS = new Set([String(process.env.SENTRY_CHANNEL_ID || "-1004430431881")]);
 const MAJORS = /^(TROYA|ETH|WETH|BTC|WBTC|HYPE|SOL|USDC|USDT|USDG|NVDA|TSLA|AAPL|SPY|QQQ|AMZN|MSFT|GOOGL|META)$/i;
 
-export const BLACKLIST = /f[o0]urtis|fourvote|fourrank|gem\s?pump|dexvra|majors?boosts?|coin_?trending/i;
+export const BLACKLIST = /f[o0]urtis|fourvote|fourrank|gem\s?pump|dexvra|majors?boosts?|coin_?trending|hood\s?hunters?|dex\s?socials?|coinsniper|coinmooner|coinhunt\b|gemfinder|freshcoins|top100token/i;
+// places a holder may fairly ask about; the listing-seller script below never fires on these
+const VENUES = String.raw`(?:dex\s?screener|coin\s?gecko|gecko\s?terminal|coin\s?market\s?cap|cmc|cg|uniswap|pons|robinhood|hyperliquid|binance|coinbase|bybit|okx|kraken|kucoin|gate|mexc|bitget|dextools|birdeye|gmgn|x|twitter|telegram|tg)\b`;
+// the listing seller's script: seed "still not listed on X", "the more listings the better", "confirm our listing on X", "update our socials on X"
+const LISTING = new RegExp([
+  String.raw`\bnot\s+(?:yet\s+)?listed\s+on\s+(?!${VENUES})[A-Za-z]`,
+  String.raw`\b(?:have|did)\s+you\s+(?:considered?|thought\s+(?:of|about))\s+(?:getting\s+)?list(?:ing|ed)\s+on\b`,
+  String.raw`\b(?:the\s+)?more\s+listings\b`,
+  String.raw`\blisted\s+on\s+(?:all|every|more|many|multiple)\s+(?:the\s+)?(?:major\s+|big\s+|top\s+)?(?:platforms?|sites?|directories|trackers)\b`,
+  String.raw`\bget\s+(?:us\s+|it\s+)?(?:on|listed\s+on)\s+(?:more|all|every)\s+(?:the\s+)?(?:sites?|platforms?|directories|trackers)\b`,
+  String.raw`\bconfirm\s+(?:our|the|your|my)\s+listing\b`,
+  String.raw`\bupdate\s+(?:our|the|your)\s+(?:telegram|tg|x|twitter|website|socials?|links?|info|profile)\b[^\n]{0,40}\bon\s+(?!${VENUES})[A-Za-z]`,
+].join("|"), "i");
+// fake "V2 / relaunch / migration" announcements that send holders to a drainer bot, and bots posing as DexScreener or Troya.
+// Admins post real news and are never screened, so a member's "migration portal" or look-alike bot is a scam: a ban at once.
+const IMPOSTOR = new RegExp([
+  String.raw`\b(?:v2|migrat\w*|relaunch\w*|allocation|airdrop)\b[^]{0,400}?\b(?:portal|bot|link|dapp|site|here)\b\s*[:\-–—]?\s*(?:👉\s*)?(?:@(?!(?:trojantroya_bot|troyaagent|troyasentry)\b)[A-Za-z0-9_]{4,}|https?:\/\/(?!(?:www\.)?(?:troya\.codes|x\.com|twitter\.com|dexscreener\.com|robinhoodchain\.blockscout\.com|t\.me\/(?:troyaagent|troyasentry|trojantroya_bot))\b))`,
+  String.raw`\bverify\s+(?:your\s+|their\s+)?(?:previous\s+|old\s+)?(?:token\s+)?holdings\b`,
+  String.raw`\b(?:v2|holder|token)\s+(?:allocation|migration)\b[^]{0,400}?(?:eligible\s+holders|official\s+updates|portal)`,
+  String.raw`@(?!trojantroya_bot\b)[A-Za-z0-9_]*(?:d[e3]x[a-z0-9_]{0,8}n[e3]r|tr[o0]ya|claim|airdrop|migrat|rectif|validat|walletconnect)[A-Za-z0-9_]*bot\b`,
+].join("|"), "iu");
 // selling listings, trending spots, boosts or votes: "listed on @x", "boost your token with @x", "I can add the rocket to 300", trending-bot posts
 const SERVICES = /\b(?:list(?:ed|ing)?|trend(?:ing)?|votes?|boost(?:s|ed|ing)?)\b[^\n@]{0,40}\b(?:on|at|with|via|by|in|from)\s+@(?!(?:trojantroya_bot|troyaagent|troyasentry|admin|admins)\b)[A-Za-z0-9_]{4,32}|\bI\s+can\s+(?:add|get|give|push|bring|increase)\b[^\n]{0,60}\b(?:votes?|rockets?|flames?|holders|volume|trending|views|members)\b|\b(?:add|increase)\s+(?:up\s+)?the\s+(?:rockets?|flames?|votes?)|🔥\s*TRENDING\s*🔥/i;
 const RULES = [
@@ -18,7 +38,7 @@ const RULES = [
   // a Solana-style address (Troya never posts one)
   [3, /(?:^|[^A-Za-z0-9])[1-9A-HJ-NP-Za-km-z]{32,44}(?![A-Za-z0-9])/],
   // paid promotion, boosts, fake votes
-  [3, /promot(?:e|ing|ion)\s+(?:for\s+)?(?:your|ur)\s+(?:project|token|coin)|professional\s+promotion|targeted\s+promotions?|reach\s+(?:genuine|real|active|organic)\s+(?:investors|holders|traders|buyers)|grow\s+(?:your|ur)\s+project|boost\s+(?:your|ur)\s+(?:token|project|coin)|(?:dex|trending)\s*(?:boost|rocket|vote)|rocket\W.{0,40}vote|buying\s+(?:volume|activity|pressure)\s+(?:of|from|up)|\bkols?\b.{0,60}(?:promot|reach|volume)|volume\s+bot|(?:cmc|coinmarketcap)\s+(?:listing|trending|communit)|\d+\+?\s*(?:tg|telegram)\s+channels/i],
+  [3, /promot(?:e|ing|ion)\s+(?:for\s+)?(?:your|ur)\s+(?:project|token|coin)|professional\s+promotion|targeted\s+promotions?|reach\s+(?:genuine|real|active|organic)\s+(?:investors|holders|traders|buyers)|grow\s+(?:your|ur)\s+project|boost\s+(?:your|ur)\s+(?:token|project|coin)|(?:dex|trending)\s*(?:boost|rocket|vote)|rocket\W.{0,40}vote|buying\s+(?:volume|activity|pressure)\s+(?:of|from|up)|\bkols?\b.{0,60}(?:promot|reach|volume)|volume\s+bot|(?:cmc|coinmarketcap)\s+(?:trending|communit)|\d+\+?\s*(?:tg|telegram)\s+channels/i],
   // call channels, "insider" and signal sellers
   [3, /insider\s+(?:calls?|printing|plays?)|next\s+(?:call|play|gem)|(?:my|our)\s+(?:next\s+)?calls?\b|call(?:ed)?\s+(?:this|it)\s+(?:one\s+)?(?:privately|early|at)|called\s+privately|\bvip\s+(?:calls?|group|channel)|verified\s+scanners?|(?:good|quality|best|free)\s+signals|signals?\s+(?:group|channel)|catch(?:ing)?\s+(?:all\s+)?(?:the\s+)?runners|call\s+the\s+big\s+investors/i],
   // scams (also a ban at once, see SCAM)
@@ -31,6 +51,9 @@ const RULES = [
   // blacklisted names and service pitches: listing, trending, vote and boost sellers the group asked to keep out
   [3, BLACKLIST],
   [3, SERVICES],
+  [3, LISTING],
+  // fake migrations and look-alike bots (also a ban at once, see severeOf)
+  [3, IMPOSTOR],
 ];
 
 // how promotional a text reads: rule weights plus other people's @handles and other coins' tickers when they come with it
@@ -131,7 +154,7 @@ async function offence(tg, chat, msgId, user, { severe = false, why = "" } = {})
   await brief(tg, chat, `${who(user)}, this is a warning: promotions, calls and ads for other coins are not allowed here. Next time is a ban. Group rules: /rules`, 60000);
   return false;
 }
-const severeOf = (m, v) => v >= 6 || SCAM.test(body(m)) || (foreignForward(m) && score(body(m)) >= 3);
+const severeOf = (m, v) => v >= 6 || SCAM.test(body(m)) || IMPOSTOR.test(body(m)) || (foreignForward(m) && score(body(m)) >= 3);
 
 export async function screen(m, tg, me) {
   const chat = m.chat?.id;

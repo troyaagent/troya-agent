@@ -121,5 +121,30 @@ const NEAR = ["we got four votes on the proposal", "go vote rocket on dexscreene
 const nearHit = NEAR.filter((t) => mod.score(t) >= 2);
 ok(!nearHit.length, `none of ${NEAR.length} near-miss messages are touched`, nearHit.join(" | "));
 
+// 16 Nov: a listing crew seeding "not listed on HoodHunters" / DexSocials, and a fake V2 migration pointing at a look-alike DexScreener bot
+const SCAM_V2 = "📢 Official Announcement\n\nAfter extensive discussions regarding the project’s marketing direction, we’ve decided to move forward with a rebrand and relaunch designed to align with the project’s new direction.\n\n🔄 V2 Relaunch & Migration\n\nThe relaunch process is expected to take approximately one hour. Supporting KOLs have been notified and will be updated as the relaunch progresses.\n\n🎁 Holder Migration\n\nTo process the V2 allocation, all eligible holders should use the designated migration portal to verify their previous token holdings and updated V2 allocation.\n\n👉 Migration Portal: @DexSreeenerTrading_Bot\n\n📌 Stay tuned for further official updates.";
+const LIST16 = ["We are still early boys, still not listed on HoodHunters", "The more, the merrier! Let’s aim to be listed on all major platforms for maximum attention!",
+  "Updating DexSocials is a smart move.", "Keep Buying Guys!!  HoodHunters .app listing soon", "Hello! Please update our Telegram, X & website on DexSocials . Thanks!",
+  "The more listings, the better! Let’s get on more sites and boost our visibility!", "Could you confirm our listing on hoodHunters .app?",
+  "Have you considered listing on cointrending sir?", "have you considered listing on Coinsniper?", "please update our website on tokenlistr",
+  SCAM_V2, "Migration portal: @TroyaV2Claim_bot", "V2 airdrop is live, check your allocation here: https://troya-v2.app", "use @DexScreenerMigrationBot to verify your holdings"];
+const l16Miss = LIST16.filter((t) => mod.score(t) < 3);
+ok(!l16Miss.length, `all ${LIST16.length} listing-crew and fake-migration messages score 3+ (removed)`, l16Miss.map((t) => `[${mod.score(t)}] ${t.slice(0, 40)}`).join(" | "));
+const NEAR16 = ["is there a v2 coming?", "is this migration real?", "someone posted a migration thing, is it legit?", "when cmc listing?", "are we listed on dexscreener yet?",
+  "not listed on coingecko yet, soon?", "can you update the website on dexscreener?", "Tweet away, everyone! Let’s get the word out — I scooped some coins.",
+  "airdrop for holders? the link is https://troya.codes/holders", "is the holder airdrop on the bot @TrojanTroya_bot", "the update is on x.com/Troyaagent",
+  "great listing on uniswap", "dexscreener shows the chart", "Keep Buying Guys!!", "Profile Updated?", "is there an allocation for early holders?"];
+const near16 = NEAR16.filter((t) => mod.score(t) >= 2);
+ok(!near16.length, `none of ${NEAR16.length} holder questions are touched`, near16.map((t) => `[${mod.score(t)}] ${t}`).join(" | "));
+reset();
+r = await mod.screen(msg(80, SCAM_V2), tg, me);
+ok(r && did("banChatMember", (c) => c.user_id === 80 && c.revoke_messages).length === 1, "a fake V2 migration post is a ban on the first message, messages revoked");
+reset();
+r = await mod.screen(msg(81, "Updating DexSocials is a smart move."), tg, me);
+ok(r && did("deleteMessage").length === 1 && !did("banChatMember").length, "a one-line listing pitch is removed with a warning, no ban the first time");
+reset();
+r = await mod.screen(msg(82, "Could you confirm our listing on hoodHunters .app?"), tg, me);
+ok(r && did("banChatMember", (c) => c.user_id === 82).length === 1, "a blacklisted name inside the listing script (two signals) is a ban at once");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

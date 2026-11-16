@@ -14,6 +14,8 @@ import { Interface, getAddress, isAddress } from "ethers";
 import { rpc, ADDR, STOCKS } from "./robinhood.mjs";
 import { geckoApi } from "./market.mjs";
 import { HttpError } from "./api.mjs";
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 export const NPM = getAddress("0x73991a25c818bf1f1128deaab1492d45638de0d3");
 const FACTORY = ADDR.v3Factory.toLowerCase();
@@ -217,8 +219,23 @@ async function volatility(pool, bg = false) {
     if (r.length < 24) return null;
     const m = r.reduce((s, x) => s + x, 0) / r.length;
     const sd = Math.sqrt(r.reduce((s, x) => s + (x - m) ** 2, 0) / (r.length - 1));
+    saveVol();
     return { hourly: sd, samples: r.length };
   }, true);
+}
+// measured volatility survives a restart (a deploy would otherwise send every pool back to GeckoTerminal)
+let volFile = null, saveT = null;
+async function loadVol() {
+  try { for (const [k, v] of Object.entries(JSON.parse(await readFile(volFile, "utf8")))) if (v?.hourly > 0) memo.set(`lp:vol:${k}`, { at: v.at, v: { hourly: v.hourly, samples: v.samples } }); } catch {}
+}
+function saveVol() {
+  if (!volFile || saveT) return;
+  saveT = setTimeout(async () => {
+    saveT = null;
+    const o = {};
+    for (const [k, h] of memo) if (k.startsWith("lp:vol:") && h.v?.hourly > 0) o[k.slice(7)] = { ...h.v, at: h.at };
+    await writeFile(volFile, JSON.stringify(o)).catch(() => {});
+  }, 5000);
 }
 const align = (t, sp, up) => Math.max(Math.ceil(MIN_TICK / sp) * sp, Math.min(Math.floor(MAX_TICK / sp) * sp, (up ? Math.ceil(t / sp) : Math.floor(t / sp)) * sp));
 
@@ -348,7 +365,8 @@ async function warm() {
   } catch {}
 }
 
-export async function register(r) {
+export async function register(r, ctx = {}) {
+  if (ctx.dataDir) { volFile = join(ctx.dataDir, "lp-vol.json"); await loadVol(); }
   if (process.env.LP_WARM !== "0") { setTimeout(warm, 90_000).unref?.(); setInterval(warm, 50 * 60_000).unref?.(); }
   r.get("/api/lp/pools", ({ query }) => lpPools(query.token || null), { weight: 1 });
   r.get("/api/lp/suggest", ({ query }) => lpSuggest(query.pool, query.days), { weight: 1 });

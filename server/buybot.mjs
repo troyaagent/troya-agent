@@ -10,7 +10,7 @@
 // numbers are the chain's own. The wallet shown is the address that ends up holding the tokens.
 import { readFileSync } from "node:fs";
 import { AbiCoder, getAddress } from "ethers";
-import { ADDR, rpc, ponsState } from "./robinhood.mjs";
+import { ADDR, CHAINS, rpc, ponsState } from "./robinhood.mjs";
 
 const MODE = process.env.BUYBOT || "";
 const CHAT = process.env.BUYBOT_CHAT || "@troyaagent";
@@ -132,9 +132,18 @@ async function scanPools(s, token, head) {
   let from = s.poolScan ? s.poolScan + 1 : Math.max(0, head - 5_000_000);
   if (head - from < 500 && s.pools) return;
   const pools = new Set(s.pools || []);
+  const filter = (a, b) => [{ address: ADDR.poolManager, topics: [T_INIT, null, ZERO_TOPIC, pad(token)], fromBlock: hex(a), toBlock: hex(b) }];
   while (from <= head) {
     const to = Math.min(head, from + 4_000_000);
-    const logs = await rpc("robinhood", "eth_getLogs", [{ address: ADDR.poolManager, topics: [T_INIT, null, ZERO_TOPIC, pad(token)], fromBlock: hex(from), toBlock: hex(to) }], { timeoutMs: 25000 });
+    // wide ranges go to the official RPC first (the fallbacks cap eth_getLogs, drpc's free plan at 10,000 blocks);
+    // if it is down, a short gap is read in 9,000-block pieces from whichever upstream answers, a long one waits
+    let logs;
+    try { logs = await rpc("robinhood", "eth_getLogs", filter(from, to), { timeoutMs: 25000, only: CHAINS.robinhood.upstreams[0] }); }
+    catch (e) {
+      if (to - from > 200_000) throw e;
+      logs = [];
+      for (let b = from; b <= to; b += 9000) logs.push(...((await rpc("robinhood", "eth_getLogs", filter(b, Math.min(to, b + 8999)), { timeoutMs: 20000 })) || []));
+    }
     for (const l of logs || []) pools.add(lower(l.topics[1]));
     from = to + 1;
   }

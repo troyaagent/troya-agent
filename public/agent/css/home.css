@@ -55,6 +55,8 @@
 .sig-a { display: flex; gap: 10px; font-size: 11.5px; padding-top: 1px; }
 .sig-list > .link { margin-top: 10px; justify-self: start; }
 .movers .tbl td, .movers .tbl th { padding-left: 8px; padding-right: 8px; }
+.panel.movers { overflow-x: auto; }   /* small phones: the table scrolls inside its panel, the page stays put */
+@media (max-width: 380px) { .movers .tbl td, .movers .tbl th { padding-left: 5px; padding-right: 5px; } }
 .tok-ico.perp { background: linear-gradient(135deg, #0f3640, #071a20); color: var(--blue-3); }
 .warnc { color: var(--warn); }
 .pad-tag { display: inline-flex; align-items: center; height: 16px; padding: 0 5px; margin-left: 6px; border-radius: 3px; border: 1px solid var(--line-3); font-size: 9.5px; font-weight: 400; color: var(--muted); vertical-align: 1px; text-transform: none; }

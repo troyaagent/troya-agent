@@ -38,7 +38,8 @@
 /* ticket */
 .pp-ticket { position: sticky; top: 68px; padding: 12px; display: grid; gap: 12px; }
 .pp-ticket .seg { width: 100%; }
-.pp-ticket .seg button { flex: 1; }
+.pp-ticket .seg button { flex: 1; min-width: 0; }
+.pp-ticket { grid-template-columns: minmax(0, 1fr); }
 .pp-size-h { display: flex; justify-content: space-between; align-items: baseline; font-size: 11.5px; color: var(--muted); }
 .pp-size { display: flex; gap: 6px; }
 .pp-size .input { flex: 1; height: 44px; font-size: 20px; font-variant-numeric: tabular-nums; }

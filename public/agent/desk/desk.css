@@ -115,13 +115,13 @@ body.drawer-open .d-fab, body.on-chat .d-fab { opacity: 0; pointer-events: none;
 .wallet-btn .av { background: conic-gradient(from 90deg, #f3f0ea, #6b6b6b, #8edff5, #f3f0ea); }
 
 /* ---------- Desk home ---------- */
-.dk { display: grid; gap: 16px; padding: 26px 0 8px; }
+.dk { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 26px 0 8px; }
 .dk-row { display: grid; gap: 16px; align-items: start; }
 .dk-row > * { min-width: 0; }
 .dk-row.r75 { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
 .dk-row.r66 { grid-template-columns: 1fr 1fr; }
 .dk-cols { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 16px; align-items: start; }
-.dk-col { display: grid; gap: 16px; min-width: 0; }
+.dk-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
 .dk-gate, .dk-agent, .dk-sentry, .dk-tools, .dk-how { padding-bottom: 16px; }
 .dk-gate > :not(.panel-h), .dk-agent > :not(.panel-h), .dk-sentry > :not(.panel-h), .dk-tools > :not(.panel-h), .dk-how > :not(.panel-h) { margin-left: 16px; margin-right: 16px; }
 .dk-agent-b { margin-left: 8px !important; margin-right: 8px !important; }
@@ -247,7 +247,7 @@ body.drawer-open .d-fab, body.on-chat .d-fab { opacity: 0; pointer-events: none;
   .d-right .chain-chip { display: none; }
 }
 @container shell (max-width: 900px) {
-  .dk-cols, .dk-row.r75, .dk-row.r66 { grid-template-columns: 1fr; }
+  .dk-cols, .dk-row.r75, .dk-row.r66 { grid-template-columns: minmax(0, 1fr); }
   .dk-steps-list { grid-template-columns: 1fr 1fr; }
   .dk-stats { grid-template-columns: 1fr 1fr; }
   .dk-stats .stat:nth-child(3) { border-left: 0; }
@@ -263,7 +263,7 @@ body.drawer-open .d-fab, body.on-chat .d-fab { opacity: 0; pointer-events: none;
   .d-shell { margin-left: 0; }
   .d-burger { display: grid !important; }
   .d-top { grid-template-columns: auto minmax(0, 1fr) minmax(200px, 420px) auto; padding: 0 16px; gap: 10px; }
-  .dk-row.r75, .dk-row.r66, .dk-cols { grid-template-columns: 1fr; }
+  .dk-row.r75, .dk-row.r66, .dk-cols { grid-template-columns: minmax(0, 1fr); }
   .dk-stats { grid-template-columns: 1fr 1fr; }
   .dk-stats .stat:nth-child(3) { border-left: 0; }
   .dk-stats .stat:nth-child(n+3) { border-top: 1px solid var(--line); }
@@ -289,6 +289,11 @@ body.drawer-open .d-fab, body.on-chat .d-fab { opacity: 0; pointer-events: none;
   body.drawer-open .d-tabbar { display: none; }
   .ag-dock { bottom: 60px; }
   .d-drawer-b .ag-dock { bottom: 0; }
+}
+@media (max-width: 380px) {
+  /* small phones (320–380px): the crumb already collapses, so tighten the bar so Connect stays on screen */
+  .d-top { gap: 6px; padding: 0 10px; }
+  .d-right { gap: 2px; }
 }
 @media (max-width: 720px) {
   .dk { gap: 12px; padding-top: 14px; }

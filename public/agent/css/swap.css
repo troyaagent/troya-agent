@@ -70,9 +70,17 @@
 .sw-gate .gh .gate-age + .badge-s { margin-left: 0; }
 .sw-gate .gate-note { margin-top: 8px; font-size: 11px; color: var(--muted); }
 
-/* network picker (Robinhood Chain, Base, Arbitrum) */
+/* network picker (Robinhood Chain, Base, Arbitrum, Solana) */
+.sw-wrap { grid-template-columns: minmax(0, 1fr); }
+.sw-net { max-width: 100%; }
+.sw-nets { max-width: 100%; }
 .sw-nets button { display: inline-flex; align-items: center; gap: 7px; }
 .sw-nets .chain-logo { flex: none; }
+@media (max-width: 440px) {
+  /* four networks share the phone width instead of pushing the card sideways */
+  .sw-net, .sw-nets { width: min(460px, 100%); }
+  .sw-nets button { flex: 1 1 0; min-width: 0; justify-content: center; gap: 5px; padding: 0 6px; font-size: 12px; }
+}
 
 /* Solana wallet chooser */
 .sw-solw { display: grid; gap: 6px; }

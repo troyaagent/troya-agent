@@ -506,7 +506,17 @@ function buildRouterTx(c, tin, tout, amountIn, minOut, deadline) {
 
 let marketMod = null;
 const ethUsdNow = async () => { try { marketMod ||= await import("./market.mjs"); return await marketMod.getEthUsd(); } catch { return null; } };
-const liquidityFor = async (token) => { try { marketMod ||= await import("./market.mjs"); return marketMod.indexRow?.(token) || null; } catch { return null; } };
+// pool depth: the market board first; a coin outside the board (e.g. a graduated v4 pool GeckoTerminal has not listed)
+// falls back to the single-token read (DexScreener, cached 30 s), capped at 2.5 s so a quote is never held up by it
+const liquidityFor = async (token) => {
+  try {
+    marketMod ||= await import("./market.mjs");
+    const row = marketMod.indexRow?.(token) || null;
+    if (row?.liquidityUsd) return row;
+    const one = await Promise.race([marketMod.getRobinhoodToken(token).then((r) => r?.token || null).catch(() => null), new Promise((ok) => setTimeout(() => ok(null), 2500))]);
+    return one?.liquidityUsd ? one : row;
+  } catch { return null; }
+};
 
 /**
  * quoteSwap({ tokenIn, tokenOut, amountIn | amountInRaw, slippageBps, from? }) — any pair on Robinhood Chain.

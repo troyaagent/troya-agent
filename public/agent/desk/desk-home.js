@@ -26,7 +26,7 @@ export async function mount(view, { go, ask: askDrawer }) {
 
   const head = h("section", { class: "dk-head" },
     h("div", { class: "dk-hello" },
-      h("p", { class: "dk-eyebrow" }, h("i", { class: "live-dot" }), "Agent desk · Robinhood Chain · Hyperliquid"),
+      h("p", { class: "dk-eyebrow" }, h("i", { class: "live-dot" }), "Agent desk · Robinhood · Base · Arbitrum · Solana · Hyperliquid"),
       h("h1", {}, h("em", {}, `${greeting()}.`), " Where should your agent look today?"),
       h("p", { class: "dk-sub" }, "Say it in plain words. Troya pulls the numbers and checks the route; you sign off.")),
     h("div", { class: "dk-ask" },

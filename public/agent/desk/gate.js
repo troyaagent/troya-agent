@@ -41,6 +41,9 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
     }
     const failed = r.checks.filter((c) => c.status === "fail").length;
     const passed = r.checks.filter((c) => c.status === "pass").length;
+    const unmeasured = r.checks.filter((c) => c.status === "skip").length, notes = r.checks.filter((c) => c.status === "warn").length;
+    // "6 passed · 1 not measured" reads clearer than "6 of 7 passed" next to a Passed verdict
+    const tally = [`${passed} passed`, failed ? `${failed} failed` : "", notes ? `${notes} to note` : "", unmeasured ? `${unmeasured} not measured` : ""].filter(Boolean).join(" · ");
     clear(out,
       h("div", { class: "dk-gate-h" },
         tokenIcon({ symbol: r.symbol, address: a, chain: "robinhood" }, ""),
@@ -48,7 +51,7 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
           h("b", {}, r.symbol ? `$${r.symbol}` : short(a)), h("span", {}, [r.name, short(a)].filter(Boolean).join(" · "))),
         h("div", { class: "dk-gate-v" },
           h("span", { class: `dk-v v-${r.verdict}` }, WORD[r.verdict] || r.verdict),
-          h("span", { class: "fine" }, `${passed} of ${r.checks.length} passed${r.checkedAt ? ` · ${ago(r.checkedAt)}` : ""}`))),
+          h("span", { class: "fine" }, `${tally}${r.checkedAt ? ` · ${ago(r.checkedAt)}` : ""}`))),
       example ? h("p", { class: "fine dk-gate-ex" }, "Live example: the $TROYA token. Paste any coin above to check it.") : null,
       h("ol", { class: "dk-checks" }, r.checks.map((c) => h("li", { class: `c-${c.status}` },
         h("span", { class: "dk-ck" }, c.status === "pass" ? icon("check") : c.status === "fail" ? icon("close") : h("b", {}, c.status === "warn" ? "!" : "–")),

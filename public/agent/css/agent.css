@@ -1,6 +1,9 @@
 /* Agent page: chat, Agent Wallet, Autopilot, Playbooks */
 .ag-wrap { max-width: 860px; margin: 0 auto; padding-top: 18px; }
-.ag-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.ag-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--line); margin-bottom: 8px; overflow-x: auto; scrollbar-width: none; }
+.ag-tabs::-webkit-scrollbar { display: none; }
+.ag-tabs a { flex: none; }
+@media (max-width: 380px) { .ag-tabs { gap: 16px; } }
 .ag-tabs a { position: relative; padding: 8px 0 10px; font-size: 13px; color: var(--muted); }
 .ag-tabs a:hover { color: var(--fg); }
 .ag-tabs a[aria-current="page"] { color: var(--fg); }

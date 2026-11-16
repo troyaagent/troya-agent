@@ -306,7 +306,7 @@ em { font-family: var(--serif); font-style: var(--serif-style); font-weight: 400
 @media (max-width: 899px) {
   .film-copy, .pz-in { grid-template-columns: 1fr; gap: 18px; }
   .pz-in { margin-top: max(var(--pull, 0px), -6vw); }
-  .facts { grid-template-columns: 1fr 1fr; margin: 0 var(--gut); }
+  .facts { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin: 0 var(--gut); }
   .fact { padding-left: 0; padding-right: 12px; }
   .fact:nth-child(odd) { border-left: 0; }
   .fact:nth-child(even) { padding-left: 16px; }
@@ -450,3 +450,6 @@ em { font-family: var(--serif); font-style: var(--serif-style); font-weight: 400
   .wk-track li[aria-hidden="true"] { display: none; }
   .wk-viewport { -webkit-mask: none; mask: none; }
 }
+
+/* very small phones: the long LP id and counts stay inside their half of the facts row */
+@media (max-width: 360px) { .fact b { font-size: 24px; overflow-wrap: anywhere; } }

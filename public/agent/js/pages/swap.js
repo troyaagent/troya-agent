@@ -49,7 +49,7 @@ export async function mount(view, ctx) {
   if (ctx.query.amount && /^\d*\.?\d+$/.test(ctx.query.amount)) st.amount = ctx.query.amount;
 
   /* ---------- layout ---------- */
-  // network picker: Robinhood Chain is home; Base and Arbitrum route through KyberSwap with the same Gate
+  // network picker: Robinhood Chain is home; Base and Arbitrum route through KyberSwap, Solana through Jupiter, each with its own Gate
   const netChip = h("div", { class: "seg sw-nets", role: "group", "aria-label": "Network" });
   const paintNets = () => clear(netChip, NETS.map((n) => h("button", { type: "button", "aria-pressed": String(st.chain === n.key), onclick: () => setChain(n.key) }, chainLogo(n.key, 16), n.label)));
   function setChain(k) {
@@ -62,7 +62,7 @@ export async function mount(view, ctx) {
   paintNets();
   const body = h("div", { class: "sw-body" });
   clear(view,
-    pageHead("Swap", "Trade on Robinhood Chain (Pons curves, Uniswap v3/v4 pools and every other Robinhood Chain launchpad), Base and Arbitrum. Troya Gate checks every swap; you sign it in your own wallet."),
+    pageHead("Swap", "Trade on Robinhood Chain (Pons curves, Uniswap v3/v4 pools and every other Robinhood Chain launchpad), Base, Arbitrum and Solana. Troya Gate checks every swap; you sign it in your own wallet."),
     h("div", { class: "sw-wrap" }, h("div", { class: "sw-net" }, netChip), body));
 
   // sell leg

@@ -167,9 +167,15 @@ export function chainLogo(chain, size = 16) {
   b.style.width = b.style.height = size + "px";
   return b;
 }
+// launchpads and venues without a logo file use their own token's logo through the icon proxy
+const PAD_ICON = {
+  abyss: "/api/icon/token/0x15f3385625d7e364c5a6216fbbceadf10fa90e7d",
+  goo: "/api/icon/token/0x6572eade9fb17f4027baf92feac222b9aa746bd0",
+  aero: "/api/icon/token/0x940181a94A35A4569E4529A3CDfB74e38FD98631?chain=base",
+};
 export function padLogo(pad, size = 16) {
   const k = String(pad || "other").toLowerCase();
-  const b = logoBox("pad-logo", k === "other" ? "…" : mono(k).slice(0, 1), [logoUrl("pad", k)], k);
+  const b = logoBox("pad-logo", k === "other" ? "…" : mono(k).slice(0, 1), [logoUrl("pad", k), PAD_ICON[k]], k);
   b.style.width = b.style.height = size + "px";
   return b;
 }
@@ -199,7 +205,10 @@ export function tokenIcon(t, size = "") {
   const img = t?.image || t?.imageUrl || t?.logo;
   const direct = img && /^(https:|\/)/.test(img) ? img : null;
   // logos go through our cached proxy first: some hosts (ipfs.io) refuse to be embedded cross-origin
-  const proxied = ADDR.test(addr) ? `/api/icon/token/${addr.toLowerCase()}` : null;
+  const net = String(t?.chain || "robinhood").toLowerCase();
+  const other = net === "base" || net === "arbitrum" || net === "solana";
+  const proxied = net === "solana" ? (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr) ? `/api/icon/token/${addr}?chain=solana` : null)
+    : ADDR.test(addr) ? `/api/icon/token/${addr.toLowerCase()}${other ? `?chain=${net}` : ""}` : null;
   const box = logoBox(`tok-ico ${size}`, mono(t?.symbol), [
     brand,
     !native && LOGOS.symbol[sym] && (sym === "WETH" || sym === "USDG") ? L + LOGOS.symbol[sym] : null,
@@ -209,8 +218,7 @@ export function tokenIcon(t, size = "") {
   const hue = [...(addr || sym || "x")].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
   box.style.background = `linear-gradient(135deg, hsl(${(hue % 60) + 170} 45% 26%), hsl(${(hue % 60) + 190} 50% 14%))`;
   // network badge in the corner (like a wallet's token list): pass t.chain = "robinhood" | "base" | "arbitrum" | …
-  const net = String(t?.chain || "").toLowerCase();
-  if (!net || !LOGOS.chain[net]) return box;
+  if (!t?.chain || !LOGOS.chain[net]) return box;
   const badge = logoBox("tok-net", "", [logoUrl("chain", net)], net);
   return h("span", { class: `tok-wrap ${size}` }, box, badge);
 }

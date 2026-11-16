@@ -16,7 +16,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { HttpError, send } from "./api.mjs";
-import { KYBER_ON, KYBER_LIVE, kyberRoute, kyberBuild } from "./kyber.mjs";
+import { KYBER_ON, KYBER_LIVE, kyberRoute, kyberBuild, splitLoss } from "./kyber.mjs";
 
 /* ------------------------------------------------------------------ */
 /* chains + upstreams                                                  */
@@ -534,14 +534,16 @@ async function kyberQuote(tin, tout, amt, coin, ethUsd, warnings, light = false)
     kyberRoute({ tokenIn: tin, tokenOut: tout, amountIn: amt }),
     light ? null : kyberRoute({ tokenIn: tin, tokenOut: tout, amountIn: probeAmt }).catch(() => null),
   ]);
-  let impact = null;
-  if (probe && probe.out > 0n) impact = Math.max(0, 1 - Number((full.out * probeAmt * 1000000n) / (probe.out * amt)) / 1000000);
-  // fees: a small round trip (probe there and back) loses about twice the one-way fees and taxes; USD prices for
-  // young coins are too rough for this
-  let feePct = null;
+  // round trips tell fees from impact: a small one loses about twice the fees and taxes, a full-size one twice the fees
+  // plus twice the impact (one-sided probes and USD prices are too noisy for young coins)
+  let impact = null, feePct = null;
   if (probe && probe.out > 0n) {
-    const back = await kyberRoute({ tokenIn: tout, tokenOut: tin, amountIn: probe.out }).catch(() => null);
-    if (back && back.out > 0n) feePct = Math.max(0, (1 - Number((back.out * 1000000n) / probeAmt) / 1000000) * 50);
+    const [backP, backF] = await Promise.all([
+      kyberRoute({ tokenIn: tout, tokenOut: tin, amountIn: probe.out }).catch(() => null),
+      kyberRoute({ tokenIn: tout, tokenOut: tin, amountIn: full.out }).catch(() => null),
+    ]);
+    const rt = (back, a) => (back && back.out > 0n ? Math.max(0, 1 - Number((back.out * 1000000n) / a) / 1000000) : null);
+    ({ feePct, impact } = splitLoss(rt(backP, probeAmt), rt(backF, amt)));
   }
   const row = await liquidityFor(coin || tout);
   const depthEth = row?.liquidityUsd && ethUsd ? row.liquidityUsd / ethUsd / 2 : null;
@@ -1125,6 +1127,10 @@ export async function checkCall(chain, c, ip) {
 /* routes                                                              */
 /* ------------------------------------------------------------------ */
 
+// Base and Arbitrum (F11) live in evmswap.mjs; the same /api/swap/* routes take ?chain=base|arbitrum
+const isEvm = (c) => c === "base" || c === "arbitrum";
+let evmMod = null;
+const evm = () => (evmMod ||= import("./evmswap.mjs"));
 export async function register(r, ctx) {
   DATA_DIR = ctx.dataDir;
   try { v4.keys = JSON.parse(await readFile(path.join(DATA_DIR, "v4keys.json"), "utf8")) || {}; } catch { v4.keys = {}; }
@@ -1150,12 +1156,13 @@ export async function register(r, ctx) {
   }
 
   const slipOf = (query) => query.slippageBps ?? (query.slippage ? Number(query.slippage) * 100 : 100);
-  r.get("/api/swap/quote", ({ query }) => quoteSwap({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query), from: query.from }), { perMin: 240 });
-  r.post("/api/swap/build", ({ body }) => { const b = body || {}; return buildSwapTx({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps }); }, { perMin: 120 });
-  r.get("/api/swap/gate", ({ query }) => gateCheck({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) }), { perMin: 90 });
+  r.get("/api/swap/quote", ({ query }) => isEvm(query.chain) ? evm().then((m) => m.evmQuote({ chain: query.chain, tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query) })) : quoteSwap({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query), from: query.from }), { perMin: 240 });
+  r.post("/api/swap/build", ({ body }) => { const b = body || {}; if (isEvm(b.chain)) return evm().then((m) => m.evmBuild({ chain: b.chain, from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps })); return buildSwapTx({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps }); }, { perMin: 120 });
+  r.get("/api/swap/gate", ({ query }) => isEvm(query.chain) ? evm().then((m) => m.evmGate({ chain: query.chain, tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) })) : gateCheck({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) }), { perMin: 90 });
 
   r.get("/api/token/health", ({ query }) => tokenHealth(query.address), { perMin: 120 });
-  r.get("/api/token/meta", ({ query }) => tokenMeta(query.address).then(pub), { perMin: 240 });
+  r.get("/api/token/meta", ({ query }) => isEvm(query.chain) ? evm().then((m) => m.evmTokenMeta(query.chain, query.address)) : tokenMeta(query.address).then(pub), { perMin: 240 });
+  r.get("/api/swap/tokens", ({ query }) => evm().then((m) => m.evmSearch({ chain: query.chain, q: query.q })), { perMin: 120 });
   r.get("/api/token/pons", async ({ query }) => {
     const s = await ponsState(query.address, query.account && isAddress(query.account) ? getAddress(query.account) : ZERO);
     return s ? { pons: true, ...ponsPublic(s), profile: await ponsProfile(s.token).catch(() => null) } : { pons: false };

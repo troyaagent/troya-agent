@@ -69,3 +69,7 @@
 .sw-gate .gh .gate-age { margin-left: auto; font-weight: 400; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .sw-gate .gh .gate-age + .badge-s { margin-left: 0; }
 .sw-gate .gate-note { margin-top: 8px; font-size: 11px; color: var(--muted); }
+
+/* network picker (Robinhood Chain, Base, Arbitrum) */
+.sw-nets button { display: inline-flex; align-items: center; gap: 7px; }
+.sw-nets .chain-logo { flex: none; }

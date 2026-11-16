@@ -81,3 +81,15 @@ export async function kyberBuild({ chainId = 4663, routeSummary, router, sender,
   if (!/^0x[0-9a-f]+$/i.test(d.data || "")) throw new Error("KyberSwap returned no calldata");
   return { to, data: d.data, value: BigInt(d.transactionValue || 0), amountOut: BigInt(d.amountOut || 0) };
 }
+
+/** splitLoss(rtProbe, rtFull) → { feePct, impact }: a full-size round trip loses about 2 × (fees + impact) and a small one
+ *  about 2 × fees. Tiny probes can be off (gas-aware routing, market makers), so a probe that shows far less loss than the
+ *  real size (on a small trade) is not trusted: the whole one-way loss is then reported as fees and impact as zero. */
+export function splitLoss(rtP, rtF) {
+  if (rtF == null) return { feePct: rtP != null ? rtP * 50 : null, impact: null };
+  const oneWay = rtF / 2;
+  // a near-zero probe next to a modest full-size loss is noise; a near-zero probe next to a big loss is real impact
+  if (rtP == null || (rtP < 0.0005 && rtF < 0.05)) return { feePct: oneWay * 100, impact: 0 };
+  const fee = Math.min(rtP / 2, oneWay);
+  return { feePct: fee * 100, impact: Math.max(0, oneWay - fee) };
+}

@@ -1,5 +1,5 @@
-// Swap (#/swap?in=&out=): any pair on Robinhood Chain through Pons curves and Uniswap v3 / v4 pools, and the other
-// Robinhood Chain venues through KyberSwap (the server asks Kyber only when its own route finds nothing).
+// Swap (#/swap?chain=&in=&out=): Robinhood Chain (Pons curves, Uniswap v3 / v4, the other launchpads through KyberSwap),
+// Base and Arbitrum (KyberSwap). The network picker sits above the card; ?chain=base|arbitrum opens on that network.
 // Quotes and the Troya Gate come from the server; every transaction is signed in the user's wallet.
 import { h, clear, pageHead, seg, icon, modal, review, toast, tokenIcon, chainLogo, venueLogo, tiny, num, short, useCss, debounce, infoTip } from "../ui.js";
 import { wallet, onWallet, openConnect, CHAINS } from "../wallet.js";
@@ -7,6 +7,7 @@ import { api } from "../api.js";
 import { ETH, isNative, balanceOf, toRaw, fromRaw, inputNum, rawInput, sendTx, waitReceipt, errText, journal } from "../chain.js";
 
 const SLIPS = [{ value: 100, label: "1%" }, { value: 300, label: "3%" }, { value: 500, label: "5%" }];
+const NETS = [{ key: "robinhood", label: "Robinhood" }, { key: "base", label: "Base" }, { key: "arbitrum", label: "Arbitrum" }];
 
 export async function mount(view, ctx) {
   useCss("swap");
@@ -14,14 +15,17 @@ export async function mount(view, ctx) {
   const st = {
     sell: ETH, buy: null, amount: "", slip: Math.round((ctx.prefs.get().slippage || 1) * 100),
     quote: null, quoteErr: null, loading: false, gate: null, gateAt: 0, gating: false, bal: null, busy: false, seq: 0,
+    chain: NETS.some((n) => n.key === ctx.query.chain) ? ctx.query.chain : "robinhood",
   };
+  const cq = () => (st.chain === "robinhood" ? {} : { chain: st.chain });
+  const netName = () => `${CHAINS[st.chain].name} · ${CHAINS[st.chain].id}`;
   if (![100, 300, 500].includes(st.slip)) st.slip = 100;
 
   // preload tokens from ?in= / ?out=
   const pre = async (a) => {
     if (!a || /^eth$/i.test(a)) return ETH;
     if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return null;
-    try { const m = await api.get(`token/meta?address=${a}`); return { address: m.address, symbol: m.symbol, name: m.name, decimals: m.decimals }; } catch { return null; }
+    try { const m = await api.get(`token/meta?${new URLSearchParams({ address: a, ...cq() })}`); return { address: m.address, symbol: m.symbol, name: m.name, decimals: m.decimals }; } catch { return null; }
   };
   if (ctx.query.in || ctx.query.out) {
     const [a, b] = await Promise.all([pre(ctx.query.in), pre(ctx.query.out)]);
@@ -33,10 +37,19 @@ export async function mount(view, ctx) {
   if (ctx.query.amount && /^\d*\.?\d+$/.test(ctx.query.amount)) st.amount = ctx.query.amount;
 
   /* ---------- layout ---------- */
-  const netChip = h("span", { class: "chain-chip" }, chainLogo("robinhood", 16), "Robinhood Chain · 4663");
+  // network picker: Robinhood Chain is home; Base and Arbitrum route through KyberSwap with the same Gate
+  const netChip = h("div", { class: "seg sw-nets", role: "group", "aria-label": "Network" });
+  const paintNets = () => clear(netChip, NETS.map((n) => h("button", { type: "button", "aria-pressed": String(st.chain === n.key), onclick: () => setChain(n.key) }, chainLogo(n.key, 16), n.label)));
+  function setChain(k) {
+    if (k === st.chain) return;
+    st.chain = k; st.sell = ETH; st.buy = null; st.amount = ""; sellInput.value = "";
+    try { const u = new URL(location.href); const [path, qs = ""] = u.hash.slice(1).split("?"); const p = new URLSearchParams(qs); k === "robinhood" ? p.delete("chain") : p.set("chain", k); p.delete("in"); p.delete("out"); history.replaceState(null, "", `#${path}${p.toString() ? "?" + p : ""}`); } catch {}
+    paintNets(); paintNote(); reset(); paint(); refreshBal();
+  }
+  paintNets();
   const body = h("div", { class: "sw-body" });
   clear(view,
-    pageHead("Swap", "Trade coins and tokenized stocks on Robinhood Chain: Pons curves, Uniswap v3/v4 pools and every other Robinhood Chain launchpad through KyberSwap. You sign every swap in your own wallet."),
+    pageHead("Swap", "Trade on Robinhood Chain (Pons curves, Uniswap v3/v4 pools and every other Robinhood Chain launchpad), Base and Arbitrum. Troya Gate checks every swap; you sign it in your own wallet."),
     h("div", { class: "sw-wrap" }, h("div", { class: "sw-net" }, netChip), body));
 
   // sell leg
@@ -69,9 +82,15 @@ export async function mount(view, ctx) {
     h("div", { class: "sw-meta" }, h("span", { class: "muted" }, "Slippage"), slipSeg,
       infoTip("The most the price may move against you between quote and inclusion. If it moves further, the swap reverts and only the network fee is spent.")),
     rows, warnBox, gateBox, btn, txBox);
-  const note = h("p", { class: "note sw-note" },
-    "Robinhood Chain is chain 4663, gas is paid in ETH. Troya routes Pons Family curves (until a coin graduates) and Uniswap v3/v4 pools, and the other Robinhood Chain launchpads and pools through KyberSwap. Troya adds no fee of its own. ",
-    h("a", { class: "link", href: "#/bridge" }, "Bridge ETH in"), " · ", h("a", { class: "link", href: "#/market" }, "Browse the market"));
+  const note = h("p", { class: "note sw-note" });
+  function paintNote() {
+    clear(note, st.chain === "robinhood"
+      ? ["Robinhood Chain is chain 4663, gas is paid in ETH. Troya routes Pons Family curves (until a coin graduates) and Uniswap v3/v4 pools, and the other Robinhood Chain launchpads and pools through KyberSwap. Troya adds no fee of its own. ",
+        h("a", { class: "link", href: "#/bridge" }, "Bridge ETH in"), " · ", h("a", { class: "link", href: "#/market" }, "Browse the market")]
+      : [`${CHAINS[st.chain].name} is chain ${CHAINS[st.chain].id}, gas is paid in ETH. Troya routes it through KyberSwap and runs the same Troya Gate: the exact swap simulated, a test sell and transfer tax. Troya adds no fee of its own. `,
+        h("a", { class: "link", href: "#/bridge" }, "Move ETH between chains")]);
+  }
+  paintNote();
 
   sellInput.addEventListener("input", () => {
     const v = sellInput.value.replace(/,/g, ".").replace(/[^\d.]/g, "");
@@ -89,7 +108,7 @@ export async function mount(view, ctx) {
   }
 
   function tokBtn(el, t) {
-    clear(el, t ? [tokenIcon({ ...t, chain: "robinhood" }, "sm"), h("b", {}, t.symbol), icon("arrowRight", "chev")] : [h("span", {}, "Select token"), icon("arrowRight", "chev")]);
+    clear(el, t ? [tokenIcon({ ...t, chain: st.chain }, "sm"), h("b", {}, t.symbol), icon("arrowRight", "chev")] : [h("span", {}, "Select token"), icon("arrowRight", "chev")]);
     el.classList.toggle("empty", !t);
   }
 
@@ -165,7 +184,7 @@ export async function mount(view, ctx) {
   // Troya Gate runs again at the moment of signing: on a new pool, liquidity can move between the quote and the click.
   async function regate(q, label) {
     st.busy = label || "Running Troya Gate again…"; paint();
-    const qs = new URLSearchParams({ tokenIn: isNative(q.tokenIn) ? "ETH" : q.tokenIn.address, tokenOut: isNative(q.tokenOut) ? "ETH" : q.tokenOut.address, amountInRaw: q.amountInRaw, slippageBps: String(st.slip), from: wallet.address });
+    const qs = new URLSearchParams({ tokenIn: isNative(q.tokenIn) ? "ETH" : q.tokenIn.address, tokenOut: isNative(q.tokenOut) ? "ETH" : q.tokenOut.address, amountInRaw: q.amountInRaw, slippageBps: String(st.slip), from: wallet.address, ...cq() });
     let g;
     try { g = await api.get(`swap/gate?${qs}`); }
     catch (e) { const err = new Error(`Troya Gate could not run again just now (${e.message}). Nothing was sent. Try again in a moment.`); err.gate = true; throw err; }
@@ -185,7 +204,7 @@ export async function mount(view, ctx) {
     const seq = ++st.seq;
     st.loading = true;
     paint();
-    const qs = new URLSearchParams({ tokenIn: isNative(st.sell) ? "ETH" : st.sell.address, tokenOut: isNative(st.buy) ? "ETH" : st.buy.address, amountInRaw: amt.toString(), slippageBps: String(st.slip) });
+    const qs = new URLSearchParams({ tokenIn: isNative(st.sell) ? "ETH" : st.sell.address, tokenOut: isNative(st.buy) ? "ETH" : st.buy.address, amountInRaw: amt.toString(), slippageBps: String(st.slip), ...cq() });
     try {
       const q = await api.get(`swap/quote?${qs}`);
       if (!alive || seq !== st.seq) return;
@@ -208,7 +227,9 @@ export async function mount(view, ctx) {
     st.bal = null;
     paint();
     if (!wallet.address || !st.sell) return;
-    try { st.bal = await balanceOf(wallet.address, st.sell); } catch { st.bal = null; }
+    const chainAt = st.chain;
+    try { st.bal = await balanceOf(wallet.address, st.sell, st.chain); } catch { st.bal = null; }
+    if (chainAt !== st.chain) return;
     if (alive) paint();
   }
   function setMax() {
@@ -236,7 +257,7 @@ export async function mount(view, ctx) {
       if (other && (isNative(t) ? isNative(other) : !isNative(other) && other.address === t.address)) { if (side === "sell") st.buy = null; else st.sell = ETH; }
       m.close(); reset(); paint(); refreshBal(); requote();
     };
-    const row = (t, extra) => h("button", { class: "tp-row", type: "button", onclick: () => choose(t) }, tokenIcon({ ...t, chain: "robinhood" }, "sm"),
+    const row = (t, extra) => h("button", { class: "tp-row", type: "button", onclick: () => choose(t) }, tokenIcon({ ...t, chain: st.chain }, "sm"),
       h("span", { class: "tp-name" }, h("b", {}, t.symbol), h("small", {}, t.name || (t.address === "native" ? "Native gas token" : short(t.address)))),
       extra ? h("span", { class: "tp-extra" }, extra) : null);
     let seq = 0;
@@ -244,6 +265,25 @@ export async function mount(view, ctx) {
       const q = input.value.trim();
       const my = ++seq;
       const items = [];
+      if (st.chain !== "robinhood") {
+        // Base / Arbitrum: popular tokens, search by name or symbol (GeckoTerminal), or paste an address
+        if (!q || "eth".startsWith(q.toLowerCase())) items.push(row(ETH, "Native"));
+        clear(list, ...items, h("div", { class: "tp-load muted" }, "Searching…"));
+        try {
+          if (/^0x[0-9a-fA-F]{40}$/.test(q)) {
+            const m2 = await api.get(`token/meta?${new URLSearchParams({ address: q, ...cq() })}`);
+            if (my !== seq) return;
+            clear(list, row({ address: m2.address, symbol: m2.symbol, name: m2.name, decimals: m2.decimals }, "By address"));
+            return;
+          }
+          const r = await api.get(`swap/tokens?${new URLSearchParams({ q, ...cq() })}`);
+          if (my !== seq) return;
+          const toks = r.tokens || [];
+          clear(list, ...items, ...toks.map((t) => row(t, t.liquidityUsd ? h("span", { class: "badge-s" }, `$${num(t.liquidityUsd / 1e6, 1)}M liq.`) : null)),
+            toks.length ? null : h("div", { class: "tp-load muted" }, "No match. Paste the token address instead."));
+        } catch { if (my === seq) clear(list, ...items, h("div", { class: "tp-load muted" }, "The token list is unavailable right now. Paste a token address instead.")); }
+        return;
+      }
       const base = [[ETH, "Native"], [{ address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", symbol: "USDG", name: "Global Dollar", decimals: 6 }, "Stablecoin"], [{ address: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", symbol: "WETH", name: "Wrapped Ether", decimals: 18 }, "Wrapped"]];
       for (const [t, tag] of base) if (!q || t.symbol.toLowerCase().startsWith(q.toLowerCase())) items.push(row(t, tag));
       clear(list, ...items, h("div", { class: "tp-load muted" }, "Searching…"));
@@ -273,7 +313,9 @@ export async function mount(view, ctx) {
     }, 250);
     input.addEventListener("input", search);
     const m = modal({ title: side === "sell" ? "Sell which token?" : "Buy which token?", body: h("div", { class: "tp" }, input, list,
-      h("p", { class: "note" }, "Troya routes Pons curves and Uniswap v3/v4 pools, and the other Robinhood Chain launchpads through KyberSwap. Paste any Robinhood Chain coin address to find it. A coin still on its Pons curve trades against its curve pair (usually ETH).")) });
+      h("p", { class: "note" }, st.chain === "robinhood"
+        ? "Troya routes Pons curves and Uniswap v3/v4 pools, and the other Robinhood Chain launchpads through KyberSwap. Paste any Robinhood Chain coin address to find it. A coin still on its Pons curve trades against its curve pair (usually ETH)."
+        : `Tokens on ${CHAINS[st.chain].name}, routed through KyberSwap. Paste any ${CHAINS[st.chain].name} token address to find it; Troya Gate checks it before you can buy.`)) });
     search();
     setTimeout(() => input.focus(), 40);
   }
@@ -286,22 +328,23 @@ export async function mount(view, ctx) {
     try {
       await regate(q);
       st.busy = "Preparing…"; paint();
-      const buildArgs = { from: wallet.address, tokenIn: isNative(q.tokenIn) ? "ETH" : q.tokenIn.address, tokenOut: isNative(q.tokenOut) ? "ETH" : q.tokenOut.address, amountInRaw: q.amountInRaw, slippageBps: st.slip };
+      const chain = st.chain, net = netName();
+      const buildArgs = { from: wallet.address, tokenIn: isNative(q.tokenIn) ? "ETH" : q.tokenIn.address, tokenOut: isNative(q.tokenOut) ? "ETH" : q.tokenOut.address, amountInRaw: q.amountInRaw, slippageBps: st.slip, ...cq() };
       let built = await api.post("swap/build", buildArgs);
       const need = (built.approvals || []).filter((a) => a.needed);
       if (need.length) {
         const okA = await review({
           title: need.length > 1 ? `${need.length} approvals first` : `Approve ${q.tokenIn.symbol}`,
           summary: `Exactly ${tiny(Number(q.amountIn))} ${q.tokenIn.symbol} for this swap, nothing more.`,
-          rows: [...need.map((a, i) => [`Step ${i + 1}`, a.label]), ["Token", `${q.tokenIn.symbol} · ${short(q.tokenIn.address)}`], ["Network", "Robinhood Chain · 4663"]],
+          rows: [...need.map((a, i) => [`Step ${i + 1}`, a.label]), ["Token", `${q.tokenIn.symbol} · ${short(q.tokenIn.address)}`], ["Network", net]],
           confirmLabel: "Approve in wallet",
         });
         if (!okA) { st.busy = false; paint(); return; }
         for (const [i, a] of need.entries()) {
           st.busy = `Approval ${i + 1} of ${need.length}: confirm in your wallet…`; paint();
-          const ah = await sendTx("robinhood", a.tx);
+          const ah = await sendTx(chain, a.tx);
           st.busy = `Waiting for approval ${i + 1}…`; paint();
-          const ar = await waitReceipt("robinhood", ah);
+          const ar = await waitReceipt(chain, ah);
           if (!ar || ar.status !== 1) throw new Error("The approval did not go through. Nothing was swapped.");
         }
         toast(`${q.tokenIn.symbol} approved`, "ok");
@@ -321,7 +364,7 @@ export async function mount(view, ctx) {
           ["Price impact", fq.priceImpact == null ? "–" : `${(fq.priceImpact * 100).toFixed(2)}%`],
           ["Route", fq.route.label],
           ["Recipient", `${short(wallet.address)} (you)`],
-          ["Network", "Robinhood Chain · 4663"],
+          ["Network", net],
         ],
         warn: fq.warnings?.length ? fq.warnings.join(" ") : null,
         confirmLabel: "Swap in wallet",
@@ -329,21 +372,22 @@ export async function mount(view, ctx) {
       if (!ok) { st.busy = false; paint(); return; }
       if (Date.now() - st.gateAt > 45000) await regate(q, "Running Troya Gate again…");
       st.busy = "Confirm in your wallet…"; paint();
-      const hash = await sendTx("robinhood", built);
-      clear(txBox, h("div", { class: "muted" }, "Submitted ", h("a", { class: "mono link", href: `https://robinhoodchain.blockscout.com/tx/${hash}`, target: "_blank", rel: "noopener" }, short(hash, 6)), " · waiting for Robinhood Chain…"));
-      st.busy = "Waiting for Robinhood Chain…"; paint();
-      const rc = await waitReceipt("robinhood", hash);
+      const hash = await sendTx(chain, built);
+      const cname = CHAINS[chain].name;
+      clear(txBox, h("div", { class: "muted" }, "Submitted ", h("a", { class: "mono link", href: `${CHAINS[chain].explorer}/tx/${hash}`, target: "_blank", rel: "noopener" }, short(hash, 6)), ` · waiting for ${cname}…`));
+      st.busy = `Waiting for ${cname}…`; paint();
+      const rc = await waitReceipt(chain, hash);
       if (rc && rc.status === 1) {
         toast(`Swapped ${tiny(Number(fq.amountIn))} ${fq.tokenIn.symbol} for ${fq.tokenOut.symbol}`, "ok", 5000);
         clear(txBox, h("div", { class: "alert ok" }, icon("check"), ` Swap confirmed · `, h("button", { class: "link", type: "button", onclick: () => navigator.clipboard?.writeText(hash).then(() => toast("Hash copied", "ok")) }, short(hash, 6))));
-        journal({ kind: "swap", chain: "robinhood", hash, status: "confirmed", venue: fq.venue, tokenIn: fq.tokenIn.address, tokenOut: fq.tokenOut.address, amountIn: fq.amountIn, amountOut: fq.amountOut, rationale: "Manual swap from the Swap page" });
+        journal({ kind: "swap", chain, hash, status: "confirmed", venue: fq.venue, tokenIn: fq.tokenIn.address, tokenOut: fq.tokenOut.address, amountIn: fq.amountIn, amountOut: fq.amountOut, rationale: "Manual swap from the Swap page" });
         st.amount = ""; sellInput.value = "";
         reset();
       } else if (rc) {
         clear(txBox, h("div", { class: "alert error" }, "The swap reverted on chain. Only the network fee was spent."));
-        journal({ kind: "swap", chain: "robinhood", hash, status: "reverted", venue: fq.venue });
+        journal({ kind: "swap", chain, hash, status: "reverted", venue: fq.venue });
       } else {
-        clear(txBox, h("div", { class: "alert warn" }, "Still waiting for Robinhood Chain to include it. It is not lost: keep the hash ", h("span", { class: "mono" }, short(hash, 6)), "."));
+        clear(txBox, h("div", { class: "alert warn" }, `Still waiting for ${cname} to include it. It is not lost: keep the hash `, h("span", { class: "mono" }, short(hash, 6)), "."));
       }
     } catch (e) {
       toast(e?.gate ? e.message : errText(e), "error", e?.gate ? 8000 : 5000);

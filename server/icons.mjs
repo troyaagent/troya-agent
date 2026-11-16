@@ -34,11 +34,14 @@ export async function register(r, ctx) {
   import("./market.mjs").then((m) => { marketMod = m; }).catch(() => {});
 
   r.get("/api/icon/token/:address", async ({ params, query, res }) => {
-    const a = String(params.address || "").toLowerCase();
-    const chain = "robinhood";
-    if (!ADDR_RE.test(a)) return sendErr(res, 400, "Not a token address");
-    if (KNOWN[a]) { try { await fs.access(path.join(PUBLIC_LOGOS, KNOWN[a])); return sendFile(res, path.join(PUBLIC_LOGOS, KNOWN[a])); } catch {} }
-    const file = await resolve(`r:${a}`, () => tokenSources(a));
+    // ?chain=base|arbitrum|solana for tokens on the other chains Troya trades (Robinhood Chain when absent)
+    const chain = OTHER.has(String(query.chain || "")) ? String(query.chain) : "robinhood";
+    const raw = String(params.address || "");
+    const a = chain === "solana" ? raw : raw.toLowerCase();
+    if (chain === "solana" ? !SOL_RE.test(a) : !ADDR_RE.test(a)) return sendErr(res, 400, "Not a token address");
+    if (chain === "robinhood" && KNOWN[a]) { try { await fs.access(path.join(PUBLIC_LOGOS, KNOWN[a])); return sendFile(res, path.join(PUBLIC_LOGOS, KNOWN[a])); } catch {} }
+    if (chain !== "robinhood" && KNOWN_OTHER[`${chain}:${a.toLowerCase()}`]) { try { const f = path.join(PUBLIC_LOGOS, KNOWN_OTHER[`${chain}:${a.toLowerCase()}`]); await fs.access(f); return sendFile(res, f); } catch {} }
+    const file = chain === "robinhood" ? await resolve(`r:${a}`, () => tokenSources(a)) : await resolve(`${chain}:${a}`, () => otherSources(chain, a));
     return file ? sendFile(res, file) : sendErr(res, 404, "No logo for this token");
   }, { weight: 0.2, perMin: 3000 });
 
@@ -51,6 +54,24 @@ export async function register(r, ctx) {
 }
 
 /* ---------- sources ---------- */
+// tokens on Base, Arbitrum and Solana: GeckoTerminal's token image, then DexScreener's
+const OTHER = new Set(["base", "arbitrum", "solana"]);
+const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const KNOWN_OTHER = {
+  "base:0x4200000000000000000000000000000000000006": "eth.svg", "arbitrum:0x82af49447d8a07e3bd95bd0d56f35241523fbab1": "eth.svg",
+  "base:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "usdc.svg", "arbitrum:0xaf88d065e77c8cc2239327c5edb3a432268e5831": "usdc.svg",
+  "arbitrum:0x912ce59144191c1204e64559fe8253a0e49e6548": "arbitrum.png",
+};
+async function otherSources(chain, a) {
+  const out = [];
+  try {
+    const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/${chain}/tokens/${a}`, { headers: { accept: "application/json", "user-agent": UA["user-agent"] }, signal: AbortSignal.timeout(8000) });
+    if (r.ok) { const img = (await r.json())?.data?.attributes?.image_url; if (img && /^https:/.test(img) && !/missing/.test(img)) out.push(img); }
+  } catch {}
+  const ds = await dexscreenerImage(a, chain).catch(() => null);
+  if (ds) out.push(ds);
+  return out;
+}
 async function tokenSources(a) {
   const out = [];
   const fromIndex = marketMod?.imageFor?.(a);
@@ -110,7 +131,7 @@ async function flushDs(chain) {
       // DexScreener's CDN resizes on request; icons never need more than 128 px
       if (u && k && !img.has(k)) img.set(k, u.replace(/width=\d+&height=\d+/, "width=128&height=128"));
     }
-    for (const x of batch) x.resolve(img.get(x.a) || null);
+    for (const x of batch) x.resolve(img.get(String(x.a).toLowerCase()) || null);
   } catch (e) { for (const x of batch) x.reject(e); }
 }
 

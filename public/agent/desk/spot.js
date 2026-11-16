@@ -100,7 +100,7 @@ export async function mount(view, ctx) {
     const checks = gateChecks(est), blocked = checks.some((c) => c.s === "fail");
     const keyOk = st.key?.state === "approved";
     // show the transfer as soon as spot is short (not only after typing an amount)
-    const needUsdc = st.side === "buy" && perpUsdc() > 0 && (Number(st.amount) > usdc || usdc < 10);
+    const needUsdc = !st.user?.unified && st.side === "buy" && perpUsdc() > 0 && (Number(st.amount) > usdc || usdc < 10);
     let btn;
     if (!wallet.address) btn = h("button", { class: "btn primary big", type: "button", onclick: () => openConnect() }, "Connect wallet");
     else if (!keyOk) btn = h("button", { class: "btn primary big", type: "button", onclick: enable }, icon("key"), "Enable trading (one signature)");
@@ -111,7 +111,10 @@ export async function mount(view, ctx) {
       h("div", { class: "sp-head" }, coinIcon(`${p.base}_spot`), h("div", {}, h("b", {}, p.label), h("small", {}, `$${tiny(p.mark)} · `, pctEl(p.change24h))),
         h("a", { class: "link fine", href: `https://app.hyperliquid.xyz/trade/${encodeURIComponent(p.pair)}`, target: "_blank", rel: "noopener" }, "On Hyperliquid")),
       // the user's Hyperliquid USDC: move between spot and perps, or take it home to the same address on Arbitrum
-      wallet.address && st.user ? h("div", { class: "sp-acct" },
+      wallet.address && st.user && st.user.unified ? h("div", { class: "sp-acct" },
+        h("span", {}, "Unified account ", h("b", {}, `${tiny(spotBal("USDC"))} USDC`), " for spot, perps and trade.xyz at once"),
+        perpUsdc() > 1 ? h("button", { class: "btn sm", type: "button", onclick: withdrawHome, title: "To your own address on Arbitrum; Hyperliquid keeps 1 USDC as the fee" }, "Withdraw to my wallet") : null)
+      : wallet.address && st.user ? h("div", { class: "sp-acct" },
         h("span", {}, "Perps ", h("b", {}, `${tiny(perpUsdc())} USDC`)), h("span", {}, "Spot ", h("b", {}, `${tiny(spotBal("USDC"))} USDC`)),
         spotBal("USDC") > 0 ? h("button", { class: "btn sm", type: "button", onclick: moveToPerps }, "Move to perps") : null,
         perpUsdc() > 1 ? h("button", { class: "btn sm", type: "button", onclick: withdrawHome, title: "To your own address on Arbitrum; Hyperliquid keeps 1 USDC as the fee" }, "Withdraw to my wallet") : null) : null,

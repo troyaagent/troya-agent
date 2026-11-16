@@ -403,7 +403,9 @@ export async function mount(view, ctx) {
     }
     const leftToday = st.limits.dailyLeftUsd != null ? `Left today ${usd(st.limits.dailyLeftUsd, { compact: true })} · ` : "";
     let xyzBox = null;
-    if (m.dex && st.user) {
+    if (m.dex && st.user?.unified) {
+      xyzBox = h("div", { class: "pp-xyz-box" }, h("p", { class: "fine", style: { margin: 0 } }, `Unified account: one USDC balance (${usd(freeOf(m))} free) backs Hyperliquid perps, trade.xyz and spot, so nothing needs moving. Stock perps trade around the clock; outside market hours the price is held inside a band.`));
+    } else if (m.dex && st.user) {
       const free = freeOf(m), need = c.margin || 0, main = st.user.withdrawable || 0;
       const short_ = need > free ? Math.ceil((need - free) * 1.05 * 100) / 100 + 0.5 : 0;
       xyzBox = h("div", { class: "pp-xyz-box" },

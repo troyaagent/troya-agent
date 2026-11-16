@@ -99,14 +99,18 @@ export async function hlUserState(address) {
   if (!isAddress(address)) throw new HlError(400, "That is not a valid address.");
   const user = getAddress(address).toLowerCase();
   return cached(`user:${user}`, 2500, async () => {
-    const [ch, orders, fills, spot, chx, ordersx] = await Promise.all([
+    const [ch, orders, fills, spot, chx, ordersx, mode] = await Promise.all([
       hlInfo({ type: "clearinghouseState", user }),
       hlInfo({ type: "frontendOpenOrders", user }).catch(() => []),
       hlInfo({ type: "userFills", user }).catch(() => []),
       hlInfo({ type: "spotClearinghouseState", user }).catch(() => ({ balances: [] })),
       hlInfo({ type: "clearinghouseState", user, dex: XYZ }).catch(() => null),
       hlInfo({ type: "frontendOpenOrders", user, dex: XYZ }).catch(() => []),
+      hlInfo({ type: "userAbstraction", user }).catch(() => null),
     ]);
+    // unified / portfolio margin: per-dex balances read 0; the shared USDC (available after maintenance) is the margin
+    const unified = mode === "unifiedAccount" || mode === "portfolioMargin";
+    const shared = unified ? +((spot?.tokenToAvailableAfterMaintenance || []).find((x) => Number(x[0]) === 0)?.[1] || 0) : null;
     const posOf = (st, dex) => (st?.assetPositions || []).map((p) => p.position).filter(Boolean).map((p) => ({ ...pos(p), dex }));
     const pos = (p) => ({
       coin: p.coin, size: +p.szi, entryPx: +p.entryPx || null, positionValue: +p.positionValue || 0,
@@ -120,10 +124,11 @@ export async function hlUserState(address) {
       accountValue: +ch.marginSummary?.accountValue || 0,
       totalMarginUsed: +ch.marginSummary?.totalMarginUsed || 0,
       totalNtlPos: +ch.marginSummary?.totalNtlPos || 0,
-      withdrawable: +ch.withdrawable || 0,
+      withdrawable: unified ? shared : +ch.withdrawable || 0,
+      unified, abstraction: mode || null,
       unrealizedPnl: positions.reduce((a, p) => a + p.unrealizedPnl, 0),
       positions,
-      dexes: { [XYZ]: { accountValue: +chx?.marginSummary?.accountValue || 0, withdrawable: +chx?.withdrawable || 0, totalMarginUsed: +chx?.marginSummary?.totalMarginUsed || 0 } },
+      dexes: { [XYZ]: { accountValue: +chx?.marginSummary?.accountValue || 0, withdrawable: unified ? shared : +chx?.withdrawable || 0, totalMarginUsed: +chx?.marginSummary?.totalMarginUsed || 0 } },
       openOrders: [...(orders || []), ...(ordersx || [])].slice(0, 100).map((o) => ({
         coin: o.coin, side: o.side === "B" ? "buy" : "sell", limitPx: +o.limitPx, size: +o.sz, origSize: +o.origSz, oid: o.oid,
         timestamp: o.timestamp, reduceOnly: !!o.reduceOnly, orderType: o.orderType, triggerPx: o.triggerPx ? +o.triggerPx : null, isTrigger: !!o.isTrigger, tif: o.tif || null,

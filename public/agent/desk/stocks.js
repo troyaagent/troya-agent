@@ -184,7 +184,7 @@ export async function mount(view, ctx) {
       if (box?.dataset.state === "fail") throw new Error("Blocked by the Loan Gate: post more collateral or borrow less.");
       if (coll > 0) {
         const bal = await balanceOf(wallet.address, { address: m.collateralToken, decimals: 18 });
-        if (coll > Number(bal)) throw new Error(`You have ${tiny(Number(bal))} ${m.symbol}.`);
+        if (coll > (bal?.amount ?? 0)) throw new Error(`You have ${tiny(bal?.amount ?? 0)} ${m.symbol}.`);
       }
       const ok = await review({ title: `Morpho loan on ${m.symbol}`, summary: `${coll ? `Post ${tiny(coll)} ${m.symbol}` : ""}${coll && bor ? " and " : ""}${bor ? `borrow ${tiny(bor)} USDG` : ""}`,
         rows: [["Market", `${m.symbol}/USDG · LLTV ${m.lltvPct}%`], ["Contract", `Morpho Blue ${short(MORPHO)}`], ["Receiver", `${short(wallet.address)} (you)`]], confirmLabel: "Continue in wallet" });
@@ -208,7 +208,7 @@ export async function mount(view, ctx) {
       const owed = BigInt(loan.borrowRaw || 0), shares = BigInt(loan.borrowShares || 0);
       const raw = full ? owed + owed / 1000n + 1000n : parseUnits(amt.toFixed(6), 6);     // full: room for interest since the last read
       const have = await balanceOf(wallet.address, { address: USDG, decimals: 6 });
-      if (Number(have) < amt) throw new Error(`You have ${tiny(Number(have))} USDG; the loan needs ${tiny(amt)}.`);
+      if ((have?.amount ?? 0) < amt) throw new Error(`You have ${tiny(have?.amount ?? 0)} USDG; the loan needs ${tiny(amt)}.`);
       await ensureAllowance(USDG, raw, "Approve USDG…");
       await step("Repaying…", { to: MORPHO, data: full && shares > 0n
         ? MO.encodeFunctionData("repay", [params, 0n, shares, wallet.address, "0x"])

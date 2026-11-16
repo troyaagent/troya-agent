@@ -6,6 +6,9 @@
 //   twap        {token, symbol, side, total, slices, everyMinutes, maxImpactPct} → F15 silent execution: a big order in
 //               slices; a slice that would move the price more than the cap waits for depth instead of going through
 //   alert       {target: perp coin or token address, direction, px}      → inbox note (no funds move)
+//   lp_range    {tokenId, name, edgePct}                                  → F18: a Uniswap v3 position; every 5 min, a note
+//               (inbox and Telegram) when the price leaves the range or comes within edgePct of an edge, with a new
+//               range from current volatility. No funds move: the rebalance is signed by the user's wallet.
 // When a watch fires: Agent Wallet on + not paused + within caps → execute and journal; otherwise an inbox proposal.
 import { randomBytes } from "node:crypto";
 import { isAddress } from "ethers";
@@ -77,6 +80,13 @@ function normalize(input) {
     const below = Math.min(3, Math.max(1.05, num(p.healthBelow) || 1.3));
     return { type, params: { marketId: id.toLowerCase(), symbol: untrusted(p.symbol || "stock", 12), healthBelow: below }, title: `Loan alert ${untrusted(p.symbol || "stock", 12)}: health under ${below}` };
   }
+  if (type === "lp_range") {
+    const id = String(p.tokenId ?? "").trim();
+    if (!/^\d{1,12}$/.test(id)) throw new HttpError(400, "A range watch needs the position's id (the number after #).");
+    const edgePct = Math.min(25, Math.max(1, num(p.edgePct) || 5));
+    const name = untrusted(p.name || "LP position", 30);
+    return { type, params: { tokenId: id, name, edgePct, state: "inside" }, title: `Range watch ${name} #${id}: out of range or within ${edgePct}% of an edge` };
+  }
   if (type === "alert") {
     const target = isAddress(String(p.target || "")) ? String(p.target).toLowerCase() : coinOf(p.target);
     const px = num(p.px);
@@ -84,11 +94,18 @@ function normalize(input) {
     const direction = p.direction === "below" ? "below" : "above";
     return { type, params: { target, direction, px, unit: isAddress(target) ? "ETH" : "USD" }, title: `Alert ${isAddress(target) ? untrusted(p.symbol || target.slice(0, 8), 20) : target} ${direction === "below" ? "≤" : "≥"} ${px}` };
   }
-  throw new HttpError(400, "Unknown playbook type. Use stop_loss, take_profit, dca, twap, rebalance, loan_guard or alert.");
+  throw new HttpError(400, "Unknown playbook type. Use stop_loss, take_profit, dca, twap, rebalance, loan_guard, lp_range or alert.");
 }
 
 export async function createWatch(address, input) {
   const w = normalize(input);
+  if (w.type === "lp_range") {
+    const { lpPositionStatus } = await import("./liquidity.mjs");
+    const s = await lpPositionStatus(address, w.params.tokenId);
+    if (s.moved || s.gone) throw new HttpError(400, "That position is not in this wallet.");
+    if (s.closed) throw new HttpError(400, "That position has no liquidity left.");
+    w.params.state = !s.inRange ? "out" : Math.min(s.roomDownPct ?? 1e9, s.roomUpPct ?? 1e9) <= w.params.edgePct ? "edge" : "inside";
+  }
   const rec = { id: randomBytes(6).toString("hex"), address: address.toLowerCase(), ...w, status: "active", createdAt: Date.now(), lastCheck: null, lastPrice: null, fires: [] };
   // Phase 3: $TROYA holders keep more playbooks active
   const hp = await import("./holders.mjs").catch(() => null);
@@ -209,6 +226,34 @@ async function twapStep(w) {
   return { params: { ...p, done, filled, nextAt: now + p.everyMinutes * 60_000, lastNote: `Slice ${done} ${o}` }, fires: [...w.fires, { t: now, slice, impact, outcome: o }].slice(-60), ...(done >= p.slices ? { status: "done" } : {}) };
 }
 
+/* ---------- F18 · range watch on a Uniswap v3 position ---------- */
+const fx = (n) => (n == null || !isFinite(n) ? "–" : Number(Number(n).toPrecision(6)).toString());
+async function lpRangeStep(w) {
+  const { lpPositionStatus, lpSuggest } = await import("./liquidity.mjs");
+  const p = w.params, s = await lpPositionStatus(w.address, p.tokenId);
+  if (s.moved || s.gone || s.closed) return { status: "done", lastError: s.moved ? "The position left this wallet." : "The position is closed." };
+  const room = Math.min(s.roomDownPct ?? 1e9, s.roomUpPct ?? 1e9);
+  // back to "inside" only once the price is clearly away from the edge, so a price hovering there sends one note
+  const state = !s.inRange ? "out" : room <= p.edgePct || (p.state !== "inside" && room <= p.edgePct * 1.5) ? "edge" : "inside";
+  const u = { lastPrice: s.price, params: { ...p, state } };
+  // a note when the state worsens (inside → edge → out); it re-arms when the price is back well inside
+  const worse = (state === "out" && p.state !== "out") || (state === "edge" && p.state === "inside");
+  if (!worse) return u;
+  let tip = "";
+  try {
+    const g = await lpSuggest(s.pool, 7);
+    const b = g.presets.find((x) => x.key === "balanced");
+    if (b) tip = ` A new balanced range for the next 7 days: ${fx(b.displayLower)} to ${fx(b.displayUpper)} ${s.quote} per ${s.base}, with about a ${b.stayPct.toFixed(0)}% chance to stay inside at today's volatility.`;
+  } catch {}
+  const where = s.price < s.displayLower ? "below" : "above";
+  const msg = state === "out"
+    ? `Your ${s.name} position #${p.tokenId} is out of range: the price is ${fx(s.price)} ${s.quote} per ${s.base}, ${where} your range of ${fx(s.displayLower)} to ${fx(s.displayUpper)}. It earns no fees until the price comes back.`
+    : `Your ${s.name} position #${p.tokenId} is ${room.toFixed(1)}% from the edge of its range (${fx(s.displayLower)} to ${fx(s.displayUpper)}, price now ${fx(s.price)}).`;
+  const o = await fire(w, fx(s.price), null, `${msg}${tip} To rebalance, open Liquidity desk, My positions: Rebalance removes it and opens the new range, signed by your wallet.`);
+  u.fires = [...w.fires, { t: Date.now(), px: s.price, state, outcome: o }].slice(-30);
+  return u;
+}
+
 async function tick() {
   if (running) return;
   running = true;
@@ -217,7 +262,7 @@ async function tick() {
     const active = list.filter((w) => w.status === "active");
     if (!active.length) return;
     let mids = null;
-    const needPerp = active.some((w) => !["dca", "twap", "loan_guard", "rebalance"].includes(w.type) && !(w.type === "alert" && isAddress(w.params.target)));
+    const needPerp = active.some((w) => !["dca", "twap", "loan_guard", "rebalance", "lp_range"].includes(w.type) && !(w.type === "alert" && isAddress(w.params.target)));
     if (needPerp) mids = Object.fromEntries((await hlMarkets()).map((m) => [m.coin.toUpperCase(), m.midPx || m.markPx]));
     const updates = new Map();
     for (const w of active) {
@@ -270,6 +315,9 @@ async function tick() {
             } else if (loan?.health != null && loan.health >= w.params.healthBelow + 0.1 && w.params.armedOff) u.params = { ...w.params, armedOff: false };
             else if (!loan) u.lastError = "No loan in this market from this wallet right now.";
           } else u.lastCheck = w.lastCheck;
+        } else if (w.type === "lp_range") {
+          if (Date.now() - (w.lastCheck || 0) >= 300_000) Object.assign(u, await lpRangeStep(w));
+          else u.lastCheck = w.lastCheck;
         } else if (w.type === "twap") {
           if (Date.now() >= w.params.nextAt) Object.assign(u, await twapStep(w));
         } else if (w.type === "dca") {

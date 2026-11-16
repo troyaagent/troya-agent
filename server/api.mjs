@@ -26,6 +26,7 @@ const MODULES = [
   "./record.mjs",      // F13: the Oracle's ledger, every Sentry call graded in public
   "./assay.mjs",       // F14: The Assay, dev, holders, bundles, clusters, wash trades and funders of a coin
   "./stocks.mjs",      // F17: Stock desk, multipliers, dividends and splits, Morpho loans against stock tokens
+  "./liquidity.mjs",   // F18: Liquidity desk, Uniswap v3 ranges from volatility, positions, fees
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];
 

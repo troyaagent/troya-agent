@@ -65,7 +65,9 @@ async function getJson(url, { timeout = 12000, method = "GET", body } = {}) {
 const hl = (body, timeout = 10000) => getJson(HL, { method: "POST", body, timeout });
 
 // GeckoTerminal queue: one call every 3 s, high-priority (user) calls first; a 429 waits and retries twice
-const gq = { hi: [], lo: [], busy: false, last: 0 };
+const gq = { hi: [], lo: [], busy: false, last: 0, lastLo: false };
+// F18 Liquidity desk reads pools and candles through the same queue (paths are under networks/robinhood/)
+export const geckoApi = (pathQs, opts) => gecko(pathQs, opts);
 function gecko(pathQs, { hi = false } = {}) {
   return new Promise((resolve, reject) => {
     (hi ? gq.hi : gq.lo).push({ pathQs, resolve, reject, hi, queuedAt: Date.now() });
@@ -82,7 +84,9 @@ async function pumpGecko() {
   try {
     while (gq.hi.length || gq.lo.length) {
       // user-facing calls go 4 s after the previous one; the background board waits 10 s and steps aside for user calls
-      let job = gq.hi.length && !loOverdue() ? gq.hi.shift() : gq.lo.shift();
+      // an overdue background job goes next, but only one at a time: then a waiting user call (a chart, a range
+      // suggestion) goes, so a backlog of overdue board jobs cannot hold user calls for half a minute either
+      let job = gq.hi.length && (!loOverdue() || gq.lastLo) ? gq.hi.shift() : gq.lo.shift();
       for (;;) {
         const wait = gq.last + (job.hi ? 4000 : 10000) - Date.now();
         if (wait <= 0) break;
@@ -90,6 +94,7 @@ async function pumpGecko() {
         await new Promise((r) => setTimeout(r, Math.min(wait, 250)));
       }
       gq.last = Date.now();
+      gq.lastLo = !job.hi;
       try { job.resolve(await getJson(`${GECKO}/networks/${NET}/${job.pathQs}`, { timeout: 15000 })); }
       catch (e) {
         if (e.status === 429 && (job.tries || 0) < 2) {

@@ -146,5 +146,30 @@ reset();
 r = await mod.screen(msg(82, "Could you confirm our listing on hoodHunters .app?"), tg, me);
 ok(r && did("banChatMember", (c) => c.user_id === 82).length === 1, "a blacklisted name inside the listing script (two signals) is a ban at once");
 
+// 16 Nov afternoon: "private holders group / whales chat, DM me" from a name posing as the team (fake Admin badge), and a partnership pitch
+const WHALE = ["Important Community Update 🫡\n\nWe have a private hoIders group where we share important community updates, announcements, and what’s coming next.\n\nIf you’re a hoIder and haven’t been added yet, send me a message and I’ll get you added.\n\nStay connected. Stay informed. 🚀",
+  "Quick update for those holding , hit me up if you’re willing to get into the whales chat ,want more chads  participating in the project.",
+  "Quick update: Any holder can hit me up to get added to the Whales Chat. Want more folks to actively participate in the project.",
+  "Hello team. i am Co-founder from @DOGGEDWELLS1. I have a partnership offer that can greatly benefit your projects. Who would be the best person to discuss this collaboration with?",
+  "We have a private whаles group, message me to join"];
+const wMiss = WHALE.filter((t) => mod.score(t) < 3);
+ok(!wMiss.length, `all ${WHALE.length} whales-chat and partnership messages score 3+ (removed)`, wMiss.map((t) => `[${mod.score(t)}] ${t.slice(0, 40)}`).join(" | "));
+const HALF = ["is the whales chat real?", "hit me up if you want to raid together on X", "any partnership news?", "who is the dev?", "the dev is cooking", "is there a private holders group?"];
+const hHit = HALF.filter((t) => mod.score(t) >= 3);
+ok(!hHit.length, `half a pitch (${HALF.length} holder lines) is not removed on sight`, hHit.map((t) => `[${mod.score(t)}] ${t}`).join(" | "));
+ok(mod.fold("hoIders") === "holders" && mod.fold("Nеil") === "Neil" && mod.fold("𝐡𝐨𝐥𝐝𝐞𝐫𝐬") === "holders", "look-alike letters are folded before the rules run");
+reset();
+r = await mod.screen(msg(90, "hit me up for the holders list", { from: { id: 90, first_name: "Mesh || Co-Founder ||" } }), tg, me);
+ok(r && did("banChatMember", (c) => c.user_id === 90).length === 1, "a name posing as the team plus a DM ask is a ban at once");
+reset();
+r = await mod.screen(msg(91, "hit me up", { from: { id: 91, first_name: "Troya Agent" } }), tg, me);
+ok(r && did("banChatMember", (c) => c.user_id === 91).length === 1, "a member named like the project asking for DMs is a ban");
+reset();
+r = await mod.screen(msg(92, "gm, the dev shipped again", { from: { id: 92, first_name: "Dev Patel" } }), tg, me);
+ok(!r && !did("deleteMessage").length, "a name with 'Dev' in it chatting normally is left alone");
+reset();
+r = await mod.screen(msg(93, "is the whales chat real?", { from: { id: 93, first_name: "Born" } }), tg, me);
+ok(!r && !did("deleteMessage").length, "a holder asking whether the whales chat is real is left alone");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

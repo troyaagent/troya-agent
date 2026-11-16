@@ -30,6 +30,21 @@ const IMPOSTOR = new RegExp([
   String.raw`\b(?:v2|holder|token)\s+(?:allocation|migration)\b[^]{0,400}?(?:eligible\s+holders|official\s+updates|portal)`,
   String.raw`@(?!trojantroya_bot\b)[A-Za-z0-9_]*(?:d[e3]x[a-z0-9_]{0,8}n[e3]r|tr[o0]ya|claim|airdrop|migrat|rectif|validat|walletconnect)[A-Za-z0-9_]*bot\b`,
 ].join("|"), "iu");
+// "private holders group / whales chat" and "hit me up, I'll get you added": each half alone is a question, together the scam
+const DM_ASK = /\bhit\s+me\s+up\b|\bsend\s+me\s+a\s+(?:message|msg|pm|text)\b|\b(?:message|msg|pm|text)\s+me\b|\bget\s+(?:you\s+)?added\b|\bi.?ll\s+(?:get\s+you\s+)?add(?:ed)?\s+you\b/i;
+const PRIVATE_CHAT = /\b(?:private|exclusive|secret|inner|vip)\s+(?:holders?|whales?|alpha|investors?|community)\s+(?:group|chat|channel|circle)\b|\bwhales?\s+(?:chat|group|channel|circle)\b|\bholders?\s+only\s+(?:group|chat)\b/i;
+// "I am co-founder of X, I have a partnership offer, who is the best person to discuss this with?"
+const PARTNERSHIP = /\b(?:partnership|collaboration|collab)\s+(?:offer|proposal|opportunit\w*|deal)\b|\bbest\s+person\s+to\s+(?:discuss|talk|speak|contact|reach)\b|\b(?:discuss|talk\s+about)\s+(?:a\s+|this\s+|the\s+|potential\s+)?(?:partnership|collaboration|collab)\b/i;
+// a member whose name claims a team role (or is the project's own name): nothing on its own, a ban with any promo or DM ask
+export const IMPOSTOR_NAME = /co.?founder|\bfounder\b|\bceo\b|\bcto\b|\bcmo\b|\badmin\b|\bmoderator\b|\bmod\b|\bdev\b|\bdeveloper\b|\bsupport\b|\bofficial\b|\bteam\b|^\s*troya(?:\s+(?:agent|team|support|official|dev|admin))?\s*$/i;
+// letters swapped to slip past filters: "hoIders" (capital I for l), Cyrillic or Greek look-alikes, 𝐟𝐚𝐧𝐜𝐲 letters
+const FOLD_FROM = [..."аеорсухіјѕԁһԛԝкмнтвαβεζηικμνορτυχ"], FOLD_TO = [..."aeopcyxijsdhqwkmhtbabezhikmnoptyx"];
+const FOLD = new Map(FOLD_FROM.map((c, i) => [c, FOLD_TO[i]]));
+export const fold = (x) => String(x || "").normalize("NFKC")
+  .replace(/[Ͱ-ϿЀ-ԯ]/g, (c) => FOLD.get(c) ?? (FOLD.has(c.toLowerCase()) ? FOLD.get(c.toLowerCase()).toUpperCase() : c))
+  .replace(/(?<=[a-z])I(?=[a-z])/g, "l");
+const nameOf = (u) => fold([u?.first_name, u?.last_name].filter(Boolean).join(" "));
+const fakeName = (u) => IMPOSTOR_NAME.test(nameOf(u));
 // selling listings, trending spots, boosts or votes: "listed on @x", "boost your token with @x", "I can add the rocket to 300", trending-bot posts
 const SERVICES = /\b(?:list(?:ed|ing)?|trend(?:ing)?|votes?|boost(?:s|ed|ing)?)\b[^\n@]{0,40}\b(?:on|at|with|via|by|in|from)\s+@(?!(?:trojantroya_bot|troyaagent|troyasentry|admin|admins)\b)[A-Za-z0-9_]{4,32}|\bI\s+can\s+(?:add|get|give|push|bring|increase)\b[^\n]{0,60}\b(?:votes?|rockets?|flames?|holders|volume|trending|views|members)\b|\b(?:add|increase)\s+(?:up\s+)?the\s+(?:rockets?|flames?|votes?)|🔥\s*TRENDING\s*🔥/i;
 const RULES = [
@@ -54,12 +69,15 @@ const RULES = [
   [3, LISTING],
   // fake migrations and look-alike bots (also a ban at once, see severeOf)
   [3, IMPOSTOR],
+  [2, DM_ASK],
+  [2, PRIVATE_CHAT],
+  [3, PARTNERSHIP],
 ];
 
 // how promotional a text reads: rule weights plus other people's @handles and other coins' tickers when they come with it
 const SCAM = RULES[4][1];
 export function score(text) {
-  const t = String(text || "");
+  const t = fold(text);
   if (!t.trim()) return 0;
   let s = 0;
   for (const [w, re] of RULES) if (re.test(t)) s += w;
@@ -154,7 +172,7 @@ async function offence(tg, chat, msgId, user, { severe = false, why = "" } = {})
   await brief(tg, chat, `${who(user)}, this is a warning: promotions, calls and ads for other coins are not allowed here. Next time is a ban. Group rules: /rules`, 60000);
   return false;
 }
-const severeOf = (m, v) => v >= 6 || SCAM.test(body(m)) || IMPOSTOR.test(body(m)) || (foreignForward(m) && score(body(m)) >= 3);
+const severeOf = (m, v) => v >= 6 || SCAM.test(fold(body(m))) || IMPOSTOR.test(fold(body(m))) || (fakeName(m.from) && v >= 2) || (foreignForward(m) && score(body(m)) >= 3);
 
 export async function screen(m, tg, me) {
   const chat = m.chat?.id;
@@ -194,6 +212,6 @@ export async function screen(m, tg, me) {
     return true;
   }
   if (flagged && v >= 1) { await del(tg, chat, m.message_id); return true; }
-  if (v >= 3) { await offence(tg, chat, m.message_id, m.from, { severe: severeOf(m, v), why: foreignForward(m) ? "forwarded ad" : `score ${v}` }); return true; }
+  if (v >= 3 || (v >= 2 && fakeName(m.from))) { await offence(tg, chat, m.message_id, m.from, { severe: severeOf(m, v), why: foreignForward(m) ? "forwarded ad" : fakeName(m.from) && v < 3 ? `score ${v}, name poses as the team` : `score ${v}` }); return true; }
   return false;
 }

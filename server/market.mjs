@@ -500,7 +500,8 @@ export async function getRobinhoodTrades(address) {
 
 // candles for a Robinhood token's main pool, in USD: [{time(sec), open, high, low, close, volume}]
 const GT_TF = { "5m": ["minute", 5], "15m": ["minute", 15], "1h": ["hour", 1], "4h": ["hour", 4], "1d": ["day", 1] };
-export async function getRobinhoodCandles(address, interval = "1h") {
+// bg: a background job (the Record back-fill, smart DCA sizing) waits behind people loading a chart or a range
+export async function getRobinhoodCandles(address, interval = "1h", { bg = false } = {}) {
   if (!ADDR_RE.test(String(address || ""))) throw httpErr(400, "That is not a valid token address.");
   const iv = GT_TF[interval] ? interval : "1h";
   const a = lc(address);
@@ -509,7 +510,7 @@ export async function getRobinhoodCandles(address, interval = "1h") {
     if (!pool) pool = (await getRobinhoodToken(a)).token?.pool;
     if (!pool) throw httpErr(404, "No pool to chart for this token yet.");
     const [tf, agg] = GT_TF[iv];
-    const d = await gecko(`pools/${pool}/ohlcv/${tf}?aggregate=${agg}&limit=300&currency=usd&token=${a}`, { hi: true });
+    const d = await gecko(`pools/${pool}/ohlcv/${tf}?aggregate=${agg}&limit=300&currency=usd&token=${a}`, { hi: !bg });
     const c = (d?.data?.attributes?.ohlcv_list || []).map((x) => ({ time: Number(x[0]), open: fnum(x[1]), high: fnum(x[2]), low: fnum(x[3]), close: fnum(x[4]), volume: fnum(x[5]) }))
       .filter((x) => x.close != null).sort((x, y) => x.time - y.time);
     return { candles: c, interval: iv, source: "GeckoTerminal", unit: "USD", pool };

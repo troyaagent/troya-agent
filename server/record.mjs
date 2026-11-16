@@ -33,7 +33,7 @@ const STEP = { "5m": 300, "15m": 900, "1h": 3600 };
 async function fromCandles(c) {
   const age = Date.now() - c.at;
   const iv = age < 24 * H ? "5m" : age < 72 * H ? "15m" : "1h";
-  const { candles } = await getRobinhoodCandles(c.token, iv);
+  const { candles } = await getRobinhoodCandles(c.token, iv, { bg: true });
   if (!candles?.length) return false;
   const step = STEP[iv], t0 = Math.floor(c.at / 1000);
   const at = (t) => candles.find((k) => k.time <= t && t < k.time + step);

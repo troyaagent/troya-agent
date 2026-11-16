@@ -190,7 +190,7 @@ async function rebalanceStep(w) {
 async function smartSize(token) {
   try {
     const { getRobinhoodCandles } = await import("./market.mjs");
-    const { candles } = await getRobinhoodCandles(token, "1h");
+    const { candles } = await getRobinhoodCandles(token, "1h", { bg: true });
     const last = candles.slice(-168).map((c) => c.close).filter((x) => x > 0);
     if (last.length < 24) return { mult: 1, note: "Not enough price history yet: base amount." };
     const avg = last.reduce((a, b) => a + b, 0) / last.length, now = last.at(-1);

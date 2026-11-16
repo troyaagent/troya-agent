@@ -4,6 +4,7 @@
 //                  mention and draft and switch the mode
 //   Holder pass    the soulbound Troya Holder Pass: mint it while you hold the minimum $TROYA (admins deploy it once)
 //   Votes          proposals; one pass, one vote, signed in the wallet (no transaction); every signature public
+//   Agents         the agent factory: name an agent, pick a template, it runs on your Agent Wallet with a public page
 import { Interface, AbiCoder, parseUnits } from "ethers";
 import { h, clear, useCss, toast, pageHead, seg, short, tiny, review } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
@@ -24,12 +25,12 @@ const ago = (t) => { if (!t) return "never"; const m = Math.round((Date.now() - 
 export async function mount(view, ctx) {
   useCss("perps"); useCss("swap");
   let alive = true;
-  const st = { tab: ["x", "pass", "votes"].includes(ctx.parts[0]) ? ctx.parts[0] : "x", me: undefined, status: null, log: null, pass: null, votes: null, busy: null };
+  const st = { tab: ["x", "pass", "votes", "agents"].includes(ctx.parts[0]) ? ctx.parts[0] : "x", agentSlug: ctx.parts[0] === "agents" ? ctx.parts[1] || null : null, agents: null, mineA: null, agent: null, tpl: null, form: { template: "accumulator" }, me: undefined, status: null, log: null, pass: null, votes: null, busy: null };
   const body = h("div", { class: "so-body" }), tabs = h("div", { class: "sd-tabs" });
   clear(view, h("div", { class: "dk so" },
-    pageHead("Social", "Your X account on Troya, Troya answering on X, the Holder Pass and holder votes."),
+    pageHead("Social", "Your X account on Troya, Troya answering on X, the Holder Pass, holder votes and the agent factory."),
     tabs, body));
-  const paintTabs = () => clear(tabs, seg([{ value: "x", label: "X" }, { value: "pass", label: "Holder pass" }, { value: "votes", label: "Votes" }], st.tab, (v) => { st.tab = v; history.replaceState(null, "", `#/social/${v}`); paint(); load(); }));
+  const paintTabs = () => clear(tabs, seg([{ value: "x", label: "X" }, { value: "pass", label: "Holder pass" }, { value: "votes", label: "Votes" }, { value: "agents", label: "Agents" }], st.tab, (v) => { st.tab = v; st.agentSlug = null; history.replaceState(null, "", `#/social/${v}`); paint(); load(); }));
   const q = ctx.query?.x;
   if (q === "notbot") toast(`That was @${ctx.query.as || "another account"}. Only @Troyaagent can connect Troya on X.`, "error", 8000);
   else if (NOTE[q]) toast(NOTE[q][0], NOTE[q][1], 7000);
@@ -37,6 +38,7 @@ export async function mount(view, ctx) {
 
   async function load() {
     if (st.tab === "pass" || st.tab === "votes") return loadHolders();
+    if (st.tab === "agents") return loadAgents();
     const [me, status] = await Promise.all([
       wallet.session ? api.get("x/me").catch(() => null) : Promise.resolve(null),
       api.get("x/status").catch((e) => ({ error: e.message })),
@@ -50,6 +52,7 @@ export async function mount(view, ctx) {
     paintTabs();
     if (st.tab === "pass") return passTab();
     if (st.tab === "votes") return votesTab();
+    if (st.tab === "agents") return agentsTab();
     const s = st.status;
     if (!s) return clear(body, h("div", { class: "sk", style: { height: "240px" } }));
     clear(body, mine(s), troya(s), st.log ? logBox() : null);
@@ -61,7 +64,7 @@ export async function mount(view, ctx) {
     st.pass = pass; st.votes = votes;
     if (alive) paint();
   }
-  const run = async (label, fn) => { if (st.busy) return; st.busy = label; paint(); try { await fn(); } catch (e) { toast(errText(e), "error", 8000); } st.busy = null; await loadHolders(); };
+  const run = async (label, fn) => { if (st.busy) return; st.busy = label; paint(); try { await fn(); } catch (e) { toast(errText(e), "error", 8000); } st.busy = null; await (st.tab === "agents" ? loadAgents() : loadHolders()); };
   function passTab() {
     const p = st.pass;
     if (!p) return clear(body, h("div", { class: "sk", style: { height: "240px" } }));
@@ -141,6 +144,78 @@ export async function mount(view, ctx) {
     }
     clear(body, ...items);
   }
+  /* ---------- agent factory ---------- */
+  async function loadAgents() {
+    const [tpl, list, mineA, agent] = await Promise.all([
+      st.tpl ? Promise.resolve(st.tpl) : api.get("agents/templates").catch(() => null),
+      api.get("agents").catch(() => ({ agents: [] })),
+      wallet.session ? api.get("agents/mine").catch(() => null) : Promise.resolve(null),
+      st.agentSlug ? api.get(`agents/${encodeURIComponent(st.agentSlug)}`).catch((e) => ({ error: e.message })) : Promise.resolve(null),
+    ]);
+    Object.assign(st, { tpl, agents: list.agents, mineA: mineA?.agents || null, agent });
+    if (alive) paint();
+  }
+  const statusChip = (s) => h("span", { class: `chip so-st-${s}` }, s);
+  function agentsTab() {
+    if (!st.tpl) return clear(body, h("div", { class: "sk", style: { height: "240px" } }));
+    if (st.agentSlug) return clear(body, agentPage());
+    const items = [factory()];
+    if (st.mineA?.length) items.push(h("div", { class: "panel sd-panel so-card" }, h("h3", {}, "Your agents"), st.mineA.map((a) => agentRow(a, true))));
+    items.push(h("div", { class: "panel sd-panel so-card" }, h("h3", {}, "Agents on Troya"), st.agents.length ? st.agents.map((a) => agentRow(a, false)) : h("p", { class: "muted" }, "No agents yet. Build the first one.")));
+    clear(body, ...items);
+  }
+  function agentRow(a, own) {
+    return h("div", { class: "so-agent" },
+      h("div", {}, h("a", { class: "so-agent-n", href: `#/social/agents/${a.slug}`, onclick: (e) => { e.preventDefault(); openAgent(a.slug); } }, a.name), h("small", {}, `@${a.slug} · ${a.templateLabel} · by ${a.ownerX ? "@" + a.ownerX : a.owner}`)),
+      h("div", { class: "so-agent-r" }, statusChip(a.status), h("span", { class: "fine" }, `${a.actions} action${a.actions === 1 ? "" : "s"}`),
+        own && a.status !== "retired" ? h("button", { class: "btn sm", type: "button", disabled: !!st.busy, onclick: () => run("Saving…", async () => { const r = await api.post(`agents/${a.slug}/toggle`, {}); toast(`${a.name} is ${r.status}.`, "ok"); }) }, a.status === "running" ? "Pause" : "Resume") : null,
+        own && a.status !== "retired" ? h("button", { class: "link", type: "button", disabled: !!st.busy, onclick: () => run("Retiring…", async () => { if (!(await review({ title: `Retire ${a.name}?`, summary: "Its playbooks stop. Its page stays, marked retired.", confirmLabel: "Retire", danger: true }))) return; await api.del(`agents/${a.slug}`); toast(`${a.name} is retired.`, "ok"); }) }, "Retire") : null));
+  }
+  function openAgent(slug) { st.agentSlug = slug; st.agent = null; history.replaceState(null, "", `#/social/agents/${slug}`); paint(); loadAgents(); }
+  function agentPage() {
+    const a = st.agent;
+    const back = h("button", { class: "link", type: "button", onclick: () => { st.agentSlug = null; history.replaceState(null, "", "#/social/agents"); paint(); loadAgents(); } }, "← All agents");
+    if (!a) return h("div", {}, back, h("div", { class: "sk", style: { height: "200px" } }));
+    if (a.error) return h("div", {}, back, h("div", { class: "alert error" }, a.error));
+    const ago = (t) => (t ? new Date(t).toLocaleString() : "–");
+    return h("div", {}, back, h("div", { class: "panel sd-panel so-card" },
+      h("div", { class: "so-li-h" }, h("h3", {}, a.name), statusChip(a.status)),
+      h("p", { class: "fine", style: { margin: 0 } }, `@${a.slug} · ${a.templateLabel}: ${a.templateLine} · by ${a.ownerX ? "@" + a.ownerX : a.owner} · since ${new Date(a.createdAt).toLocaleDateString()}`),
+      a.bio ? h("p", {}, a.bio) : null,
+      h("p", { class: "fine" }, "It trades only through its owner's Agent Wallet, inside the owner's limits, with Troya Gate on every swap."),
+      h("h4", {}, "Playbooks"), (a.playbooks || []).map((w) => h("div", { class: "so-li" }, h("div", { class: "so-li-h" }, h("b", {}, w.title), statusChip(w.status)),
+        h("p", { class: "fine", style: { margin: 0 } }, `checked ${ago(w.lastCheck)} · ${w.fires} action${w.fires === 1 ? "" : "s"}${w.lastNote ? " · " + w.lastNote : ""}${w.error ? " · " + w.error : ""}`))),
+      h("h4", {}, "Recent actions"), a.recent?.length ? a.recent.map((f) => h("p", { class: "fine", style: { margin: 0 } }, `${ago(f.t)} · ${f.playbook} · ${f.outcome}${f.note ? " · " + f.note : ""}`)) : h("p", { class: "muted" }, "None yet.")));
+  }
+  function factory() {
+    const card = h("div", { class: "panel sd-panel so-card" }, h("h3", {}, "Build an agent"));
+    if (!wallet.address) { card.append(h("p", { class: "muted" }, "Connect your wallet to build an agent."), h("button", { class: "btn primary", type: "button", onclick: openConnect }, "Connect wallet")); return card; }
+    if (!wallet.session) { card.append(h("p", { class: "muted" }, "Sign in with your wallet first (one signature, no transaction)."), h("button", { class: "btn primary", type: "button", onclick: async () => { try { await signIn(); loadAgents(); } catch (e) { toast(e.message, "error"); } } }, "Sign in")); return card; }
+    const f = st.form, T = st.tpl.templates;
+    const inp = (k, ph, mode = "text") => { const el = h("input", { class: "input", placeholder: ph, value: f[k] ?? "", inputmode: mode === "num" ? "decimal" : "text" }); el.addEventListener("input", () => { f[k] = el.value; }); return el; };
+    const tplSeg = seg(Object.entries(T).map(([value, t]) => ({ value, label: t.label })), f.template, (v) => { f.template = v; paint(); }, "so-tpl");
+    const fields = {
+      accumulator: [inp("token", "Coin address (0x…), for example $TROYA 0x1FA8…a074"), h("div", { class: "fw-row" }, inp("amountEth", "ETH per buy", "num"), inp("everyHours", "Every hours (24)", "num"), inp("runs", "Buys (14)", "num"))],
+      index: [(() => { const s = h("select", { class: "input" }, Object.entries(st.tpl.baskets).map(([k, b]) => h("option", { value: k, selected: f.basket === k }, `${b.label}: ${b.symbols.join(", ")}`))); s.addEventListener("change", () => { f.basket = s.value; }); f.basket ||= s.value; return s; })(), inp("driftPct", "Rebalance at drift % (5)", "num"), h("p", { class: "fine", style: { margin: 0 } }, "Buy the basket into your Agent Wallet first (Stock desk, Baskets).")],
+      twap: [inp("token", "Coin address (0x…)"), h("div", { class: "fw-row" }, inp("total", "Total ETH", "num"), inp("slices", "Slices (6)", "num"), inp("everyMinutes", "Every minutes (30)", "num"), inp("maxImpactPct", "Max impact % (0.5)", "num"))],
+      range: [inp("tokenId", "Position number from Liquidity desk (the # number)"), inp("edgePct", "Warn within % of an edge (5)", "num")],
+      loan: [inp("marketId", "Morpho market id (0x…, from Stock desk, Borrow)"), h("div", { class: "fw-row" }, inp("symbol", "Stock (NVDA)"), inp("healthBelow", "Warn under health (1.3)", "num"))],
+    }[f.template];
+    card.append(h("div", { class: "fw-row" }, inp("name", "Name, for example Night Owl"), inp("slug", "Handle (night-owl)")), inp("bio", "One line about it (optional)"),
+      tplSeg, h("p", { class: "fine", style: { margin: 0 } }, T[f.template].line), ...fields,
+      h("button", { class: "btn blue", type: "button", disabled: !!st.busy, onclick: build }, st.busy || "Build the agent"),
+      h("p", { class: "fine", style: { margin: 0 } }, "An agent is a public name over your own playbooks. It acts through your Agent Wallet inside your limits; with the Agent Wallet off, each action comes to your inbox for approval."));
+    return card;
+  }
+  const build = () => run("Building…", async () => {
+    const f = st.form, params = { ...f };
+    if (params.token && /^0x[0-9a-fA-F]{40}$/.test(params.token)) params.symbol = (await api.get(`token/meta?address=${params.token}`).catch(() => null))?.symbol || null;
+    const a = await api.post("agents", { name: f.name, slug: f.slug, bio: f.bio, template: f.template, params });
+    toast(`${a.name} is running.`, "ok", 6000);
+    st.form = { template: f.template };
+    openAgent(a.slug);
+  });
+
   const vote = (x, option) => run("Signing…", async () => {
     const signer = await signerFor("robinhood");
     const signature = await signer.signTypedData(st.pass.domain, st.pass.types, { proposal: x.id, option, voter: wallet.address });

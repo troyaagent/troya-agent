@@ -30,6 +30,7 @@ const MODULES = [
   "./flywheel.mjs",    // F19: $TROYA flywheel, creator fees into buyback, burn and locked liquidity, read from the chain
   "./xsocial.mjs",     // F20: Sign in with X, Troya answering on X (draft first), one daily X budget
   "./votes.mjs",       // F20: the Troya Holder Pass (soulbound NFT) and pass votes signed with EIP-712
+  "./agents.mjs",      // F20: agent factory, named agents built from playbooks, each with a public page
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];
 

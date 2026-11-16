@@ -7,6 +7,7 @@
 //   GET  /api/x/status           → public: is Troya on X connected, its mode (off, draft, live), today's X usage
 //   GET  /api/x/log              → admins: the mentions Troya saw and what it drafted or posted
 //   POST /api/x/mode {mode}      → admins: off | draft | live
+//   POST /api/x/poll             → admins: check the mentions now instead of waiting for the next round
 // Every X call goes through one daily budget (reads, posts, searches; X_DAILY_* in the env). Over the cap, no call is
 // made. X is pay-per-use, so the defaults are small. The bot's tokens are stored encrypted (data/x.key).
 import { randomBytes, createHash, createCipheriv, createDecipheriv } from "node:crypto";
@@ -215,5 +216,11 @@ export async function register(r, ctx) {
     await store.update("x-state.json", {}, (s) => ({ ...s, mode: m, modeBy: requireSession(req).address, modeAt: Date.now() }));
     return { ok: true, mode: m };
   });
+  r.post("/api/x/poll", async ({ req }) => {
+    if (!isAdmin(req)) throw new HttpError(403, "Admins only.");
+    await poll();
+    const st = await store.readJson("x-state.json", {});
+    return { ok: true, lastPoll: st.lastPoll || null, lastError: st.lastError || null, started: !!st.sinceId };
+  }, { perMin: 6 });
   if (on() && process.env.X_POLL !== "0") { setTimeout(() => poll().catch(() => {}), 60_000).unref?.(); setInterval(() => poll().catch(() => {}), POLL_MIN * 60_000).unref?.(); }
 }

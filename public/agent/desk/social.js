@@ -251,7 +251,11 @@ export async function mount(view, ctx) {
       s.admin ? h("div", { class: "so-admin" }, h("span", { class: "fine" }, "Admin · mode"),
         seg([{ value: "off", label: "Off" }, { value: "draft", label: "Draft" }, { value: "live", label: "Live" }], s.mode, async (v) => {
           try { await api.post("x/mode", { mode: v }); toast(`Troya on X: ${v}`, "ok"); load(); } catch (e) { toast(e.message, "error"); }
-        })) : null,
+        }), s.bot ? h("button", { class: "btn sm", type: "button", disabled: st.polling, onclick: async () => {
+          st.polling = true; paint();
+          try { const r = await api.post("x/poll", {}); toast(r.lastError ? `X: ${r.lastError}` : "Mentions checked.", r.lastError ? "error" : "ok"); } catch (e) { toast(e.message, "error"); }
+          st.polling = false; load();
+        } }, st.polling ? "Checking…" : "Check mentions now") : null) : null,
       s.posted?.length ? h("div", { class: "so-posted" }, h("span", { class: "fine" }, "Latest replies"), s.posted.map((p) => h("a", { class: "ulink", href: `https://x.com/${s.bot?.username || "Troyaagent"}/status/${p.replyId}`, target: "_blank", rel: "noopener" }, `to @${p.author || "someone"} · ${ago(p.at)}`))) : null);
   }
   function logBox() {

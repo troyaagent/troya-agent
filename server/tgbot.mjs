@@ -333,6 +333,19 @@ export async function handleBotMessage(m, tg, me) {
 
   let text, markup;
   try {
+    if (cmd === "start" && m.chat.type === "private" && /^report\b/i.test(arg.trim())) {
+      await tg("sendMessage", { chat_id: chatId, parse_mode: "HTML", link_preview_options: { is_disabled: true }, text: `<b>Report to the Troya team</b>
+Send one message here:
+
+<code>/bug</code> and what broke, for example <code>/bug Swap shows no price for NVDA</code>
+<code>/idea</code> and what you want, for example <code>/idea add Base to Sentry</code>
+<code>/report</code> and anything suspicious: a fake account, a scam DM, a strange listing offer
+
+A screenshot helps: send the image with the command and a line as its caption. You get a reference number. Reports go to the team inbox, never to anyone's personal chat.
+
+Nobody from Troya DMs first or asks for a seed phrase or private key.` });
+      return;
+    }
     if (cmd === "start" && m.chat.type === "private") { await tg("sendMessage", { chat_id: chatId, text: DM_WELCOME, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: DM_WELCOME_KB }); return; }
     if (cmd === "start" || cmd === "help") text = HELP;
     else if (cmd === "sentry") ({ text, markup } = await sentryText());

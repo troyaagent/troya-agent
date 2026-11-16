@@ -133,13 +133,13 @@ export async function mount(view, ctx) {
     else if (!v.proposals.length) items.push(h("div", { class: "panel sd-panel so-card" }, h("p", { class: "muted" }, "No proposals yet.")));
     for (const x of v.proposals) {
       const total = x.tally.reduce((s, n) => s + n, 0) || 1;
-      const canVote = x.open && p.me?.passId && p.me.active && p.me.mintedBlock < x.startBlock;
+      const canVote = x.open && p.me?.passId && p.me.active && p.me.mintedAt < x.startTime;
       items.push(h("div", { class: "panel sd-panel so-card" },
         h("div", { class: "so-li-h" }, h("b", {}, x.title), h("span", { class: "chip" }, x.open ? `open · ${Math.max(0, Math.ceil((x.endsAt - Date.now()) / 3600_000))} h left` : x.final ? "closed · final" : "closed")),
         h("div", { class: "so-opts" }, x.options.map((name, i) => h("div", { class: "so-opt" },
           h("div", { class: "so-opt-h" }, h("span", {}, name), h("b", {}, `${x.tally[i]} vote${x.tally[i] === 1 ? "" : "s"}`)), h("i", { style: { width: `${(x.tally[i] / total) * 100}%` } }),
           canVote ? h("button", { class: "btn sm", type: "button", disabled: !!st.busy, onclick: () => vote(x, i) }, "Vote") : null))),
-        h("p", { class: "fine", style: { margin: 0 } }, `${x.counted} counted of ${x.cast} cast · passes minted before block ${x.startBlock} and still holding the minimum · `, h("a", { class: "ulink", href: `/api/votes/${x.id}`, target: "_blank", rel: "noopener" }, "every signed vote (JSON)")),
+        h("p", { class: "fine", style: { margin: 0 } }, `${x.counted} counted of ${x.cast} cast · passes minted before ${new Date(x.startTime * 1000).toLocaleString()} and still holding the minimum · `, h("a", { class: "ulink", href: `/api/votes/${x.id}`, target: "_blank", rel: "noopener" }, "every signed vote (JSON)")),
         x.open && wallet.address && !canVote ? h("p", { class: "fine" }, !p.me?.passId ? "Mint a Holder Pass to vote in the next proposals." : !p.me.active ? "Your wallet is under the minimum right now." : "Your pass was minted after this vote opened; it counts from the next one.") : null));
     }
     clear(body, ...items);

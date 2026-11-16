@@ -6,7 +6,9 @@
 //   GET  /api/votes                → proposals with live tallies          GET /api/votes/:id → one proposal, every signed vote
 //   POST /api/votes {title, options, days}       → admins: open a proposal
 //   POST /api/votes/:id/vote {option, signature} → a pass holder's EIP-712 signed vote (no transaction, no gas)
-// Counting rules: one pass, one vote. A pass counts only if it was minted before the proposal opened, and only while its
+// Counting rules: one pass, one vote. A pass counts only if it was minted before the proposal opened (compared by time:
+// on an Arbitrum Orbit chain block.number inside a contract is the parent chain's block, so the pass's mint timestamp
+// is checked against the Robinhood Chain block time when the proposal opened), and only while its
 // wallet still holds MIN_HOLD $TROYA; when a proposal closes, every voter is checked once more and the result is frozen.
 // So moving one bag of $TROYA between wallets cannot vote twice. Every signature is public: anyone can re-check.
 import { Interface, verifyTypedData, getAddress, isAddress } from "ethers";
@@ -57,7 +59,7 @@ export async function passView(address) {
       const id = Number((await call(pass, passI, "passOf", [a]))[0]);
       me.passId = id || null;
       me.active = !!id && me.eligible;
-      if (id) { const m = await call(pass, passI, "mintedAt", [id]); me.mintedBlock = Number(m.blockNumber); me.image = await passImage(pass, id).catch(() => null); }
+      if (id) { const m = await call(pass, passI, "mintedAt", [id]); me.mintedAt = Number(m.timestamp); me.image = await passImage(pass, id).catch(() => null); }
     }
     out.me = me;
   }
@@ -85,6 +87,7 @@ async function configure(req, hash) {
 }
 
 /* ---------- proposals and votes ---------- */
+const startOf = (p) => p.startTime || Math.floor(p.createdAt / 1000);
 async function counts(p, pass, final = false) {
   const tally = p.options.map(() => 0), voters = [];
   for (const v of Object.values(p.votes || {})) {
@@ -93,7 +96,7 @@ async function counts(p, pass, final = false) {
       const id = Number((await call(pass, passI, "passOf", [v.voter]))[0]);
       if (id) {
         const m = await call(pass, passI, "mintedAt", [id]);
-        ok = Number(m.blockNumber) < p.startBlock && (await call(pass, passI, "isActive", [v.voter]))[0];
+        ok = Number(m.timestamp) < startOf(p) && (await call(pass, passI, "isActive", [v.voter]))[0];
       }
     } catch {}
     voters.push({ ...v, counts: ok });
@@ -110,7 +113,7 @@ async function proposalView(p, withVotes = false) {
     if (!open) { await store.update("votes.json", [], (l) => { const x = l.find((y) => y.id === p.id); if (x && !x.result) x.result = t; return l; }); }
   }
   const { votes, result, ...rest } = p;
-  return { ...rest, open, tally: t?.tally || p.options.map(() => 0), counted: t ? t.voters.filter((v) => v.counts).length : 0, cast: Object.keys(votes || {}).length, final: !!t?.final, checkedAt: t?.checkedAt || null,
+  return { ...rest, startTime: startOf(p), open, tally: t?.tally || p.options.map(() => 0), counted: t ? t.voters.filter((v) => v.counts).length : 0, cast: Object.keys(votes || {}).length, final: !!t?.final, checkedAt: t?.checkedAt || null,
     votes: withVotes ? (t?.voters || Object.values(votes || {})).map((v) => ({ voter: v.voter, option: v.option, signature: v.signature, at: v.at, counts: v.counts ?? null })) : undefined };
 }
 async function createProposal(req, body) {
@@ -120,8 +123,9 @@ async function createProposal(req, body) {
   const options = (Array.isArray(body?.options) ? body.options : []).map((o) => String(o || "").trim().slice(0, 60)).filter(Boolean).slice(0, 5);
   const days = Math.min(14, Math.max(1, Number(body?.days) || 3));
   if (title.length < 8 || options.length < 2) throw new HttpError(400, "A proposal needs a title and at least two options.");
-  const startBlock = Number(BigInt(await rpc("robinhood", "eth_blockNumber", [])));
-  const p = { id: `p${Date.now().toString(36)}`, title, options, startBlock, createdAt: Date.now(), endsAt: Date.now() + days * 86400_000, createdBy: requireSession(req).address, votes: {} };
+  const head = await rpc("robinhood", "eth_getBlockByNumber", ["latest", false]);
+  const startBlock = Number(BigInt(head.number)), startTime = Number(BigInt(head.timestamp));
+  const p = { id: `p${Date.now().toString(36)}`, title, options, startBlock, startTime, createdAt: Date.now(), endsAt: Date.now() + days * 86400_000, createdBy: requireSession(req).address, votes: {} };
   await store.update("votes.json", [], (l) => { l.push(p); return l; });
   return proposalView(p);
 }
@@ -142,7 +146,7 @@ async function castVote(id, body) {
   const passId = Number((await call(pass, passI, "passOf", [voter]))[0]);
   if (!passId) throw new HttpError(403, "This wallet has no Holder Pass.");
   const m = await call(pass, passI, "mintedAt", [passId]);
-  if (Number(m.blockNumber) >= p.startBlock) throw new HttpError(403, "Your pass was minted after this vote opened, so it counts from the next one.");
+  if (Number(m.timestamp) >= startOf(p)) throw new HttpError(403, "Your pass was minted after this vote opened, so it counts from the next one.");
   if (!(await call(pass, passI, "isActive", [voter]))[0]) throw new HttpError(403, "Your wallet holds less $TROYA than the pass needs right now.");
   await store.update("votes.json", [], (l) => { const x = l.find((y) => y.id === id); x.votes[lc(voter)] = { voter, option, signature: String(body.signature), at: Date.now() }; return l; });
   return { ok: true, option };

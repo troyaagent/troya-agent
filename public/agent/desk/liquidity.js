@@ -112,7 +112,7 @@ export async function mount(view, ctx) {
   async function loadPools(token = null) {
     try { const r = await api.get(`lp/pools${token ? `?token=${token}` : ""}`); st.pools = r.pools; st.byToken = !!token; st.err = r.pools.length ? null : r.note || "No pools."; } catch (e) { st.err = e.message; }
     if (!st.pool && st.pools[0]) st.pool = st.pools[0].address;
-    if (alive) { paintList(); if (st.pool && !st.sug) loadSug(); }
+    if (alive) { paintList(); if (st.pool && !st.sug) { if (st.tab === "new") paintCard(); loadSug(); } }
   }
   async function loadSug() {
     const pool = st.pool;

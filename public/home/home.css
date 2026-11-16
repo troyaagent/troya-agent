@@ -5,11 +5,13 @@
 @font-face { font-family: "Instrument Serif"; font-style: italic; src: url(fonts/instrument-serif-italic.woff2) format("woff2"); font-display: swap; }
 
 :root {
-  --bg: #0d0c0b; --band: #060505; --fg: #efe9df; --muted: #8a847a; --accent: #8edff5; --on-accent: #0d0c0b; --line: rgba(239,233,223,.16);
+  --bg: #0a0d10; --band: #05080a; --fg: #f5f9fb; --muted: #8796a0; --accent: #8edff5; --on-accent: #0a0d10; --line: rgba(245,249,251,.16);
+  --grad: linear-gradient(180deg, #ffffff 0%, #dff7ff 34%, #8edff5 66%, #4aa7cf 100%);
   --sans: "Instrument Sans", "Helvetica Neue", Arial, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
   --serif: "Instrument Serif", Georgia, serif; --serif-style: italic; --serif-scale: 1;
   --gut: clamp(16px, 3vw, 52px);
 }
+html[data-t="B"], html[data-t="C"] { --grad: linear-gradient(var(--accent), var(--accent)); }
 html[data-t="B"] { --bg: #efe9df; --band: #e4dccd; --fg: #121110; --muted: #6f685d; --accent: #1c4f7c; --on-accent: #efe9df; --line: rgba(18,17,16,.15); }
 html[data-t="C"] { --bg: #8e2a1f; --band: #6a1c13; --fg: #140b09; --muted: #43160f; --accent: #f1e7d6; --on-accent: #8e2a1f; --line: rgba(20,11,9,.22); }
 html[data-t="D"] { --bg: #0e2233; --band: #091826; --fg: #eef2f4; --muted: #8197a6; --accent: #8edff5; --on-accent: #0e2233; --line: rgba(238,242,244,.16); }
@@ -26,6 +28,12 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 :focus-visible { outline: 1.5px solid var(--accent); outline-offset: 3px; }
 ::selection { background: var(--accent); color: var(--on-accent); }
 em { font-family: var(--serif); font-style: var(--serif-style); font-weight: 400; color: var(--accent); text-transform: none; letter-spacing: -0.01em; }
+/* accent words, big numbers and the last hero word wear the Troya-blue gradient (white at the top into ice blue) */
+em, .fact b, .mega .script, .mega .l2 > span:last-child .ch-l {
+  background-image: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+em, .mega .script { padding-right: .04em; }
+.mega .script { text-shadow: none; filter: drop-shadow(0 2px 24px rgba(0, 0, 0, .45)); }
 
 /* type */
 .tag { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; font: 600 11px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
@@ -213,7 +221,7 @@ em { font-family: var(--serif); font-style: var(--serif-style); font-weight: 400
   .q { font-size: 10.5px; }
   .q2, .q4, .q5 { display: none; }
   .q2 { top: 150px; }
-  .mega { top: 200px; font-size: 40px; }
+  .mega { top: 200px; font-size: min(40px, 9.4vw); }
   .horse3d { width: 100vw; height: 54vh; }
   .ch2 .huge, .ch4 .huge { font-size: 44px; }
   .count { display: none; }

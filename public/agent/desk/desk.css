@@ -563,3 +563,8 @@ html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color:
 .so-st-retired { color: var(--muted); }
 .so-card h4 { margin: 8px 0 0; font-size: 13px; font-weight: 600; }
 .so-card select.input { height: 38px; }
+
+/* palette: coins with their logos */
+.d-pal-ic.coin { border: 0; background: none; padding: 0; overflow: hidden; border-radius: 50%; }
+.d-pal-ic.coin .tok-ico { width: 32px; height: 32px; }
+.d-pal-t small.warn { color: var(--warn); }

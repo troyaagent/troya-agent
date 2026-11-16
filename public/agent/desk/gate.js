@@ -2,6 +2,7 @@
 // gatePanel() is the Desk card; mount() is the full page at #/gate and #/gate/0x…
 import { h, clear, icon, useCss, short, ago, tokenIcon, toast } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
+import { coinSuggest, findCoin } from "/agent/js/coinsearch.js";
 
 const ADDR = /0x[0-9a-fA-F]{40}/;
 const EXAMPLE = "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC";   // NVDA (Robinhood stock token)
@@ -51,14 +52,21 @@ function assayBox(addr, compact) {
 
 export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
   const SITE = window.SITE || {};
-  const input = h("input", { class: "input dk-gate-in", type: "text", spellcheck: "false", autocomplete: "off", placeholder: "Paste a Robinhood Chain coin address, 0x…", "aria-label": "Coin address", maxlength: "80" });
+  const input = h("input", { class: "input dk-gate-in", type: "text", spellcheck: "false", autocomplete: "off", placeholder: "Search a coin (TROYA, NVDA…) or paste its address", "aria-label": "Coin name, ticker or address", maxlength: "80" });
+  const inputBox = coinSuggest(input, (c) => { input.value = c.address; run(c.address); }, { majors: false });
   const runBtn = h("button", { class: "btn primary", type: "button" }, icon("shield"), "Run the Gate");
   const out = h("div", { class: "dk-gate-out", "aria-live": "polite" });
   let alive = true, seq = 0;
 
   async function run(raw, { example = false } = {}) {
-    const m = ADDR.exec(String(raw || ""));
-    if (!m) { if (raw) toast("Paste a full coin address (0x and 40 characters).", "error"); input.focus(); return; }
+    let m = ADDR.exec(String(raw || ""));
+    if (!m && String(raw || "").trim()) {
+      // a name or a ticker: take the top match (the real coin ranks first; copies are marked in the dropdown)
+      const c = await findCoin(raw).catch(() => null);
+      if (c?.address) m = [c.address];
+      else { toast(`No Robinhood Chain coin matches "${String(raw).trim()}". Paste its address instead.`, "error"); input.focus(); return; }
+    }
+    if (!m) { input.focus(); return; }
     const a = m[0], id = ++seq;
     if (!example) input.value = a;
     runBtn.disabled = true;
@@ -111,7 +119,7 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
   const el = h("section", { class: `panel dk-gate ${compact ? "compact" : ""}` },
     h("div", { class: "panel-h" }, h("h2", {}, "Troya Gate"), compact ? h("a", { class: "link fine", href: "#/gate" }, "Open the Gate") : h("a", { class: "link fine", href: "/risk-controls" }, "How the checks work")),
     h("p", { class: "dk-gate-sub" }, "Seven checks before you can buy: route, price impact, depth, fees and taxes, a simulation, a test sell and transfer tax. Fail one, no order."),
-    h("div", { class: "dk-gate-form" }, input, runBtn),
+    h("div", { class: "dk-gate-form" }, inputBox, runBtn),
     out);
 
   if (ADDR.test(start)) run(start);

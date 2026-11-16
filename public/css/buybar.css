@@ -1,0 +1,56 @@
+/* Header bar shared by the landing and every site page: X, Telegram, GitHub and a Buy $TROYA menu whose first
+   choice is our own Troya Swap (the Gate checks the coin before the wallet signs). Uses each page's own tokens. */
+.bb-soc { display: inline-flex; align-items: center; gap: 2px; margin-right: 2px; }
+.bb-soc a { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 999px; color: var(--fg); opacity: .78;
+  transition: opacity .25s, background .25s, color .25s, transform .35s cubic-bezier(.2, .8, .2, 1); }
+.bb-soc a:hover { opacity: 1; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); transform: translateY(-1px); }
+.bb-soc svg { width: 16px; height: 16px; fill: currentColor; }
+
+.bb-buy { position: relative; }
+.bb-btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px 0 6px; border-radius: 999px;
+  background: var(--accent); color: var(--on-accent); font: 700 11px/1 var(--sans, system-ui); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; border: 0;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent), 0 6px 22px color-mix(in srgb, var(--accent) 28%, transparent);
+  transition: transform .35s cubic-bezier(.2, .8, .2, 1), box-shadow .35s; }
+.bb-btn:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px var(--accent), 0 10px 30px color-mix(in srgb, var(--accent) 40%, transparent); }
+.bb-btn img { width: 24px; height: 24px; border-radius: 50%; background: rgba(0, 0, 0, .28); object-fit: cover; }
+.bb-btn .bb-chev { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .3s; }
+.bb-btn[aria-expanded="true"] .bb-chev { transform: rotate(180deg); }
+/* a slow soft sheen across the button, a wave of light, never a hard slash */
+.bb-btn::after { content: ""; position: absolute; inset: -40% -60%; pointer-events: none;
+  background: radial-gradient(40% 60% at 50% 50%, rgba(255, 255, 255, .38), rgba(255, 255, 255, 0) 70%);
+  transform: translateX(-70%); animation: bb-sheen 7s ease-in-out infinite; }
+@keyframes bb-sheen { 0%, 55% { transform: translateX(-70%); opacity: 0; } 70% { opacity: 1; } 100% { transform: translateX(70%); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .bb-btn::after { animation: none; display: none; } }
+
+.bb-menu { position: absolute; right: 0; top: calc(100% + 10px); z-index: 80; width: min(360px, calc(100vw - 24px)); padding: 8px; border-radius: 18px;
+  background: color-mix(in srgb, var(--bg) 94%, #000); border: 1px solid var(--line-2, var(--line)); color: var(--fg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .45); transform-origin: top right; animation: bb-in .28s cubic-bezier(.2, .8, .2, 1); }
+.bb-menu[hidden] { display: none; }
+@keyframes bb-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }
+.bb-i { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 12px; color: inherit; text-decoration: none; transition: background .2s; }
+.bb-i:hover, .bb-i:focus-visible { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.bb-i > span:nth-child(2) { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.bb-i b { font: 600 14px/1.2 var(--sans, system-ui); letter-spacing: 0; text-transform: none; }
+.bb-i small { font: 400 12px/1.35 var(--sans, system-ui); color: var(--muted, rgba(255, 255, 255, .6)); letter-spacing: 0; text-transform: none; }
+.bb-i img, .bb-g { width: 36px; height: 36px; flex: none; border-radius: 50%; }
+.bb-g { display: grid; place-items: center; border: 1px solid var(--line-2, var(--line)); font: 700 13px/1 var(--sans, system-ui); color: var(--fg); }
+.bb-g svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.bb-main { background: color-mix(in srgb, var(--accent) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); margin-bottom: 4px; }
+.bb-main:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.bb-main em { font: 700 9.5px/1 var(--sans, system-ui); letter-spacing: .12em; text-transform: uppercase; font-style: normal; padding: 5px 8px; border-radius: 999px; background: var(--accent); color: var(--on-accent); }
+.bb-out { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; opacity: .5; }
+.bb-ca { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; width: 100%; margin-top: 6px; padding: 10px 12px; border-radius: 12px; cursor: pointer;
+  border: 1px dashed var(--line-2, var(--line)); background: none; color: inherit; text-align: left; }
+.bb-ca span { font: 700 10px/1 var(--sans, system-ui); letter-spacing: .12em; color: var(--accent); }
+.bb-ca code { font: 400 11px/1.35 var(--mono, ui-monospace, monospace); word-break: break-all; opacity: .85; }
+.bb-ca b { font: 700 10px/1 var(--sans, system-ui); letter-spacing: .1em; text-transform: uppercase; }
+.bb-ca:hover { border-color: var(--accent); }
+
+@media (max-width: 860px) { .bb-btn .bb-t { display: none; } }
+@media (max-width: 600px) {
+  .bb-soc { display: none; }            /* the same three links sit in the menu */
+  .nav-r > .ca, .pn-r > .pn-ca { display: none; }   /* the full CA with Copy sits in the Buy menu */
+  .pill, .pn-pill { white-space: nowrap; }
+  .bb-btn { padding-right: 10px; }
+  .bb-menu { position: fixed; left: 12px; right: 12px; top: 68px; width: auto; transform-origin: top center; }
+}

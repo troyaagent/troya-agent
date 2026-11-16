@@ -6,15 +6,16 @@
 
 :root {
   color-scheme: dark;
-  --bg: #0d0c0b; --bg-1: #0a0908; --bg-2: #141311; --bg-3: #1b1a17; --bg-4: #24221f;
-  --line: rgba(239, 233, 223, .09); --line-2: rgba(239, 233, 223, .16); --line-3: rgba(239, 233, 223, .28);
-  --fg: #efe9df; --fg-2: #d4cdc1; --muted: #948d82; --faint: #645f56;
-  --blue: #8edff5; --blue-2: #8edff5; --blue-3: #c6f1fb; --ice: #efe9df; --deep: #1f3b42; --deep-2: #101a1c;
+  --bg: #0a0d10; --bg-1: #070a0c; --bg-2: #11161a; --bg-3: #171d22; --bg-4: #1f262c;
+  --line: rgba(245, 249, 251, .09); --line-2: rgba(245, 249, 251, .16); --line-3: rgba(245, 249, 251, .28);
+  --fg: #f5f9fb; --fg-2: #d3dde2; --muted: #8b99a2; --faint: #5d6a72;
+  --blue: #8edff5; --blue-2: #8edff5; --blue-3: #c6f1fb; --ice: #f5f9fb; --deep: #1f3b42; --deep-2: #101a1c;
+  --grad: linear-gradient(180deg, #ffffff 0%, #dff7ff 34%, #8edff5 66%, #4aa7cf 100%);
   --up: #8edff5; --up-bg: rgba(142, 223, 245, .1);
-  --accent: #8edff5; --on-accent: #0d0c0b;
+  --accent: #8edff5; --on-accent: #0a0d10;
   --serif: "Instrument Serif", Georgia, serif;
   --gutter: clamp(16px, 3vw, 52px);
-  --panel: rgba(239, 233, 223, .025);
+  --panel: rgba(245, 249, 251, .025);
 }
 html { background: var(--bg); scroll-behavior: smooth; }
 body.pn { background: var(--bg); color: var(--fg); font-size: 15px; line-height: 1.55; }
@@ -62,6 +63,7 @@ body.pn .page-hero > canvas.rain, body.pn .nf > canvas.rain { position: absolute
 .page-hero .eyebrow .dot, .dot { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: none; }
 .page-hero h1, .nf h1 { margin: 0 0 26px; font: 700 clamp(42px, 6vw, 104px)/.9 var(--sans); letter-spacing: -0.045em; text-transform: uppercase; max-width: 12em; }
 .acc, .w.acc > i { font-family: var(--serif); font-style: italic; font-weight: 400; text-transform: none; letter-spacing: -0.01em; color: var(--accent); font-size: 1.1em; line-height: .8; }
+.acc, .w.acc > i { background-image: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-box-decoration-break: clone; box-decoration-break: clone; padding-right: .04em; }
 .page-hero .lead { font-size: 16px; line-height: 1.6; color: var(--fg-2); max-width: 36em; }
 .page-hero .hero-act { gap: 18px 30px; margin-top: 34px; }
 .page-hero .meta { color: var(--muted); }

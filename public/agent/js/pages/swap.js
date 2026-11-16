@@ -274,7 +274,11 @@ export async function mount(view, ctx) {
     const other = side === "sell" ? st.buy : st.sell;
     const input = h("input", { class: "input", placeholder: "Search a name, symbol or paste an address", autocomplete: "off", spellcheck: "false" });
     const list = h("div", { class: "tp-list" });
-    const choose = (t) => {
+    const choose = async (t) => {
+      if (t.decimals == null && t.address && t.address !== "native") {
+        try { const m2 = await api.get(`token/meta?${new URLSearchParams({ address: t.address, ...cq() })}`); t = { ...t, decimals: m2.decimals, symbol: t.symbol || m2.symbol, name: t.name || m2.name }; }
+        catch { toast("Could not read this token from the chain. Try again in a moment.", "error"); return; }
+      }
       if (side === "sell") st.sell = t; else st.buy = t;
       if (other && (isNative(t) ? isNative(other) : !isNative(other) && other.address === t.address)) { if (side === "sell") st.buy = null; else st.sell = nativeOf(); }
       m.close(); reset(); paint(); refreshBal(); requote();
@@ -317,6 +321,23 @@ export async function mount(view, ctx) {
           clear(list, row({ address: m2.address, symbol: m2.symbol, name: m2.name, decimals: m2.decimals }, "By address"));
           return;
         }
+        if (q) {
+          // a symbol, name or ticker: the whole chain (index + stock tokens + DexScreener), real coin first, copies marked
+          const [r, sk] = await Promise.all([
+            api.get(`search/coins?${new URLSearchParams({ q, limit: "24" })}`),
+            (stocksCache ||= api.get("market/stocks").catch(() => ({ stocks: [] }))),
+          ]);
+          if (my !== seq) return;
+          const tradable = new Set((sk.stocks || []).filter((t) => t.tradable).map((t) => String(t.address).toLowerCase()));
+          const hits = (r.coins || []).filter((c) => c.kind !== "major" && (c.kind !== "stock" || tradable.has(c.address)));
+          const liq = (n) => (n >= 1e6 ? `$${num(n / 1e6, 1)}M liq.` : `$${num(n / 1e3, n >= 1e4 ? 0 : 1)}K liq.`);
+          clear(list, ...items,
+            ...hits.map((c) => row({ address: c.address, symbol: c.symbol, name: c.name, decimals: null, image: c.image },
+              c.copy ? h("span", { class: "badge-s warn", title: "A small coin borrowing the ticker of a bigger one. Check the address." }, "Copy?")
+                : h("span", { class: "badge-s" }, c.kind === "stock" ? "Stock" : c.launchpad || (c.liquidityUsd ? liq(c.liquidityUsd) : "Coin")))),
+            hits.length || items.length ? null : h("div", { class: "tp-load muted" }, "No match. Paste the token address instead."));
+          return;
+        }
         const [r, sk] = await Promise.all([
           api.get(`market/robinhood?${new URLSearchParams({ q, limit: "30", sort: "volume", dir: "desc", tradable: "1" })}`),
           (stocksCache ||= api.get("market/stocks").catch(() => ({ stocks: [] }))),
@@ -326,8 +347,8 @@ export async function mount(view, ctx) {
         const stocks = (sk.stocks || []).filter((t) => t.tradable && (!ql || t.symbol.toLowerCase().includes(ql) || t.name.toLowerCase().includes(ql))).slice(0, q ? 12 : 6);
         const toks = (r.tokens || r.rows || []).filter((t) => t.address && t.address !== "native");
         clear(list, ...items,
-          ...stocks.map((t) => row({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals ?? 18, image: t.image }, h("span", { class: "badge-s" }, "Stock"))),
-          ...toks.map((t) => row({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals ?? 18, image: t.image }, t.launchpad ? h("span", { class: "badge-s" }, t.launchpad) : null)),
+          ...stocks.map((t) => row({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals ?? null, image: t.image }, h("span", { class: "badge-s" }, "Stock"))),
+          ...toks.map((t) => row({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals ?? null, image: t.image }, t.launchpad ? h("span", { class: "badge-s" }, t.launchpad) : null)),
           toks.length || stocks.length ? null : h("div", { class: "tp-load muted" }, q ? "No match. Paste the token address instead." : "Type to search Robinhood Chain tokens."));
       } catch (e) {
         if (my !== seq) return;

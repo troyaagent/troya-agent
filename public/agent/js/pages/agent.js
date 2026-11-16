@@ -1,6 +1,7 @@
 // Agent page: Chat · Wallet (Agent Wallet + API tokens) · Autopilot (+ limits) · Playbooks.
 import { h, clear, icon, toast, modal, review, short, greeting, useCss, every, store, copyText, ago, num, usd, esc, chainLogo, tokenIcon, coinIcon } from "../ui.js";
 import { api, stream } from "../api.js";
+import { coinSuggest } from "../coinsearch.js";
 import { wallet, onWallet, signIn, openConnect } from "../wallet.js";
 
 const TABS = [["chat", "Chat"], ["wallet", "Wallet"], ["autopilot", "Autopilot"], ["sentry", "Sentry Autopilot"], ["playbooks", "Playbooks"]];
@@ -563,13 +564,14 @@ function mountPlaybooks(box) {
     const drawType = () => {
       clear(typeSeg, TYPES.map(([v, t]) => h("button", { type: "button", "aria-pressed": String(v === type), onclick: () => { type = v; drawType(); } }, t)));
       const inp = (name, ph, t = "text") => h("label", { class: "field" }, h("span", {}, ph), h("input", { class: "input", name, type: t, step: "any", placeholder: ph }));
+      const coinInp = (name, ph) => { const el = h("input", { class: "input", name, type: "text", placeholder: ph }); return h("label", { class: "field" }, h("span", {}, ph), coinSuggest(el, (c) => { el.value = c.address; })); };
       const dir = (def) => h("label", { class: "field" }, h("span", {}, "Fires when price is"), h("select", { class: "select", name: "direction" }, h("option", { value: "below", selected: def === "below" }, "at or below"), h("option", { value: "above", selected: def === "above" }, "at or above")));
       if (type === "stop_loss") clear(fields, inp("coin", "Perp, e.g. ETH"), inp("triggerPx", "Trigger price (USD)", "number"), dir("below"), inp("sizePct", "Close % of position (default 100)", "number"));
       if (type === "take_profit") clear(fields, inp("coin", "Perp, e.g. ETH"), inp("levels", "Levels price:% e.g. 4000:25, 4200:25"), dir("above"));
-      if (type === "dca") clear(fields, inp("token", "Token symbol or address on Robinhood Chain"), inp("amountEth", "ETH per buy", "number"),
+      if (type === "dca") clear(fields, coinInp("token", "Token: type a name or ticker, or paste its address"), inp("amountEth", "ETH per buy", "number"),
         h("label", { class: "field" }, h("span", {}, "Every"), h("select", { class: "select", name: "everyHours" }, [[1, "hour"], [4, "4 hours"], [24, "day"], [168, "week"]].map(([v, t]) => h("option", { value: v, selected: v === 24 }, t)))), inp("runs", "Number of buys (default 10)", "number"),
         h("label", { class: "row ag-smart" }, h("input", { type: "checkbox", name: "smart" }), h("span", {}, h("b", {}, "Smart DCA"), " · buy up to 1.5× when the price is under its 7-day average, as little as 0.5× when over it. Never more than ETH per buy × number of buys in total.")));
-      if (type === "twap") clear(fields, inp("token", "Token symbol or address on Robinhood Chain"),
+      if (type === "twap") clear(fields, coinInp("token", "Token: type a name or ticker, or paste its address"),
         h("label", { class: "field" }, h("span", {}, "Side"), h("select", { class: "select", name: "side" }, h("option", { value: "buy" }, "Buy with ETH"), h("option", { value: "sell" }, "Sell for ETH"))),
         inp("total", "Total (ETH to spend, or tokens to sell)", "number"), inp("slices", "Slices (2–48, default 6)", "number"),
         h("label", { class: "field" }, h("span", {}, "One slice every"), h("select", { class: "select", name: "everyMinutes" }, [[2, "2 min"], [5, "5 min"], [10, "10 min"], [30, "30 min"], [60, "hour"]].map(([v, t]) => h("option", { value: v, selected: v === 10 }, t)))),

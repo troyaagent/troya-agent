@@ -7,6 +7,7 @@
 import { Interface, parseUnits } from "ethers";
 import { h, clear, useCss, toast, tiny, usd, pageHead, seg, review, short } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
+import { coinSuggest } from "/agent/js/coinsearch.js";
 import { wallet, onWallet, openConnect } from "/agent/js/wallet.js";
 import { balanceOf, sendTx, waitReceipt, errText } from "/agent/js/chain.js";
 
@@ -159,7 +160,11 @@ export async function mount(view, ctx) {
   const search = h("input", { class: "input", placeholder: "Search ETH, NVDA… or paste a token address", "aria-label": "Search pools", autocomplete: "off" });
   const list = h("div", { class: "sp-list" });
   const card = h("div", { class: "panel sp-card lq-card" });
-  const grid = h("div", { class: "sp-grid" }, h("div", { class: "panel sp-side" }, search, list), card);
+  const searchBox = coinSuggest(search, (c) => {
+    search.value = c.symbol; st.q = "";
+    if (c.address === "native") { loadPools(); st.q = "eth"; paintList(); } else loadPools(lc(c.address));
+  }, { majors: true });
+  const grid = h("div", { class: "sp-grid" }, h("div", { class: "panel sp-side" }, searchBox, list), card);
   search.addEventListener("input", () => {
     const q = search.value.trim();
     if (ADDR_RE.test(q)) { st.q = ""; loadPools(lc(q)); return; }

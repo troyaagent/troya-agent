@@ -1,7 +1,7 @@
 // Troya Desk (concept shell). Same pages, same API and wallet modules as /agent; only the frame changes:
 // grouped sidebar, top bar with Ask, an agent drawer that stays open beside any page, and a new Desk home.
 // Pages live in /agent/js/pages/<name>.js (unchanged). Desk home and Gate live next to this file.
-import { h, $, clear, icon, toast, modal, short, store, chainLogo } from "/agent/js/ui.js";
+import { h, $, clear, icon, toast, modal, short, store, chainLogo, tokenIcon } from "/agent/js/ui.js";
 import { wallet, onWallet, openConnect, restore, disconnect, signIn, CHAINS, chainById } from "/agent/js/wallet.js";
 import { api } from "/agent/js/api.js";
 
@@ -314,14 +314,36 @@ $("[data-ask-fab]").addEventListener("click", () => openDrawer());
 const ASKS = ["What is moving on Robinhood Chain right now?", "Show funding extremes on Hyperliquid", "What should I watch today?"];
 function openAsk(prefill = "") {
   const input = h("input", { class: "d-pal-in", placeholder: "Ask Troya anything, paste a coin address, or type a page name", value: prefill, "aria-label": "Ask Troya", autocomplete: "off", spellcheck: "false" });
-  let sel = 0, flat = [];
+  let sel = 0, flat = [], coins = [], coinQ = "", coinSeq = 0, coinTimer = 0;
   const opts = h("div", { class: "d-pal-list", role: "listbox" });
+  // coins by symbol, name or ticker: the server searches the whole chain (index, stock tokens, DexScreener)
+  const findCoins = () => {
+    clearTimeout(coinTimer);
+    const raw = input.value.trim().replace(/^\$/, "");
+    if (raw.length < 2 || /0x[0-9a-fA-F]{40}/.test(raw) || raw.split(/\s+/).length > 3) { coins = []; coinQ = ""; return; }
+    coinTimer = setTimeout(async () => {
+      const my = ++coinSeq;
+      try { const r = await api.get(`search/coins?q=${encodeURIComponent(raw)}&limit=6`); if (my !== coinSeq) return; coins = r.coins || []; coinQ = raw; render(); } catch {}
+    }, 180);
+  };
   // rows: { kind: "ask" | "coin" | "page", title, hint, icon, target }
   const sections = () => {
     const raw = input.value.trim(), q = raw.toLowerCase();
     const ca = (/0x[0-9a-fA-F]{40}/.exec(raw) || [])[0];
     const out = [];
     const asks = [];
+    const fmt = (n) => (n == null ? null : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${Math.round(n)}`);
+    const px = (n) => (n == null ? null : n >= 1 ? `$${n.toFixed(2)}` : n > 0 ? `$${n.toLocaleString("en-US", { maximumSignificantDigits: 3, maximumFractionDigits: 20 })}` : null);
+    if (coins.length && coinQ && q.replace(/^\$/, "").startsWith(coinQ.toLowerCase().slice(0, 2))) {
+      const rows = coins.map((c) => ({ kind: "coin", coin: c, title: `${c.symbol}${c.name && c.name.toLowerCase() !== c.symbol.toLowerCase() ? ` · ${c.name}` : ""}`,
+        hint: [c.kind === "stock" ? "Robinhood stock token" : c.kind === "major" ? "Major" : c.launchpad || null, px(c.priceUsd), c.liquidityUsd ? `liq ${fmt(c.liquidityUsd)}` : null, c.copy ? "small copy of a bigger coin with this ticker" : null].filter(Boolean).join(" · "),
+        target: c.address === "native" ? "#/swap" : `#/token/${c.address}` }));
+      const t = coins[0];
+      if (t && t.address !== "native") rows.splice(1, 0,
+        { kind: "page", title: `Swap into ${t.symbol}`, hint: "Opens Swap with it selected; the Gate runs first", icon: "swap", target: `#/swap?out=${t.address}` },
+        { kind: "page", title: `Gate ${t.symbol}`, hint: "Seven checks before you buy", icon: "gate", target: `#/gate/${t.address}` });
+      out.push(["Coins", rows]);
+    }
     if (raw && !ca) asks.push({ kind: "ask", title: raw, hint: "Ask Troya: the answer opens beside this page", icon: "spark", target: raw });
     for (const a of ASKS) if (!q || a.toLowerCase().includes(q)) asks.push({ kind: "ask", title: a, hint: "Ask Troya", icon: "spark", target: a });
     if (ca) out.push(["Check this coin", [
@@ -348,10 +370,10 @@ function openAsk(prefill = "") {
     let i = 0;
     clear(opts, secs.map(([label, rows]) => h("div", { class: "d-pal-sec" }, h("div", { class: "d-pal-h" }, label),
       rows.map((it) => { const idx = i++; return h("button", { class: `d-pal-row ${idx === sel ? "sel" : ""}`, type: "button", role: "option", "aria-selected": String(idx === sel), onclick: () => run(it), onmousemove: () => { if (sel !== idx) { sel = idx; render(); } } },
-        h("span", { class: `d-pal-ic ${it.kind}` }, si(it.icon || "desk")), h("span", { class: "d-pal-t" }, h("b", {}, it.title), h("small", {}, it.hint)), h("kbd", {}, "↵")); }))));
+        it.coin ? h("span", { class: "d-pal-ic coin" }, tokenIcon(it.coin)) : h("span", { class: `d-pal-ic ${it.kind}` }, si(it.icon || "desk")), h("span", { class: "d-pal-t" }, h("b", {}, it.title), h("small", { class: it.coin?.copy ? "warn" : null }, it.hint)), h("kbd", {}, "↵")); }))));
     opts.querySelector(".sel")?.scrollIntoView({ block: "nearest" });
   };
-  input.addEventListener("input", () => { sel = 0; render(); });
+  input.addEventListener("input", () => { sel = 0; findCoins(); render(); });
   input.addEventListener("keydown", (e) => {
     if (e.key === "ArrowDown") { sel = (sel + 1) % Math.max(1, flat.length); render(); e.preventDefault(); }
     else if (e.key === "ArrowUp") { sel = (sel - 1 + flat.length) % Math.max(1, flat.length); render(); e.preventDefault(); }

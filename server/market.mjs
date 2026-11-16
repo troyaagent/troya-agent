@@ -671,7 +671,62 @@ export async function getSignals() {
 }
 
 /* ---------------- routes ---------------- */
+/* ---------------- one coin search: symbol, name or ticker, every source, a logo for each ---------------- */
+// The board holds only the busiest coins, so a name search there misses most of the chain. This merges the majors,
+// Robinhood's stock tokens, the board and DexScreener's search (every pool on Robinhood Chain by symbol and name),
+// keeps one row per contract, puts the real one first (exact match, then official, then liquidity) and marks tiny
+// copies that borrow a bigger coin's ticker.
+const COIN_SEARCH = new Map();
+const kindRank = (c) => (c.kind === "major" ? 0 : c.kind === "stock" ? 1 : 2);
+export async function searchCoins(q, limit = 12) {
+  const raw = String(q || "").trim().replace(/^\$/, "").slice(0, 40);
+  limit = Math.max(1, Math.min(30, Number(limit) || 12));
+  if (!raw) return { q: "", coins: [] };
+  if (ADDR_RE.test(raw)) {
+    const r = await getRobinhoodToken(raw).catch(() => null), t = r?.token;
+    return { q: raw, coins: t ? [{ address: lc(t.address), symbol: t.symbol, name: t.name, kind: STOCK_SET.has(lc(t.address)) ? "stock" : "coin", image: t.image || null, priceUsd: t.priceUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, change24h: t.change24h ?? null, launchpad: t.launchpad || null }] : [] };
+  }
+  const ql = raw.toLowerCase();
+  const hit = COIN_SEARCH.get(ql);
+  if (hit && Date.now() - hit.t < 60_000) return { ...hit.v, coins: hit.v.coins.slice(0, limit) };
+  const out = new Map();
+  const add = (c) => {
+    const a = lc(c.address); if (!a) return;
+    const prev = out.get(a);
+    out.set(a, prev ? { ...prev, ...Object.fromEntries(Object.entries(c).filter(([, v]) => v != null)), image: prev.image || c.image || null, liquidityUsd: Math.max(prev.liquidityUsd || 0, c.liquidityUsd || 0) || null } : { ...c, address: a });
+  };
+  const hits = (sym, name) => String(sym || "").toLowerCase().includes(ql) || String(name || "").toLowerCase().includes(ql);
+  for (const [address, symbol, name] of [["native", "ETH", "Ether"], [RH.weth, "WETH", "Wrapped Ether"], [RH.usdg, "USDG", "Global Dollar"]])
+    if (hits(symbol, name)) add({ address, symbol, name, kind: "major" });
+  for (const s of STOCKS) if (hits(s.symbol, s.name)) add({ address: s.address, symbol: s.symbol, name: String(s.name || "").replace(/\s•\s*Robinhood Token$/, ""), kind: "stock", image: IMAGES.get(lc(s.address)) || null });
+  for (const t of board.rows.values()) if (hits(t.symbol, t.name))
+    add({ address: t.address, symbol: t.symbol, name: t.name, kind: t.stock ? "stock" : "coin", image: t.image || null, priceUsd: t.priceUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, change24h: t.change24h ?? null, launchpad: t.launchpad || null });
+  try {
+    const d = await memo(`ds:search:${ql}`, 60_000, () => getJson(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(raw)}`, { timeout: 8000 }));
+    for (const p of d?.pairs || []) {
+      if (p.chainId !== "robinhood" || !p.baseToken?.address) continue;
+      const b = p.baseToken, sym = String(b.symbol || "").replace(/\s•.*$/, ""), name = String(b.name || "").replace(/\s•\s*Robinhood Token$/, "");
+      if (!hits(sym, name)) continue;                       // DexScreener also matches on the quote token
+      const a = lc(b.address);
+      if (/^0x0{40}$/.test(a)) continue;                    // native ETH in v4 pools: the ETH row above covers it
+      add({ address: a, symbol: sym, name, kind: STOCK_SET.has(a) ? "stock" : "coin", image: goodImg(p.info?.imageUrl), priceUsd: fnum(p.priceUsd), liquidityUsd: fnum(p.liquidity?.usd),
+        volume24hUsd: fnum(p.volume?.h24), change24h: fnum(p.priceChange?.h24), launchpad: padOfDex(`${p.dexId || "other"}${p.labels?.[0] ? "-" + p.labels[0] : ""}`) || null });
+    }
+  } catch { /* the local sources still answer */ }
+  const rank = (c) => { const s = String(c.symbol).toLowerCase(), n = String(c.name || "").toLowerCase(); return s === ql ? 0 : s.startsWith(ql) ? 1 : n === ql || n.startsWith(ql) ? 2 : 3; };
+  let coins = [...out.values()].sort((x, y) => rank(x) - rank(y) || kindRank(x) - kindRank(y) || (y.liquidityUsd || 0) - (x.liquidityUsd || 0));
+  const top = new Map();
+  for (const c of coins) { const k = String(c.symbol).toLowerCase(); top.set(k, Math.max(top.get(k) || 0, c.liquidityUsd || 0, c.kind !== "coin" ? 1e9 : 0)); }
+  coins = coins.map((c) => ({ ...c, image: c.image || (c.kind === "stock" ? `/api/stocks/logo/${c.address}` : null),
+    copy: c.kind === "coin" && (c.liquidityUsd || 0) < 25_000 && (top.get(String(c.symbol).toLowerCase()) || 0) > Math.max(5000, 20 * (c.liquidityUsd || 0)) }));
+  const v = { q: raw, coins, sources: ["Troya index", "Robinhood stock tokens", "DexScreener"], updatedAt: Date.now() };
+  COIN_SEARCH.set(ql, { t: Date.now(), v });
+  if (COIN_SEARCH.size > 500) COIN_SEARCH.delete(COIN_SEARCH.keys().next().value);
+  return { ...v, coins: coins.slice(0, limit) };
+}
+
 export async function register(r) {
+  r.get("/api/search/coins", ({ query }) => searchCoins(query.q, query.limit), { weight: 1, perMin: 240 });
   r.get("/api/market/robinhood", ({ query }) => getRobinhoodTokens(query), { weight: 1 });
   r.get("/api/market/robinhood/token", ({ query }) => getRobinhoodToken(query.address), { weight: 2 });
   r.get("/api/market/robinhood/candles", ({ query }) => getRobinhoodCandles(query.address, query.interval), { weight: 1 });

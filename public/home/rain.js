@@ -108,7 +108,7 @@
         if (gy > H || gy < -s.lh) continue;
         const ch = s.chars[s.len - 1 - k];
         if (ch === " ") continue;
-        if (k === 0) { ctx.globalAlpha = Math.min(1, s.a * 1.15); ctx.fillStyle = "#f4f1ea"; }
+        if (k === 0) { ctx.globalAlpha = Math.min(1, s.a * 1.15); ctx.fillStyle = "#f5f9fb"; }
         else { ctx.globalAlpha = s.a * 0.78 * (1 - k / s.len); ctx.fillStyle = "#8edff5"; }
         ctx.fillText(ch, s.x, gy);
       }

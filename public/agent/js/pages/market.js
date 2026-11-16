@@ -78,10 +78,20 @@ function robinhoodTab(box, go, query) {
     tbl.setLoading(10);
     const qs = new URLSearchParams({ q: state.q, launchpad: state.launchpad, sort: state.sort, dir: state.dir, offset: String(state.offset), limit: String(PAGE), tradable: state.showAll ? "0" : "1" });
     try {
-      const d = await api.get(`market/robinhood?${qs}`);
+      // a name or ticker also asks the full-chain search, so a coin outside the board still shows up (real coin first)
+      const named = state.q && !/0x[0-9a-fA-F]{40}/.test(state.q) && state.offset === 0 && state.launchpad === "all";
+      const [d, s] = await Promise.all([api.get(`market/robinhood?${qs}`), named ? api.get(`search/coins?${new URLSearchParams({ q: state.q, limit: "20" })}`).catch(() => null) : null]);
       if (id !== reqId) return;
       renderChips(d.counts);
-      tbl.setRows(d.tokens);
+      let rows = d.tokens || [];
+      if (s?.coins?.length) {
+        const by = new Map(rows.map((t) => [String(t.address).toLowerCase(), t]));
+        const first = s.coins.filter((c) => c.kind !== "major").map((c) => by.get(c.address) || { address: c.address, symbol: c.symbol, name: c.name, image: c.image, priceUsd: c.priceUsd, liquidityUsd: c.liquidityUsd, volume24hUsd: c.volume24hUsd, change24h: c.change24h, launchpad: c.launchpad, stock: c.kind === "stock" });
+        const seen = new Set(first.map((t) => String(t.address).toLowerCase()));
+        rows = [...first, ...rows.filter((t) => !seen.has(String(t.address).toLowerCase()))];
+        d.total = Math.max(d.total || 0, rows.length);
+      }
+      tbl.setRows(rows);
       const hiddenTotal = d.hiddenTotal;
       untradable.textContent = state.showAll ? "Hide coins Troya cannot route" : `Show coins Troya cannot route yet${hiddenTotal ? ` (${compact(hiddenTotal, 0)})` : ""}`;
       untradable.onclick = () => { state.showAll = !state.showAll; load(); };

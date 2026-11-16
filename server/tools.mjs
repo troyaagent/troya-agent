@@ -86,6 +86,11 @@ const slim = (t) => t && ({
 export async function robinhoodTokens({ q = "", sort = "volume", limit = 10 } = {}) {
   limit = Math.max(1, Math.min(50, Number(limit) || 10));
   const market = await mod("market");
+  // a name, symbol or ticker: the full-chain search (the board alone holds only the busiest coins)
+  if (String(q).trim() && !isAddress(String(q).trim())) {
+    const s = await market.searchCoins(q, limit).catch(() => null);
+    if (s?.coins?.length) return { tokens: s.coins.filter((c) => c.address !== "native").map((c) => ({ address: c.address, symbol: c.symbol, name: c.name, kind: c.kind, priceUsd: c.priceUsd, liquidityUsd: c.liquidityUsd, volume24hUsd: c.volume24hUsd, change24h: c.change24h, launchpad: c.launchpad, copyOfBiggerCoin: c.copy || undefined })), source: s.sources.join(" + ") };
+  }
   const r = await market.getRobinhoodTokens({ q, sort: sort === "new" ? "newest" : sort === "gainers" ? "change" : "volume", dir: "desc", limit: sort === "gainers" ? 100 : limit, tradable: sort === "new" ? 0 : 1 });
   let list = (r?.tokens || []).filter((t) => t?.address);
   if (sort === "gainers") list = list.filter((t) => (t.volume24hUsd || 0) >= 5000 && (t.liquidityUsd || 0) >= 5000);

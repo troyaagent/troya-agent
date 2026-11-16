@@ -8,6 +8,7 @@
 import { Interface, AbiCoder, parseUnits } from "ethers";
 import { h, clear, useCss, toast, pageHead, seg, short, tiny, review } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
+import { coinSuggest, findCoin } from "/agent/js/coinsearch.js";
 import { wallet, onWallet, openConnect, signIn, signerFor } from "/agent/js/wallet.js";
 import { sendTx, waitReceipt, errText } from "/agent/js/chain.js";
 
@@ -193,11 +194,12 @@ export async function mount(view, ctx) {
     if (!wallet.session) { card.append(h("p", { class: "muted" }, "Sign in with your wallet first (one signature, no transaction)."), h("button", { class: "btn primary", type: "button", onclick: async () => { try { await signIn(); loadAgents(); } catch (e) { toast(e.message, "error"); } } }, "Sign in")); return card; }
     const f = st.form, T = st.tpl.templates;
     const inp = (k, ph, mode = "text") => { const el = h("input", { class: "input", placeholder: ph, value: f[k] ?? "", inputmode: mode === "num" ? "decimal" : "text" }); el.addEventListener("input", () => { f[k] = el.value; }); return el; };
+    const coin = (k, ph) => { const el = inp(k, ph); return coinSuggest(el, (c) => { f[k] = c.address; el.value = c.address; toast(`${c.symbol} picked: ${short(c.address)}`, "ok", 2500); }); };
     const tplSeg = seg(Object.entries(T).map(([value, t]) => ({ value, label: t.label })), f.template, (v) => { f.template = v; paint(); }, "so-tpl");
     const fields = {
-      accumulator: [inp("token", "Coin address (0x…), for example $TROYA 0x1FA8…a074"), h("div", { class: "fw-row" }, inp("amountEth", "ETH per buy", "num"), inp("everyHours", "Every hours (24)", "num"), inp("runs", "Buys (14)", "num"))],
+      accumulator: [coin("token", "Coin: type TROYA, NVDA… or paste its address"), h("div", { class: "fw-row" }, inp("amountEth", "ETH per buy", "num"), inp("everyHours", "Every hours (24)", "num"), inp("runs", "Buys (14)", "num"))],
       index: [(() => { const s = h("select", { class: "input" }, Object.entries(st.tpl.baskets).map(([k, b]) => h("option", { value: k, selected: f.basket === k }, `${b.label}: ${b.symbols.join(", ")}`))); s.addEventListener("change", () => { f.basket = s.value; }); f.basket ||= s.value; return s; })(), inp("driftPct", "Rebalance at drift % (5)", "num"), h("p", { class: "fine", style: { margin: 0 } }, "Buy the basket into your Agent Wallet first (Stock desk, Baskets).")],
-      twap: [inp("token", "Coin address (0x…)"), h("div", { class: "fw-row" }, inp("total", "Total ETH", "num"), inp("slices", "Slices (6)", "num"), inp("everyMinutes", "Every minutes (30)", "num"), inp("maxImpactPct", "Max impact % (0.5)", "num"))],
+      twap: [coin("token", "Coin: type a name or ticker, or paste its address"), h("div", { class: "fw-row" }, inp("total", "Total ETH", "num"), inp("slices", "Slices (6)", "num"), inp("everyMinutes", "Every minutes (30)", "num"), inp("maxImpactPct", "Max impact % (0.5)", "num"))],
       range: [inp("tokenId", "Position number from Liquidity desk (the # number)"), inp("edgePct", "Warn within % of an edge (5)", "num")],
       loan: [inp("marketId", "Morpho market id (0x…, from Stock desk, Borrow)"), h("div", { class: "fw-row" }, inp("symbol", "Stock (NVDA)"), inp("healthBelow", "Warn under health (1.3)", "num"))],
     }[f.template];
@@ -209,7 +211,11 @@ export async function mount(view, ctx) {
   }
   const build = () => run("Building…", async () => {
     const f = st.form, params = { ...f };
-    if (params.token && /^0x[0-9a-fA-F]{40}$/.test(params.token)) params.symbol = (await api.get(`token/meta?address=${params.token}`).catch(() => null))?.symbol || null;
+    if (params.token && !/^0x[0-9a-fA-F]{40}$/.test(params.token.trim())) {
+      const c = await findCoin(params.token);
+      if (!c) throw new Error(`No Robinhood Chain coin matches "${params.token}". Paste its address instead.`);
+      params.token = c.address; params.symbol = c.symbol;
+    } else if (params.token) params.symbol = (await api.get(`token/meta?address=${params.token.trim()}`).catch(() => null))?.symbol || null;
     const a = await api.post("agents", { name: f.name, slug: f.slug, bio: f.bio, template: f.template, params });
     toast(`${a.name} is running.`, "ok", 6000);
     st.form = { template: f.template };

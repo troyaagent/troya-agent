@@ -2,7 +2,9 @@
 import { h, clear, icon, pageHead, table, review, toast, modal, num, usd, compact, pct, pctEl, short, useCss, every, debounce, store, coinIcon } from "../ui.js";
 import { api } from "../api.js";
 import { wallet, onWallet, openConnect, ensureChain } from "../wallet.js";
-import { getTradingKey, tradingKeyStatus, approveTradingKey, revokeTradingKey, placeOrder, cancelOrder } from "../hl.js";
+import { getTradingKey, tradingKeyStatus, approveTradingKey, revokeTradingKey, placeOrder, cancelOrder, sendToDex } from "../hl.js";
+// F16: trade.xyz markets (stocks, indices, metals) sit beside the Hyperliquid perps; their margin is a separate balance
+const nameOf = (m) => (m?.dex ? `${m.label} · trade.xyz` : `${m?.coin}-PERP`);
 
 const IVALS = ["1m", "5m", "15m", "1h", "4h", "1d"];
 const prefs = store("troya.perps", { interval: "1h", unit: "USD", lev: {} });
@@ -83,9 +85,9 @@ export async function mount(view, ctx) {
 
   /* ---------- markets + header ---------- */
   async function loadMeta() {
-    const r = await api.get("hl/meta");
+    const r = await api.get("hl/meta?all=1");
     st.markets = r.markets.filter((m) => !m.isDelisted);
-    const m = st.markets.find((x) => x.coin === st.coin) || st.markets.find((x) => x.coin === "BTC");
+    const m = st.markets.find((x) => x.coin.toUpperCase() === String(st.coin).toUpperCase()) || st.markets.find((x) => x.coin === "BTC");
     if (!st.m || m.coin !== st.m.coin) { st.coin = m.coin; }
     st.m = m;
     if (st.lev == null) st.lev = Math.min(prefs.get().lev?.[m.coin] || 3, m.maxLeverage, st.limits.maxLeverage);
@@ -95,7 +97,7 @@ export async function mount(view, ctx) {
   function renderHead() {
     const m = st.m;
     if (!m) return;
-    clear(mktBtn, coinIcon(m.coin, "pp-coin"), `${m.coin}-PERP`, icon("arrowRight"));
+    clear(mktBtn, coinIcon(m.label || m.coin, "pp-coin"), nameOf(m), icon("arrowRight"));
     mktBtn.lastChild.style.transform = "rotate(90deg)";
     pxEl.textContent = fmtPx(m.markPx);
     clear(chgEl, pctEl(m.change24h));
@@ -104,17 +106,21 @@ export async function mount(view, ctx) {
     vVol.textContent = usd(m.dayNtlVlm, { compact: true, d: 2 });
     vOi.textContent = usd(m.openInterestUsd, { compact: true, d: 2 });
     vOr.textContent = fmtPx(m.oraclePx);
-    document.title = `${fmtPx(m.markPx)} ${m.coin}-PERP · Troya Agent`;
+    document.title = `${fmtPx(m.markPx)} ${nameOf(m)} · Troya Agent`;
   }
   stops.push(every(1000, () => live.classList.toggle("stale", Date.now() - st.lastOk > 15000)));
 
   function pickMarket() {
-    const q = h("input", { class: "input", placeholder: "Search a market (BTC, ETH, HYPE…)", "aria-label": "Search markets" });
+    const q = h("input", { class: "input", placeholder: "Search a market (BTC, ETH, NVDA, GOLD…)", "aria-label": "Search markets" });
     const list = h("div", { class: "pp-pick-list" });
-    let sel = 0;
+    let sel = 0, group = st.m?.dex ? "xyz" : "all";
+    const groupSeg = h("div", { class: "seg pp-pick-g" });
+    const drawGroups = () => clear(groupSeg, [["all", "All"], ["crypto", "Crypto"], ["xyz", "Stocks, indices & metals · trade.xyz"]].map(([v, t]) =>
+      h("button", { type: "button", "aria-pressed": String(group === v), onclick: () => { group = v; sel = 0; drawGroups(); render(); } }, t)));
     const rows = () => {
       const s = q.value.trim().toUpperCase();
-      return st.markets.filter((m) => !s || m.coin.includes(s)).sort((a, b) => (b.dayNtlVlm || 0) - (a.dayNtlVlm || 0)).slice(0, 120);
+      return st.markets.filter((m) => (group === "all" || (group === "xyz" ? m.dex === "xyz" : !m.dex)) && (!s || m.coin.toUpperCase().includes(s) || (m.label || "").toUpperCase().includes(s)))
+        .sort((a, b) => (b.dayNtlVlm || 0) - (a.dayNtlVlm || 0)).slice(0, 150);
     };
     const choose = (m) => { md.close(); ctx.go(`#/perps/${m.coin}`); };
     const render = () => {
@@ -122,7 +128,7 @@ export async function mount(view, ctx) {
       sel = Math.min(sel, Math.max(0, rs.length - 1));
       clear(list, h("div", { class: "pp-pick-row pp-pick-hd" }, h("b", {}, "Market"), h("span", {}, "Price"), h("span", {}, "24h"), h("span", { class: "vol" }, "Volume")),
         rs.length ? rs.map((m, i) => h("button", { type: "button", class: `pp-pick-row ${i === sel ? "sel" : ""}`, onclick: () => choose(m) },
-          h("b", {}, coinIcon(m.coin, "sm"), `${m.coin}-PERP`, h("small", {}, `${m.maxLeverage}x`)), h("span", {}, fmtPx(m.markPx)), h("span", { class: m.change24h >= 0 ? "up" : "down" }, pct(m.change24h)), h("span", { class: "vol muted" }, usd(m.dayNtlVlm, { compact: true }))))
+          h("b", {}, coinIcon(m.label || m.coin, "sm"), m.dex ? m.label : `${m.coin}-PERP`, m.dex ? h("small", { class: "pp-xyz" }, "trade.xyz") : null, h("small", {}, `${m.maxLeverage}x`)), h("span", {}, fmtPx(m.markPx)), h("span", { class: m.change24h >= 0 ? "up" : "down" }, pct(m.change24h)), h("span", { class: "vol muted" }, usd(m.dayNtlVlm, { compact: true }))))
           : h("div", { class: "empty" }, "No market matches."));
     };
     q.addEventListener("input", () => { sel = 0; render(); });
@@ -132,7 +138,8 @@ export async function mount(view, ctx) {
       if (e.key === "ArrowUp") { sel = Math.max(0, sel - 1); render(); e.preventDefault(); }
       if (e.key === "Enter" && rs[sel]) choose(rs[sel]);
     });
-    const md = modal({ title: "Hyperliquid perps", wide: true, body: h("div", { class: "pp-pick" }, q, list) });
+    const md = modal({ title: "Perps markets", wide: true, body: h("div", { class: "pp-pick" }, q, groupSeg, list) });
+    drawGroups();
     render();
     setTimeout(() => q.focus(), 40);
   }
@@ -321,8 +328,8 @@ export async function mount(view, ctx) {
     if (L.dailyLeftUsd != null) add("Daily cap", c.usdSize <= L.dailyLeftUsd ? "pass" : "fail", `${usd(L.dailyLeftUsd, { compact: true })} left today`);
     add("Leverage", c.lev <= Math.min(L.maxLeverage, m.maxLeverage) ? "pass" : "fail", `${c.lev}x of ${Math.min(L.maxLeverage, m.maxLeverage)}x cap`);
     if (st.user) {
-      const reduce = reduceIn.checked;
-      add("Margin", reduce || c.margin <= st.user.withdrawable ? "pass" : "fail", `${usd(c.margin)} needed · ${usd(st.user.withdrawable)} free`);
+      const reduce = reduceIn.checked, free = freeOf(m);
+      add("Margin", reduce || c.margin <= free ? "pass" : "fail", `${usd(c.margin)} needed · ${usd(free)} free${m.dex ? " in trade.xyz" : ""}`);
     }
     if (st.type === "market") add("Price impact", !c.complete ? "fail" : c.impact > 3 ? "fail" : c.impact > 0.5 ? "warn" : "pass", c.complete ? `${c.impact.toFixed(3)}%` : "book too thin");
     if (c.liqDist != null && !reduceIn.checked) add("Liquidation", c.liqDist < 3 ? "warn" : "pass", `~${c.liqDist.toFixed(1)}% away`);
@@ -354,8 +361,8 @@ export async function mount(view, ctx) {
         const next = i === 0 ? "USD" : "COIN";
         if (next !== st.unit) { const cc = calc(); sizeIn.value = cc.usdSize > 0 ? (next === "USD" ? cc.usdSize.toFixed(2) : String(+cc.coinSize.toFixed(m.szDecimals))) : ""; }
         st.unit = next; prefs.set({ ...prefs.get(), unit: next }); renderTicket();
-      } }, i === 0 ? "USD" : m.coin.slice(0, 5))));
-    const free = st.user ? st.user.withdrawable * st.lev : null;
+      } }, i === 0 ? "USD" : (m.label || m.coin).slice(0, 5))));
+    const free = st.user ? freeOf(m) * st.lev : null;
     const pcts = h("div", { class: "pp-pcts" }, [25, 50, 75, 100].map((p) => h("button", { type: "button", onclick: () => {
       if (free == null) { toast(wallet.address ? "Still reading your account…" : "Connect a wallet to size from your balance.", ""); return; }
       const usdAmt = Math.min(free * p / 100, st.limits.perTradeUsd);
@@ -395,6 +402,15 @@ export async function mount(view, ctx) {
       keyNote = h("p", { class: "pp-key", style: { margin: 0 } }, `Trading key ${short(st.key.key.address)} active. `, h("button", { class: "link", type: "button", onclick: revoke }, "Revoke"));
     }
     const leftToday = st.limits.dailyLeftUsd != null ? `Left today ${usd(st.limits.dailyLeftUsd, { compact: true })} · ` : "";
+    let xyzBox = null;
+    if (m.dex && st.user) {
+      const free = freeOf(m), need = c.margin || 0, main = st.user.withdrawable || 0;
+      const short_ = need > free ? Math.ceil((need - free) * 1.05 * 100) / 100 + 0.5 : 0;
+      xyzBox = h("div", { class: "pp-xyz-box" },
+        h("p", { class: "fine", style: { margin: 0 } }, `trade.xyz margin is its own balance: ${usd(free)} there, ${usd(main)} in your Hyperliquid perps. Stock perps trade around the clock; outside market hours the price is held inside a band.`),
+        short_ > 0 && main > 0 ? h("button", { class: "btn sm blue", type: "button", onclick: () => moveUsdc(Math.min(short_, main), "", "xyz") }, `Move ${usd(Math.min(short_, main))} USDC to trade.xyz`) : null,
+        free > 0.5 ? h("button", { class: "link fine", type: "button", onclick: () => moveUsdc(free, "xyz", "") }, `Move ${usd(free)} back to perps`) : null);
+    }
 
     clear(ticket, sideSeg, typeSeg,
       st.type === "limit" ? h("label", { class: "field" }, h("span", {}, "Limit price (USD)"), limitIn) : null,
@@ -402,10 +418,19 @@ export async function mount(view, ctx) {
         h("div", { class: "pp-size", style: { marginTop: "6px" } }, sizeIn, unit)),
       pcts,
       h("div", {}, h("div", { class: "pp-lev-h" }, h("span", {}, "Leverage"), h("b", {}, `${st.lev}x`)), levIn, h("div", { class: "pp-lev-f" }, h("span", {}, "1x"), h("span", {}, `${cap}x cap`))),
-      adv, rows, gateBox, btn, keyNote);
+      adv, rows, xyzBox, gateBox, btn, keyNote);
     if (keep) { keep.focus(); try { const n = keep.value.length; keep.setSelectionRange(n, n); } catch {} }
   }
 
+  function freeOf(m) { return m?.dex ? +(st.user?.dexes?.[m.dex]?.withdrawable || 0) : +(st.user?.withdrawable || 0); }
+  async function moveUsdc(amount, from, to) {
+    try {
+      await ensureChain("arbitrum");
+      await sendToDex(wallet.address, wallet.eip, amount, from, to);
+      toast(`Moved ${usd(amount)} USDC ${to === "xyz" ? "to trade.xyz" : "back to perps"}`, "ok");
+      await loadUser(); renderTicket();
+    } catch (e) { toast(e.shortMessage || e.message, "error", 6000); }
+  }
   async function enableTrading() {
     try {
       const ok = await review({ title: "Enable trading on Hyperliquid", summary: "Approve a trade-only key for this browser.", confirmLabel: "Approve in wallet", rows: [
@@ -488,7 +513,7 @@ export async function mount(view, ctx) {
   /* ---------- boot ---------- */
   try { await loadMeta(); }
   catch (e) { clear(view, h("div", { class: "empty", style: { padding: "100px 0" } }, h("b", {}, "Hyperliquid markets could not be loaded."), h("div", {}, e.message), h("button", { class: "btn", type: "button", onclick: () => ctx.go(location.hash) }, "Try again"))); return; }
-  if (ctx.parts[0] && st.m.coin !== (ctx.parts[0] || "").toUpperCase().replace(/-PERP$/, "")) toast(`No perp called ${ctx.parts[0]}; showing ${st.m.coin}.`, "");
+  if (ctx.parts[0] && st.m.coin.toUpperCase() !== (ctx.parts[0] || "").toUpperCase().replace(/-PERP$/, "")) toast(`No perp called ${ctx.parts[0]}; showing ${st.m.coin}.`, "");
   renderIvals();
   renderTicket();
   renderPositions();

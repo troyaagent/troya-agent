@@ -259,6 +259,29 @@ export async function withdrawUsdc(owner, eip, amount) {
   const action = { type: "withdraw3", signatureChainId: "0xa4b1", hyperliquidChain: "Mainnet", destination, amount: amt, time };
   return relay({ action, nonce: time, signature: { r: sig.r, s: sig.s, v: sig.v }, vaultAddress: null });
 }
+/** F16: moves USDC between the main Hyperliquid perps balance ("") and the trade.xyz balance ("xyz"). The user's wallet
+ *  signs (sendAsset); the destination is always the signer's own address, and the server checks that before relaying. */
+export async function sendToDex(owner, eip, amount, sourceDex, destinationDex) {
+  const nonce = nextNonce();
+  const amt = String(Math.floor(Number(amount) * 1e6) / 1e6);
+  if (!(Number(amt) > 0)) throw new Error("Enter an amount of USDC.");
+  const destination = getAddress(owner);
+  const token = "USDC:0x6d1e7cde53ba9467b783cb7c530ce054";
+  const message = { hyperliquidChain: "Mainnet", destination, sourceDex, destinationDex, token, amount: amt, fromSubAccount: "", nonce };
+  const typed = {
+    domain: { name: "HyperliquidSignTransaction", version: "1", chainId: 42161, verifyingContract: ZERO },
+    types: {
+      EIP712Domain: [{ name: "name", type: "string" }, { name: "version", type: "string" }, { name: "chainId", type: "uint256" }, { name: "verifyingContract", type: "address" }],
+      "HyperliquidTransaction:SendAsset": [{ name: "hyperliquidChain", type: "string" }, { name: "destination", type: "string" }, { name: "sourceDex", type: "string" }, { name: "destinationDex", type: "string" }, { name: "token", type: "string" }, { name: "amount", type: "string" }, { name: "fromSubAccount", type: "string" }, { name: "nonce", type: "uint64" }],
+    },
+    primaryType: "HyperliquidTransaction:SendAsset",
+    message,
+  };
+  const raw = await eip.request({ method: "eth_signTypedData_v4", params: [owner, JSON.stringify(typed)] });
+  const sig = Signature.from(raw);
+  const action = { type: "sendAsset", signatureChainId: "0xa4b1", hyperliquidChain: "Mainnet", destination, sourceDex, destinationDex, token, amount: amt, fromSubAccount: "", nonce };
+  return relay({ action, nonce, signature: { r: sig.r, s: sig.s, v: sig.v }, vaultAddress: null });
+}
 export async function setLeverage({ owner, market, leverage, isCross = true }) {
   const lev = Math.round(Number(leverage));
   if (!(lev >= 1 && lev <= market.maxLeverage)) throw new Error(`${market.coin} allows 1–${market.maxLeverage}x.`);

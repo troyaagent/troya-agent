@@ -2,7 +2,7 @@
 // Signing follows Hyperliquid's L1 action scheme: keccak(msgpack(action) ‖ nonce u64 BE ‖ vault flag [‖ expiresAfter])
 // → "phantom agent" {source, connectionId} signed as EIP-712 under domain {name:"Exchange", version:"1", chainId:1337, verifyingContract:0x0}.
 import { encode } from "@msgpack/msgpack";
-import { Wallet, keccak256, getBytes, concat, toBeHex, zeroPadValue, Signature, getAddress, isAddress } from "ethers";
+import { Wallet, keccak256, getBytes, concat, toBeHex, zeroPadValue, Signature, getAddress, isAddress, verifyTypedData } from "ethers";
 
 const INFO = "https://api.hyperliquid.xyz/info";
 const EXCHANGE = "https://api.hyperliquid.xyz/exchange";
@@ -61,9 +61,37 @@ export async function hlMeta() {
     return { markets, time: Date.now() };
   });
 }
+// F16: trade.xyz perps (stocks, indices, metals) are a HIP-3 dex on Hyperliquid. Same API, same trading key; orders
+// use asset 100000 + dexIndex × 10000 + index, margin sits in a separate "xyz" balance. Read from the live meta each time.
+export const XYZ = "xyz";
+export const XYZ_USDC = "USDC:0x6d1e7cde53ba9467b783cb7c530ce054";   // the collateral token as sendAsset names it
+export async function hlXyzMeta() {
+  return cached("meta:xyz", 5000, async () => {
+    const dexes = await cached("perpDexs", 10 * 60e3, () => hlInfo({ type: "perpDexs" }));
+    const idx = (dexes || []).findIndex((d) => d && d.name === XYZ);
+    if (idx < 1) return { markets: [], dexIndex: null };
+    const [meta, ctxs] = await hlInfo({ type: "metaAndAssetCtxs", dex: XYZ });
+    const markets = meta.universe.map((u, i) => {
+      const c = ctxs[i] || {};
+      const mark = +c.markPx || null, prev = +c.prevDayPx || null;
+      return {
+        asset: 100000 + idx * 10000 + i, coin: u.name, label: u.name.replace(/^xyz:/, ""), dex: XYZ, venue: "trade.xyz",
+        szDecimals: u.szDecimals, maxLeverage: u.maxLeverage, onlyIsolated: !!u.onlyIsolated || u.marginMode === "noCross", isDelisted: !!u.isDelisted, marginMode: u.marginMode || null,
+        markPx: mark, midPx: +c.midPx || null, oraclePx: +c.oraclePx || null, prevDayPx: prev,
+        change24h: mark && prev ? ((mark - prev) / prev) * 100 : null,
+        funding: c.funding != null ? +c.funding : null, openInterest: c.openInterest != null ? +c.openInterest : null,
+        openInterestUsd: c.openInterest != null && mark ? +c.openInterest * mark : null, dayNtlVlm: c.dayNtlVlm != null ? +c.dayNtlVlm : null,
+        premium: c.premium != null ? +c.premium : null, impactPxs: c.impactPxs || null,
+      };
+    });
+    return { markets, dexIndex: idx };
+  });
+}
 export async function hlAsset(coin) {
+  const want = String(coin).toUpperCase();
   const { markets } = await hlMeta();
-  const m = markets.find((x) => x.coin.toUpperCase() === String(coin).toUpperCase());
+  let m = markets.find((x) => x.coin.toUpperCase() === want);
+  if (!m && want.startsWith("XYZ:")) m = (await hlXyzMeta()).markets.find((x) => x.coin.toUpperCase() === want && !x.isDelisted);
   if (!m) throw new HlError(404, `Hyperliquid has no perp market called ${coin}.`);
   return m;
 }
@@ -71,18 +99,22 @@ export async function hlUserState(address) {
   if (!isAddress(address)) throw new HlError(400, "That is not a valid address.");
   const user = getAddress(address).toLowerCase();
   return cached(`user:${user}`, 2500, async () => {
-    const [ch, orders, fills, spot] = await Promise.all([
+    const [ch, orders, fills, spot, chx, ordersx] = await Promise.all([
       hlInfo({ type: "clearinghouseState", user }),
       hlInfo({ type: "frontendOpenOrders", user }).catch(() => []),
       hlInfo({ type: "userFills", user }).catch(() => []),
       hlInfo({ type: "spotClearinghouseState", user }).catch(() => ({ balances: [] })),
+      hlInfo({ type: "clearinghouseState", user, dex: XYZ }).catch(() => null),
+      hlInfo({ type: "frontendOpenOrders", user, dex: XYZ }).catch(() => []),
     ]);
-    const positions = (ch.assetPositions || []).map((p) => p.position).filter(Boolean).map((p) => ({
+    const posOf = (st, dex) => (st?.assetPositions || []).map((p) => p.position).filter(Boolean).map((p) => ({ ...pos(p), dex }));
+    const pos = (p) => ({
       coin: p.coin, size: +p.szi, entryPx: +p.entryPx || null, positionValue: +p.positionValue || 0,
       unrealizedPnl: +p.unrealizedPnl || 0, returnOnEquity: +p.returnOnEquity || 0, liquidationPx: p.liquidationPx != null ? +p.liquidationPx : null,
       marginUsed: +p.marginUsed || 0, leverage: p.leverage?.value ?? null, leverageType: p.leverage?.type ?? null, maxLeverage: p.maxLeverage ?? null,
       funding: p.cumFunding ? +p.cumFunding.sinceOpen : null,
-    }));
+    });
+    const positions = [...posOf(ch, null), ...posOf(chx, XYZ)];
     return {
       address: user,
       accountValue: +ch.marginSummary?.accountValue || 0,
@@ -91,7 +123,8 @@ export async function hlUserState(address) {
       withdrawable: +ch.withdrawable || 0,
       unrealizedPnl: positions.reduce((a, p) => a + p.unrealizedPnl, 0),
       positions,
-      openOrders: (orders || []).slice(0, 100).map((o) => ({
+      dexes: { [XYZ]: { accountValue: +chx?.marginSummary?.accountValue || 0, withdrawable: +chx?.withdrawable || 0, totalMarginUsed: +chx?.marginSummary?.totalMarginUsed || 0 } },
+      openOrders: [...(orders || []), ...(ordersx || [])].slice(0, 100).map((o) => ({
         coin: o.coin, side: o.side === "B" ? "buy" : "sell", limitPx: +o.limitPx, size: +o.sz, origSize: +o.origSz, oid: o.oid,
         timestamp: o.timestamp, reduceOnly: !!o.reduceOnly, orderType: o.orderType, triggerPx: o.triggerPx ? +o.triggerPx : null, isTrigger: !!o.isTrigger, tif: o.tif || null,
       })),
@@ -252,7 +285,12 @@ export async function hlUpdateLeverage({ privateKey, coin, leverage, isCross = t
 const INTERVALS = { "1m": 60e3, "5m": 300e3, "15m": 900e3, "1h": 3600e3, "4h": 14400e3, "1d": 86400e3 };
 
 export async function register(r) {
-  r.get("/api/hl/meta", async () => hlMeta());
+  r.get("/api/hl/meta", async ({ query }) => {
+    const main = await hlMeta();
+    if (query.all !== "1") return main;
+    const x = await hlXyzMeta().catch(() => ({ markets: [] }));
+    return { markets: [...main.markets, ...x.markets], time: main.time };
+  });
 
   r.get("/api/hl/mids", async () => cached("mids", 2000, () => hlInfo({ type: "allMids" })));
 
@@ -262,20 +300,20 @@ export async function register(r) {
     const end = Date.now();
     const from = Number(query.from) > 0 ? Number(query.from) : end - INTERVALS[interval] * 400;
     const start = Math.max(from, end - INTERVALS[interval] * 2000);
-    await hlAsset(coin);
+    const canon = (await hlAsset(coin)).coin;
     const bucket = Math.floor(end / Math.min(INTERVALS[interval], 60e3));
-    const rows = await cached(`candles:${coin}:${interval}:${Math.floor(start / INTERVALS[interval])}:${bucket}`, 4000,
-      () => hlInfo({ type: "candleSnapshot", req: { coin, interval, startTime: start, endTime: end } }));
-    return { coin, interval, candles: (rows || []).map((c) => ({ t: c.t, o: +c.o, h: +c.h, l: +c.l, c: +c.c, v: +c.v, n: c.n })) };
+    const rows = await cached(`candles:${canon}:${interval}:${Math.floor(start / INTERVALS[interval])}:${bucket}`, 4000,
+      () => hlInfo({ type: "candleSnapshot", req: { coin: canon, interval, startTime: start, endTime: end } }));
+    return { coin: canon, interval, candles: (rows || []).map((c) => ({ t: c.t, o: +c.o, h: +c.h, l: +c.l, c: +c.c, v: +c.v, n: c.n })) };
   }, { weight: 2 });
 
   r.get("/api/hl/book", async ({ query }) => {
     const coin = String(query.coin || "BTC").toUpperCase();
     // spot books (F12) are "@<index>" or "PURR/USDC"; anything else must be a known perp
-    if (!/^@\d{1,5}$|^[A-Z0-9]{1,12}\/USDC$/.test(coin)) await hlAsset(coin);
-    const b = await cached(`book:${coin}`, 1000, () => hlInfo({ type: "l2Book", coin }));
+    const canon = /^@\d{1,5}$|^[A-Z0-9]{1,12}\/USDC$/.test(coin) ? coin : (await hlAsset(coin)).coin;
+    const b = await cached(`book:${canon}`, 1000, () => hlInfo({ type: "l2Book", coin: canon }));
     const side = (lv) => (lv || []).slice(0, 20).map((x) => ({ px: +x.px, sz: +x.sz, n: x.n }));
-    return { coin, time: b?.time || Date.now(), bids: side(b?.levels?.[0]), asks: side(b?.levels?.[1]) };
+    return { coin: canon, time: b?.time || Date.now(), bids: side(b?.levels?.[0]), asks: side(b?.levels?.[1]) };
   });
 
   r.get("/api/hl/user", async ({ query }) => {
@@ -285,7 +323,7 @@ export async function register(r) {
 
   // Relay for payloads already signed in the browser (CSP keeps the page same-origin).
   // We only forward; keys never reach this server. Shape is checked so it cannot be used as an open proxy.
-  const RELAY_TYPES = new Set(["order", "cancel", "updateLeverage", "approveAgent", "scheduleCancel", "modify", "batchModify", "usdClassTransfer", "withdraw3"]);
+  const RELAY_TYPES = new Set(["order", "cancel", "updateLeverage", "approveAgent", "scheduleCancel", "modify", "batchModify", "usdClassTransfer", "withdraw3", "sendAsset"]);
   r.post("/api/hl/exchange", async ({ body }) => {
     const a = body?.action;
     if (!a || typeof a !== "object" || !RELAY_TYPES.has(a.type)) throw new HlError(400, "Unsupported Hyperliquid action.");
@@ -293,6 +331,16 @@ export async function register(r) {
     const s = body.signature;
     if (!s || !/^0x[0-9a-fA-F]{1,64}$/.test(String(s.r)) || !/^0x[0-9a-fA-F]{1,64}$/.test(String(s.s)) || ![27, 28].includes(Number(s.v))) throw new HlError(400, "Bad signature.");
     if (a.type === "order" && (!Array.isArray(a.orders) || a.orders.length < 1 || a.orders.length > 10)) throw new HlError(400, "Bad order list.");
+    // sendAsset only between the user's own perp balances (main ↔ trade.xyz), never to another address
+    if (a.type === "sendAsset" && (![""].concat(XYZ).includes(a.sourceDex) || ![""].concat(XYZ).includes(a.destinationDex) || a.sourceDex === a.destinationDex || a.token !== XYZ_USDC || a.fromSubAccount !== "")) throw new HlError(400, "Only USDC between your Hyperliquid perps and trade.xyz balances.");
+    if (a.type === "sendAsset") {
+      // the destination must be the signer: recover who signed the EIP-712 message
+      const types = { "HyperliquidTransaction:SendAsset": [{ name: "hyperliquidChain", type: "string" }, { name: "destination", type: "string" }, { name: "sourceDex", type: "string" }, { name: "destinationDex", type: "string" }, { name: "token", type: "string" }, { name: "amount", type: "string" }, { name: "fromSubAccount", type: "string" }, { name: "nonce", type: "uint64" }] };
+      let signer = null;
+      try { signer = verifyTypedData({ name: "HyperliquidSignTransaction", version: "1", chainId: parseInt(a.signatureChainId, 16), verifyingContract: "0x0000000000000000000000000000000000000000" }, types,
+        { hyperliquidChain: a.hyperliquidChain, destination: a.destination, sourceDex: a.sourceDex, destinationDex: a.destinationDex, token: a.token, amount: a.amount, fromSubAccount: a.fromSubAccount, nonce: a.nonce }, { r: s.r, s: s.s, v: Number(s.v) }); } catch {}
+      if (!signer || signer.toLowerCase() !== String(a.destination).toLowerCase()) throw new HlError(400, "USDC can only move between your own balances.");
+    }
     const payload = { action: a, nonce: body.nonce, signature: { r: s.r, s: s.s, v: Number(s.v) }, vaultAddress: body.vaultAddress || null };
     return postExchange(payload);
   }, { weight: 3, perMin: 120, maxBody: 32 * 1024 });

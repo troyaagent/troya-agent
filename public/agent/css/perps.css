@@ -108,3 +108,10 @@
 .pp-pick-row b { display: flex; align-items: center; gap: 8px; }
 .pp-pick-row b .tok-ico.sm { width: 20px; height: 20px; }
 .pp-coin.has-img { background: var(--bg-4); }
+
+/* F16: trade.xyz markets in the Perps picker and ticket */
+.pp-pick-g { margin: 10px 0 4px; flex-wrap: wrap; }
+.pp-xyz { margin-left: 6px; padding: 1px 6px; border: 1px solid var(--line-2); border-radius: 99px; font-size: 10px; color: var(--muted); }
+.pp-xyz-box { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); }
+.pp-xyz-box .btn { justify-self: start; }
+.pp-xyz-box .link { justify-self: start; }

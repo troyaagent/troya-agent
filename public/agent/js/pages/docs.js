@@ -32,6 +32,9 @@ export async function mount(view) {
         [h("b", {}, "Arbitrum and Base: "), "pick the network above the Swap card; KyberSwap routes, the same Troya Gate, your own wallet signs (live since 16 Nov 2026, each tested with real money)."],
         [h("b", {}, "Solana: "), "pick Solana above the Swap card: Jupiter routes (pump.fun and every other Solana launchpad), a Solana Gate (who can freeze or mint the coin, Token-2022 traps, the swap simulated from your address, a sell route), signed in your own Solana wallet (live since 16 Nov 2026)."],
         [h("b", {}, "Spot (Hyperliquid): "), "buy and sell HYPE, UBTC, UETH and every Hyperliquid spot coin from your own Hyperliquid account; a Spot Gate reads the live book first and orders never fill more than 1% from the price (live since 16 Nov 2026)."],
+        [h("b", {}, "The Assay: "), "under every Gate result: what the dev bought, sold and holds, liquidity pulled, top-10 concentration, the first 30 seconds of buyers, wallet clusters, round-trip trading and who funded the dev. Red and amber flags only, never a safe stamp."],
+        [h("b", {}, "TWAP and Smart DCA: "), "Agent → Playbooks. TWAP splits a big buy or sell into slices that each stay under a price-impact cap (a slice waits for depth instead of going through); Smart DCA buys 0.5–1.5× the base by the 7-day average, within the total budget."],
+        [h("b", {}, "The Record: "), "troya.codes/record grades every Sentry call: the price at the call, an hour later, a day later and the peak."],
       ]),
     ]],
     ["token", "$TROYA token", (() => {

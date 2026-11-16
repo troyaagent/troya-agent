@@ -250,8 +250,22 @@ async function intentWatch(ctx, text, lang, type) {
     if (!(amount > 0) || !target) return { text: T(lang, "Try: **DCA 0.01 ETH weekly into NVDA** (or paste the token address).", "Contoh: **DCA 0.01 ETH tiap minggu ke NVDA** (atau tempel alamat tokennya).") };
     const t = await resolveToken(target);
     if (!t || t.native || !isAddress(t.address)) return { text: T(lang, `I could not find "${untrusted(target, 20)}" on Robinhood Chain.`, `"${untrusted(target, 20)}" tidak ketemu di Robinhood Chain.`) };
-    params = { type, token: t.address, symbol: t.symbol, amountEth: amount, everyHours: every, runs: 10 };
-    summary = `DCA ${amount} ETH → ${untrusted(t.symbol, 16)} every ${every}h (10 buys)`;
+    const smart = /\b(smart|pintar)\b/i.test(text);
+    params = { type, token: t.address, symbol: t.symbol, amountEth: amount, everyHours: every, runs: 10, ...(smart ? { smart: true } : {}) };
+    summary = `${smart ? "Smart DCA" : "DCA"} ${amount} ETH → ${untrusted(t.symbol, 16)} every ${every}h (10 buys${smart ? ", 0.5–1.5× by the 7-day average" : ""})`;
+  } else if (type === "twap") {
+    // "twap 1 ETH into NVDA over 1 hour" · "twap sell 50000 PONS over 30 min in 10 slices"
+    const sell = /\b(sell|jual)\b/i.test(text);
+    const total = nums[0];
+    const target = addr || ((text.match(/\b(?:into|ke|to|buat|for|sell|jual)\s+(?:[\d.,]+\s+)?\$?([A-Za-z][A-Za-z0-9]{1,19})/i) || [])[1]);
+    if (!(total > 0) || !target) return { text: T(lang, "Try: **TWAP 1 ETH into NVDA over 1 hour** or **TWAP sell 50000 PONS over 30 min**.", "Contoh: **TWAP 1 ETH ke NVDA selama 1 jam** atau **TWAP jual 50000 PONS selama 30 menit**.") };
+    const t = await resolveToken(target);
+    if (!t || t.native || !isAddress(t.address)) return { text: T(lang, `I could not find "${untrusted(target, 20)}" on Robinhood Chain.`, `"${untrusted(target, 20)}" tidak ketemu di Robinhood Chain.`) };
+    const dur = text.match(/(?:over|in|selama|dalam)\s+([\d.]+)\s*(h|hours?|jam|m|min|mins|minutes?|menit)/i);
+    const minutes = dur ? Number(dur[1]) * (/^(h|hour|hours|jam)/i.test(dur[2]) ? 60 : 1) : 60;
+    const sl = Number((text.match(/([\d]+)\s*(?:slices|potong|bagian)/i) || [])[1]) || Math.min(12, Math.max(2, Math.round(minutes / 10)));
+    params = { type, token: t.address, symbol: t.symbol, side: sell ? "sell" : "buy", total, slices: sl, everyMinutes: Math.max(1, Math.round(minutes / sl)), maxImpactPct: 0.4 };
+    summary = `TWAP ${sell ? `sell ${total} ${untrusted(t.symbol, 16)} → ETH` : `${total} ETH → ${untrusted(t.symbol, 16)}`} in ${sl} slices over ${minutes} min (each under 0.4% price impact)`;
   } else {
     const target = addr || coin;
     if (!target || !nums.length) return { text: T(lang, "Try: **alert me if BTC goes below 70000**.", "Contoh: **kabari kalau BTC di bawah 70000**.") };
@@ -354,8 +368,10 @@ const AGENT_TOOLS = [
     coin: { type: "string", description: "Perp symbol, e.g. BTC, ETH, HYPE" }, side: { type: "string", enum: ["long", "short"] },
     size_usd: { type: "number", description: "Notional in USD" }, leverage: { type: "number" }, tp: { type: "number", description: "Take-profit price" }, sl: { type: "number", description: "Stop-loss price" },
   }, ["coin", "side", "size_usd"]),
-  fn("make_watch", "Set a server-side watch the user confirms: price alert, stop-loss, take-profit, or DCA buys.", {
-    type: { type: "string", enum: ["alert", "stop_loss", "take_profit", "dca"] },
+  fn("make_watch", "Set a server-side watch the user confirms: price alert, stop-loss, take-profit, DCA buys (plain or smart: 0.5–1.5× by the 7-day average), or a TWAP that splits a big buy or sell into slices under a price-impact cap.", {
+    type: { type: "string", enum: ["alert", "stop_loss", "take_profit", "dca", "twap"] },
+    smart: { type: "boolean", description: "Smart DCA" }, side: { type: "string", enum: ["buy", "sell"], description: "TWAP side" },
+    total: { type: "number", description: "TWAP total: ETH to spend (buy) or tokens to sell" }, minutes: { type: "number", description: "TWAP duration in minutes" }, slices: { type: "number", description: "TWAP slices" },
     target: { type: "string", description: "Perp coin (alert/stop/take-profit) or Robinhood Chain token symbol/address (dca, token alerts)" },
     price: { type: "number", description: "Trigger price (alert, stop_loss)" }, direction: { type: "string", enum: ["above", "below"] },
     levels: { type: "array", items: { type: "number" }, description: "Take-profit prices" },
@@ -370,7 +386,7 @@ const AGENT_TOOLS = [
 ];
 
 function systemPrompt(lang) {
-  return `You are Troya, the assistant inside Troya Agent (troya.codes): a trading desk for Robinhood Chain (chain 4663, an Arbitrum Orbit L2, gas in ETH) and Hyperliquid perps. Robinhood Chain has memecoins launched on Pons (bonding curves that graduate to Uniswap v4), Uniswap v3/v4 pools, coins from other launchpads (Long.xyz, Bankr, Frontier.fun, Abyss, Goo, Clank.trade, o1, Virtuals), and tokenized stocks and ETFs (NVDA, TSLA, AAPL, SPY...). Troya routes Pons curves and Uniswap itself and reaches the other launchpads through KyberSwap (live since 16 Nov 2026, tested with real money), so quote_swap and the Gate work for any Robinhood Chain coin with a pool. Base and Arbitrum swaps are live too (Swap page network picker, KyberSwap, same Gate, each tested with real money). Solana swaps are live as well (Swap page network picker → Solana, Jupiter routes incl. pump.fun, a Solana Gate, the user's own Solana wallet signs). Roadmap V4 'Cassandra' (announced 16 Nov 2026, in build, no dates; easiest ships first, each phase after a real-money test): F13 The Oracle's ledger (every Sentry call graded in public at troya.codes/record, LIVE), F14 The Assay (dev sells, holder clusters, bundled buys, wash trades, who funded the dev), F15 Silent execution (TWAP for big orders, DCA that reads the market), F16 More perps (stock/index/metal perps through trade.xyz, plus Lighter on Robinhood Chain), F17 Stock desk (dividends and splits, stock baskets, auto-rebalance, borrow against stocks with liquidation alerts), F18 Liquidity desk (LP ranges set by the agent, out-of-range alerts), F19 $TROYA flywheel (creator fees into buyback, burn and locked liquidity on a public dashboard), F20 Social layer (sign in with X, Troya on X, agent factory, holder NFT with votes). Never give dates or promise prices for these. Roadmap V5 'Odysseus' (announced 16 Nov 2026, after V4, in build, no dates): F21 The chart oracle (AI chart notes graded after the move on The Record), F22 Troya CLI (the desk in your terminal, npm), F23 Gate for every agent (pay-per-check API in USDG), F24 Agent registry (agents file calls and earn a public reputation), F25 The audited rail (limits, allowlist and kill switch for agents trading stocks through Robinhood's agentic MCP; not a partnership with Robinhood). The Record (troya.codes/record) grades every Sentry call in public (price at the call, 1 h, 24 h, peak; win if higher after 24 h). Hyperliquid spot is live too (the Spot page: HYPE, UBTC, UETH and more, a Spot Gate on the live book, orders capped 1% from the price). The agent tools, Agent Wallet, Market and Sentry stay on Robinhood Chain; perps are on Hyperliquid. Troya Gate is the pre-trade check: it simulates buying and selling back, reads taxes, liquidity and owner powers, and blocks what fails.
+  return `You are Troya, the assistant inside Troya Agent (troya.codes): a trading desk for Robinhood Chain (chain 4663, an Arbitrum Orbit L2, gas in ETH) and Hyperliquid perps. Robinhood Chain has memecoins launched on Pons (bonding curves that graduate to Uniswap v4), Uniswap v3/v4 pools, coins from other launchpads (Long.xyz, Bankr, Frontier.fun, Abyss, Goo, Clank.trade, o1, Virtuals), and tokenized stocks and ETFs (NVDA, TSLA, AAPL, SPY...). Troya routes Pons curves and Uniswap itself and reaches the other launchpads through KyberSwap (live since 16 Nov 2026, tested with real money), so quote_swap and the Gate work for any Robinhood Chain coin with a pool. Base and Arbitrum swaps are live too (Swap page network picker, KyberSwap, same Gate, each tested with real money). Solana swaps are live as well (Swap page network picker → Solana, Jupiter routes incl. pump.fun, a Solana Gate, the user's own Solana wallet signs). Roadmap V4 'Cassandra' (announced 16 Nov 2026, in build, no dates; easiest ships first, each phase after a real-money test): F13 The Oracle's ledger (every Sentry call graded in public at troya.codes/record, LIVE), F14 The Assay (LIVE: dev sells, holder clusters, bundled buys, wash trades, who funded the dev; under the Gate on troya.codes/agent#/gate and /assay in Telegram), F15 Silent execution (LIVE: TWAP playbook splits a big buy or sell into slices that each stay under a price-impact cap, and Smart DCA buys 0.5–1.5× by the 7-day average; Agent → Playbooks or ask in chat), F16 More perps (stock/index/metal perps through trade.xyz, plus Lighter on Robinhood Chain), F17 Stock desk (dividends and splits, stock baskets, auto-rebalance, borrow against stocks with liquidation alerts), F18 Liquidity desk (LP ranges set by the agent, out-of-range alerts), F19 $TROYA flywheel (creator fees into buyback, burn and locked liquidity on a public dashboard), F20 Social layer (sign in with X, Troya on X, agent factory, holder NFT with votes). Never give dates or promise prices for these. Roadmap V5 'Odysseus' (announced 16 Nov 2026, after V4, in build, no dates): F21 The chart oracle (AI chart notes graded after the move on The Record), F22 Troya CLI (the desk in your terminal, npm), F23 Gate for every agent (pay-per-check API in USDG), F24 Agent registry (agents file calls and earn a public reputation), F25 The audited rail (limits, allowlist and kill switch for agents trading stocks through Robinhood's agentic MCP; not a partnership with Robinhood). The Record (troya.codes/record) grades every Sentry call in public (price at the call, 1 h, 24 h, peak; win if higher after 24 h). Hyperliquid spot is live too (the Spot page: HYPE, UBTC, UETH and more, a Spot Gate on the live book, orders capped 1% from the price). The agent tools, Agent Wallet, Market and Sentry stay on Robinhood Chain; perps are on Hyperliquid. Troya Gate is the pre-trade check: it simulates buying and selling back, reads taxes, liquidity and owner powers, and blocks what fails.
 Rules:
 - Every price, volume, funding rate, balance or token fact you state must come from a tool result in this conversation. Never guess numbers. If a tool fails, say so plainly.
 - Orders: call make_swap_ticket / make_perp_ticket / make_watch / make_bridge_ticket / make_hl_fund_ticket. They create a ticket the user signs or approves; you never move funds and never say an order was placed or filled.
@@ -415,9 +431,10 @@ async function agentAnswer(ctx, text, lang) {
       const dir = a.direction === "above" ? "above" : "below";
       const phrase = a.type === "stop_loss" ? `stop loss ${tg} ${dir === "above" ? "above " : ""}at ${a.price}`
         : a.type === "take_profit" ? `take profit ${tg} ${(a.levels || [a.price]).filter((x) => x > 0).join(" ")}${a.direction === "below" ? " below" : ""}`
-        : a.type === "dca" ? `DCA ${a.amount_eth} ETH ${a.every === "hourly" ? "hourly" : a.every === "weekly" ? "weekly" : "daily"} into ${tg}`
+        : a.type === "dca" ? `${a.smart ? "smart " : ""}DCA ${a.amount_eth} ETH ${a.every === "hourly" ? "hourly" : a.every === "weekly" ? "weekly" : "daily"} into ${tg}`
+        : a.type === "twap" ? (a.side === "sell" ? `twap sell ${a.total} ${tg} over ${a.minutes || 60} min${a.slices ? ` in ${a.slices} slices` : ""}` : `twap ${a.total} ETH into ${tg} over ${a.minutes || 60} min${a.slices ? ` in ${a.slices} slices` : ""}`)
         : `alert me if ${tg} goes ${dir} ${a.price}`;
-      return take(await intentWatch(ctx, phrase, lang, a.type === "stop_loss" || a.type === "take_profit" || a.type === "dca" ? a.type : "alert"));
+      return take(await intentWatch(ctx, phrase, lang, ["stop_loss", "take_profit", "dca", "twap"].includes(a.type) ? a.type : "alert"));
     }
     if (name === "make_hl_fund_ticket") return take(await intentHlFund(ctx, Number(a.amount_eth), lang));
     if (name === "make_bridge_ticket") {
@@ -446,6 +463,7 @@ async function parserAnswer(ctx, text, lang) {
   const swapWords = /\b(swap|buy|beli|tukar|sell|jual|convert)\b/i;
   if (/\b(stop[\s-]?loss|cut[\s-]?loss)\b|\bsl\b(?!\s*\d)/i.test(t) && !/\b(long|short)\b/i.test(t)) return intentWatch(ctx, t, lang, "stop_loss");
   if (/\b(take[\s-]?profit)\b/i.test(t) && !/\b(long|short)\b/i.test(t)) return intentWatch(ctx, t, lang, "take_profit");
+  if (/\btwap\b/i.test(t)) return intentWatch(ctx, t, lang, "twap");
   if (/\b(dca|cicil|nyicil)\b/i.test(t)) return intentWatch(ctx, t, lang, "dca");
   if (/\b(alert|notify|ping me|kabari|ingatkan|beritahu)\b/i.test(t)) return intentWatch(ctx, t, lang, "alert");
   if (/\b(protect|lindungi|amankan|guard)\b/i.test(t)) return intentProtect(ctx, lang);

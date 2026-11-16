@@ -1,7 +1,10 @@
 // Playbooks = server watches checked every 20 s.
 //   stop_loss   {coin, triggerPx, direction: "below"|"above", sizePct}   → close the perp position
 //   take_profit {coin, levels:[{px, sizePct}], direction}                → close part of the position at each level
-//   dca         {token, symbol, amountEth, everyHours, runs}             → swap ETH into a Robinhood Chain token on a schedule
+//   dca         {token, symbol, amountEth, everyHours, runs, smart}      → swap ETH into a Robinhood Chain token on a schedule;
+//               smart: each buy is 0.5×–1.5× the base, more when the price is under its 7-day average, within the budget
+//   twap        {token, symbol, side, total, slices, everyMinutes, maxImpactPct} → F15 silent execution: a big order in
+//               slices; a slice that would move the price more than the cap waits for depth instead of going through
 //   alert       {target: perp coin or token address, direction, px}      → inbox note (no funds move)
 // When a watch fires: Agent Wallet on + not paused + within caps → execute and journal; otherwise an inbox proposal.
 import { randomBytes } from "node:crypto";
@@ -42,7 +45,20 @@ function normalize(input) {
     const amount = num(p.amountEth ?? p.amountHype), every = num(p.everyHours);
     if (!(amount > 0) || !(every >= 1)) throw new HttpError(400, "DCA needs an amount of ETH and an interval of at least 1 hour.");
     const runs = Math.min(365, Math.max(1, num(p.runs) || 10));
-    return { type, params: { token: String(p.token).toLowerCase(), symbol: untrusted(p.symbol || "token", 20), amountEth: amount, everyHours: every, runs, done: 0, nextAt: Date.now() + 60_000 }, title: `DCA ${amount} ETH → ${untrusted(p.symbol || "token", 20)} every ${every}h` };
+    const smart = p.smart === true || p.smart === "true" || p.smart === 1;
+    return { type, params: { token: String(p.token).toLowerCase(), symbol: untrusted(p.symbol || "token", 20), amountEth: amount, everyHours: every, runs, done: 0, nextAt: Date.now() + 60_000, ...(smart ? { smart: true, budget: +(amount * runs).toFixed(8), spent: 0 } : {}) }, title: `${smart ? "Smart DCA" : "DCA"} ${amount} ETH → ${untrusted(p.symbol || "token", 20)} every ${every}h` };
+  }
+  if (type === "twap") {
+    if (!isAddress(String(p.token || ""))) throw new HttpError(400, "TWAP needs the token contract address on Robinhood Chain.");
+    const side = p.side === "sell" ? "sell" : "buy";
+    const total = num(p.total ?? p.amount);
+    if (!(total > 0)) throw new HttpError(400, side === "buy" ? "TWAP needs the total ETH to spend." : "TWAP needs the total amount of the token to sell.");
+    const slices = Math.min(48, Math.max(2, Math.round(num(p.slices) || 6)));
+    const everyMinutes = Math.min(240, Math.max(1, num(p.everyMinutes) || 10));
+    const maxImpactPct = Math.min(5, Math.max(0.05, num(p.maxImpactPct) || 0.4));
+    const sym = untrusted(p.symbol || "token", 20);
+    return { type, params: { token: String(p.token).toLowerCase(), symbol: sym, side, total, slices, everyMinutes, maxImpactPct, done: 0, filled: 0, waits: 0, nextAt: Date.now() + 30_000 },
+      title: `TWAP ${side === "buy" ? `${total} ETH → ${sym}` : `${total} ${sym} → ETH`} · ${slices} slices every ${everyMinutes} min` };
   }
   if (type === "alert") {
     const target = isAddress(String(p.target || "")) ? String(p.target).toLowerCase() : coinOf(p.target);
@@ -51,7 +67,7 @@ function normalize(input) {
     const direction = p.direction === "below" ? "below" : "above";
     return { type, params: { target, direction, px, unit: isAddress(target) ? "ETH" : "USD" }, title: `Alert ${isAddress(target) ? untrusted(p.symbol || target.slice(0, 8), 20) : target} ${direction === "below" ? "≤" : "≥"} ${px}` };
   }
-  throw new HttpError(400, "Unknown playbook type. Use stop_loss, take_profit, dca or alert.");
+  throw new HttpError(400, "Unknown playbook type. Use stop_loss, take_profit, dca, twap or alert.");
 }
 
 export async function createWatch(address, input) {
@@ -94,6 +110,48 @@ async function fire(w, price, action, note) {
   return outcome;
 }
 
+/* ---------- F15 · silent execution ---------- */
+// Smart DCA: compare the price with its 7-day average (hourly candles). Under the average buys more, over it buys
+// less: 1 + 2 × (average − price) / average, kept between 0.5× and 1.5×.
+async function smartSize(token) {
+  try {
+    const { getRobinhoodCandles } = await import("./market.mjs");
+    const { candles } = await getRobinhoodCandles(token, "1h");
+    const last = candles.slice(-168).map((c) => c.close).filter((x) => x > 0);
+    if (last.length < 24) return { mult: 1, note: "Not enough price history yet: base amount." };
+    const avg = last.reduce((a, b) => a + b, 0) / last.length, now = last.at(-1);
+    const mult = Math.min(1.5, Math.max(0.5, 1 + (2 * (avg - now)) / avg));
+    const d = ((now / avg - 1) * 100).toFixed(1);
+    return { mult, note: `Price is ${Math.abs(d)}% ${now < avg ? "under" : "over"} its 7-day average.` };
+  } catch { return { mult: 1, note: "Price history unavailable: base amount." }; }
+}
+// TWAP: one slice per interval. Before a slice goes, its price impact is quoted; over the cap it waits a minute and
+// asks again (after slices × 3 waits the order stops where it is and says so).
+async function twapStep(w) {
+  const p = w.params, now = Date.now();
+  const left = p.slices - p.done;
+  if (left <= 0) return { status: "done" };
+  const slice = +((p.total - p.filled) / left).toPrecision(8);
+  const buy = p.side === "buy";
+  const { quoteSwap } = await import("./robinhood.mjs");
+  let q = null;
+  try { q = await quoteSwap({ tokenIn: buy ? "ETH" : p.token, tokenOut: buy ? p.token : "ETH", amountIn: String(slice), slippageBps: 200 }); } catch {}
+  const impact = q?.priceImpact != null ? q.priceImpact * 100 : null;
+  if (!q || impact == null || impact > p.maxImpactPct) {
+    const waits = (p.waits || 0) + 1;
+    const why = !q ? "no route right now" : impact == null ? "the price impact could not be measured" : `a ${slice} ${buy ? "ETH" : p.symbol} slice would move the price ${impact.toFixed(2)}% (cap ${p.maxImpactPct}%)`;
+    if (waits >= p.slices * 3) {
+      await addInbox(w.address, { kind: "playbook", title: `${w.title}: stopped`, body: `Stopped after ${p.done} of ${p.slices} slices: ${why}. ${p.filled} of ${p.total} ${buy ? "ETH" : p.symbol} went through.` });
+      return { status: "done", params: { ...p, waits, lastNote: `Stopped: ${why}` } };
+    }
+    return { params: { ...p, waits, nextAt: now + 60_000, lastNote: `Waiting for depth: ${why}` } };
+  }
+  const o = await fire(w, `slice ${p.done + 1}/${p.slices}`, { kind: "swap", params: { tokenIn: buy ? "native" : p.token, tokenOut: buy ? p.token : "native", amountIn: slice, slippagePct: Math.max(0.5, Math.min(3, p.maxImpactPct * 2)) } },
+    `Slice ${p.done + 1} of ${p.slices}: ${slice} ${buy ? "ETH" : p.symbol}, price impact ${impact.toFixed(2)}% (cap ${p.maxImpactPct}%).`);
+  const done = p.done + 1, filled = +(p.filled + (o === "executed" || o === "proposed" ? slice : 0)).toFixed(8);
+  return { params: { ...p, done, filled, nextAt: now + p.everyMinutes * 60_000, lastNote: `Slice ${done} ${o}` }, fires: [...w.fires, { t: now, slice, impact, outcome: o }].slice(-60), ...(done >= p.slices ? { status: "done" } : {}) };
+}
+
 async function tick() {
   if (running) return;
   running = true;
@@ -102,7 +160,7 @@ async function tick() {
     const active = list.filter((w) => w.status === "active");
     if (!active.length) return;
     let mids = null;
-    const needPerp = active.some((w) => w.type !== "dca" && !(w.type === "alert" && isAddress(w.params.target)));
+    const needPerp = active.some((w) => w.type !== "dca" && w.type !== "twap" && !(w.type === "alert" && isAddress(w.params.target)));
     if (needPerp) mids = Object.fromEntries((await hlMarkets()).map((m) => [m.coin.toUpperCase(), m.midPx || m.markPx]));
     const updates = new Map();
     for (const w of active) {
@@ -128,6 +186,21 @@ async function tick() {
             }
           }
           if (fired) { u.params = { ...w.params, levels }; if (levels.every((l) => l.done)) u.status = "done"; }
+        } else if (w.type === "dca" && w.params.smart) {
+          if (Date.now() >= w.params.nextAt) {
+            const left = +(w.params.budget - (w.params.spent || 0)).toFixed(8);
+            const { mult, note } = await smartSize(w.params.token);
+            const amount = +Math.min(left, w.params.amountEth * mult).toPrecision(6);
+            const done = w.params.done + 1;
+            if (amount > 0) {
+              const o = await fire(w, "schedule", { kind: "swap", params: { tokenIn: "native", tokenOut: w.params.token, amountIn: amount, slippagePct: 2 } }, `Smart buy ${done} of ${w.params.runs}: ${amount} ETH (${mult.toFixed(2)}× the base). ${note}`);
+              u.params = { ...w.params, done, spent: +((w.params.spent || 0) + (o === "executed" || o === "proposed" ? amount : 0)).toFixed(8), lastMult: mult, nextAt: Date.now() + w.params.everyHours * 3600_000 };
+              u.fires = [...w.fires, { t: Date.now(), amount, mult, outcome: o }].slice(-50);
+            } else u.params = { ...w.params, done };
+            if (done >= w.params.runs || (u.params.spent || 0) >= w.params.budget - 1e-9) u.status = "done";
+          }
+        } else if (w.type === "twap") {
+          if (Date.now() >= w.params.nextAt) Object.assign(u, await twapStep(w));
         } else if (w.type === "dca") {
           if (Date.now() >= w.params.nextAt) {
             const o = await fire(w, "schedule", { kind: "swap", params: { tokenIn: "native", tokenOut: w.params.token, amountIn: w.params.amountEth ?? w.params.amountHype, slippagePct: 2 } }, `Scheduled buy ${w.params.done + 1} of ${w.params.runs}.`);

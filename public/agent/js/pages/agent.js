@@ -545,7 +545,7 @@ function mountAutopilot(box) {
 /* =====================================================================================
    PLAYBOOKS
    ===================================================================================== */
-const TYPES = [["stop_loss", "Stop-loss guard"], ["take_profit", "Take-profit ladder"], ["dca", "DCA into a token"], ["alert", "Price alert"]];
+const TYPES = [["stop_loss", "Stop-loss guard"], ["take_profit", "Take-profit ladder"], ["dca", "DCA into a token"], ["twap", "TWAP (big order)"], ["alert", "Price alert"]];
 
 function mountPlaybooks(box) {
   const main = h("div", { class: "ag-col" });
@@ -567,7 +567,14 @@ function mountPlaybooks(box) {
       if (type === "stop_loss") clear(fields, inp("coin", "Perp, e.g. ETH"), inp("triggerPx", "Trigger price (USD)", "number"), dir("below"), inp("sizePct", "Close % of position (default 100)", "number"));
       if (type === "take_profit") clear(fields, inp("coin", "Perp, e.g. ETH"), inp("levels", "Levels price:% e.g. 4000:25, 4200:25"), dir("above"));
       if (type === "dca") clear(fields, inp("token", "Token symbol or address on Robinhood Chain"), inp("amountEth", "ETH per buy", "number"),
-        h("label", { class: "field" }, h("span", {}, "Every"), h("select", { class: "select", name: "everyHours" }, [[1, "hour"], [4, "4 hours"], [24, "day"], [168, "week"]].map(([v, t]) => h("option", { value: v, selected: v === 24 }, t)))), inp("runs", "Number of buys (default 10)", "number"));
+        h("label", { class: "field" }, h("span", {}, "Every"), h("select", { class: "select", name: "everyHours" }, [[1, "hour"], [4, "4 hours"], [24, "day"], [168, "week"]].map(([v, t]) => h("option", { value: v, selected: v === 24 }, t)))), inp("runs", "Number of buys (default 10)", "number"),
+        h("label", { class: "row ag-smart" }, h("input", { type: "checkbox", name: "smart" }), h("span", {}, h("b", {}, "Smart DCA"), " · buy up to 1.5× when the price is under its 7-day average, as little as 0.5× when over it. Never more than ETH per buy × number of buys in total.")));
+      if (type === "twap") clear(fields, inp("token", "Token symbol or address on Robinhood Chain"),
+        h("label", { class: "field" }, h("span", {}, "Side"), h("select", { class: "select", name: "side" }, h("option", { value: "buy" }, "Buy with ETH"), h("option", { value: "sell" }, "Sell for ETH"))),
+        inp("total", "Total (ETH to spend, or tokens to sell)", "number"), inp("slices", "Slices (2–48, default 6)", "number"),
+        h("label", { class: "field" }, h("span", {}, "One slice every"), h("select", { class: "select", name: "everyMinutes" }, [[2, "2 min"], [5, "5 min"], [10, "10 min"], [30, "30 min"], [60, "hour"]].map(([v, t]) => h("option", { value: v, selected: v === 10 }, t)))),
+        inp("maxImpactPct", "Max price impact per slice, % (default 0.4)", "number"),
+        h("p", { class: "note ag-span2" }, "A slice that would move the price more than the cap waits for depth and asks again a minute later, so a big order never slams a thin pool."));
       if (type === "alert") clear(fields, inp("target", "Perp (e.g. BTC) or token address"), inp("px", "Price (USD for perps, ETH for tokens)", "number"), dir("above"));
     };
     drawType();
@@ -579,7 +586,7 @@ function mountPlaybooks(box) {
           let params = {};
           if (type === "stop_loss") params = { coin: val("coin"), triggerPx: Number(val("triggerPx")), direction: val("direction"), sizePct: Number(val("sizePct")) || 100 };
           if (type === "take_profit") params = { coin: val("coin"), direction: val("direction"), levels: String(val("levels") || "").split(/[,;\n]+/).map((s) => { const [px, pct] = s.split(":").map((x) => Number(x.trim())); return { px, sizePct: pct || 25 }; }).filter((l) => l.px > 0) };
-          if (type === "dca") {
+          if (type === "dca" || type === "twap") {
             let token = val("token"), symbol = token;
             if (!/^0x[0-9a-fA-F]{40}$/.test(token || "")) {
               const r = await api.get(`/api/tools/robinhood_tokens?q=${encodeURIComponent(token || "")}&limit=5`);
@@ -587,7 +594,9 @@ function mountPlaybooks(box) {
               if (!t) throw new Error(`No Robinhood Chain token matches "${token}".`);
               token = t.address; symbol = t.symbol;
             }
-            params = { token, symbol, amountEth: Number(val("amountEth")), everyHours: Number(val("everyHours")), runs: Number(val("runs")) || 10 };
+            params = type === "twap"
+              ? { token, symbol, side: val("side"), total: Number(val("total")), slices: Number(val("slices")) || 6, everyMinutes: Number(val("everyMinutes")) || 10, maxImpactPct: Number(val("maxImpactPct")) || 0.4 }
+              : { token, symbol, amountEth: Number(val("amountEth")), everyHours: Number(val("everyHours")), runs: Number(val("runs")) || 10, smart: !!fields.querySelector('[name="smart"]')?.checked };
           }
           if (type === "alert") params = { target: val("target"), px: Number(val("px")), direction: val("direction") };
           const r = await api.post("watches", { type, params });
@@ -595,7 +604,7 @@ function mountPlaybooks(box) {
           render();
         } catch (e) { toast(e.message, "error", 5000); }
       } }, icon("plus"), "Create playbook"));
-    clear(main, h("div", { class: "ag-intro" }, h("h2", {}, "Playbooks"), h("p", {}, "Rules the server watches for you: stop-loss guards, take-profit ladders, DCA schedules and price alerts.")),
+    clear(main, h("div", { class: "ag-intro" }, h("h2", {}, "Playbooks"), h("p", {}, "Rules the server watches for you: stop-loss guards, take-profit ladders, DCA (plain or smart), TWAP for big orders and price alerts.")),
       h("div", { class: "panel ag-panel" }, h("h3", {}, "Your playbooks"), listBox), form,
       h("div", { class: "panel ag-panel" }, h("h3", {}, "Trigger journal"), journalBox));
     const load = async () => {
@@ -603,7 +612,7 @@ function mountPlaybooks(box) {
         const [w, j] = await Promise.all([api.get("watches"), api.get("journal?kind=watch&limit=40")]);
         clear(listBox, w.items.length ? w.items.map((it) => h("div", { class: "ag-pb" },
           h("span", { class: `badge-s ${it.status === "active" ? "blue" : it.status === "done" ? "" : "warn"}` }, it.status),
-          h("div", { class: "grow" }, h("b", {}, it.title), h("div", { class: "faint" }, `${TYPES.find(([v]) => v === it.type)?.[1] || it.type} · ${it.lastCheck ? `checked ${ago(it.lastCheck)} ago` : "waiting for first check"}${it.lastPrice != null ? ` · last ${num(it.lastPrice, it.lastPrice < 1 ? 8 : 4)}` : ""}${it.fires?.length ? ` · fired ${it.fires.length}×` : ""}${it.lastError ? ` · ${it.lastError}` : ""}`)),
+          h("div", { class: "grow" }, h("b", {}, it.title), it.type === "twap" ? h("div", { class: "faint" }, `${it.params.done}/${it.params.slices} slices · ${it.params.filled} of ${it.params.total} ${it.params.side === "buy" ? "ETH" : it.params.symbol}${it.params.lastNote ? ` · ${it.params.lastNote}` : ""}`) : it.params?.smart ? h("div", { class: "faint" }, `${it.params.done}/${it.params.runs} buys · ${it.params.spent || 0} of ${it.params.budget} ETH budget${it.params.lastMult ? ` · last ${it.params.lastMult.toFixed(2)}×` : ""}`) : null, h("div", { class: "faint" }, `${TYPES.find(([v]) => v === it.type)?.[1] || it.type} · ${it.lastCheck ? `checked ${ago(it.lastCheck)} ago` : "waiting for first check"}${it.lastPrice != null ? ` · last ${num(it.lastPrice, it.lastPrice < 1 ? 8 : 4)}` : ""}${it.fires?.length ? ` · fired ${it.fires.length}×` : ""}${it.lastError ? ` · ${it.lastError}` : ""}`)),
           it.status !== "done" ? h("button", { class: "btn ghost sm", type: "button", onclick: async () => { try { await api.post(`watches/${it.id}/toggle`); load(); } catch (e) { toast(e.message, "error"); } } }, it.status === "active" ? "Pause" : "Resume") : null,
           h("button", { class: "btn ghost sm", type: "button", "aria-label": "Delete", onclick: async () => { try { await api.del(`watches/${it.id}`); load(); } catch (e) { toast(e.message, "error"); } } }, icon("trash"))))
           : h("p", { class: "faint" }, "No playbooks yet. Create one below, or ask in chat: “stop loss ETH at 3000”."));

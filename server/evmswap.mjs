@@ -27,8 +27,12 @@ export const POPULAR = {
     ["0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", "WBTC", "Wrapped BTC", 8], ["0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a", "GMX", "GMX", 18],
   ],
 };
-// signing a Base / Arbitrum swap opens after its real-money test (EVM_LIVE=1 or the default below); quotes and the Gate work either way
-export const EVM_LIVE = process.env.EVM_LIVE ? process.env.EVM_LIVE === "1" : false;
+// Signing opens per chain after that chain's own real-money test. Arbitrum passed on 16 Nov 2026 (0.008 ETH → ARB and back:
+// txs 0x5cdd4942…, 0x70f35f6c…, 0xd82d36eb…); Base runs the same code and opens after its own test.
+// EVM_LIVE_CHAINS=arbitrum,base sets the list; EVM_LIVE=0 closes all. Quotes and the Gate work either way.
+export const EVM_LIVE = process.env.EVM_LIVE !== "0";
+const LIVE_CHAINS = new Set(String(process.env.EVM_LIVE_CHAINS || "arbitrum").split(",").map((x) => x.trim()).filter(Boolean));
+export const evmLive = (chain) => EVM_LIVE && LIVE_CHAINS.has(chain);
 const ZERO = "0x0000000000000000000000000000000000000000";
 const NATIVE = { address: "native", symbol: "ETH", name: "Ether", decimals: 18 };
 const SIM = "0x7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0a"; // no key exists; used only inside eth_call
@@ -141,7 +145,7 @@ export async function evmBuild({ chain, from, tokenIn, tokenOut, amountIn, amoun
   const n = netOf(chain);
   if (!isAddress(from || "")) throw new HttpError(400, "A valid wallet address is required.");
   const who = getAddress(from);
-  if (!EVM_LIVE && !_sim && !_gate) throw new HttpError(403, "Swaps on Base and Arbitrum open after their real-money test, very soon. Quotes and Troya Gate already work here.", { code: "EVM_TESTING" });
+  if (!evmLive(n.key) && !_sim && !_gate) throw new HttpError(403, `Swaps on ${n.name} open after their own real-money test, very soon. Quotes and Troya Gate already work here.`, { code: "EVM_TESTING" });
   const q = _quote?.plan ? _quote : await evmQuote({ chain: n.key, tokenIn, tokenOut, amountIn, amountInRaw, slippageBps });
   let min = BigInt(q.minOutRaw);
   if (minOutRaw != null && minOutRaw !== "") { const r = BigInt(minOutRaw); min = _sim ? (r < 0n ? 0n : r) : (r > min ? r : min); }
@@ -253,7 +257,7 @@ export async function evmGate({ chain, tokenIn, tokenOut, amountIn, amountInRaw,
       }
     } catch (e) { add("sell", "warn", "Test sell", e.message); add("tax", "skip", "Transfer tax", "Not measured"); }
   } else if (coin && coin !== "native") { add("sell", "skip", "Test sell", "A major token (stablecoin or WETH): no test sell needed"); }
-  if (!KYBER_LIVE || !EVM_LIVE) tx = null;
+  if (!KYBER_LIVE || !evmLive(n.key)) tx = null;
   return { pass: !checks.some((c) => c.status === "fail"), checks, quote: q, tx, chain: n.key, checkedAt: Date.now() };
 }
 

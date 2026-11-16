@@ -43,6 +43,9 @@ const LIST = [
   P("11 Other launchpads through KyberSwap", "robinhood", "0x53dde2747f8138fa34de7ca4ebbf9fc6015cc8c58e188d58db822443d5346a24", "buy ABYSS (Abyss launchpad) through the KyberSwap router from the Swap page"),
   P("11 Other launchpads through KyberSwap", "robinhood", "0xaf498861e6e1c53592eca2c5a8e9869e45e1591560e7a951e79840fc99b9842b", "approve ABYSS for the KyberSwap router (the exact amount)"),
   P("11 Other launchpads through KyberSwap", "robinhood", "0xf5f46c779faf0c80fe2ac107a3c1fbfea6c671b4454be5faddc344c9cc197c4b", "sell it all back to ETH"),
+  P("12 Arbitrum", "arbitrum", "0x5cdd494230e3f2b248038d8097d2f034afc57aec85a0f8fff04d995db9bf31f2", "buy ARB on Arbitrum One through the KyberSwap router from the Swap page"),
+  P("12 Arbitrum", "arbitrum", "0x70f35f6cf130963c9caae8f7251f0ed1ea64400e9ec03666b47669f32333f330", "approve ARB for the KyberSwap router (the exact amount)"),
+  P("12 Arbitrum", "arbitrum", "0xd82d36eb4daa4aed9dcf307726958bf57787e0a59aeb6f943fd4313a30adf9c1", "sell it all back to ETH"),
 
   P("LP burn", "robinhood", "0xfe7f12591df9b9f53a0366a31cf36d1cf00b8200b6ae05fb8eeb7989afc24ea0", "Uniswap v4 position NFT #4293939 (ETH/TROYA pool) sent to 0x…dEaD: that liquidity can never be removed"),
 ];

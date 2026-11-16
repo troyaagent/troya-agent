@@ -198,7 +198,7 @@ export async function mount(view, ctx) {
       h("div", { class: "lc-done-act" },
         d.token ? h("a", { class: "btn primary", href: `#/token/${d.token.toLowerCase()}` }, "Open coin page") : null,
         d.url ? h("a", { class: "btn", href: d.url, target: "_blank", rel: "noopener" }, "View on Pons ", icon("ext")) : null,
-        d.token ? h("a", { class: "btn ghost", href: `#/swap?out=${d.token}` }, "Buy it") : null),
+        d.token ? h("a", { class: "btn", href: `#/swap?out=${d.token}` }, "Buy it") : null),
       h("p", { class: "note" }, "Launch transaction ", h("button", { class: "link mono", type: "button", onclick: () => copyText(d.hash, "Hash copied") }, short(d.hash, 6)), ". It can take a few minutes for GeckoTerminal to list the coin.")));
     wrap.querySelector("h2")?.focus();
     toast("Coin launched", "ok", 5000);

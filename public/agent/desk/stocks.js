@@ -165,7 +165,7 @@ export async function mount(view, ctx) {
         h("div", { class: "lt-row" }, collIn, borIn, h("button", { class: "btn primary", type: "button", disabled: !!st.busy, onclick: () => doBorrow(m, params) }, st.busy || "Post and borrow")),
         gateBox,
         loan ? h("div", { class: "lt-row" }, repIn, h("button", { class: "btn", type: "button", disabled: !!st.busy, onclick: () => doRepay(m, params, loan) }, "Repay"),
-          h("button", { class: "btn ghost", type: "button", disabled: !!st.busy || loan.borrowUsdg > 0.000001, onclick: () => doWithdraw(m, params, loan), title: "Repay the loan first" }, "Withdraw collateral")) : null),
+          h("button", { class: "btn", type: "button", disabled: !!st.busy || loan.borrowUsdg > 0.000001, onclick: () => doWithdraw(m, params, loan), title: "Repay the loan first" }, "Withdraw collateral")) : null),
       h("p", { class: "fine" }, L.note));
   }
   const step = async (label, tx) => { st.busy = label; paint(); const hsh = await sendTx("robinhood", tx); const rc = await waitReceipt("robinhood", hsh); if (rc?.status !== 1) throw new Error(`${label} failed.`); return hsh; };

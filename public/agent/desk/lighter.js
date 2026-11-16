@@ -12,7 +12,7 @@ const SLIP = 0.01;
 export async function mount(view, ctx) {
   useCss("perps"); useCss("swap");
   let alive = true;
-  const st = { markets: [], m: null, book: null, acct: undefined, state: null, key: null, keyOk: false, usdg: null, side: "long", size: "", lev: 3, busy: false, q: "", err: null };
+  const st = { markets: [], m: null, book: null, acct: undefined, state: null, key: null, keyOk: false, usdg: null, outgoing: null, side: "long", size: "", lev: 3, busy: false, q: "", err: null };
   const list = h("div", { class: "sp-list" });
   const search = h("input", { class: "input", placeholder: "Search TSLA, ETH, NVDA…", "aria-label": "Search Lighter markets", autocomplete: "off" });
   const card = h("div", { class: "panel sp-card" });
@@ -40,6 +40,7 @@ export async function mount(view, ctx) {
     if (!wallet.address) { st.acct = undefined; st.state = null; st.key = null; return paintAcct(); }
     try { st.acct = await L.accountOf(wallet.address); } catch { st.acct = undefined; }
     try { st.usdg = await L.usdgBalance(wallet.address); } catch { st.usdg = null; }
+    if (st.outgoing && st.usdg != null && st.usdg >= st.outgoing.before + st.outgoing.amt * 0.99) { toast(`${tiny(st.outgoing.amt)} USDG arrived in your wallet on Robinhood Chain`, "ok", 8000); st.outgoing = null; }
     if (st.acct != null) {
       try { st.state = await L.accountState(st.acct); } catch { st.state = null; }
       st.key = L.getKey(wallet.address, st.acct);
@@ -54,7 +55,8 @@ export async function mount(view, ctx) {
     if (!wallet.address) return clear(acctBox, h("div", { class: "lt-row" }, h("span", {}, "Connect the wallet you will trade from."), h("button", { class: "btn primary sm", type: "button", onclick: openConnect }, "Connect wallet")));
     if (st.acct === undefined) return clear(acctBox, h("p", { class: "muted", style: { margin: 0 } }, "Reading your Lighter account…"));
     const depositBtn = h("button", { class: "btn sm blue", type: "button", disabled: st.busy, onclick: doDeposit }, st.acct == null ? "Deposit and open my account" : "Deposit");
-    const usdgLine = h("span", { class: "fine" }, `Wallet on Robinhood Chain: ${st.usdg == null ? "–" : `${tiny(st.usdg)} USDG`}`);
+    const usdgLine = h("span", { class: "fine" }, `Wallet on Robinhood Chain: ${st.usdg == null ? "–" : `${tiny(st.usdg)} USDG`}`,
+      st.outgoing ? h("b", { class: "up" }, ` · ${tiny(st.outgoing.amt)} USDG on its way from Lighter`) : null);
     if (st.acct == null) {
       return clear(acctBox, h("div", { class: "lt-steps" },
         h("div", {}, h("b", {}, "1 · Open your Lighter account"), h("p", { class: "fine" }, "Lighter opens an account on your first deposit: USDG from your wallet on Robinhood Chain into Lighter's contract (at least 1 USDG). Two signatures: approve, then deposit.")),
@@ -68,7 +70,7 @@ export async function mount(view, ctx) {
       h("div", { class: "lt-row" },
         h("span", {}, h("b", {}, `Lighter account #${st.acct}`), h("span", { class: "fine" }, ` · collateral ${usd(s.collateral || 0)} · free ${usd(s.available || 0)}`)), keyPart),
       h("div", { class: "lt-row" }, amtIn, depositBtn,
-        h("button", { class: "btn sm ghost", type: "button", disabled: st.busy || !st.keyOk || !(s.available > 1), onclick: doWithdraw }, "Withdraw to my wallet"), usdgLine),
+        h("button", { class: "btn sm", type: "button", disabled: st.busy || !st.keyOk || !(s.available > 1), onclick: doWithdraw, title: "USDG back to your own address on Robinhood Chain" }, "Withdraw to my wallet"), usdgLine),
       positions());
   }
   function positions() {
@@ -77,7 +79,7 @@ export async function mount(view, ctx) {
     return h("div", { class: "lt-pos" }, ps.map((p) => h("div", { class: "lt-row" },
       h("b", {}, `${p.size > 0 ? "Long" : "Short"} ${p.symbol}`), h("span", {}, `${tiny(Math.abs(p.size))} @ ${tiny(p.entry)}`),
       h("span", { class: p.pnl >= 0 ? "up" : "down" }, `${p.pnl >= 0 ? "+" : ""}${usd(p.pnl)}`), p.liq ? h("span", { class: "fine" }, `liq ${tiny(p.liq)}`) : null,
-      h("button", { class: "btn sm ghost", type: "button", disabled: st.busy || !st.keyOk, onclick: () => closePos(p) }, "Close"))));
+      h("button", { class: "btn sm", type: "button", disabled: st.busy || !st.keyOk, onclick: () => closePos(p) }, "Close"))));
   }
 
   /* ---------- markets list + ticket ---------- */
@@ -161,6 +163,7 @@ export async function mount(view, ctx) {
     const amt = Number(amtIn.value) || Math.floor(free * 100) / 100;
     if (!(amt >= 1) || amt > free) throw new Error(`Withdraw between 1 and ${tiny(free)} USDG.`);
     await L.withdraw(wallet.address, st.acct, amt);
+    st.outgoing = { amt, before: st.usdg || 0 };
     toast(`Withdrawal of ${tiny(amt)} USDG to your own address accepted. It settles on Robinhood Chain.`, "ok", 8000);
   });
   const submit = () => run("order", async () => {

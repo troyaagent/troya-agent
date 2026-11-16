@@ -265,6 +265,14 @@ function mountWallet(box) {
     const per = h("input", { class: "input", type: "number", min: "0", step: "1", value: aw.caps.perTradeUsd });
     const day = h("input", { class: "input", type: "number", min: "0", step: "1", value: aw.caps.dailyUsd });
     const wAmt = h("input", { class: "input", type: "number", min: "0", step: "any", placeholder: "0.0" });
+    // Max: the Agent Wallet's ETH minus 0.0001 ETH it needs for the withdrawal's own gas, cut (never rounded up) to 6 decimals
+    let lastEth = null;
+    const wMax = h("button", { class: "chip", type: "button", title: "Everything but 0.0001 ETH kept for gas", onclick: async () => {
+      try { if (lastEth == null) lastEth = (await api.get("agent-wallet/balances")).robinhoodEth; } catch { return toast("Balance unavailable right now.", "error"); }
+      const v = Math.floor(Math.max(0, Number(lastEth || 0) - 0.0001) * 1e6) / 1e6;
+      if (!(v > 0)) return toast("Not enough ETH in the Agent Wallet to withdraw.", "");
+      wAmt.value = String(v);
+    } }, "Max");
     const wChain = h("select", { class: "select" }, h("option", { value: "robinhood" }, "Robinhood Chain"));
     clear(main,
       h("div", { class: "panel ag-panel" },
@@ -281,7 +289,7 @@ function mountWallet(box) {
           h("p", { class: "note" }, "Your general limits (Agent → Autopilot) still apply. The stricter value wins."),
           h("button", { class: "btn", type: "button", onclick: async () => { try { await api.post("agent-wallet/settings", { perTradeUsd: Number(per.value), dailyUsd: Number(day.value) }); toast("Caps saved", "ok"); render(); } catch (e) { toast(e.message, "error"); } } }, "Save caps")),
         h("div", { class: "panel ag-panel" }, h("h3", {}, "Withdraw to my wallet"),
-          h("div", { class: "row" }, h("label", { class: "field grow" }, h("span", {}, "Amount (ETH)"), wAmt), h("label", { class: "field" }, h("span", {}, "Network"), wChain)),
+          h("div", { class: "row" }, h("label", { class: "field grow" }, h("span", {}, "Amount (ETH)"), h("div", { class: "row", style: { gap: "6px" } }, wAmt, wMax)), h("label", { class: "field" }, h("span", {}, "Network"), wChain)),
           h("p", { class: "note" }, "Destination is fixed: ", h("span", { class: "mono" }, short(wallet.address, 6))),
           h("button", { class: "btn", type: "button", onclick: async () => {
             const amount = Number(wAmt.value);
@@ -302,6 +310,7 @@ function mountWallet(box) {
     stopBal = every(20000, async () => {
       try {
         const b = await api.get("agent-wallet/balances");
+        lastEth = b.robinhoodEth ?? lastEth;
         const vals = [b.robinhoodEth != null ? `${num(b.robinhoodEth, 5)} ETH` : "–", b.robinhoodTokens?.length ? b.robinhoodTokens.slice(0, 2).map((x) => `${num(x.amount, 4)} ${x.symbol}`).join(" · ") : "None", b.hyperliquid ? usd(b.hyperliquid.accountValueUsd) : "–"];
         [...balBox.querySelectorAll(".v")].forEach((el, i) => (el.textContent = vals[i]));
       } catch {}

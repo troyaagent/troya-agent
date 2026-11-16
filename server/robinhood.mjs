@@ -108,7 +108,7 @@ export const iface = {
     "function name() view returns (string)", "function symbol() view returns (string)", "function decimals() view returns (uint8)",
     "function totalSupply() view returns (uint256)", "function balanceOf(address) view returns (uint256)",
     "function allowance(address owner,address spender) view returns (uint256)", "function approve(address spender,uint256 amount) returns (bool)",
-    "function owner() view returns (address)",
+    "function owner() view returns (address)", "function transfer(address to,uint256 amount) returns (bool)",
   ]),
   ponsToken: new Interface(["function logo() view returns (string)", "function description() view returns (string)", "function socials() view returns (string twitter,string telegram,string discord,string website,string farcaster)"]),
   mc: new Interface([
@@ -755,6 +755,37 @@ export async function simulateTx(tx, overrides) {
   }
 }
 /**
+ * transferTaxProbe(token, amountRaw) — the tax a token takes on transfer, measured directly. Inside one eth_call,
+ * Multicall3 is handed the tokens through a state override, sends them to the Uniswap v4 PoolManager (where a v4 sell
+ * delivers them) and to a fresh wallet, and reads what arrived. Used when a router's return value does not report the
+ * amount out (the Universal Router returns nothing) and when the test sell could not run.
+ * → { pct, toPool, toWallet } (percent lost; null where that transfer reverted), { pct: null, blocked: true } when no
+ * transfer goes through at all, or null when the balance storage cannot be found.
+ */
+const SIM_WALLET_2 = "0x7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0b"; // no key exists for this either
+export async function transferTaxProbe(token, amountRaw) {
+  const t = addr(token, "token address"), amt = BigInt(amountRaw), MC = ADDR.multicall3;
+  if (amt <= 0n) return null;
+  const keys = await touchedKeys(t, iface.erc20.encodeFunctionData("balanceOf", [MC]));
+  if (!keys.length) return null;
+  const bal = (a) => ({ target: t, allowFailure: true, callData: iface.erc20.encodeFunctionData("balanceOf", [a]) });
+  const send = (a) => ({ target: t, allowFailure: true, callData: iface.erc20.encodeFunctionData("transfer", [a, amt]) });
+  const calls = [ADDR.poolManager, SIM_WALLET_2].flatMap((a) => [bal(a), send(a), bal(a)]);
+  const ov = { [t]: { stateDiff: Object.fromEntries(keys.map((k) => [k, toBeHex(amt * 3n, 32)])) } };
+  const raw = await rpc("robinhood", "eth_call", [{ to: MC, data: iface.mc.encodeFunctionData("aggregate3", [calls]), gas: "0x1c9c380" }, "latest", ov]);
+  const res = iface.mc.decodeFunctionResult("aggregate3", raw)[0];
+  const lost = (i) => {
+    const [b0, tx, b1] = [res[i], res[i + 1], res[i + 2]];
+    if (!b0.success || !tx.success || !b1.success) return null;
+    if (tx.returnData && tx.returnData !== "0x" && BigInt(tx.returnData) === 0n) return null;   // transfer() said false
+    const got = BigInt(b1.returnData) - BigInt(b0.returnData);
+    return got >= amt ? 0 : (Number(amt - got) / Number(amt)) * 100;
+  };
+  const toPool = lost(0), toWallet = lost(3);
+  if (toPool == null && toWallet == null) return { pct: null, blocked: true };   // both transfers reverted or said false
+  return { pct: Math.max(toPool ?? 0, toWallet ?? 0), toPool, toWallet };
+}
+/**
  * sellCheck({ token, amountRaw, to? }) — a throwaway address gets the tokens + approvals inside an eth_call and sells
  * them back (to ETH unless `to` is given) through the best route. Reveals honeypots and transfer tax.
  */
@@ -799,8 +830,10 @@ export async function sellCheck({ token, amountRaw, to = "ETH" }) {
     else if (q.venue === "kyberswap") actual = BigInt(coder.decode(["uint256", "uint256"], sim.returnData)[0]); // swap() → (returnAmount, gasUsed)
   } catch {}
   const quoted = BigInt(q.amountOutRaw);
-  const taxPct = actual != null && quoted > 0n ? Math.max(0, 1 - Number(actual) / Number(quoted)) * 100 : null;
-  return { ok: true, sellable: true, partial, quote: q, actualOut: actual != null ? fmt(actual, q.tokenOut.decimals) : null, quotedOut: q.amountOut, outSymbol: q.tokenOut.symbol, transferTaxPct: taxPct };
+  let taxPct = actual != null && quoted > 0n ? Math.max(0, 1 - Number(actual) / Number(quoted)) * 100 : null, taxVia = taxPct != null ? "sell" : null;
+  // the Universal Router (Uniswap v4) returns nothing, so measure the transfer itself
+  if (taxPct == null) { const p = await transferTaxProbe(t, amt).catch(() => null); if (p?.pct != null) { taxPct = p.pct; taxVia = "transfer"; } }
+  return { ok: true, sellable: true, partial, quote: q, actualOut: actual != null ? fmt(actual, q.tokenOut.decimals) : null, quotedOut: q.amountOut, outSymbol: q.tokenOut.symbol, transferTaxPct: taxPct, transferTaxVia: taxVia };
 }
 
 /**
@@ -835,14 +868,21 @@ export async function gateCheck({ tokenIn, tokenOut, amountIn, amountInRaw, from
     const sellAmt = q.side === "buy" ? q.amountOutRaw : q.amountInRaw;
     try {
       const sc = await sellCheck({ token: coin, amountRaw: sellAmt });
-      if (sc.unknown) { add("sell", "skip", "Test sell", sc.reason); add("tax", "skip", "Transfer tax", "Not measured"); }
-      else if (!sc.sellable) { add("sell", "fail", "Test sell", sc.reason); add("tax", "skip", "Transfer tax", "Not measured"); }
+      // when the test sell cannot tell, the transfer itself is still measured
+      const probeTax = async () => {
+        const p = await transferTaxProbe(coin, sellAmt).catch(() => null);
+        if (!p) return add("tax", "skip", "Transfer tax", "Not measured");
+        if (p.blocked) return add("tax", "warn", "Transfer tax", "A plain transfer reverts, to the pool and to a wallet: trading may be paused, limited or blocked");
+        add("tax", p.pct > 10 ? "fail" : p.pct > 0.5 ? "warn" : "pass", "Transfer tax", p.pct > 0.5 ? `About ${p.pct.toFixed(1)}% is lost on transfer` : "None on a transfer to the pool or to a wallet");
+      };
+      if (sc.unknown) { add("sell", "skip", "Test sell", sc.reason); await probeTax(); }
+      else if (!sc.sellable) { add("sell", "fail", "Test sell", sc.reason); await probeTax(); }
       else {
         add("sell", "pass", "Test sell", sc.partial
           ? `A partial sell goes through (${sc.actualOut != null ? Number(sc.actualOut).toPrecision(4) + " " + sc.outSymbol : "succeeds"}); the young curve can't take a full one yet`
           : sc.actualOut != null ? `Selling back returns ${Number(sc.actualOut).toPrecision(5)} ${sc.outSymbol}` : "Selling back succeeds");
         const tax = sc.transferTaxPct;
-        add("tax", tax == null ? "skip" : tax > 10 ? "fail" : tax > 0.5 ? "warn" : "pass", "Transfer tax", tax == null ? "Not measured on this route" : tax > 0.5 ? `About ${tax.toFixed(1)}% is lost on transfer` : "None detected");
+        add("tax", tax == null ? "skip" : tax > 10 ? "fail" : tax > 0.5 ? "warn" : "pass", "Transfer tax", tax == null ? "Not measured on this route" : tax > 0.5 ? `About ${tax.toFixed(1)}% is lost on transfer` : sc.transferTaxVia === "transfer" ? "None on a transfer to the pool or to a wallet" : "None detected");
       }
     } catch (e) { add("sell", "warn", "Test sell", e.message); add("tax", "skip", "Transfer tax", "Not measured"); }
   }

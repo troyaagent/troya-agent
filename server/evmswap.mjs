@@ -39,7 +39,12 @@ const SIM = "0x7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0a"; // no key exists; used
 const MAX_SLIP = Math.max(10, Math.min(5000, Number(process.env.MAX_SLIPPAGE_BPS) || 500));
 const coder = AbiCoder.defaultAbiCoder();
 const erc20 = new Interface(["function balanceOf(address) view returns (uint256)", "function allowance(address,address) view returns (uint256)",
-  "function approve(address,uint256) returns (bool)", "function decimals() view returns (uint8)", "function symbol() view returns (string)", "function name() view returns (string)"]);
+  "function approve(address,uint256) returns (bool)", "function decimals() view returns (uint8)", "function symbol() view returns (string)", "function name() view returns (string)",
+  "function transfer(address,uint256) returns (bool)"]);
+const mc3 = new Interface(["function aggregate3(tuple(address target,bool allowFailure,bytes callData)[] calls) payable returns (tuple(bool success,bytes returnData)[] returnData)"]);
+const MC3 = "0xcA11bde05977b3631167028862bE2a173976CA11";            // Multicall3, same address on Base and Arbitrum
+const SIM2 = "0x7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0b";           // no key exists for this either
+const KYBER_ROUTER = "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5";
 const lower = (s) => String(s || "").toLowerCase();
 const qty = (v) => "0x" + BigInt(v || 0).toString(16);
 const fmt = (raw, d) => formatUnits(raw, d);
@@ -200,6 +205,29 @@ const allowSlot = (owner, spender) => (i, layout) => {
   const inner = keccak256(layout === "sol" ? coder.encode(["address", "uint256"], [owner, i]) : coder.encode(["uint256", "address"], [i, owner]));
   return keccak256(layout === "sol" ? coder.encode(["address", "bytes32"], [spender, inner]) : coder.encode(["bytes32", "address"], [inner, spender]));
 };
+// Transfer tax measured directly (the Robinhood Chain Gate does the same): inside one eth_call Multicall3 is handed the
+// tokens, sends them to the KyberSwap router (where a sell starts) and to a fresh wallet, and reads what arrived.
+// → { pct } (percent lost), { pct: null, blocked: true } when no transfer goes through, or null if balances can't be found.
+export async function evmTransferTaxProbe(n, token, amt) {
+  const bs = await mappingSlot(n, token, erc20.encodeFunctionData("balanceOf", [SIM]), balSlot(SIM), "bal");
+  if (!bs || amt <= 0n) return null;
+  const bal = (a) => ({ target: token, allowFailure: true, callData: erc20.encodeFunctionData("balanceOf", [a]) });
+  const send = (a) => ({ target: token, allowFailure: true, callData: erc20.encodeFunctionData("transfer", [a, amt]) });
+  const calls = [KYBER_ROUTER, SIM2].flatMap((a) => [bal(a), send(a), bal(a)]);
+  const ov = { [token]: { stateDiff: { [balSlot(MC3)(bs.i, bs.layout)]: toBeHex(amt * 3n, 32) } } };
+  const raw = await rpc(n.key, "eth_call", [{ to: MC3, data: mc3.encodeFunctionData("aggregate3", [calls]), gas: "0x1c9c380" }, "latest", ov]);
+  const res = mc3.decodeFunctionResult("aggregate3", raw)[0];
+  const lost = (i) => {
+    const [b0, tx, b1] = [res[i], res[i + 1], res[i + 2]];
+    if (!b0.success || !tx.success || !b1.success) return null;
+    if (tx.returnData && tx.returnData !== "0x" && BigInt(tx.returnData) === 0n) return null;
+    const got = BigInt(b1.returnData) - BigInt(b0.returnData);
+    return got >= amt ? 0 : (Number(amt - got) / Number(amt)) * 100;
+  };
+  const a = lost(0), b = lost(3);
+  if (a == null && b == null) return { pct: null, blocked: true };
+  return { pct: Math.max(a ?? 0, b ?? 0) };
+}
 export async function evmSellCheck({ chain, token, amountRaw }) {
   const n = netOf(chain);
   const t = getAddress(token);
@@ -218,8 +246,9 @@ export async function evmSellCheck({ chain, token, amountRaw }) {
   let actual = null;
   try { actual = BigInt(coder.decode(["uint256", "uint256"], sim.returnData)[0]); } catch {}
   const quoted = BigInt(q.amountOutRaw);
-  const taxPct = actual != null && quoted > 0n ? Math.max(0, 1 - Number(actual) / Number(quoted)) * 100 : null;
-  return { ok: true, sellable: true, quote: q, actualOut: actual != null ? fmt(actual, 18) : null, outSymbol: "ETH", transferTaxPct: taxPct };
+  let taxPct = actual != null && quoted > 0n ? Math.max(0, 1 - Number(actual) / Number(quoted)) * 100 : null, taxVia = taxPct != null ? "sell" : null;
+  if (taxPct == null) { const p = await evmTransferTaxProbe(n, t, amt).catch(() => null); if (p?.pct != null) { taxPct = p.pct; taxVia = "transfer"; } }
+  return { ok: true, sellable: true, quote: q, actualOut: actual != null ? fmt(actual, 18) : null, outSymbol: "ETH", transferTaxPct: taxPct, transferTaxVia: taxVia };
 }
 
 /* ---------- Troya Gate ---------- */
@@ -247,13 +276,21 @@ export async function evmGate({ chain, tokenIn, tokenOut, amountIn, amountInRaw,
   const coin = q.side === "buy" ? q.tokenOut.address : q.side === "sell" ? q.tokenIn.address : null;
   if (coin && coin !== "native" && !POPULAR[n.key].some(([a]) => lower(a) === lower(coin) && /^(USDC|USDT|DAI|WETH)$/.test(POPULAR[n.key].find(([x]) => lower(x) === lower(coin))[1]))) {
     try {
-      const sc = await evmSellCheck({ chain: n.key, token: coin, amountRaw: q.side === "buy" ? q.amountOutRaw : q.amountInRaw });
-      if (sc.unknown) { add("sell", "skip", "Test sell", sc.reason); add("tax", "skip", "Transfer tax", "Not measured"); }
-      else if (!sc.sellable) { add("sell", "fail", "Test sell", sc.reason); add("tax", "skip", "Transfer tax", "Not measured"); }
+      const sellAmt = BigInt(q.side === "buy" ? q.amountOutRaw : q.amountInRaw);
+      const sc = await evmSellCheck({ chain: n.key, token: coin, amountRaw: sellAmt.toString() });
+      // when the test sell cannot tell, the transfer itself is still measured
+      const probeTax = async () => {
+        const p = await evmTransferTaxProbe(n, getAddress(coin), sellAmt).catch(() => null);
+        if (!p) return add("tax", "skip", "Transfer tax", "Not measured");
+        if (p.blocked) return add("tax", "warn", "Transfer tax", "A plain transfer reverts, to the router and to a wallet: trading may be paused, limited or blocked");
+        add("tax", p.pct > 10 ? "fail" : p.pct > 0.5 ? "warn" : "pass", "Transfer tax", p.pct > 0.5 ? `About ${p.pct.toFixed(1)}% is lost on transfer` : "None on a transfer to the router or to a wallet");
+      };
+      if (sc.unknown) { add("sell", "skip", "Test sell", sc.reason); await probeTax(); }
+      else if (!sc.sellable) { add("sell", "fail", "Test sell", sc.reason); await probeTax(); }
       else {
         add("sell", "pass", "Test sell", sc.actualOut != null ? `Selling back returns ${Number(sc.actualOut).toPrecision(5)} ETH` : "Selling back succeeds");
         const tax = sc.transferTaxPct;
-        add("tax", tax == null ? "skip" : tax > 10 ? "fail" : tax > 0.5 ? "warn" : "pass", "Transfer tax", tax == null ? "Not measured on this route" : tax > 0.5 ? `About ${tax.toFixed(1)}% is lost on transfer` : "None detected");
+        add("tax", tax == null ? "skip" : tax > 10 ? "fail" : tax > 0.5 ? "warn" : "pass", "Transfer tax", tax == null ? "Not measured on this route" : tax > 0.5 ? `About ${tax.toFixed(1)}% is lost on transfer` : sc.transferTaxVia === "transfer" ? "None on a transfer to the router or to a wallet" : "None detected");
       }
     } catch (e) { add("sell", "warn", "Test sell", e.message); add("tax", "skip", "Transfer tax", "Not measured"); }
   } else if (coin && coin !== "native") { add("sell", "skip", "Test sell", "A major token (stablecoin or WETH): no test sell needed"); }

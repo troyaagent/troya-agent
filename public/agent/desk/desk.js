@@ -54,7 +54,7 @@ export const GROUPS = [
   ["Discover", [["Gate a coin", "#/gate", "gate"], ["Market", "#/market", "market"], ["Launchpad", "#/launch", "launch"], ["Create a token", "#/launch/create", "create"], ["Leaderboard", "#/leaderboard", "leaderboard"]]],
   ["Agent", [["Chat", "#/agent", "chat"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Sentry Autopilot", "#/agent/sentry", "sentry"], ["Playbooks", "#/agent/playbooks", "playbooks"]]],
   ["You", [["Portfolio", "#/portfolio", "portfolio"], ["Inbox", "#/portfolio/inbox", "inbox"], ["History", "#/portfolio/history", "history"]]],
-  ["Help", [["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Verify", "/verify", "verify"]]],
+  ["Help", [["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Verify", "/verify", "verify"], ["The Record", "/record", "verify"]]],
 ];
 const FLAT = GROUPS.flatMap(([g, items]) => items.map(([t, href, ic]) => ({ g, t, href, ic })));
 // route table: first path segment → page module (same as /agent) plus the Desk's own Gate page

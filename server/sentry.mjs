@@ -217,11 +217,13 @@ const TRADE = process.env.TG_TRADE === "1";
 const buttons = (a) => ({ inline_keyboard: [
   ...(TRADE ? [[{ text: "Trade in Telegram", url: `https://t.me/${process.env.TG_BOT_USERNAME || "TrojanTroya_bot"}?start=t_${a}` }]] : []),
   [{ text: "Check in Troya", url: `${SITE}/agent#/swap?in=eth&out=${a}` }, { text: "Pons", url: PONS + a.toLowerCase() }],
+  [{ text: "Every call graded: The Record", url: `${SITE}/record` }],
 ] });
 
 const poolButtons = (a) => ({ inline_keyboard: [
   ...(TRADE ? [[{ text: "Trade in Telegram", url: `https://t.me/${process.env.TG_BOT_USERNAME || "TrojanTroya_bot"}?start=t_${a}` }]] : []),
   [{ text: "Check in Troya", url: `${SITE}/agent#/swap?in=eth&out=${a}` }, { text: "DexScreener", url: `https://dexscreener.com/robinhood/${a}` }],
+  [{ text: "Every call graded: The Record", url: `${SITE}/record` }],
 ] });
 
 export function formatRecap(d, dayLabel) {

@@ -160,12 +160,13 @@ export async function mount(view, ctx) {
             h("button", { class: "btn sm ghost", type: "button", onclick: () => guard(x) }, "Alert me")))
           : h("p", { class: "muted" }, "No Morpho loans on stock tokens from this wallet.")),
       h("div", { class: "panel sd-panel" },
-        seg(L.markets.map((x, i) => ({ value: String(i), label: `${x.symbol} · ${x.lltvPct}%` })), String(st.mk), (v) => { st.mk = +v; st.coll = st.borrow = ""; paint(); }, "sd-mk"),
+        seg(L.markets.map((x, i) => ({ value: String(i), label: `${x.symbol} · ${x.lltvPct}% · ${usd(x.liquidityUsdg, { compact: true })} free` })), String(st.mk), (v) => { st.mk = +v; st.coll = st.borrow = ""; paint(); }, "sd-mk"),
         h("p", { class: "fine" }, `Morpho market ${short(m.id)} · LLTV ${m.lltvPct}% · ${usd(m.borrowUsdg, { compact: true })} borrowed of ${usd(m.supplyUsdg, { compact: true })} · oracle $${tiny(m.priceUsd)}`),
         h("div", { class: "lt-row" }, collIn, borIn, h("button", { class: "btn primary", type: "button", disabled: !!st.busy, onclick: () => doBorrow(m, params) }, st.busy || "Post and borrow")),
         gateBox,
-        loan ? h("div", { class: "lt-row" }, repIn, h("button", { class: "btn", type: "button", disabled: !!st.busy, onclick: () => doRepay(m, params, loan) }, "Repay"),
-          h("button", { class: "btn", type: "button", disabled: !!st.busy || loan.borrowUsdg > 0.000001, onclick: () => doWithdraw(m, params, loan), title: "Repay the loan first" }, "Withdraw collateral")) : null),
+        loan ? h("div", { class: "lt-row" }, repIn, h("button", { class: "btn", type: "button", disabled: !!st.busy || !owes(loan), onclick: () => doRepay(m, params, loan) }, "Repay"),
+          h("button", { class: "btn", type: "button", disabled: !!st.busy || !owes(loan), onclick: () => doRepay(m, params, loan, true) }, "Repay all"),
+          h("button", { class: "btn", type: "button", disabled: !!st.busy || owes(loan) || !(BigInt(loan.collateralRaw || 0) > 0n), onclick: () => doWithdraw(m, params, loan), title: owes(loan) ? "Repay the loan first" : "All of it back to your wallet" }, "Withdraw collateral")) : null),
       h("p", { class: "fine" }, L.note));
   }
   const step = async (label, tx) => { st.busy = label; paint(); const hsh = await sendTx("robinhood", tx); const rc = await waitReceipt("robinhood", hsh); if (rc?.status !== 1) throw new Error(`${label} failed.`); return hsh; };
@@ -198,20 +199,28 @@ export async function mount(view, ctx) {
     } catch (e) { toast(errText(e), "error", 7000); }
     st.busy = null; await load();
   }
-  async function doRepay(m, params, loan) {
+  async function doRepay(m, params, loan, all = false) {
     try {
-      const amt = Math.min(Number(st.repay) || 0, loan.borrowUsdg);
-      if (!(amt > 0)) throw new Error("Enter USDG to repay.");
-      const raw = parseUnits(amt.toFixed(6), 6);
-      await ensureAllowance(USDG, raw + 1000n, "Approve USDG…");
-      await step("Repaying…", { to: MORPHO, data: MO.encodeFunctionData("repay", [params, raw, 0n, wallet.address, "0x"]), value: "0" });
-      toast(`Repaid ${tiny(amt)} USDG`, "ok"); st.repay = "";
+      const amt = all ? loan.borrowUsdg : Math.min(Number(st.repay) || 0, loan.borrowUsdg);
+      if (!(amt > 0)) throw new Error("Enter USDG to repay, or use Repay all.");
+      // paying the whole debt goes by borrow shares: interest accrues every second, so an amount would leave dust
+      const full = all || amt >= loan.borrowUsdg - 0.000001;
+      const owed = BigInt(loan.borrowRaw || 0), shares = BigInt(loan.borrowShares || 0);
+      const raw = full ? owed + owed / 1000n + 1000n : parseUnits(amt.toFixed(6), 6);     // full: room for interest since the last read
+      const have = await balanceOf(wallet.address, { address: USDG, decimals: 6 });
+      if (Number(have) < amt) throw new Error(`You have ${tiny(Number(have))} USDG; the loan needs ${tiny(amt)}.`);
+      await ensureAllowance(USDG, raw, "Approve USDG…");
+      await step("Repaying…", { to: MORPHO, data: full && shares > 0n
+        ? MO.encodeFunctionData("repay", [params, 0n, shares, wallet.address, "0x"])
+        : MO.encodeFunctionData("repay", [params, raw, 0n, wallet.address, "0x"]), value: "0" });
+      toast(full ? `Loan repaid in full (${tiny(amt)} USDG)` : `Repaid ${tiny(amt)} USDG`, "ok"); st.repay = "";
     } catch (e) { toast(errText(e), "error", 7000); }
     st.busy = null; await load();
   }
+  function owes(loan) { return BigInt(loan?.borrowShares || 0) > 0n; }
   async function doWithdraw(m, params, loan) {
     try {
-      await step("Withdrawing collateral…", { to: MORPHO, data: MO.encodeFunctionData("withdrawCollateral", [params, parseUnits(String(loan.collateral), 18), wallet.address, wallet.address]), value: "0" });
+      await step("Withdrawing collateral…", { to: MORPHO, data: MO.encodeFunctionData("withdrawCollateral", [params, BigInt(loan.collateralRaw), wallet.address, wallet.address]), value: "0" });
       toast(`${tiny(loan.collateral)} ${m.symbol} back in your wallet`, "ok");
     } catch (e) { toast(errText(e), "error", 7000); }
     st.busy = null; await load();

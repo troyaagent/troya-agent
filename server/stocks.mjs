@@ -124,7 +124,7 @@ export async function stockLoans(address) {
     const maxBorrowRaw = (coll * price / 10n ** 36n) * BigInt(m.lltv) / 10n ** 18n;
     const borrow = Number(borrowRaw) / 1e6, collTokens = Number(coll) / 1e18;
     out.loans.push({
-      marketId: m.id, symbol: m.symbol, collateral: collTokens, collateralUsd: m.priceUsd ? collTokens * m.priceUsd : null, borrowUsdg: borrow,
+      marketId: m.id, symbol: m.symbol, collateral: collTokens, collateralRaw: coll.toString(), borrowShares: bs.toString(), borrowRaw: borrowRaw.toString(), collateralUsd: m.priceUsd ? collTokens * m.priceUsd : null, borrowUsdg: borrow,
       maxBorrowUsdg: Number(maxBorrowRaw) / 1e6, health: borrowRaw > 0n ? Number(maxBorrowRaw) / Number(borrowRaw) : null,
       liquidationPriceUsd: borrow > 0 && collTokens > 0 ? borrow / (collTokens * (m.lltvPct / 100)) : null, lltvPct: m.lltvPct, priceUsd: m.priceUsd,
     });

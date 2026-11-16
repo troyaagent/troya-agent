@@ -79,6 +79,9 @@ export async function mount(view, ctx) {
     } else out.push({ s: "fail", l: "Order book", d: "No bids or asks right now" });
     if (est) {
       out.push({ s: !est.filledAll ? "fail" : est.impact > 0.05 ? "fail" : est.impact > 0.01 ? "warn" : "pass", l: "Your size", d: !est.filledAll ? "The visible book cannot fill this size" : `Fills at about $${tiny(est.avg)} (${(est.impact * 100).toFixed(2)}% from mid)` });
+      // Hyperliquid refuses orders worth less than $10
+      const value = st.side === "buy" ? Number(st.amount) : Number(st.amount) * (est.avg || 0);
+      if (value < 10) out.push({ s: "fail", l: "Order size", d: `Hyperliquid's minimum order is $10 (this one is about $${tiny(value)})` });
     }
     return out;
   }

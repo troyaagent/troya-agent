@@ -589,8 +589,14 @@ function mountPlaybooks(box) {
           if (type === "dca" || type === "twap") {
             let token = val("token"), symbol = token;
             if (!/^0x[0-9a-fA-F]{40}$/.test(token || "")) {
-              const r = await api.get(`/api/tools/robinhood_tokens?q=${encodeURIComponent(token || "")}&limit=5`);
-              const t = r.result.tokens.find((x) => x.symbol.toLowerCase() === String(token).toLowerCase()) || r.result.tokens[0];
+              // stock tokens (NVDA, SPY…) are not on the coin board: check Robinhood's stock list first, then the coins
+              const want = String(token || "").trim().replace(/^\$/, "").toLowerCase();
+              const desk = await api.get("/api/stocks/desk").catch(() => null);
+              let t = desk?.assets?.find((x) => x.symbol.toLowerCase() === want);
+              if (!t) {
+                const r = await api.get(`/api/tools/robinhood_tokens?q=${encodeURIComponent(want)}&limit=5`);
+                t = r.result.tokens.find((x) => x.symbol.toLowerCase() === want) || r.result.tokens[0];
+              }
               if (!t) throw new Error(`No Robinhood Chain token matches "${token}".`);
               token = t.address; symbol = t.symbol;
             }

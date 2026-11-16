@@ -10,6 +10,11 @@
 !/server/
 !/public/
 !/mcp/
+!/contracts/
+/contracts/lib/
+/contracts/out/
+/contracts/cache/
+/contracts/broadcast/
 !/tools/
 !/.github/
 /public/_*/

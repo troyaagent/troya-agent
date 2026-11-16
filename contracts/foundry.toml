@@ -1,0 +1,16 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc = "0.8.24"
+# Robinhood Chain is an Arbitrum Orbit chain; Shanghai opcodes are what MIRAI already deployed there with
+evm_version = "shanghai"
+optimizer = true
+optimizer_runs = 500
+remappings = ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/", "forge-std/=lib/forge-std/src/"]
+
+[fuzz]
+runs = 256
+
+[rpc_endpoints]
+robinhood = "https://robinhood.drpc.org"

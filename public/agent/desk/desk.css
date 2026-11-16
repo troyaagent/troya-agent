@@ -544,3 +544,11 @@ html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color:
 .so-q { margin: 0; font-size: 13px; color: var(--fg-2); overflow-wrap: anywhere; }
 .so-a { margin: 0; font-size: 13px; padding-left: 10px; border-left: 2px solid var(--blue); overflow-wrap: anywhere; }
 @container shell (max-width: 560px) { .so-uses { grid-template-columns: 1fr; } }
+
+.so-pass { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.so-pass img { border-radius: 14px; border: 1px solid var(--line); }
+.so-opts { display: grid; gap: 8px; }
+.so-opt { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 9px 12px; border-radius: 9px; background: var(--bg-2); overflow: hidden; }
+.so-opt-h { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.so-opt i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--blue); }
+.so-card textarea.input { min-height: 72px; padding-top: 8px; resize: vertical; }

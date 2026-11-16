@@ -2,9 +2,17 @@
 //   X              link your X account to your wallet (Sign in with X); Troya on X: the @Troyaagent account, its mode
 //                  (off, draft, live), today's X usage against the daily caps, the replies it posted; admins see every
 //                  mention and draft and switch the mode
-import { h, clear, useCss, toast, pageHead, seg, short } from "/agent/js/ui.js";
+//   Holder pass    the soulbound Troya Holder Pass: mint it while you hold the minimum $TROYA (admins deploy it once)
+//   Votes          proposals; one pass, one vote, signed in the wallet (no transaction); every signature public
+import { Interface, AbiCoder, parseUnits } from "ethers";
+import { h, clear, useCss, toast, pageHead, seg, short, tiny, review } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
-import { wallet, onWallet, openConnect, signIn } from "/agent/js/wallet.js";
+import { wallet, onWallet, openConnect, signIn, signerFor } from "/agent/js/wallet.js";
+import { sendTx, waitReceipt, errText } from "/agent/js/chain.js";
+
+const PASS = new Interface(["function mint() returns (uint256)", "function burn()"]);
+const big = (x) => (x == null ? "–" : x >= 1e6 ? `${(x / 1e6).toFixed(2)}M` : x >= 1e3 ? `${(x / 1e3).toFixed(1)}K` : tiny(x));
+const TROYA = "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074";
 
 const NOTE = {
   linked: ["Your X account is linked to this wallet.", "ok"], bot: ["@Troyaagent is connected: Troya can read and answer its mentions.", "ok"],
@@ -16,17 +24,19 @@ const ago = (t) => { if (!t) return "never"; const m = Math.round((Date.now() - 
 export async function mount(view, ctx) {
   useCss("perps"); useCss("swap");
   let alive = true;
-  const st = { me: undefined, status: null, log: null };
-  const body = h("div", { class: "so-body" });
+  const st = { tab: ["x", "pass", "votes"].includes(ctx.parts[0]) ? ctx.parts[0] : "x", me: undefined, status: null, log: null, pass: null, votes: null, busy: null };
+  const body = h("div", { class: "so-body" }), tabs = h("div", { class: "sd-tabs" });
   clear(view, h("div", { class: "dk so" },
-    pageHead("Social", "Your X account on Troya, and Troya answering on X. Every X call counts against one small daily budget."),
-    body));
+    pageHead("Social", "Your X account on Troya, Troya answering on X, the Holder Pass and holder votes."),
+    tabs, body));
+  const paintTabs = () => clear(tabs, seg([{ value: "x", label: "X" }, { value: "pass", label: "Holder pass" }, { value: "votes", label: "Votes" }], st.tab, (v) => { st.tab = v; history.replaceState(null, "", `#/social/${v}`); paint(); load(); }));
   const q = ctx.query?.x;
   if (q === "notbot") toast(`That was @${ctx.query.as || "another account"}. Only @Troyaagent can connect Troya on X.`, "error", 8000);
   else if (NOTE[q]) toast(NOTE[q][0], NOTE[q][1], 7000);
   if (q) history.replaceState(null, "", "#/social");
 
   async function load() {
+    if (st.tab === "pass" || st.tab === "votes") return loadHolders();
     const [me, status] = await Promise.all([
       wallet.session ? api.get("x/me").catch(() => null) : Promise.resolve(null),
       api.get("x/status").catch((e) => ({ error: e.message })),
@@ -37,10 +47,106 @@ export async function mount(view, ctx) {
   }
 
   function paint() {
+    paintTabs();
+    if (st.tab === "pass") return passTab();
+    if (st.tab === "votes") return votesTab();
     const s = st.status;
     if (!s) return clear(body, h("div", { class: "sk", style: { height: "240px" } }));
     clear(body, mine(s), troya(s), st.log ? logBox() : null);
   }
+
+  /* ---------- holder pass ---------- */
+  async function loadHolders() {
+    const [pass, votes] = await Promise.all([api.get(`pass${wallet.address ? `?address=${wallet.address}` : ""}`).catch((e) => ({ error: e.message })), api.get("votes").catch(() => null)]);
+    st.pass = pass; st.votes = votes;
+    if (alive) paint();
+  }
+  const run = async (label, fn) => { if (st.busy) return; st.busy = label; paint(); try { await fn(); } catch (e) { toast(errText(e), "error", 8000); } st.busy = null; await loadHolders(); };
+  function passTab() {
+    const p = st.pass;
+    if (!p) return clear(body, h("div", { class: "sk", style: { height: "240px" } }));
+    if (p.error) return clear(body, h("div", { class: "alert error" }, p.error));
+    const card = h("div", { class: "panel sd-panel so-card" }, h("h3", {}, "Troya Holder Pass"),
+      h("p", { class: "muted", style: { margin: 0 } }, `A soulbound NFT for wallets holding at least ${big(p.minHold)} $TROYA. It cannot be sold, sent or approved, only burned by its holder. One pass is one vote while its wallet still holds the minimum.`));
+    if (!p.deployed) {
+      card.append(h("p", { class: "fine" }, "The pass contract is not deployed yet."));
+      if (st.votes?.admin) {
+        const minIn = h("input", { class: "input", inputmode: "decimal", value: String(p.minHold), "aria-label": "Minimum $TROYA" });
+        card.append(h("div", { class: "fw-row" }, h("span", { class: "fine" }, "Admin · minimum $TROYA (fixed forever)"), minIn,
+          h("button", { class: "btn blue", type: "button", disabled: !!st.busy, onclick: () => deploy(Number(minIn.value)) }, st.busy || "Deploy the pass")));
+      }
+      return clear(body, card);
+    }
+    card.append(h("p", { class: "fine" }, h("a", { class: "ulink", href: `https://robinhoodchain.blockscout.com/address/${p.pass}`, target: "_blank", rel: "noopener" }, `Contract ${short(p.pass)}`), ` · ${p.passes} pass${p.passes === 1 ? "" : "es"} held · ${p.minted} minted`));
+    const me = p.me;
+    if (!wallet.address) card.append(h("button", { class: "btn primary", type: "button", onclick: openConnect }, "Connect wallet"));
+    else if (me?.passId) card.append(h("div", { class: "so-pass" }, me.image ? h("img", { src: me.image, alt: `Troya Holder Pass #${me.passId}`, width: 180, height: 180 }) : null,
+      h("div", {}, h("b", {}, `Pass #${me.passId}`), h("p", { class: "fine" }, me.active ? `Counts in votes: this wallet holds ${big(me.balance)} $TROYA.` : `Not counting right now: this wallet holds ${big(me.balance)} $TROYA, under the ${big(p.minHold)} minimum.`),
+        h("button", { class: "link", type: "button", disabled: !!st.busy, onclick: burnPass }, "Burn my pass"))));
+    else if (me?.eligible) card.append(h("p", {}, `This wallet holds ${big(me.balance)} $TROYA: it can mint a pass.`), h("button", { class: "btn blue", type: "button", disabled: !!st.busy, onclick: mintPass }, st.busy || "Mint my pass"));
+    else card.append(h("p", {}, `This wallet holds ${big(me?.balance || 0)} $TROYA; the pass needs ${big(p.minHold)}.`), h("a", { class: "btn", href: `#/swap?out=${TROYA}` }, "Get $TROYA"));
+    clear(body, card);
+  }
+  const deploy = (minHold) => run("Deploying…", async () => {
+    if (!(minHold > 0)) throw new Error("Enter the minimum $TROYA.");
+    const b = await (await fetch("/agent/desk/troya-pass.json")).json();
+    const ok = await review({ title: "Deploy the Troya Holder Pass", summary: `Minimum ${big(minHold)} $TROYA, fixed forever. No owner, no admin, no upgrade.`, rows: [["Token", `$TROYA ${short(TROYA)}`], ["Contract", "TroyaPass (16 tests passed)"], ["Gas", "about 1.9M gas"]], confirmLabel: "Continue in wallet" });
+    if (!ok) return;
+    const data = b.bytecode + AbiCoder.defaultAbiCoder().encode(["address", "uint256"], [TROYA, parseUnits(String(minHold), 18)]).slice(2);
+    const signer = await signerFor("robinhood");
+    const tx = await signer.sendTransaction({ data });
+    const rc = await waitReceipt("robinhood", tx.hash, { timeoutMs: 180_000 });
+    if (rc?.status !== 1) throw new Error("The deployment failed on chain.");
+    await api.post("pass/config", { hash: tx.hash });
+    toast("The Holder Pass is live.", "ok", 7000);
+  });
+  const mintPass = () => run("Minting…", async () => {
+    const hash = await sendTx("robinhood", { to: st.pass.pass, data: PASS.encodeFunctionData("mint"), value: "0" });
+    const rc = await waitReceipt("robinhood", hash);
+    if (rc?.status !== 1) throw new Error("The mint failed on chain.");
+    toast("Your Holder Pass is minted.", "ok", 6000);
+  });
+  const burnPass = () => run("Burning…", async () => {
+    if (!(await review({ title: "Burn your pass?", summary: "It stops counting in votes. You can mint a new one later while you hold the minimum.", confirmLabel: "Burn it", danger: true }))) return;
+    const hash = await sendTx("robinhood", { to: st.pass.pass, data: PASS.encodeFunctionData("burn"), value: "0" });
+    const rc = await waitReceipt("robinhood", hash);
+    if (rc?.status !== 1) throw new Error("The burn failed on chain.");
+    toast("Pass burned.", "ok");
+  });
+
+  /* ---------- votes ---------- */
+  function votesTab() {
+    const v = st.votes, p = st.pass;
+    if (!v || !p) return clear(body, h("div", { class: "sk", style: { height: "240px" } }));
+    const items = [];
+    if (v.admin && p.deployed) {
+      const t = h("input", { class: "input", placeholder: "Question, for example: Next flywheel split?", maxlength: "140" });
+      const o = h("textarea", { class: "input", rows: "3", placeholder: "One option per line (2 to 5)" });
+      const d = h("input", { class: "input", inputmode: "numeric", value: "3", "aria-label": "Days" });
+      items.push(h("div", { class: "panel sd-panel so-card" }, h("h3", {}, "New proposal (admins)"), t, o, h("div", { class: "fw-row" }, h("span", { class: "fine" }, "Open for days"), d,
+        h("button", { class: "btn blue", type: "button", disabled: !!st.busy, onclick: () => run("Opening…", async () => { await api.post("votes", { title: t.value, options: o.value.split("\n"), days: Number(d.value) }); toast("Proposal open.", "ok"); }) }, "Open the vote"))));
+    }
+    if (!p.deployed) items.push(h("div", { class: "panel sd-panel so-card" }, h("p", { class: "muted" }, "Votes start once the Holder Pass is deployed.")));
+    else if (!v.proposals.length) items.push(h("div", { class: "panel sd-panel so-card" }, h("p", { class: "muted" }, "No proposals yet.")));
+    for (const x of v.proposals) {
+      const total = x.tally.reduce((s, n) => s + n, 0) || 1;
+      const canVote = x.open && p.me?.passId && p.me.active && p.me.mintedBlock < x.startBlock;
+      items.push(h("div", { class: "panel sd-panel so-card" },
+        h("div", { class: "so-li-h" }, h("b", {}, x.title), h("span", { class: "chip" }, x.open ? `open · ${Math.max(0, Math.ceil((x.endsAt - Date.now()) / 3600_000))} h left` : x.final ? "closed · final" : "closed")),
+        h("div", { class: "so-opts" }, x.options.map((name, i) => h("div", { class: "so-opt" },
+          h("div", { class: "so-opt-h" }, h("span", {}, name), h("b", {}, `${x.tally[i]} vote${x.tally[i] === 1 ? "" : "s"}`)), h("i", { style: { width: `${(x.tally[i] / total) * 100}%` } }),
+          canVote ? h("button", { class: "btn sm", type: "button", disabled: !!st.busy, onclick: () => vote(x, i) }, "Vote") : null))),
+        h("p", { class: "fine", style: { margin: 0 } }, `${x.counted} counted of ${x.cast} cast · passes minted before block ${x.startBlock} and still holding the minimum · `, h("a", { class: "ulink", href: `/api/votes/${x.id}`, target: "_blank", rel: "noopener" }, "every signed vote (JSON)")),
+        x.open && wallet.address && !canVote ? h("p", { class: "fine" }, !p.me?.passId ? "Mint a Holder Pass to vote in the next proposals." : !p.me.active ? "Your wallet is under the minimum right now." : "Your pass was minted after this vote opened; it counts from the next one.") : null));
+    }
+    clear(body, ...items);
+  }
+  const vote = (x, option) => run("Signing…", async () => {
+    const signer = await signerFor("robinhood");
+    const signature = await signer.signTypedData(st.pass.domain, st.pass.types, { proposal: x.id, option, voter: wallet.address });
+    await api.post(`votes/${x.id}/vote`, { option, voter: wallet.address, signature });
+    toast(`Vote signed: ${x.options[option]}. No transaction, no gas.`, "ok", 6000);
+  });
   function mine(s) {
     const box = h("div", { class: "panel sd-panel so-card" }, h("h3", {}, "Your X account"));
     if (!s.configured) box.append(h("p", { class: "muted" }, "Sign in with X is not configured on this server yet."));

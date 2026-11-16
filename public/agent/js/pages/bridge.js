@@ -4,7 +4,7 @@
 import { h, clear, pageHead, seg, icon, review, toast, tiny, num, short, useCss, debounce, infoTip, copyText, ago, chainLogo, venueLogo, tokenIcon } from "../ui.js";
 import { wallet, onWallet, openConnect, addChain, CHAINS } from "../wallet.js";
 import { api } from "../api.js";
-import { balanceOf, toRaw, fromRaw, inputNum, sendTx, waitReceipt, errText, journal, transfers, addTransfer, updateTransfer } from "../chain.js";
+import { balanceOf, toRaw, fromRaw, inputNum, rawInput, sendTx, waitReceipt, errText, journal, transfers, addTransfer, updateTransfer } from "../chain.js";
 
 const HOME = { id: 4663, key: "robinhood", name: "Robinhood Chain" };
 const OTHER = [{ id: 42161, key: "arbitrum", name: "Arbitrum" }, { id: 8453, key: "base", name: "Base" }, { id: 1, key: "ethereum", name: "Ethereum" }];
@@ -110,7 +110,7 @@ export async function mount(view, ctx) {
     if (!st.bal) return;
     const reserve = src().key === "ethereum" ? 2n * 10n ** 15n : 3n * 10n ** 14n; // leave gas on the source chain
     const raw = st.bal.raw > reserve ? st.bal.raw - reserve : 0n;
-    amountInput.value = inputNum(fromRaw(raw), 6);
+    amountInput.value = rawInput(raw, 18, 6);
     amountInput.dispatchEvent(new Event("input"));
   }
 

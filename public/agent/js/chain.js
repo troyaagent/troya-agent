@@ -30,6 +30,15 @@ export function toRaw(amount, decimals = 18) {
   try { return parseUnits(`${w || "0"}.${f.slice(0, decimals) || "0"}`, decimals); } catch { return null; }
 }
 export const fromRaw = (raw, decimals = 18) => Number(formatUnits(BigInt(raw), decimals));
+/** Exact amount for an input field from raw units, cut (never rounded up) to maxDp decimals, so "Max" can never ask for
+ *  more than the wallet holds. */
+export function rawInput(raw, decimals = 18, maxDp = 8) {
+  const r = BigInt(raw);
+  if (r <= 0n) return "";
+  const [w, f = ""] = formatUnits(r, decimals).split(".");
+  const cut = f.slice(0, Math.min(18, maxDp)).replace(/0+$/, "");
+  return cut ? `${w}.${cut}` : w;
+}
 /** Trims a float for an input field without exponent notation. */
 export function inputNum(v, maxDp = 6) {
   if (!isFinite(v) || v <= 0) return "";

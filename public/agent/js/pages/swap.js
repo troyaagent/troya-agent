@@ -3,7 +3,7 @@
 import { h, clear, pageHead, seg, icon, modal, review, toast, tokenIcon, chainLogo, venueLogo, tiny, num, short, useCss, debounce, infoTip } from "../ui.js";
 import { wallet, onWallet, openConnect, CHAINS } from "../wallet.js";
 import { api } from "../api.js";
-import { ETH, isNative, balanceOf, toRaw, fromRaw, inputNum, sendTx, waitReceipt, errText, journal } from "../chain.js";
+import { ETH, isNative, balanceOf, toRaw, fromRaw, inputNum, rawInput, sendTx, waitReceipt, errText, journal } from "../chain.js";
 
 const SLIPS = [{ value: 100, label: "1%" }, { value: 300, label: "3%" }, { value: 500, label: "5%" }];
 
@@ -35,7 +35,7 @@ export async function mount(view, ctx) {
   const netChip = h("span", { class: "chain-chip" }, chainLogo("robinhood", 16), "Robinhood Chain · 4663");
   const body = h("div", { class: "sw-body" });
   clear(view,
-    pageHead("Swap", "Trade coins and tokenized stocks on Robinhood Chain: Pons curves and Uniswap v3/v4 pools. You sign every swap in your own wallet."),
+    pageHead("Swap", "Trade coins and tokenized stocks on Robinhood Chain: Pons curves, Uniswap v3/v4 pools and every other Robinhood Chain launchpad through KyberSwap. You sign every swap in your own wallet."),
     h("div", { class: "sw-wrap" }, h("div", { class: "sw-net" }, netChip), body));
 
   // sell leg
@@ -69,7 +69,7 @@ export async function mount(view, ctx) {
       infoTip("The most the price may move against you between quote and inclusion. If it moves further, the swap reverts and only the network fee is spent.")),
     rows, warnBox, gateBox, btn, txBox);
   const note = h("p", { class: "note sw-note" },
-    "Robinhood Chain is chain 4663, gas is paid in ETH. Troya routes Pons Family curves (until a coin graduates) and Uniswap v3/v4 pools, and adds no fee of its own. ",
+    "Robinhood Chain is chain 4663, gas is paid in ETH. Troya routes Pons Family curves (until a coin graduates) and Uniswap v3/v4 pools, and the other Robinhood Chain launchpads and pools through KyberSwap. Troya adds no fee of its own. ",
     h("a", { class: "link", href: "#/bridge" }, "Bridge ETH in"), " · ", h("a", { class: "link", href: "#/market" }, "Browse the market"));
 
   sellInput.addEventListener("input", () => {
@@ -214,13 +214,13 @@ export async function mount(view, ctx) {
     if (!st.bal) return;
     let raw = st.bal.raw;
     if (isNative(st.sell)) raw = raw > 3n * 10n ** 14n ? raw - 3n * 10n ** 14n : 0n; // keep a little ETH for gas
-    sellInput.value = inputNum(fromRaw(raw, st.sell.decimals ?? 18), 8);
+    sellInput.value = rawInput(raw, st.sell.decimals ?? 18, 8);
     sellInput.dispatchEvent(new Event("input"));
   }
   function setPct(p) {
     if (!st.bal) return;
     const raw = (st.bal.raw * BigInt(p)) / 100n;
-    sellInput.value = inputNum(fromRaw(raw, st.sell.decimals ?? 18), 8);
+    sellInput.value = rawInput(raw, st.sell.decimals ?? 18, 8);
     sellInput.dispatchEvent(new Event("input"));
   }
 

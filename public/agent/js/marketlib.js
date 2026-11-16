@@ -3,7 +3,8 @@ import { h, tokenIcon, padLogo, tiny, usd, compact } from "./ui.js";
 
 export const LAUNCHPADS = [
   ["pons", "Pons"], ["clanker", "Clanker"], ["bankr", "Bankr"], ["virtuals", "Virtuals"], ["hoodit", "Hoodit"], ["mintclub", "Mint Club"], ["easya", "EasyA"],
-  ["o1", "O1 Launchpad"], ["frontier", "Frontier"], ["long", "Long"], ["uniswap", "Uniswap"], ["ramses", "Ramses"], ["pancake", "PancakeSwap"], ["sushi", "SushiSwap"], ["other", "Other"],
+  ["o1", "O1 Launchpad"], ["frontier", "Frontier"], ["long", "Long"], ["abyss", "Abyss"], ["goo", "Goo"], ["clank", "Clank.trade"], ["uniswap", "Uniswap"], ["ramses", "Ramses"],
+  ["pancake", "PancakeSwap"], ["sushi", "SushiSwap"], ["aero", "Aerodrome"], ["up", "Up"], ["other", "Other"],
 ];
 export const padName = (k) => (LAUNCHPADS.find(([v]) => v === k)?.[1] || (k ? k[0].toUpperCase() + k.slice(1) : "Other"));
 
@@ -11,7 +12,7 @@ export function tokenCell(t, opts = {}) {
   return h("div", { class: "tok" }, tokenIcon(t),
     h("div", { style: { minWidth: 0 } },
       h("b", {}, t.symbol || "?", opts.tag !== false && t.launchpad ? h("span", { class: "pad-tag" }, padLogo(t.launchpad, 12), padName(t.launchpad)) : null,
-        !t.tradable && opts.flagUntradable ? h("span", { class: "pad-tag warn", title: "Its pools are on venues Troya does not route yet (Troya routes Pons curves and Uniswap v3/v4)." }, "not routed") : null),
+        !t.tradable && opts.flagUntradable ? h("span", { class: "pad-tag warn", title: "Troya found no route for it yet: Pons curves, Uniswap v3/v4 and the other Robinhood Chain venues through KyberSwap." }, "not routed") : null),
       h("small", {}, t.name || "")));
 }
 // "$0.00175" on top, "0.0₇8 ETH" under it

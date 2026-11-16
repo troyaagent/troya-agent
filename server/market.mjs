@@ -3,6 +3,7 @@
 // Everything here is read-only and cached in memory; when a source fails the last good copy is served with `stale: true`.
 // GeckoTerminal's public API allows about 30 calls a minute, so every call goes through one paced queue
 // (user-facing reads jump ahead of the background index refresh).
+import { KYBER_ON } from "./kyber.mjs";
 import { noteV4, ponsState, ponsPublic, ponsProfile, STOCKS, ADDR as RH } from "./robinhood.mjs";
 
 const UA = { "user-agent": "troya-agent/0.2 (+market-reader)", accept: "application/json" };
@@ -16,12 +17,18 @@ const SORTS = new Set(["volume", "mcap", "change", "liquidity", "newest", "price
 const SORT_ALIAS = { age: "newest", new: "newest", marketcap: "mcap", cap: "mcap", fdv: "mcap", gainers: "change", vol: "volume", holders: "txns" };
 export const LAUNCHPADS = {
   pons: "Pons", clanker: "Clanker", bankr: "Bankr", virtuals: "Virtuals", hoodit: "Hoodit", mintclub: "Mint Club", easya: "EasyA", o1: "O1 Launchpad",
-  frontier: "Frontier", long: "Long", uniswap: "Uniswap", ramses: "Ramses", pancake: "PancakeSwap", sushi: "SushiSwap", other: "Other",
+  frontier: "Frontier", long: "Long", abyss: "Abyss", goo: "Goo", clank: "Clank.trade", uniswap: "Uniswap", ramses: "Ramses", pancake: "PancakeSwap", sushi: "SushiSwap",
+  aero: "Aerodrome", up: "Up", other: "Other",
 };
-const LAUNCH_PADS = new Set(["pons", "clanker", "bankr", "virtuals", "hoodit", "mintclub", "easya", "o1", "frontier", "long"]);
+const LAUNCH_PADS = new Set(["pons", "clanker", "bankr", "virtuals", "hoodit", "mintclub", "easya", "o1", "frontier", "long", "abyss", "goo", "clank"]);
 export function padOfDex(id = "") {
   if (/^pons/.test(id)) return "pons";
+  if (id === "clank-trade") return "clank";
   if (/^clank/.test(id)) return "clanker";
+  if (id === "abyss") return "abyss";
+  if (/^goo-/.test(id)) return "goo";
+  if (/^aero-/.test(id)) return "aero";
+  if (/^up-v/.test(id)) return "up";
   if (/^bankr/.test(id)) return "bankr";
   if (/^virtuals/.test(id)) return "virtuals";
   if (id === "hoodit") return "hoodit";
@@ -36,8 +43,9 @@ export function padOfDex(id = "") {
   if (/^sushiswap/.test(id)) return "sushi";
   return "other";
 }
-// venues Troya can build a swap for: Pons curves and Uniswap v3 / v4 (graduated Pons pools are v4 with the Pons hook)
-const ROUTABLE = (dex) => /^(pons-v2|pons-v2-dex|pons-dot-family|uniswap-v3-robinhood|uniswap-v4-robinhood)$/.test(dex);
+// venues Troya can build a swap for: Pons curves and Uniswap v3 / v4 (graduated Pons pools are v4 with the Pons hook), and every
+// other Robinhood Chain venue through the KyberSwap fallback (robinhood.mjs asks Kyber when its own route finds nothing)
+const ROUTABLE = (dex) => /^(pons-v2|pons-v2-dex|pons-dot-family|uniswap-v3-robinhood|uniswap-v4-robinhood)$/.test(dex) || (KYBER_ON && !!dex);
 
 /* ---------------- fetch + cache ---------------- */
 async function getJson(url, { timeout = 12000, method = "GET", body } = {}) {
@@ -158,7 +166,7 @@ function dsRows(pairs, ethUsd) {
       buys24h: tx.buys ?? null, sells24h: tx.sells ?? null, txns24h: tx.buys != null ? (tx.buys || 0) + (tx.sells || 0) : null,
       createdAt: fnum(p.pairCreatedAt), pool: lc(p.pairAddress), poolDex: dex, quoteSymbol: p.quoteToken?.symbol || null,
       pools: [{ pool: lc(p.pairAddress), dex, quoteSymbol: p.quoteToken?.symbol || null, liquidityUsd: fnum(p.liquidity?.usd), volumeUsd: fnum(p.volume?.h24) }],
-      launchpad: padOfDex(dex), tradable: /^uniswap-(v3|v4)$/.test(dex), stock: STOCK_SET.has(a),
+      launchpad: padOfDex(dex), tradable: /^uniswap-(v3|v4)$/.test(dex) || KYBER_ON, stock: STOCK_SET.has(a),
       website: p.info?.websites?.[0]?.url || null,
       twitter: p.info?.socials?.find((x) => x.type === "twitter")?.url || null,
       telegram: p.info?.socials?.find((x) => x.type === "telegram")?.url || null,
@@ -246,13 +254,21 @@ function fold(map, pr, ethUsd) {
   if (t.image) IMAGES.set(t.address, t.image);
 }
 const clean = (t) => { const { _main, ...rest } = t; return rest; };
+// the newest pools on Robinhood Chain across every venue (Sentry uses this to catch launches outside Pons and Uniswap)
+export async function newLaunchPools() {
+  const d = await gecko(`new_pools?page=1&include=base_token`);
+  const inc = new Map((d.included || []).map((x) => [x.id, x]));
+  return (d.data || []).map((p) => { const pr = poolRow(p, inc); return { base: pr.base, quote: pr.quote, dex: pr.dex, pool: pr.pool, createdAt: pr.createdAt, pad: padOfDex(pr.dex), liquidityUsd: pr.liquidityUsd }; });
+}
 // GeckoTerminal's public API is tight on rate (it answers 429 well under the documented 30/min), so the board reads
-// 12 pages per pass and refreshes every 8 minutes
+// 20 pages per pass (the busiest pools, Pons, the other Robinhood Chain launchpads, new pools) and refreshes every 8 minutes
 const PAGES = [
   ...[1, 2, 3].map((p) => `pools?page=${p}&sort=h24_tx_count_desc&include=base_token`),
   ...[1, 2, 3].map((p) => `pools?page=${p}&sort=h24_volume_usd_desc&include=base_token`),
   ...[1, 2, 3].map((p) => `dexes/pons-v2/pools?page=${p}&sort=h24_volume_usd_desc&include=base_token`),
   `dexes/pons-v2-dex/pools?page=1&sort=h24_volume_usd_desc&include=base_token`,
+  ...["long-xyz", "bankr-robinhood", "frontier-fun", "abyss", "goo-exchange", "clank-trade", "o1-launchpad-robinhood", "virtuals-robinhood"]
+    .map((d) => `dexes/${d}/pools?page=1&sort=h24_volume_usd_desc&include=base_token`),
   ...[1, 2].map((p) => `new_pools?page=${p}&include=base_token`),
 ];
 async function refreshBoard() {

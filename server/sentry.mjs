@@ -8,7 +8,9 @@
 //   SENTRY=1    watch + post        SENTRY=dry   watch, write posts to data/sentry-preview.jsonl, send nothing
 //   SENTRY_CHANNEL (default @troyasentry) · SENTRY_RECAP_CHAT (default @troyaagent) · SENTRY_RECAP_UTC_HOUR (default 13)
 //   SENTRY_IMAGES=0 turns off the coin's logo on posts (on by default; posts fall back to text when a logo can't be fetched)
-//   SENTRY_POOLS=1 also checks coins that launch outside Pons: every new hookless Uniswap v3/v4 pool against ETH, WETH or USDG.
+//   SENTRY_POOLS=1 also checks coins that launch outside Pons: every new hookless Uniswap v3/v4 pool against ETH, WETH or USDG,
+//   and (from GeckoTerminal's new-pools list, every 4 minutes) new pools on the other Robinhood Chain launchpads and venues:
+//   Long.xyz, Bankr, Frontier.fun, Abyss, Goo, Clank.trade, o1, Virtuals, Ramses, Aerodrome … (routed through KyberSwap).
 //   They are checked at about 5, 20 and 80 minutes and posted under the same rules, with 0.5 ETH of pool depth in place of
 //   the curve, so empty, dust or farm-traded pools never reach the channel. SENTRY_POOLS=dry writes those posts to data/sentry-pools-preview.jsonl instead.
 // Launch log: PonsFactory event, topics = [sig, token, curve, deployer]. Token names come from the internet: they are
@@ -18,6 +20,7 @@ import { ADDR, CHAINS, rpc, gateCheck, ponsState, ponsPublic, ponsProfile } from
 import { readFileSync } from "node:fs";
 import { AbiCoder, getAddress } from "ethers";
 import { addV4Key } from "./robinhood.mjs";
+import { newLaunchPools, LAUNCHPADS } from "./market.mjs";
 
 const LAUNCH_TOPIC = "0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607";
 const MODE = process.env.SENTRY || "";
@@ -168,7 +171,7 @@ export async function transfersOf(token, fromBlock, sinceMs = null) {
 }
 async function measureBuyers(r, q) {
   try {
-    const venues = [r.pons?.curve, ADDR.poolManager, q?.source === "Uniswap v3" ? q.pool : null];
+    const venues = [r.pons?.curve, ADDR.poolManager, q?.pool && /^0x[0-9a-fA-F]{40}$/.test(q.pool) ? q.pool : null];
     const all = buyerSet(await transfersOf(r.token, q?.block), { venues, exclude: [r.pons?.deployer, r.pons?.creatorFeeRecipient] });
     remember(r.token.toLowerCase(), all.map(wid));
     r.buyers = { all: all.length, organic: organicOf(r.token, all) };
@@ -377,6 +380,18 @@ async function scanPools(s, from, to) {
   }
 }
 
+// launches on the other Robinhood Chain venues, from GeckoTerminal's new-pools list (Pons and plain Uniswap are covered above)
+const LAUNCH_EVERY_MS = 4 * 60_000, LAUNCH_MAX_AGE_MS = 2 * 3600e3;
+async function scanLaunchpads(s) {
+  if (Date.now() - (s.launchpadsAt || 0) < LAUNCH_EVERY_MS) return;
+  s.launchpadsAt = Date.now();
+  for (const p of await newLaunchPools()) {
+    if (!p.base || p.pad === "pons" || /^uniswap-v[34]/.test(p.dex)) continue;
+    if (p.createdAt && p.createdAt < Date.now() - LAUNCH_MAX_AGE_MS) continue;
+    notePool(s, p.base, { source: LAUNCHPADS[p.pad] && p.pad !== "other" ? LAUNCHPADS[p.pad] : p.dex, pool: p.pool, block: null });
+  }
+}
+
 const recentlyPosted = (s, token) => (s.posted?.[token.toLowerCase()] || 0) > Date.now() - 86400e3;
 function markPosted(s, r) {
   const now = Date.now(), token = r.token, symbol = r.symbol;
@@ -489,6 +504,7 @@ async function tick() {
     const s = await store.readJson(STATE, { lastBlock: 0, seen: {}, queue: [], events: [], recapSent: null });
     s.events ||= [];
     await scan(s).catch((e) => console.warn("[sentry] scan:", e.message));
+    if (POOLS) await scanLaunchpads(s).catch((e) => console.warn("[sentry] launchpads:", e.message));
     await work(s);
     pruneWallets();
     if (walletsDirty && Date.now() - lastWalletSave > 60000) { walletsDirty = false; lastWalletSave = Date.now(); await saveWallets().catch((e) => console.warn("[sentry] wallets:", e.message)); }

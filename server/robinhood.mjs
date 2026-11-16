@@ -16,6 +16,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { HttpError, send } from "./api.mjs";
+import { KYBER_ON, KYBER_LIVE, kyberRoute, kyberBuild } from "./kyber.mjs";
 
 /* ------------------------------------------------------------------ */
 /* chains + upstreams                                                  */
@@ -524,6 +525,33 @@ export function floorMinOut(quoteMin, requested, sim = false) {
   if (sim) return r < 0n ? 0n : r;
   return r > q ? r : q;
 }
+// KyberSwap fallback quote. Impact = how much worse the full size fills than a 1% probe; fees and spread come from the probe's
+// USD values when Kyber prices both sides. The plan carries Kyber's own route; buildSwapTx turns it into calldata on the server.
+async function kyberQuote(tin, tout, amt, coin, ethUsd, warnings) {
+  const probeAmt = amt / 100n > 0n ? amt / 100n : 1n;
+  const [full, probe] = await Promise.all([
+    kyberRoute({ tokenIn: tin, tokenOut: tout, amountIn: amt }),
+    kyberRoute({ tokenIn: tin, tokenOut: tout, amountIn: probeAmt }).catch(() => null),
+  ]);
+  let impact = null;
+  if (probe && probe.out > 0n) impact = Math.max(0, 1 - Number((full.out * probeAmt * 1000000n) / (probe.out * amt)) / 1000000);
+  // fees: a small round trip (probe there and back) loses about twice the one-way fees and taxes; USD prices for
+  // young coins are too rough for this
+  let feePct = null;
+  if (probe && probe.out > 0n) {
+    const back = await kyberRoute({ tokenIn: tout, tokenOut: tin, amountIn: probe.out }).catch(() => null);
+    if (back && back.out > 0n) feePct = Math.max(0, (1 - Number((back.out * 1000000n) / probeAmt) / 1000000) * 50);
+  }
+  const row = await liquidityFor(coin || tout);
+  const depthEth = row?.liquidityUsd && ethUsd ? row.liquidityUsd / ethUsd / 2 : null;
+  const via = full.exchanges.join(" + ");
+  return {
+    out: full.out, priceImpact: impact, feePct, feeNote: feePct != null ? "half of a small round trip" : null, venue: "kyberswap",
+    route: { venue: "kyberswap", label: `KyberSwap · ${symOf(tin)} → ${symOf(tout)} via ${via}`, hops: full.paths.map((leg) => ({ from: symOf(leg[0]?.tokenIn || tin), to: symOf(leg[leg.length - 1]?.tokenOut || tout), venue: leg.map((x) => x.exchange).join(" → ") })) },
+    depth: { eth: depthEth, usd: row?.liquidityUsd ?? null, note: depthEth != null ? "ETH side of the main pool (GeckoTerminal reserve / 2)" : "Pool depth not indexed" },
+    plan: { venue: "kyber", routeSummary: full.routeSummary, router: full.router },
+  };
+}
 export async function quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps = 100, from, _sim = false }) {
   const tin = isNative(tokenIn) ? ZERO : addr(tokenIn, "input token");
   const tout = isNative(tokenOut) ? ZERO : addr(tokenOut, "output token");
@@ -546,7 +574,7 @@ export async function quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slip
       amountIn: fmt(amt, mi.decimals), amountInRaw: amt.toString(),
       amountOut: fmt(o.out, mo.decimals), amountOutRaw: o.out.toString(), minOut: fmt(minOut, mo.decimals), minOutRaw: minOut.toString(),
       rate: Number(fmt(o.out, mo.decimals)) / Number(fmt(amt, mi.decimals)),
-      priceImpact: o.priceImpact, feePct: o.feePct, venue: o.venue, route: o.route, poolLiquidity: o.depth,
+      priceImpact: o.priceImpact, feePct: o.feePct, feeNote: o.feeNote || null, venue: o.venue, route: o.route, poolLiquidity: o.depth,
       alternatives: o.alternatives || [], warnings, plan: o.plan, quotedAt: Date.now(),
     };
   };
@@ -589,7 +617,12 @@ export async function quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slip
   // Uniswap v3 / v4 (graduated Pons coins route through their Pons-hook pool)
   const hubs = ps?.graduated && ps.pair !== ZERO ? [ps.pair] : [];
   const r = await routerQuote(tin, tout, amt, hubs);
-  if (!r.ok) throw new HttpError(404, `${r.reason} Troya routes Pons curves and Uniswap v3/v4 pools on Robinhood Chain.`, { code: "NO_ROUTE" });
+  if (!r.ok) {
+    // not on a Pons curve or a Uniswap pool Troya can reach: ask KyberSwap (Long.xyz, Bankr, Frontier, Virtuals, Ramses, Aerodrome …)
+    const kq = KYBER_ON ? await kyberQuote(tin, tout, amt, coin, ethUsd, warnings).catch(() => null) : null;
+    if (kq) return finish(kq);
+    throw new HttpError(404, `${r.reason} Troya routes Pons curves and Uniswap v3/v4 pools on Robinhood Chain, plus the other Robinhood Chain venues through KyberSwap.`, { code: "NO_ROUTE" });
+  }
   const c = r.best.c;
   let feePct = c.venue === "v3" ? c.hops.reduce((s, h) => s + h.fee / 10000, 0) : c.hops.reduce((s, h) => s + (h.key.fee < 0x800000 ? h.key.fee / 10000 : 0), 0);
   if (ps?.graduated) feePct += Number(ps.feeBps + ps.taxBps) / 100; // the Pons hook keeps the 1% fee + creator tax after graduation
@@ -614,7 +647,7 @@ async function isPonsEither(a, b) {
  * → { chainId, from, to, data, value, deadline, quote, approvals:[{kind,token,spender,amount,needed,tx}], approval }
  * Always re-quotes on the server: calldata is never built from a client-supplied route.
  */
-export async function buildSwapTx({ from, tokenIn, tokenOut, amountIn, amountInRaw, minOutRaw, slippageBps, deadlineSec = 1200, _quote, _sim = false }) {
+export async function buildSwapTx({ from, tokenIn, tokenOut, amountIn, amountInRaw, minOutRaw, slippageBps, deadlineSec = 1200, _quote, _sim = false, _gate = false }) {
   const who = addr(from, "wallet address");
   const q = _quote?.plan ? _quote : await quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps, from: who });
   const amt = BigInt(q.amountInRaw);
@@ -633,6 +666,14 @@ export async function buildSwapTx({ from, tokenIn, tokenOut, amountIn, amountInR
     } else {
       built = { to: p.curve, data: iface.ponsCurve.encodeFunctionData("sell", [amt, min, who]), value: 0n, approvals: [{ kind: "erc20", token: p.token, spender: p.curve, amount: amt }] };
     }
+  } else if (p.venue === "kyber") {
+    if (!KYBER_LIVE && !_sim && !_gate) throw new HttpError(403, "Swaps through KyberSwap (for coins outside Pons and Uniswap) are in their real-money test and open shortly. The Gate result is already live.", { code: "KYBER_TESTING" });
+    // slippage that lands Kyber's own minimum at or above Troya's floor (the quote's minimum, or a stricter one from the client)
+    const quoted = BigInt(p.routeSummary.amountOut);
+    const slip = quoted > min ? Number(((quoted - min) * 10000n) / quoted) : 1;
+    const kb = await kyberBuild({ routeSummary: p.routeSummary, router: p.router, sender: who, slippageBps: Math.max(1, slip), deadline });
+    built = { to: kb.to, data: kb.data, value: kb.value, approvals: tin === ZERO ? [] : [{ kind: "erc20", token: tin, spender: kb.to, amount: amt, name: "KyberSwap" }] };
+    if (tin === ZERO && kb.value !== amt) throw new HttpError(502, "KyberSwap asked for a different ETH amount than quoted, so the swap was not built.");
   } else {
     built = buildRouterTx(p.c, tin, tout, amt, min, deadline);
   }
@@ -653,7 +694,7 @@ async function approvalTxs(owner, specs) {
     if (a.kind === "erc20") {
       const allowance = BigInt(reads[i]?.[0] ?? 0n);
       return { kind: "erc20", token: a.token, spender: a.spender, amount: a.amount.toString(), allowance: allowance.toString(), needed: allowance < a.amount,
-        label: `Approve ${symOf(a.token)} for ${a.spender === ADDR.permit2 ? "Permit2" : a.spender === ADDR.swapRouter02 ? "Uniswap" : "the Pons curve"}`,
+        label: `Approve ${symOf(a.token)} for ${a.name || (a.spender === ADDR.permit2 ? "Permit2" : a.spender === ADDR.swapRouter02 ? "Uniswap" : "the Pons curve")}`,
         tx: { to: a.token, data: iface.erc20.encodeFunctionData("approve", [a.spender, a.amount]), value: "0" } };
     }
     const amount = BigInt(reads[i]?.[0] ?? 0n), exp = Number(reads[i]?.[1] ?? 0);
@@ -736,6 +777,7 @@ export async function sellCheck({ token, amountRaw, to = "ETH" }) {
   try {
     if (q.venue === "pons-curve") actual = BigInt(iface.ponsCurve.decodeFunctionResult("sell", sim.returnData)[0]);
     else if (q.venue === "uniswap-v3") actual = BigInt(coder.decode(["uint256"], iface.swapRouter02.decodeFunctionResult("multicall", sim.returnData)[0][0])[0]);
+    else if (q.venue === "kyberswap") actual = BigInt(coder.decode(["uint256", "uint256"], sim.returnData)[0]); // swap() → (returnAmount, gasUsed)
   } catch {}
   const quoted = BigInt(q.amountOutRaw);
   const taxPct = actual != null && quoted > 0n ? Math.max(0, 1 - Number(actual) / Number(quoted)) * 100 : null;
@@ -759,10 +801,10 @@ export async function gateCheck({ tokenIn, tokenOut, amountIn, amountInRaw, from
   else if (d.eth != null) add("depth", d.eth < 0.05 ? "fail" : d.eth < 0.5 ? "warn" : "pass", "Pool depth", `${d.eth < 1 ? d.eth.toFixed(3) : d.eth.toFixed(2)} ETH${q.venue === "pons-curve" ? " raised on the curve" : ""}`);
   else if (d.pair != null) add("depth", "pass", "Pool depth", `${d.pair.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${d.pairSymbol} raised on the curve`);
   else add("depth", "skip", "Pool depth", d.note || "Not indexed");
-  if (q.feePct != null) add("fee", q.feePct > 10 ? "fail" : q.feePct > 5 ? "warn" : "pass", "Fees and taxes", `${q.feePct.toFixed(2)}%`);
+  if (q.feePct != null) add("fee", q.feePct > 10 ? "fail" : q.feePct > 5 ? "warn" : "pass", "Fees and taxes", `${q.feePct.toFixed(2)}%${q.feeNote ? ` (${q.feeNote})` : ""}`);
   let tx = null;
   try {
-    tx = await buildSwapTx({ from: from && isAddress(from) ? from : SIM_WALLET, _quote: q });
+    tx = await buildSwapTx({ from: from && isAddress(from) ? from : SIM_WALLET, _quote: q, _gate: true });
     if (!tx.approvals.some((a) => a.needed)) {
       const sim = await simulateTx({ from: tx.from, to: tx.to, data: tx.data, value: tx.value });
       add("sim", sim.ok ? "pass" : "fail", "Transaction simulation", sim.ok ? "The exact swap succeeds against the current pool" : sim.error);
@@ -785,6 +827,8 @@ export async function gateCheck({ tokenIn, tokenOut, amountIn, amountInRaw, from
       }
     } catch (e) { add("sell", "warn", "Test sell", e.message); add("tax", "skip", "Transfer tax", "Not measured"); }
   }
+  // a Kyber route is simulated above, but nobody gets its calldata to sign until KYBER_LIVE is on
+  if (q.venue === "kyberswap" && !KYBER_LIVE) tx = null;
   return { pass: !checks.some((c) => c.status === "fail"), checks, quote: q, tx, checkedAt: Date.now() };
 }
 

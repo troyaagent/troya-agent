@@ -29,7 +29,7 @@ export async function mount(view) {
         [h("b", {}, "Start: "), "a guided 60-second setup at #/start."],
         [h("b", {}, "Launchpad: "), "new coins from Pons, Long.xyz, Bankr, Frontier.fun, Abyss, Virtuals and more, and a form to launch your own on Pons."],
         [h("b", {}, "Agent: "), "chat, Agent Wallet, Autopilot and Playbooks."],
-        [h("b", {}, "Arbitrum and Base: "), "pick the network above the Swap card; KyberSwap routes, the same Troya Gate, your own wallet signs. Arbitrum is live (16 Nov 2026); Base shows quotes and the Gate and opens after its own real-money test."],
+        [h("b", {}, "Arbitrum and Base: "), "pick the network above the Swap card; KyberSwap routes, the same Troya Gate, your own wallet signs (live since 16 Nov 2026, each tested with real money)."],
         [h("b", {}, "Next (Roadmap v3, in build): "), "Solana and Hyperliquid spot."],
       ]),
     ]],

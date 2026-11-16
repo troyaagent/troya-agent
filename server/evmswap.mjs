@@ -27,11 +27,11 @@ export const POPULAR = {
     ["0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", "WBTC", "Wrapped BTC", 8], ["0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a", "GMX", "GMX", 18],
   ],
 };
-// Signing opens per chain after that chain's own real-money test. Arbitrum passed on 16 Nov 2026 (0.008 ETH → ARB and back:
-// txs 0x5cdd4942…, 0x70f35f6c…, 0xd82d36eb…); Base runs the same code and opens after its own test.
+// Signing opens per chain after that chain's own real-money test. Both passed on 16 Nov 2026: Arbitrum (0.008 ETH → ARB and
+// back: txs 0x5cdd4942…, 0x70f35f6c…, 0xd82d36eb…) and Base (0.001 ETH → AERO and back: 0x8d06b5f7…, 0x5753629f…, 0x5af72722…).
 // EVM_LIVE_CHAINS=arbitrum,base sets the list; EVM_LIVE=0 closes all. Quotes and the Gate work either way.
 export const EVM_LIVE = process.env.EVM_LIVE !== "0";
-const LIVE_CHAINS = new Set(String(process.env.EVM_LIVE_CHAINS || "arbitrum").split(",").map((x) => x.trim()).filter(Boolean));
+const LIVE_CHAINS = new Set(String(process.env.EVM_LIVE_CHAINS || "arbitrum,base").split(",").map((x) => x.trim()).filter(Boolean));
 export const evmLive = (chain) => EVM_LIVE && LIVE_CHAINS.has(chain);
 const ZERO = "0x0000000000000000000000000000000000000000";
 const NATIVE = { address: "native", symbol: "ETH", name: "Ether", decimals: 18 };

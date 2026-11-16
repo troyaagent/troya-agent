@@ -1,7 +1,7 @@
 {
   "name": "Troya Agent proof log",
   "site": "https://troya.codes/verify",
-  "generated": "2026-11-16T12:44:30.190Z",
+  "generated": "2026-11-16T12:52:23.253Z",
   "testWallet": "0x12a05719851c8375342DE65c9105329c81f57054",
   "note": "Every transaction is read from the chain. Agent Wallets are created by the Troya server for a signed-in wallet; each one here was funded by the test wallet and paid back only to it. Hyperliquid fills: https://troya.codes/api/proof/hl-fills (from Hyperliquid's own info API).",
   "transactions": [
@@ -356,7 +356,7 @@
       "status": "success"
     },
     {
-      "step": "12 Arbitrum",
+      "step": "12 Arbitrum and Base",
       "chain": "arbitrum",
       "hash": "0x5cdd494230e3f2b248038d8097d2f034afc57aec85a0f8fff04d995db9bf31f2",
       "what": "buy ARB on Arbitrum One through the KyberSwap router from the Swap page",
@@ -370,7 +370,7 @@
       "status": "success"
     },
     {
-      "step": "12 Arbitrum",
+      "step": "12 Arbitrum and Base",
       "chain": "arbitrum",
       "hash": "0x70f35f6cf130963c9caae8f7251f0ed1ea64400e9ec03666b47669f32333f330",
       "what": "approve ARB for the KyberSwap router (the exact amount)",
@@ -384,7 +384,7 @@
       "status": "success"
     },
     {
-      "step": "12 Arbitrum",
+      "step": "12 Arbitrum and Base",
       "chain": "arbitrum",
       "hash": "0xd82d36eb4daa4aed9dcf307726958bf57787e0a59aeb6f943fd4313a30adf9c1",
       "what": "sell it all back to ETH",
@@ -395,6 +395,48 @@
       "to": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
       "block": 524749902,
       "timeUtc": "2026-11-16T12:42:36.000Z",
+      "status": "success"
+    },
+    {
+      "step": "12 Arbitrum and Base",
+      "chain": "base",
+      "hash": "0x8d06b5f72fe6425150844966998bc0b0daf1b1459a173f605019211005fdf180",
+      "what": "buy AERO on Base through the KyberSwap router from the Swap page",
+      "chainId": 8453,
+      "explorer": "https://basescan.org/tx/0x8d06b5f72fe6425150844966998bc0b0daf1b1459a173f605019211005fdf180",
+      "signer": "0x45611870017682Ec781EDb9F71fA72fA91159350",
+      "signerRole": "team wallet: signs in its own browser wallet",
+      "to": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
+      "block": 58215051,
+      "timeUtc": "2026-11-16T12:49:45.000Z",
+      "status": "success"
+    },
+    {
+      "step": "12 Arbitrum and Base",
+      "chain": "base",
+      "hash": "0x5753629f0e8456a4c701ced613d30c68497dda77964788f26b92b65664ec6b4e",
+      "what": "approve AERO for the KyberSwap router (the exact amount)",
+      "chainId": 8453,
+      "explorer": "https://basescan.org/tx/0x5753629f0e8456a4c701ced613d30c68497dda77964788f26b92b65664ec6b4e",
+      "signer": "0x45611870017682Ec781EDb9F71fA72fA91159350",
+      "signerRole": "team wallet: signs in its own browser wallet",
+      "to": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+      "block": 58215409,
+      "timeUtc": "2026-11-16T12:50:57.000Z",
+      "status": "success"
+    },
+    {
+      "step": "12 Arbitrum and Base",
+      "chain": "base",
+      "hash": "0x5af7272242e14a3d183279db8e831c886433cec850d62ac6b5e07c9a49b317c3",
+      "what": "sell it all back to ETH",
+      "chainId": 8453,
+      "explorer": "https://basescan.org/tx/0x5af7272242e14a3d183279db8e831c886433cec850d62ac6b5e07c9a49b317c3",
+      "signer": "0x45611870017682Ec781EDb9F71fA72fA91159350",
+      "signerRole": "team wallet: signs in its own browser wallet",
+      "to": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
+      "block": 58215453,
+      "timeUtc": "2026-11-16T12:51:06.000Z",
       "status": "success"
     },
     {

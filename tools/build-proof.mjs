@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { JsonRpcProvider } from "ethers";
 const rh = new JsonRpcProvider(process.env.ROBINHOOD_RPC || "https://robinhood-rpc.publicnode.com", 4663, { staticNetwork: true });
 const arb = new JsonRpcProvider("https://arb1.arbitrum.io/rpc", 42161, { staticNetwork: true });
+const base = new JsonRpcProvider("https://mainnet.base.org", 8453, { staticNetwork: true });
 const TEST = "0x12a05719851c8375342DE65c9105329c81f57054";
 const ROLES = {
   [TEST.toLowerCase()]: "test wallet: signs in its own browser wallet",
@@ -43,20 +44,23 @@ const LIST = [
   P("11 Other launchpads through KyberSwap", "robinhood", "0x53dde2747f8138fa34de7ca4ebbf9fc6015cc8c58e188d58db822443d5346a24", "buy ABYSS (Abyss launchpad) through the KyberSwap router from the Swap page"),
   P("11 Other launchpads through KyberSwap", "robinhood", "0xaf498861e6e1c53592eca2c5a8e9869e45e1591560e7a951e79840fc99b9842b", "approve ABYSS for the KyberSwap router (the exact amount)"),
   P("11 Other launchpads through KyberSwap", "robinhood", "0xf5f46c779faf0c80fe2ac107a3c1fbfea6c671b4454be5faddc344c9cc197c4b", "sell it all back to ETH"),
-  P("12 Arbitrum", "arbitrum", "0x5cdd494230e3f2b248038d8097d2f034afc57aec85a0f8fff04d995db9bf31f2", "buy ARB on Arbitrum One through the KyberSwap router from the Swap page"),
-  P("12 Arbitrum", "arbitrum", "0x70f35f6cf130963c9caae8f7251f0ed1ea64400e9ec03666b47669f32333f330", "approve ARB for the KyberSwap router (the exact amount)"),
-  P("12 Arbitrum", "arbitrum", "0xd82d36eb4daa4aed9dcf307726958bf57787e0a59aeb6f943fd4313a30adf9c1", "sell it all back to ETH"),
+  P("12 Arbitrum and Base", "arbitrum", "0x5cdd494230e3f2b248038d8097d2f034afc57aec85a0f8fff04d995db9bf31f2", "buy ARB on Arbitrum One through the KyberSwap router from the Swap page"),
+  P("12 Arbitrum and Base", "arbitrum", "0x70f35f6cf130963c9caae8f7251f0ed1ea64400e9ec03666b47669f32333f330", "approve ARB for the KyberSwap router (the exact amount)"),
+  P("12 Arbitrum and Base", "arbitrum", "0xd82d36eb4daa4aed9dcf307726958bf57787e0a59aeb6f943fd4313a30adf9c1", "sell it all back to ETH"),
+  P("12 Arbitrum and Base", "base", "0x8d06b5f72fe6425150844966998bc0b0daf1b1459a173f605019211005fdf180", "buy AERO on Base through the KyberSwap router from the Swap page"),
+  P("12 Arbitrum and Base", "base", "0x5753629f0e8456a4c701ced613d30c68497dda77964788f26b92b65664ec6b4e", "approve AERO for the KyberSwap router (the exact amount)"),
+  P("12 Arbitrum and Base", "base", "0x5af7272242e14a3d183279db8e831c886433cec850d62ac6b5e07c9a49b317c3", "sell it all back to ETH"),
 
   P("LP burn", "robinhood", "0xfe7f12591df9b9f53a0366a31cf36d1cf00b8200b6ae05fb8eeb7989afc24ea0", "Uniswap v4 position NFT #4293939 (ETH/TROYA pool) sent to 0x…dEaD: that liquidity can never be removed"),
 ];
-const EXP = { robinhood: "https://robinhoodchain.blockscout.com/tx/", arbitrum: "https://arbitrum.blockscout.com/tx/" };
+const EXP = { robinhood: "https://robinhoodchain.blockscout.com/tx/", arbitrum: "https://arbitrum.blockscout.com/tx/", base: "https://basescan.org/tx/" };
 const out = [];
 for (const x of LIST) {
-  const p = x.chain === "arbitrum" ? arb : rh;
+  const p = x.chain === "arbitrum" ? arb : x.chain === "base" ? base : rh;
   const [t, rc] = await Promise.all([p.getTransaction(x.hash), p.getTransactionReceipt(x.hash)]);
   if (!t || !rc) throw new Error(`not found: ${x.hash}`);
   const b = await p.getBlock(rc.blockNumber);
-  out.push({ ...x, chainId: x.chain === "arbitrum" ? 42161 : 4663, explorer: EXP[x.chain] + x.hash, signer: t.from, signerRole: ROLES[t.from.toLowerCase()] || "contract or third party", to: t.to, block: rc.blockNumber, timeUtc: new Date(b.timestamp * 1000).toISOString(), status: rc.status === 1 ? "success" : "failed" });
+  out.push({ ...x, chainId: x.chain === "arbitrum" ? 42161 : x.chain === "base" ? 8453 : 4663, explorer: EXP[x.chain] + x.hash, signer: t.from, signerRole: ROLES[t.from.toLowerCase()] || "contract or third party", to: t.to, block: rc.blockNumber, timeUtc: new Date(b.timestamp * 1000).toISOString(), status: rc.status === 1 ? "success" : "failed" });
   process.stdout.write(".");
 }
 const doc = {

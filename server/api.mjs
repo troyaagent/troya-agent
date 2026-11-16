@@ -25,6 +25,7 @@ const MODULES = [
   "./proof.mjs",       // proof for checkers: the test wallet's Hyperliquid fills as JSON
   "./record.mjs",      // F13: the Oracle's ledger, every Sentry call graded in public
   "./assay.mjs",       // F14: The Assay, dev, holders, bundles, clusters, wash trades and funders of a coin
+  "./stocks.mjs",      // F17: Stock desk, multipliers, dividends and splits, Morpho loans against stock tokens
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];
 

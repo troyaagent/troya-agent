@@ -60,6 +60,13 @@ function normalize(input) {
     return { type, params: { token: String(p.token).toLowerCase(), symbol: sym, side, total, slices, everyMinutes, maxImpactPct, done: 0, filled: 0, waits: 0, nextAt: Date.now() + 30_000 },
       title: `TWAP ${side === "buy" ? `${total} ETH → ${sym}` : `${total} ${sym} → ETH`} · ${slices} slices every ${everyMinutes} min` };
   }
+  if (type === "loan_guard") {
+    // F17: a Morpho loan against a stock token; fires when its health factor falls under the line (no funds move)
+    const id = String(p.marketId || "");
+    if (!/^0x[0-9a-fA-F]{64}$/.test(id)) throw new HttpError(400, "A loan alert needs the Morpho market id.");
+    const below = Math.min(3, Math.max(1.05, num(p.healthBelow) || 1.3));
+    return { type, params: { marketId: id.toLowerCase(), symbol: untrusted(p.symbol || "stock", 12), healthBelow: below }, title: `Loan alert ${untrusted(p.symbol || "stock", 12)}: health under ${below}` };
+  }
   if (type === "alert") {
     const target = isAddress(String(p.target || "")) ? String(p.target).toLowerCase() : coinOf(p.target);
     const px = num(p.px);
@@ -67,7 +74,7 @@ function normalize(input) {
     const direction = p.direction === "below" ? "below" : "above";
     return { type, params: { target, direction, px, unit: isAddress(target) ? "ETH" : "USD" }, title: `Alert ${isAddress(target) ? untrusted(p.symbol || target.slice(0, 8), 20) : target} ${direction === "below" ? "≤" : "≥"} ${px}` };
   }
-  throw new HttpError(400, "Unknown playbook type. Use stop_loss, take_profit, dca, twap or alert.");
+  throw new HttpError(400, "Unknown playbook type. Use stop_loss, take_profit, dca, twap, loan_guard or alert.");
 }
 
 export async function createWatch(address, input) {
@@ -160,7 +167,7 @@ async function tick() {
     const active = list.filter((w) => w.status === "active");
     if (!active.length) return;
     let mids = null;
-    const needPerp = active.some((w) => w.type !== "dca" && w.type !== "twap" && !(w.type === "alert" && isAddress(w.params.target)));
+    const needPerp = active.some((w) => !["dca", "twap", "loan_guard"].includes(w.type) && !(w.type === "alert" && isAddress(w.params.target)));
     if (needPerp) mids = Object.fromEntries((await hlMarkets()).map((m) => [m.coin.toUpperCase(), m.midPx || m.markPx]));
     const updates = new Map();
     for (const w of active) {
@@ -199,6 +206,18 @@ async function tick() {
             } else u.params = { ...w.params, done };
             if (done >= w.params.runs || (u.params.spent || 0) >= w.params.budget - 1e-9) u.status = "done";
           }
+        } else if (w.type === "loan_guard") {
+          // once a minute is enough for a loan; re-arms when the health factor recovers
+          if (Date.now() - (w.lastCheck || 0) >= 60_000) {
+            const { stockLoans } = await import("./stocks.mjs");
+            const loan = (await stockLoans(w.address)).loans.find((x) => x.marketId === w.params.marketId);
+            u.lastPrice = loan?.health ?? null;
+            if (loan?.health != null && loan.health < w.params.healthBelow && !w.params.armedOff) {
+              const o = await fire(w, loan.health.toFixed(2), null, `Your Morpho loan on ${w.params.symbol} is at health ${loan.health.toFixed(2)} (liquidation at 1.00, around $${loan.liquidationPriceUsd?.toFixed(2)} per ${w.params.symbol}). Repay some USDG or post more ${w.params.symbol} in Stock desk, Borrow.`);
+              u.params = { ...w.params, armedOff: true }; u.fires = [...w.fires, { t: Date.now(), px: loan.health, outcome: o }].slice(-30);
+            } else if (loan?.health != null && loan.health >= w.params.healthBelow + 0.1 && w.params.armedOff) u.params = { ...w.params, armedOff: false };
+            else if (!loan) u.lastError = "No loan in this market from this wallet right now.";
+          } else u.lastCheck = w.lastCheck;
         } else if (w.type === "twap") {
           if (Date.now() >= w.params.nextAt) Object.assign(u, await twapStep(w));
         } else if (w.type === "dca") {

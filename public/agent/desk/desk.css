@@ -429,3 +429,19 @@ html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color:
 .lt-book { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font: 400 12px/1.6 var(--mono); font-variant-numeric: tabular-nums; }
 .lt-book > div > div { display: flex; justify-content: space-between; }
 .lt-legal { margin-top: 14px; max-width: 900px; }
+
+
+/* F17: Stock desk */
+.sd-tabs { margin: 4px 0 14px; }
+.sd-body { display: grid; gap: 14px; }
+.sd-panel { display: grid; gap: 10px; padding: 14px 16px; }
+.sd-panel h3 { margin: 0; font-size: 14px; }
+.sd-tbl { display: grid; }
+.sd-row { display: grid; grid-template-columns: minmax(180px, 2fr) 1fr 0.8fr 1.4fr auto; align-items: center; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px; font-variant-numeric: tabular-nums; }
+.sd-hd { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.sd-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sd-name img { border-radius: 50%; flex: none; }
+.sd-name small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sd-pend { color: var(--warn); }
+.sd-legs { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 720px) { .sd-row { grid-template-columns: 1fr auto; } .sd-row > span:nth-child(3), .sd-row > span:nth-child(4) { display: none; } }

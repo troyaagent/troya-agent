@@ -139,7 +139,7 @@ const lc = (a) => String(a || "").toLowerCase();
 
 /* ---------------- DexScreener (token detail + stocks: fast, 300 calls/min) ---------------- */
 const DS = "https://api.dexscreener.com/tokens/v1/robinhood/";
-async function dsPairs(addrs) {
+export async function dsPairs(addrs) {
   const list = [...new Set(addrs.map(lc))].filter((a) => ADDR_RE.test(a));
   const out = [];
   for (let i = 0; i < list.length; i += 30) {
@@ -150,7 +150,7 @@ async function dsPairs(addrs) {
   return out;
 }
 // best DexScreener pair per base token (deepest liquidity) → board-style row
-function dsRows(pairs, ethUsd) {
+export function dsRows(pairs, ethUsd) {
   const best = new Map();
   for (const p of pairs || []) {
     const a = lc(p.baseToken?.address);

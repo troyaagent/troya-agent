@@ -60,7 +60,7 @@ const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const KNOWN_OTHER = {
   "base:0x4200000000000000000000000000000000000006": "eth-color.svg", "arbitrum:0x82af49447d8a07e3bd95bd0d56f35241523fbab1": "eth-color.svg",
   "base:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "usdc.svg", "arbitrum:0xaf88d065e77c8cc2239327c5edb3a432268e5831": "usdc.svg",
-  "arbitrum:0x912ce59144191c1204e64559fe8253a0e49e6548": "arbitrum.png",
+  "arbitrum:0x912ce59144191c1204e64559fe8253a0e49e6548": "arbitrum-disc.svg",
 };
 async function otherSources(chain, a) {
   const out = [];

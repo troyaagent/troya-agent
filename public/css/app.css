@@ -262,6 +262,7 @@ textarea.input { height: auto; padding: 10px 11px; resize: vertical; line-height
 .tok-wrap > .tok-net img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 /* network logos keep a thin light ring so dark marks (Arbitrum's navy disc) never melt into the dark page */
-.chain-logo { border-radius: 50%; box-shadow: 0 0 0 1px rgba(255, 255, 255, .34); }
-.tok-wrap > .tok-net { box-shadow: 0 0 0 1.5px var(--bg-2), 0 0 0 2.5px rgba(255, 255, 255, .55); }
-.tok-ico { box-shadow: 0 0 0 1px rgba(255, 255, 255, .14); }
+.chain-logo { border-radius: 50%; box-shadow: 0 0 0 1px var(--logo-ring, rgba(255, 255, 255, .34)); }
+.tok-wrap > .tok-net { box-shadow: 0 0 0 1.5px var(--bg-2), 0 0 0 2.5px var(--logo-ring-2, rgba(255, 255, 255, .55)); }
+.pad-logo, .wallet-logo { box-shadow: 0 0 0 1px var(--logo-ring, rgba(255, 255, 255, .34)); }
+.tok-ico { box-shadow: 0 0 0 1px var(--logo-edge, rgba(255, 255, 255, .14)); }

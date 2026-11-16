@@ -9,6 +9,8 @@ const SITE = window.SITE || {};
 
 /* ---------- icons for the sidebar (stroke, 24 grid) ---------- */
 const SI = {
+  sun: "M12 3v1.5M12 19.5V21M3 12h1.5M19.5 12H21M5.6 5.6l1.1 1.1M17.3 17.3l1.1 1.1M5.6 18.4l1.1-1.1M17.3 6.7l1.1-1.1M12 7.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z",
+  moon: "M20.5 13.2A8.5 8.5 0 1 1 10.8 3.5a6.6 6.6 0 0 0 9.7 9.7z",
   desk: "M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z",
   swap: "M7 16V4m0 0L3 8m4-4 4 4M17 8v12m0 0 4-4m-4 4-4-4",
   perps: "M3 17l6-6 4 4 8-8M15 7h6v6",
@@ -160,6 +162,13 @@ clear($("[data-tabbar]"),
 $(".d-search-ico").append(si("search"));
 const right = $("[data-right]");
 let inboxCount = 0;
+// dark (default) or light, remembered in this browser
+function setTheme(t) {
+  if (t === "light") document.documentElement.dataset.theme = "light"; else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem("troya.theme", t); } catch {}
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", t === "light" ? "#f5f3ee" : "#0a0a0a");
+  renderRight();
+}
 function renderRight() {
   const c = chainById(wallet.chainId);
   const chip = h("span", { class: `chain-chip ${wallet.address ? "" : "off"}`, title: wallet.address ? `Wallet network: ${c?.name || "chain " + wallet.chainId}` : "Main network" },
@@ -169,7 +178,9 @@ function renderRight() {
     ? h("button", { class: "wallet-btn on", type: "button", onclick: walletMenu }, h("i", { class: "av" }), short(wallet.address))
     : h("button", { class: "wallet-btn d-connect", type: "button", onclick: () => openConnect(), "aria-label": "Connect wallet" }, icon("wallet"), h("span", {}, "Connect", h("span", { class: "wb-more" }, " wallet")));
   const gear = h("button", { class: "icon-btn", type: "button", "aria-label": "Settings", onclick: openSettings }, icon("gear"));
-  clear(right, chip, bell, gear, wbtn);
+  const light = document.documentElement.dataset.theme === "light";
+  const mode = h("button", { class: "icon-btn d-mode", type: "button", "aria-label": light ? "Dark mode" : "Light mode", title: light ? "Dark mode" : "Light mode", onclick: () => setTheme(light ? "dark" : "light") }, si(light ? "moon" : "sun"));
+  clear(right, chip, bell, mode, gear, wbtn);
   for (const el of document.querySelectorAll("[data-inbox]")) el.textContent = inboxCount ? (inboxCount > 9 ? "9+" : inboxCount) : "";
 }
 function walletMenu() {

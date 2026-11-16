@@ -210,7 +210,7 @@ export async function getHypeUsd() {
 
 /* ---------------- Robinhood Chain board (GeckoTerminal) ---------------- */
 const HUBS = new Set([lc(RH.weth), lc(RH.usdg), "0x0000000000000000000000000000000000000000"]);
-const board = { rows: new Map(), updatedAt: 0, refreshing: null, error: null, volumeUsd: 0 };
+const board = { rows: new Map(), updatedAt: 0, refreshing: null, error: null, volumeUsd: 0, cursor: 0 };
 // The board is saved to data/board.json and read back at boot: a full pass takes minutes at GeckoTerminal's pace, so a
 // restart (or a 429 spell) would otherwise leave the Market with only the first page or nothing at all.
 const BOARD_FILE = process.env.DATA_DIR ? path.join(process.env.DATA_DIR, "board.json") : null;
@@ -222,7 +222,7 @@ let boardSaveTimer = null;
     const s = JSON.parse(readFileSync(BOARD_FILE, "utf8"));
     if (!(Date.now() - (s.updatedAt || 0) < BOARD_MAX_AGE) || !Array.isArray(s.rows)) return;
     board.rows = new Map(s.rows.filter((t) => t?.address).map((t) => [t.address, t]));
-    board.updatedAt = s.updatedAt; board.volumeUsd = s.volumeUsd || 0;
+    board.updatedAt = s.updatedAt; board.volumeUsd = s.volumeUsd || 0; board.cursor = Number.isInteger(s.cursor) && s.cursor >= 0 ? s.cursor : 0;
     for (const t of board.rows.values()) if (t.image) IMAGES.set(t.address, t.image);
   } catch {}
 })();
@@ -232,7 +232,7 @@ function saveBoard() {
     boardSaveTimer = null;
     try {
       const tmp = BOARD_FILE + ".tmp";
-      await writeFile(tmp, JSON.stringify({ updatedAt: board.updatedAt, volumeUsd: board.volumeUsd, rows: [...board.rows.values()].map(clean) }));
+      await writeFile(tmp, JSON.stringify({ updatedAt: board.updatedAt, volumeUsd: board.volumeUsd, cursor: board.cursor, rows: [...board.rows.values()].map(clean) }));
       await rename(tmp, BOARD_FILE);
     } catch (e) { console.warn("[market] board save:", e.message); }
   }, 5000);
@@ -312,7 +312,12 @@ async function refreshBoard() {
     const map = new Map();
     const v4seen = [];
     let ok = 0;
-    for (const pq of PAGES) {
+    // a pass picks up where the last one stopped (the cursor is saved with the board), so restarts in quick succession
+    // still walk every page instead of fetching page 1 again and never reaching the launchpads
+    const start = (board.cursor || 0) % PAGES.length;
+    for (let k = 0; k < PAGES.length; k++) {
+      const idx = (start + k) % PAGES.length, pq = PAGES[idx];
+      board.cursor = (idx + 1) % PAGES.length;
       try {
         const d = await gecko(pq);
         ok++;
@@ -322,7 +327,7 @@ async function refreshBoard() {
           fold(map, pr, ethUsd);
           if (/^0x[0-9a-f]{64}$/.test(pr.pool) && /uniswap-v4|pons-v2-dex/.test(pr.dex)) v4seen.push({ id: pr.pool, a: pr.base, b: pr.quote, liq: pr.liquidityUsd || 0 });
         }
-        if (pq.startsWith("pools?page=1&")) publish(map);
+        publish(map);
       } catch (e) { board.error = e.message; if (e.status === 429) await new Promise((r) => setTimeout(r, 30_000)); }
     }
     if (!ok) throw new Error(board.error || "GeckoTerminal did not answer");

@@ -10,7 +10,6 @@ const FILE = "record.json";
 const SENTRY = "sentry.json";
 const H = 3600e3, DAY = 24 * H, TICK = 5 * 60e3;
 const LIVE_LAG = 3 * 60e3;           // noticed more than 3 min after the post → the price at the call comes from candles
-const BACKFILL_PER_TICK = 5;          // GeckoTerminal is rate-limited; old calls are filled a few at a time
 const KEEP = 1000;
 let store, timer, busy = false;
 
@@ -71,58 +70,71 @@ async function sample(c) {
 }
 
 /* ---------- sync with Sentry's posts ---------- */
-export async function noteCall({ token, symbol, at = Date.now(), post = null, source = null }) {
-  if (!store || !token) return;
-  const d = await store.readJson(FILE, { calls: {} });
-  const k = lc(token);
-  if (d.calls[k]) return;
-  const c = { token: k, symbol: symbol || null, at, post, source, status: "watching", via: "live" };
-  if (Date.now() - at < LIVE_LAG) await sample(c).catch(() => {});
-  d.calls[k] = c;
-  await store.writeJson(FILE, trim(d));
-}
+// one copy in memory, shared by the live loop and the back-fill loop, written to disk after each pass
+let mem = null;
+async function state() { mem ||= await store.readJson(FILE, { calls: {} }); return mem; }
+async function save() { if (mem) await store.writeJson(FILE, trim(mem)); }
 function trim(d) {
   const all = Object.values(d.calls).sort((a, b) => b.at - a.at);
   if (all.length > KEEP) d.calls = Object.fromEntries(all.slice(0, KEEP).map((c) => [c.token, c]));
   return d;
 }
+export async function noteCall({ token, symbol, at = Date.now(), post = null, source = null }) {
+  if (!store || !token) return;
+  const d = await state();
+  const k = lc(token);
+  if (d.calls[k]) return;
+  const c = { token: k, symbol: symbol || null, at, post, source, status: "watching", via: Date.now() - at < LIVE_LAG ? "live" : "pending-candles" };
+  d.calls[k] = c;
+  if (c.via === "live") await sample(c).catch(() => {});
+  await save();
+}
 
+// live loop: picks up new Sentry posts and samples every call still inside its first day
 async function tick() {
   if (busy) return;
   busy = true;
   try {
-    const d = await store.readJson(FILE, { calls: {} });
+    const d = await state();
     const s = await store.readJson(SENTRY, {});
     const now = Date.now();
-    // every posted Sentry call (posts carry the t.me link)
-    for (const r of s.recent || []) {
-      if (!r.posted || !r.token || d.calls[lc(r.token)]) continue;
-      const late = now - (r.at || now) > LIVE_LAG;
-      d.calls[lc(r.token)] = { token: lc(r.token), symbol: r.symbol || null, at: r.at || now, post: r.post || null, source: r.source || null, status: "watching", via: late ? "pending-candles" : "live" };
-    }
+    const add = (tok, at, extra = {}) => {
+      const k = lc(tok);
+      if (!tok || !at || d.calls[k]) return;
+      d.calls[k] = { token: k, symbol: null, at, post: null, source: null, status: "watching", via: now - at > LIVE_LAG ? "pending-candles" : "live", ...extra };
+    };
+    for (const r of s.recent || []) if (r.posted) add(r.token, r.at || now, { symbol: r.symbol || null, post: r.post || null, source: r.source || null });
     // older posts Sentry still remembers (token → time posted), beyond the last 200 results it keeps in full
-    for (const [tok, at] of Object.entries(s.posted || {})) {
-      if (!tok || !Number(at) || d.calls[lc(tok)]) continue;
-      d.calls[lc(tok)] = { token: lc(tok), symbol: null, at: Number(at), post: null, source: null, status: "watching", via: now - Number(at) > LIVE_LAG ? "pending-candles" : "live" };
-    }
-    let filled = 0;
-    for (const c of Object.values(d.calls).sort((a, b) => b.at - a.at)) {
-      if (c.status !== "watching") continue;
-      if (c.via === "pending-candles" || (!c.p0 && now - c.at > LIVE_LAG)) {
-        if (filled >= BACKFILL_PER_TICK) continue;
-        filled++;
-        const ok = await fromCandles(c).catch(() => false);
-        if (!ok) { c.tries = (c.tries || 0) + 1; if (c.tries >= 6) c.status = "no-data"; }
-        // once the price at the call is known, a call still inside its first day keeps going live
-        if (ok && c.status === "watching" && now - c.at < DAY) c.via = "candles+live";
-        continue;
-      }
+    for (const [tok, at] of Object.entries(s.posted || {})) add(tok, Number(at));
+    for (const c of Object.values(d.calls)) {
+      if (c.status !== "watching" || c.via === "pending-candles" || !c.p0 && now - c.at > LIVE_LAG) continue;
       if (now - (c.last || 0) >= TICK - 5000) await sample(c).catch(() => {});
     }
-    await store.writeJson(FILE, trim(d));
+    await save();
   } catch (e) {
     console.warn("[record]", e.message);
   } finally { busy = false; }
+}
+
+// back-fill loop: one call at a time from GeckoTerminal candles (slow and rate-limited, so it never holds up the live loop)
+let filling = false;
+async function backfill() {
+  if (filling) return;
+  filling = true;
+  try {
+    const d = await state();
+    const now = Date.now();
+    const c = Object.values(d.calls).filter((x) => x.status === "watching" && (x.via === "pending-candles" || (!x.p0 && now - x.at > LIVE_LAG)))
+      .sort((a, b) => (a.tries || 0) - (b.tries || 0) || b.at - a.at)[0];
+    if (!c) return;
+    const ok = await fromCandles(c).catch(() => false);
+    if (!ok) { c.tries = (c.tries || 0) + 1; if (c.tries >= 6) c.status = "no-data"; }
+    // once the price at the call is known, a call still inside its first day keeps going live
+    if (ok && c.status === "watching" && now - c.at < DAY) c.via = "candles+live";
+    await save();
+  } catch (e) {
+    console.warn("[record] backfill:", e.message);
+  } finally { filling = false; }
 }
 
 /* ---------- the public view ---------- */
@@ -137,7 +149,7 @@ function view(c) {
 }
 function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 export async function recordView({ limit = 100 } = {}) {
-  const d = await store.readJson(FILE, { calls: {} });
+  const d = await state();
   const calls = Object.values(d.calls).sort((a, b) => b.at - a.at).map(view);
   const graded = calls.filter((c) => c.result);
   const r24 = graded.map((c) => c.change24h).filter((x) => x != null);
@@ -163,5 +175,6 @@ export async function register(r, ctx) {
   if (process.env.RECORD === "0") return;
   clearInterval(timer);
   timer = setInterval(() => tick().catch(() => {}), 60_000);
+  setInterval(() => backfill().catch(() => {}), 8_000);
   setTimeout(() => tick().catch(() => {}), 15_000);
 }

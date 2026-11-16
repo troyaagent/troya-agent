@@ -180,9 +180,11 @@ async function poolsOfToken(t) {
 // factory's pools for ETH/USDG and every stock token against USDG and ETH
 async function topPoolAddrs() {
   return cached("lp:top", 3600_000, async () => {
-    const d = await geckoApi(`dexes/${DEX}/pools?sort=h24_volume_usd_desc&page=1`, { hi: true }).catch(() => null);
-    const rows = gtRows(d).map((x) => x.address);
-    if (rows.length >= 5) return rows;
+    // GeckoTerminal gets 6 s; past that the factory answers now and GeckoTerminal's list lands for the next hour
+    const gt = geckoApi(`dexes/${DEX}/pools?sort=h24_volume_usd_desc&page=1`, { hi: true }).then((d) => gtRows(d).map((x) => x.address)).catch(() => []);
+    const rows = await Promise.race([gt, new Promise((r) => setTimeout(() => r(null), 6000))]);
+    if (rows?.length >= 5) { saveVol(); return rows; }
+    if (rows === null) gt.then((x) => { if (x.length >= 5) { memo.set("lp:top", { at: Date.now(), v: x }); saveVol(); } });
     const pairs = [...FEES.map((f) => [WETH, USDG, f]), ...STOCKS.flatMap((s) => [[s.address, USDG, 500], [s.address, WETH, 500], [s.address, USDG, 3000]])];
     const r = await multicall(pairs.map(([a, b, f]) => ({ to: ADDR.v3Factory, data: factoryI.encodeFunctionData("getPool", [a, b, f]) })));
     return r.map((x) => lc(dec(factoryI, "getPool", x)?.[0] || "")).filter((a) => a && !/^0x0{40}$/.test(a));
@@ -226,7 +228,11 @@ async function volatility(pool, bg = false) {
 // measured volatility survives a restart (a deploy would otherwise send every pool back to GeckoTerminal)
 let volFile = null, saveT = null;
 async function loadVol() {
-  try { for (const [k, v] of Object.entries(JSON.parse(await readFile(volFile, "utf8")))) if (v?.hourly > 0) memo.set(`lp:vol:${k}`, { at: v.at, v: { hourly: v.hourly, samples: v.samples } }); } catch {}
+  try {
+    const j = JSON.parse(await readFile(volFile, "utf8"));
+    if (Array.isArray(j.__top?.v) && j.__top.v.length) memo.set("lp:top", { at: j.__top.at, v: j.__top.v });
+    for (const [k, v] of Object.entries(j)) if (v?.hourly > 0) memo.set(`lp:vol:${k}`, { at: v.at, v: { hourly: v.hourly, samples: v.samples } });
+  } catch {}
 }
 function saveVol() {
   if (!volFile || saveT) return;
@@ -234,6 +240,8 @@ function saveVol() {
     saveT = null;
     const o = {};
     for (const [k, h] of memo) if (k.startsWith("lp:vol:") && h.v?.hourly > 0) o[k.slice(7)] = { ...h.v, at: h.at };
+    const top = memo.get("lp:top");
+    if (top?.v?.length) o.__top = { at: top.at, v: top.v };
     await writeFile(volFile, JSON.stringify(o)).catch(() => {});
   }, 5000);
 }

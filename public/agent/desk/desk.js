@@ -4,6 +4,7 @@
 import { h, $, clear, icon, toast, modal, short, store, chainLogo, tokenIcon } from "/agent/js/ui.js";
 import { wallet, onWallet, openConnect, restore, disconnect, signIn, CHAINS, chainById } from "/agent/js/wallet.js";
 import { api } from "/agent/js/api.js";
+import { chromeIcon } from "./chrome-icons.js";
 
 const SITE = window.SITE || {};
 
@@ -44,6 +45,8 @@ const SI = {
   spark: "M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8",
 };
 export function si(name, cls = "") {
+  const chrome = chromeIcon(name, cls);         // Desk 2.0: the chrome set first, the stroke set for anything else
+  if (chrome) return chrome;
   const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   el.setAttribute("viewBox", "0 0 24 24"); el.setAttribute("fill", "none"); el.setAttribute("stroke", "currentColor");
   el.setAttribute("stroke-width", "1.6"); el.setAttribute("stroke-linecap", "round"); el.setAttribute("stroke-linejoin", "round"); el.setAttribute("aria-hidden", "true");
@@ -133,6 +136,12 @@ async function route() {
   document.title = `${act?.t || page[0].toUpperCase() + page.slice(1)} · Troya Agent`;
 }
 
+/* ---------- the room: soft chrome light behind every page (dark theme) ---------- */
+const room = h("div", { class: "d-room", "aria-hidden": "true" }, h("canvas", { class: "d-silk" }));
+document.body.prepend(room);
+let silk = null;
+import("./silk.js").then((m) => { silk = m.mountSilk(room.firstChild, 0.5); if (!silk) room.classList.add("flat"); }).catch(() => room.classList.add("flat"));
+
 /* ---------- sidebar ---------- */
 clear($("[data-nav]"), GROUPS.map(([g, items]) => h("div", { class: "d-group" },
   g ? h("h5", {}, g) : null,
@@ -172,18 +181,19 @@ let inboxCount = 0;
 function setTheme(t) {
   if (t === "light") document.documentElement.dataset.theme = "light"; else delete document.documentElement.dataset.theme;
   try { localStorage.setItem("troya.theme", t); } catch {}
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", t === "light" ? "#f5f3ee" : "#0a0a0a");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", t === "light" ? "#f5f3ee" : "#03060a");
   renderRight();
+  requestAnimationFrame(() => silk?.resume());
 }
 function renderRight() {
   const c = chainById(wallet.chainId);
   const chip = h("span", { class: `chain-chip ${wallet.address ? "" : "off"}`, title: wallet.address ? `Wallet network: ${c?.name || "chain " + wallet.chainId}` : "Main network" },
     chainLogo(wallet.address ? (c?.key || "") : "robinhood", 16), wallet.address ? (c?.name || `Chain ${wallet.chainId}`) : "Robinhood Chain");
-  const bell = h("a", { class: "icon-btn", href: "#/portfolio/inbox", "aria-label": "Inbox" }, icon("bell"), inboxCount ? h("span", { class: "badge" }, inboxCount > 9 ? "9+" : inboxCount) : null);
+  const bell = h("a", { class: "icon-btn", href: "#/portfolio/inbox", "aria-label": "Inbox" }, si("inbox"), inboxCount ? h("span", { class: "badge" }, inboxCount > 9 ? "9+" : inboxCount) : null);
   const wbtn = wallet.address
     ? h("button", { class: "wallet-btn on", type: "button", onclick: walletMenu }, h("i", { class: "av" }), short(wallet.address))
-    : h("button", { class: "wallet-btn d-connect", type: "button", onclick: () => openConnect(), "aria-label": "Connect wallet" }, icon("wallet"), h("span", {}, "Connect", h("span", { class: "wb-more" }, " wallet")));
-  const gear = h("button", { class: "icon-btn", type: "button", "aria-label": "Settings", onclick: openSettings }, icon("gear"));
+    : h("button", { class: "wallet-btn d-connect", type: "button", onclick: () => openConnect(), "aria-label": "Connect wallet" }, si("wallet"), h("span", {}, "Connect", h("span", { class: "wb-more" }, " wallet")));
+  const gear = h("button", { class: "icon-btn", type: "button", "aria-label": "Settings", onclick: openSettings }, si("gear"));
   const light = document.documentElement.dataset.theme === "light";
   const mode = h("button", { class: "icon-btn d-mode", type: "button", "aria-label": light ? "Dark mode" : "Light mode", title: light ? "Dark mode" : "Light mode", onclick: () => setTheme(light ? "dark" : "light") }, si(light ? "moon" : "sun"));
   clear(right, chip, bell, mode, gear, wbtn);

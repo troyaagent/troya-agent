@@ -527,11 +527,12 @@ export function floorMinOut(quoteMin, requested, sim = false) {
 }
 // KyberSwap fallback quote. Impact = how much worse the full size fills than a 1% probe; fees and spread come from the probe's
 // USD values when Kyber prices both sides. The plan carries Kyber's own route; buildSwapTx turns it into calldata on the server.
-async function kyberQuote(tin, tout, amt, coin, ethUsd, warnings) {
+async function kyberQuote(tin, tout, amt, coin, ethUsd, warnings, light = false) {
   const probeAmt = amt / 100n > 0n ? amt / 100n : 1n;
+  // light (the Gate's own test sell): only the route and the amount out are needed, so skip the probe and the round trip
   const [full, probe] = await Promise.all([
     kyberRoute({ tokenIn: tin, tokenOut: tout, amountIn: amt }),
-    kyberRoute({ tokenIn: tin, tokenOut: tout, amountIn: probeAmt }).catch(() => null),
+    light ? null : kyberRoute({ tokenIn: tin, tokenOut: tout, amountIn: probeAmt }).catch(() => null),
   ]);
   let impact = null;
   if (probe && probe.out > 0n) impact = Math.max(0, 1 - Number((full.out * probeAmt * 1000000n) / (probe.out * amt)) / 1000000);
@@ -619,7 +620,7 @@ export async function quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slip
   const r = await routerQuote(tin, tout, amt, hubs);
   if (!r.ok) {
     // not on a Pons curve or a Uniswap pool Troya can reach: ask KyberSwap (Long.xyz, Bankr, Frontier, Virtuals, Ramses, Aerodrome …)
-    const kq = KYBER_ON ? await kyberQuote(tin, tout, amt, coin, ethUsd, warnings).catch(() => null) : null;
+    const kq = KYBER_ON ? await kyberQuote(tin, tout, amt, coin, ethUsd, warnings, _sim).catch(() => null) : null;
     if (kq) return finish(kq);
     throw new HttpError(404, `${r.reason} Troya routes Pons curves and Uniswap v3/v4 pools on Robinhood Chain, plus the other Robinhood Chain venues through KyberSwap.`, { code: "NO_ROUTE" });
   }

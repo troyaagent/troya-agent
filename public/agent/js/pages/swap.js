@@ -88,7 +88,7 @@ export async function mount(view, ctx) {
   }
 
   function tokBtn(el, t) {
-    clear(el, t ? [tokenIcon(t, "sm"), h("b", {}, t.symbol), icon("arrowRight", "chev")] : [h("span", {}, "Select token"), icon("arrowRight", "chev")]);
+    clear(el, t ? [tokenIcon({ ...t, chain: "robinhood" }, "sm"), h("b", {}, t.symbol), icon("arrowRight", "chev")] : [h("span", {}, "Select token"), icon("arrowRight", "chev")]);
     el.classList.toggle("empty", !t);
   }
 
@@ -235,7 +235,7 @@ export async function mount(view, ctx) {
       if (other && (isNative(t) ? isNative(other) : !isNative(other) && other.address === t.address)) { if (side === "sell") st.buy = null; else st.sell = ETH; }
       m.close(); reset(); paint(); refreshBal(); requote();
     };
-    const row = (t, extra) => h("button", { class: "tp-row", type: "button", onclick: () => choose(t) }, tokenIcon(t, "sm"),
+    const row = (t, extra) => h("button", { class: "tp-row", type: "button", onclick: () => choose(t) }, tokenIcon({ ...t, chain: "robinhood" }, "sm"),
       h("span", { class: "tp-name" }, h("b", {}, t.symbol), h("small", {}, t.name || (t.address === "native" ? "Native gas token" : short(t.address)))),
       extra ? h("span", { class: "tp-extra" }, extra) : null);
     let seq = 0;

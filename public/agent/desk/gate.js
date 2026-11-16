@@ -43,7 +43,7 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
     const passed = r.checks.filter((c) => c.status === "pass").length;
     clear(out,
       h("div", { class: "dk-gate-h" },
-        tokenIcon({ symbol: r.symbol, address: a }, ""),
+        tokenIcon({ symbol: r.symbol, address: a, chain: "robinhood" }, ""),
         h("div", { class: "dk-gate-id" },
           h("b", {}, r.symbol ? `$${r.symbol}` : short(a)), h("span", {}, [r.name, short(a)].filter(Boolean).join(" · "))),
         h("div", { class: "dk-gate-v" },

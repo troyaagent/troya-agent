@@ -18,7 +18,7 @@ const lower = (s) => String(s || "").toLowerCase();
 
 // Kyber refuses bursts (403 "Forbidden" / 429), and one Gate run makes several calls, so calls go out one at a time with a
 // short gap, and a refused call waits and tries again.
-const GAP_MS = Math.max(100, Number(process.env.KYBER_GAP_MS) || 400);
+const GAP_MS = Math.max(100, Number(process.env.KYBER_GAP_MS) || 600);
 let chain = Promise.resolve(), last = 0;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function slot() {
@@ -30,14 +30,14 @@ async function call(chainId, path, { method = "GET", body, timeout = 12000 } = {
   const slug = SLUG[chainId];
   if (!slug) throw new Error(`KyberSwap is not set up for chain ${chainId}`);
   let lastErr;
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     await slot();
     const res = await fetch(`${BASE}/${slug}/api/v1/${path}`, {
       method, signal: AbortSignal.timeout(timeout),
       headers: { accept: "application/json", "x-client-id": CLIENT, ...(body ? { "content-type": "application/json" } : {}) },
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (res.status === 403 || res.status === 429) { lastErr = new Error("KyberSwap is busy, try again in a moment"); await sleep(800 * 2 ** attempt); continue; }
+    if (res.status === 403 || res.status === 429) { lastErr = new Error("KyberSwap is busy, try again in a moment"); last = Date.now() + 1000 * 2 ** attempt; await sleep(1000 * 2 ** attempt); continue; }
     let j;
     try { j = await res.json(); } catch { throw new Error(`KyberSwap returned ${res.status}`); }
     if (!res.ok || String(j.code) !== "0" || !j.data) throw new Error(j?.message ? `KyberSwap: ${j.message}` : `KyberSwap returned ${res.status}`);
@@ -46,10 +46,13 @@ async function call(chainId, path, { method = "GET", body, timeout = 12000 } = {
   throw lastErr;
 }
 
+const CACHE = new Map(), CACHE_MS = 15_000;
 /** kyberRoute({ tokenIn, tokenOut, amountIn }) — addresses, or ZERO / "native" for ETH; amountIn as bigint. */
 export async function kyberRoute({ chainId = 4663, tokenIn, tokenOut, amountIn }) {
   const t = (a) => (!a || a === "native" || /^0x0{40}$/i.test(a) ? KYBER_NATIVE : a);
   const qs = new URLSearchParams({ tokenIn: t(tokenIn), tokenOut: t(tokenOut), amountIn: BigInt(amountIn).toString(), gasInclude: "true" });
+  const key = `${chainId}:${qs}`, hit = CACHE.get(key);
+  if (hit && Date.now() - hit.t < CACHE_MS) return hit.v;
   const d = await call(chainId, `routes?${qs}`);
   const rs = d.routeSummary;
   if (!rs?.amountOut || BigInt(rs.amountOut) <= 0n) throw new Error("KyberSwap found no route");
@@ -57,11 +60,14 @@ export async function kyberRoute({ chainId = 4663, tokenIn, tokenOut, amountIn }
   if (!ROUTERS.has(lower(router))) throw new Error("KyberSwap answered with an unknown router, so the route was not used");
   const paths = (rs.route || []).map((leg) => leg.map((s) => ({ pool: s.pool, tokenIn: s.tokenIn, tokenOut: s.tokenOut, exchange: s.exchange, poolType: s.poolType })));
   const exchanges = [...new Set(paths.flat().map((s) => s.exchange))];
-  return {
+  const v = {
     routeSummary: rs, router, out: BigInt(rs.amountOut),
     inUsd: Number(rs.amountInUsd) || null, outUsd: Number(rs.amountOutUsd) || null, gasUsd: Number(rs.gasUsd) || null,
     paths, exchanges,
   };
+  CACHE.set(key, { t: Date.now(), v });
+  if (CACHE.size > 300) for (const [k, x] of CACHE) if (Date.now() - x.t > CACHE_MS) CACHE.delete(k);
+  return v;
 }
 
 /** kyberBuild({ routeSummary, router, sender, slippageBps, deadline }) → { to, data, value, amountOut } */

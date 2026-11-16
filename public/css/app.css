@@ -255,3 +255,8 @@ textarea.input { height: auto; padding: 10px 11px; resize: vertical; line-height
 @media (max-width: 480px) { .wb-more { display: none; } .a-brand { white-space: nowrap; } }
 @media (max-width: 400px) { .a-brand { font-size: 0; gap: 0; } }
 @media (max-width: 479px) { .icon-btn.gh-link { display: none; } }
+
+/* token icon with a network badge in the corner */
+.tok-wrap { position: relative; display: inline-grid; flex: none; line-height: 0; }
+.tok-wrap > .tok-net { position: absolute; right: -3px; bottom: -2px; width: 46%; height: 46%; min-width: 9px; min-height: 9px; border-radius: 50%; overflow: hidden; background: var(--bg-2); box-shadow: 0 0 0 1.5px var(--bg-2); }
+.tok-wrap > .tok-net img { width: 100%; height: 100%; object-fit: cover; display: block; }

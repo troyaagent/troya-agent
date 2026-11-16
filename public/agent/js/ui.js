@@ -208,7 +208,11 @@ export function tokenIcon(t, size = "") {
   ]);
   const hue = [...(addr || sym || "x")].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
   box.style.background = `linear-gradient(135deg, hsl(${(hue % 60) + 170} 45% 26%), hsl(${(hue % 60) + 190} 50% 14%))`;
-  return box;
+  // network badge in the corner (like a wallet's token list): pass t.chain = "robinhood" | "base" | "arbitrum" | …
+  const net = String(t?.chain || "").toLowerCase();
+  if (!net || !LOGOS.chain[net]) return box;
+  const badge = logoBox("tok-net", "", [logoUrl("chain", net)], net);
+  return h("span", { class: `tok-wrap ${size}` }, box, badge);
 }
 // Hyperliquid market logo (perps, HIP-3 "dex:COIN", spot)
 export function coinIcon(coin, size = "") {

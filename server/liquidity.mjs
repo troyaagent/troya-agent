@@ -7,9 +7,11 @@
 //                                       the fees $1,000 would earn per day at today's volume while in range
 //   GET /api/lp/positions?address=    → the wallet's v3 positions: range, in range or not, token amounts, uncollected
 //                                       fees, value, and how far the price is from each edge
-// Sources: the pool and position contracts on chain; GeckoTerminal for volume, USD prices and candles.
+// Sources: the pool and position contracts on chain; DexScreener for TVL, 24h volume and USD prices (fresh every 2 min);
+// GeckoTerminal for hourly candles (one call per pool per hour, the top pools measured ahead in the background) and the
+// list of busiest pools (one call per hour). Its free quota is shared, so nothing here waits on it twice.
 import { Interface, getAddress, isAddress } from "ethers";
-import { rpc, ADDR } from "./robinhood.mjs";
+import { rpc, ADDR, STOCKS } from "./robinhood.mjs";
 import { geckoApi } from "./market.mjs";
 import { HttpError } from "./api.mjs";
 
@@ -140,37 +142,75 @@ function gtRows(d) {
   });
 }
 
+// TVL, 24h volume and both tokens' USD prices from DexScreener's pair endpoint (30 pools a call, 300 calls a minute)
+const DSP = "https://api.dexscreener.com/latest/dex/pairs/robinhood/";
+async function dsStats(addrs) {
+  const out = new Map(), list = [...new Set(addrs.map(lc))].sort();
+  for (let i = 0; i < list.length; i += 30) {
+    const part = list.slice(i, i + 30);
+    const d = await cached(`lp:ds:${part.join(",")}`, 120_000, async () => {
+      const r = await fetch(DSP + part.join(","), { headers: { accept: "application/json", "user-agent": "troya-agent/0.2" }, signal: AbortSignal.timeout(12000) });
+      if (!r.ok) throw new Error(`DexScreener answered ${r.status}`);
+      return r.json();
+    }, true).catch(() => null);
+    for (const p of d?.pairs || []) {
+      const b = lc(p.baseToken?.address), q = lc(p.quoteToken?.address), pu = Number(p.priceUsd) || null, pn = Number(p.priceNative) || null;
+      out.set(lc(p.pairAddress), { address: lc(p.pairAddress), tvl: Number(p.liquidity?.usd) || 0, vol: Number(p.volume?.h24) || 0, usd: { [b]: pu, [q]: pu && pn ? pu / pn : null } });
+    }
+  }
+  return out;
+}
+const FEES = [100, 500, 3000, 10000];
+// every Uniswap v3 pool of a token against ETH and USDG, straight from the factory, plus any other pair DexScreener knows
+async function poolsOfToken(t) {
+  const quotes = [WETH, USDG].filter((q) => q !== t);
+  const pairs = quotes.flatMap((q) => FEES.map((f) => [q, f]));
+  const r = await multicall(pairs.map(([q, f]) => ({ to: ADDR.v3Factory, data: factoryI.encodeFunctionData("getPool", [t, q, f]) })));
+  const found = r.map((x) => lc(dec(factoryI, "getPool", x)?.[0] || "")).filter((a) => a && !/^0x0{40}$/.test(a));
+  const ds = await cached(`lp:dstoken:${t}`, 300_000, async () => {
+    const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/robinhood/${t}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(12000) });
+    return res.ok ? res.json() : [];
+  }).catch(() => []);
+  for (const p of Array.isArray(ds) ? ds : []) if (p.dexId === "uniswap" && (p.labels || []).includes("v3")) found.push(lc(p.pairAddress));
+  return [...new Set(found)];
+}
+// the busiest pools: GeckoTerminal's list, asked once an hour (served from memory meanwhile); if it cannot answer, the
+// factory's pools for ETH/USDG and every stock token against USDG and ETH
+async function topPoolAddrs() {
+  return cached("lp:top", 3600_000, async () => {
+    const d = await geckoApi(`dexes/${DEX}/pools?sort=h24_volume_usd_desc&page=1`, { hi: true }).catch(() => null);
+    const rows = gtRows(d).map((x) => x.address);
+    if (rows.length >= 5) return rows;
+    const pairs = [...FEES.map((f) => [WETH, USDG, f]), ...STOCKS.flatMap((s) => [[s.address, USDG, 500], [s.address, WETH, 500], [s.address, USDG, 3000]])];
+    const r = await multicall(pairs.map(([a, b, f]) => ({ to: ADDR.v3Factory, data: factoryI.encodeFunctionData("getPool", [a, b, f]) })));
+    return r.map((x) => lc(dec(factoryI, "getPool", x)?.[0] || "")).filter((a) => a && !/^0x0{40}$/.test(a));
+  }, true);
+}
+
 export async function lpPools(token) {
   const t = token && isAddress(token) ? lc(token) : null;
   return cached(`lp:pools:${t || "top"}`, 120_000, async () => {
-    const d = await geckoApi(t ? `tokens/${t}/pools?page=1` : `dexes/${DEX}/pools?sort=h24_volume_usd_desc&page=1`, { hi: true });
-    const rows = gtRows(d).filter((x) => x.tvl >= 1000).slice(0, 20);
-    memo.set(`lp:raw:${t || "top"}`, { at: Date.now(), v: rows });
-    if (!rows.length) return { pools: [], token: t, updatedAt: Date.now(), note: t ? "No Uniswap v3 pool with liquidity for this token on Robinhood Chain." : "" };
-    const pools = await readPools(rows.map((x) => x.address));
-    const gt = new Map(rows.map((x) => [x.address, x]));
-    return { pools: pools.map((p) => present(p, gt.get(p.address))).sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0)), token: t, updatedAt: Date.now(), source: "Uniswap v3 on chain · GeckoTerminal volume and prices" };
-  });
+    const addrs = (t ? await poolsOfToken(t) : await topPoolAddrs()).slice(0, 60);
+    if (!addrs.length) return { pools: [], token: t, updatedAt: Date.now(), note: t ? "No Uniswap v3 pool for this token on Robinhood Chain." : "No pools could be read right now." };
+    const [pools, stats] = await Promise.all([readPools(addrs), dsStats(addrs)]);
+    const list = pools.map((p) => present(p, stats.get(p.address))).filter((p) => t || (p.tvlUsd || 0) >= 1000)
+      .sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0)).slice(0, 25);
+    return { pools: list, token: t, updatedAt: Date.now(), note: list.length ? "" : "No Uniswap v3 pool with liquidity for this token.", source: "Uniswap v3 on chain · DexScreener TVL, volume and prices" };
+  }, true);
 }
 
 async function poolInfo(address) {
   if (!isAddress(address)) throw new HttpError(400, "That is not a pool address.");
   const a = lc(address);
-  const [p] = await readPools([a]);
+  const [[p], stats] = await Promise.all([readPools([a]), dsStats([a])]);
   if (!p) throw new HttpError(404, "Not a Uniswap v3 pool on Robinhood Chain.");
-  const gt = await cached(`lp:gt:${a}`, 120_000, async () => {
-    // a pool already in a fresh pool list needs no second GeckoTerminal call (the queue spaces calls 4 s apart)
-    for (const [k, hit] of memo) if (k.startsWith("lp:raw:") && hit.v && Date.now() - hit.at < 120_000) { const x = hit.v.find((y) => y.address === a); if (x) return x; }
-    const d = await geckoApi(`pools/${a}`, { hi: true }).catch(() => null);
-    return gtRows({ data: d?.data ? [d.data] : [] })[0] || null;
-  });
-  return present(p, gt);
+  return present(p, stats.get(a));
 }
 
 /* ---------- ranges from volatility ---------- */
-async function volatility(pool) {
-  return cached(`lp:vol:${pool}`, 30 * 60_000, async () => {
-    const d = await geckoApi(`pools/${pool}/ohlcv/hour?aggregate=1&limit=300&currency=token`, { hi: true });
+async function volatility(pool, bg = false) {
+  return cached(`lp:vol:${pool}`, 60 * 60_000, async () => {
+    const d = await geckoApi(`pools/${pool}/ohlcv/hour?aggregate=1&limit=300&currency=token`, { hi: !bg });
     const closes = (d?.data?.attributes?.ohlcv_list || []).map((x) => Number(x[4])).filter((x) => x > 0).reverse();
     const r = [];
     for (let i = 1; i < closes.length; i++) r.push(Math.log(closes[i] / closes[i - 1]));
@@ -219,13 +259,6 @@ export async function lpSuggest(pool, days = 7) {
 }
 
 /* ---------- the wallet's positions ---------- */
-// volume, TVL and USD prices for many pools in one GeckoTerminal call
-const gtMulti = (addrs) => cached(`lp:multi:${[...addrs].sort().join(",")}`, 120_000, async () => {
-  if (!addrs.length) return new Map();
-  const d = await geckoApi(`pools/multi/${addrs.slice(0, 30).join(",")}`, { hi: true }).catch(() => null);
-  return new Map(gtRows(d).map((x) => [x.address, x]));
-});
-
 export async function lpPositions(address, only = null) {
   if (!isAddress(address)) throw new HttpError(400, "That is not a valid address.");
   const owner = getAddress(address);
@@ -243,7 +276,7 @@ export async function lpPositions(address, only = null) {
   const pa = await multicall(keys.map((p) => ({ to: ADDR.v3Factory, data: factoryI.encodeFunctionData("getPool", [p.token0, p.token1, p.fee]) })));
   const poolOf = new Map(keys.map((p, i) => [`${lc(p.token0)}:${lc(p.token1)}:${p.fee}`, lc(dec(factoryI, "getPool", pa[i])?.[0] || "")]));
   const pools = new Map((await readPools([...new Set([...poolOf.values()].filter((x) => x && !/^0x0{40}$/.test(x)))])).map((p) => [p.address, p]));
-  const gt = await gtMulti([...pools.keys()]);
+  const gt = await dsStats([...pools.keys()]);
   // uncollected fees: what collect would pay right now, simulated from the owner (it must be the caller)
   const fees = await Promise.all(raw.map(async (x) => {
     try {
@@ -307,7 +340,16 @@ export async function lpRangeFor(pair, days = 7) {
   };
 }
 
+// measure the busiest pools ahead, as background jobs, so their ranges open at once
+async function warm() {
+  try {
+    const top = (await lpPools()).pools.slice(0, 8);
+    for (const p of top) await volatility(p.address, true).catch(() => {});
+  } catch {}
+}
+
 export async function register(r) {
+  if (process.env.LP_WARM !== "0") { setTimeout(warm, 90_000).unref?.(); setInterval(warm, 50 * 60_000).unref?.(); }
   r.get("/api/lp/pools", ({ query }) => lpPools(query.token || null), { weight: 1 });
   r.get("/api/lp/suggest", ({ query }) => lpSuggest(query.pool, query.days), { weight: 1 });
   r.get("/api/lp/positions", ({ query }) => lpPositions(query.address), { weight: 1 });

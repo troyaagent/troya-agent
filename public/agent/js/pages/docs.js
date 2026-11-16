@@ -31,7 +31,7 @@ export async function mount(view) {
         [h("b", {}, "Agent: "), "chat, Agent Wallet, Autopilot and Playbooks."],
         [h("b", {}, "Arbitrum and Base: "), "pick the network above the Swap card; KyberSwap routes, the same Troya Gate, your own wallet signs (live since 16 Nov 2026, each tested with real money)."],
         [h("b", {}, "Solana: "), "pick Solana above the Swap card: Jupiter routes (pump.fun and every other Solana launchpad), a Solana Gate (who can freeze or mint the coin, Token-2022 traps, the swap simulated from your address, a sell route), signed in your own Solana wallet (live since 16 Nov 2026)."],
-        [h("b", {}, "Next: "), "Hyperliquid spot (the Spot page already shows prices and the Spot Gate)."],
+        [h("b", {}, "Spot (Hyperliquid): "), "buy and sell HYPE, UBTC, UETH and every Hyperliquid spot coin from your own Hyperliquid account; a Spot Gate reads the live book first and orders never fill more than 1% from the price (live since 16 Nov 2026)."],
       ]),
     ]],
     ["token", "$TROYA token", (() => {

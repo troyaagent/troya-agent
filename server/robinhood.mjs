@@ -1170,7 +1170,8 @@ export async function register(r, ctx) {
   // which F11/F12 pieces are open for signing on this server (each opens after its real-money test)
   r.get("/api/features", async () => {
     const [e, so] = await Promise.all([evm(), sol()]);
-    return { arbitrum: e.evmLive("arbitrum"), base: e.evmLive("base"), solana: so.SOLANA_LIVE, spot: process.env.SPOT_LIVE === "1" };
+    // Hyperliquid spot passed its real-money test on 16 Nov 2026 (bought 0.25 HYPE, sold 0.24 back); SPOT_LIVE=0 closes it
+    return { arbitrum: e.evmLive("arbitrum"), base: e.evmLive("base"), solana: so.SOLANA_LIVE, spot: process.env.SPOT_LIVE !== "0" };
   });
   r.get("/api/sol/balance", ({ query }) => sol().then((m) => m.solBalance({ owner: query.owner, mint: query.mint })), { perMin: 240 });
   r.get("/api/sol/status", ({ query }) => sol().then((m) => m.solStatus({ sig: query.sig })), { perMin: 240 });

@@ -93,7 +93,10 @@ export async function mount(view, ctx) {
     const input = h("input", { class: "input sp-amt", inputmode: "decimal", placeholder: "0", value: st.amount, "aria-label": st.side === "buy" ? "USDC to spend" : `${p.base} to sell` });
     input.addEventListener("input", () => { st.amount = input.value.replace(/,/g, ".").replace(/[^\d.]/g, ""); const pos = input.selectionStart; paint(); const ni = card.querySelector(".sp-amt"); ni.focus(); ni.setSelectionRange(pos, pos); });
     const bal = st.side === "buy" ? usdc : baseBal;
-    const chips = wallet.address && bal > 0 ? [25, 50, 75, 100].map((x) => h("button", { class: "chip", type: "button", onclick: () => { st.amount = String(Math.floor(bal * x / 100 * 1e6) / 1e6); paint(); } }, x === 100 ? "Max" : `${x}%`)) : [];
+    // a sell can only be a multiple of the coin's step (10^-szDecimals): cut to it so Max shows what really sells
+    const step = st.side === "sell" ? 10 ** p.szDecimals : 1e6;
+    const chips = wallet.address && bal > 0 ? [25, 50, 75, 100].map((x) => h("button", { class: "chip", type: "button", onclick: () => { st.amount = String(Math.floor(bal * x / 100 * step + 1e-9) / step); paint(); } }, x === 100 ? "Max" : `${x}%`)) : [];
+    const dust = st.side === "sell" && bal > 0 ? bal - Math.floor(bal * 10 ** p.szDecimals + 1e-9) / 10 ** p.szDecimals : 0;
     const checks = gateChecks(est), blocked = checks.some((c) => c.s === "fail");
     const keyOk = st.key?.state === "approved";
     // show the transfer as soon as spot is short (not only after typing an amount)
@@ -109,7 +112,8 @@ export async function mount(view, ctx) {
         h("a", { class: "link fine", href: `https://app.hyperliquid.xyz/trade/${encodeURIComponent(p.pair)}`, target: "_blank", rel: "noopener" }, "On Hyperliquid")),
       seg([{ value: "buy", label: "Buy" }, { value: "sell", label: "Sell" }], st.side, (v) => { st.side = v; st.amount = ""; paint(); }, "sp-seg"),
       h("div", { class: "sp-leg" }, h("div", { class: "sp-leg-top" }, h("span", {}, st.side === "buy" ? "Spend (USDC)" : `Sell (${p.base})`),
-        wallet.address ? h("span", { class: "muted" }, `Spot balance ${tiny(bal)} ${st.side === "buy" ? "USDC" : p.base}`) : null), input, h("div", { class: "sw-quick" }, chips)),
+        wallet.address ? h("span", { class: "muted" }, `Spot balance ${tiny(bal)} ${st.side === "buy" ? "USDC" : p.base}`) : null), input, h("div", { class: "sw-quick" }, chips),
+        dust > 1e-12 ? h("small", { class: "muted" }, `${p.base} sells in steps of ${10 ** -p.szDecimals}; ${tiny(dust)} ${p.base} stays in your account until it adds up to a full step.`) : null),
       est ? h("div", { class: "rows" },
         h("div", {}, h("span", {}, "You receive (est.)"), h("span", {}, `${tiny(est.receive)} ${st.side === "buy" ? p.base : "USDC"}`)),
         h("div", {}, h("span", {}, "Price cap"), h("span", {}, `1% from the price at sending`)),

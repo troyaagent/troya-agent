@@ -130,11 +130,11 @@ function icon_(name, cls = "") {
 const L = "/img/logos/";
 // official marks for networks, launchpads, venues and wallets (self-hosted in /img/logos)
 export const LOGOS = {
-  chain: { robinhood: "robinhood.png", hyperliquid: "hyperliquid.svg", arbitrum: "arbitrum-disc.svg", base: "base.png", ethereum: "eth-color.svg" },
+  chain: { robinhood: "robinhood.png", hyperliquid: "hyperliquid.svg", arbitrum: "arbitrum-disc.svg", base: "base.png", ethereum: "eth-color.svg", solana: "sol.svg" },
   pad: { clanker: "clanker.png", bankr: "bankr.png", virtuals: "virtuals.png", mintclub: "mintclub.png", uniswap: "uniswap.webp", ramses: "ramses.png", pancake: "pancake.png", sushi: "sushi.png", stocks: "robinhood.png" },
   venue: { uniswap: "uniswap.webp", lifi: "lifi.webp", relay: "relay.webp", hyperliquid: "hyperliquid.svg", wrap: "eth-color.svg" },
   wallet: { metamask: "metamask.webp", rabby: "rabby.webp", okx: "okx.webp", coinbase: "coinbase.webp" },
-  symbol: { HYPE: "hyperliquid.svg", USDC: "usdc.svg", ETH: "eth-color.svg", WETH: "eth-color.svg", USDG: "usdg.png" },
+  symbol: { HYPE: "hyperliquid.svg", USDC: "usdc.svg", ETH: "eth-color.svg", WETH: "eth-color.svg", USDG: "usdg.png", SOL: "sol.svg" },
 };
 const NATIVE = /^(eth|native|0x0{40}|0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee)$/i;
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
@@ -201,7 +201,7 @@ export function tokenIcon(t, size = "") {
   const sym = String(t?.symbol || "").toUpperCase();
   const addr = String(t?.address || "");
   const native = !addr ? sym === "ETH" : NATIVE.test(addr);
-  const brand = native ? L + LOGOS.symbol.ETH : null;
+  const brand = native ? L + (sym === "SOL" ? LOGOS.symbol.SOL : LOGOS.symbol.ETH) : null;
   const img = t?.image || t?.imageUrl || t?.logo;
   const direct = img && /^(https:|\/)/.test(img) ? img : null;
   // logos go through our cached proxy first: some hosts (ipfs.io) refuse to be embedded cross-origin

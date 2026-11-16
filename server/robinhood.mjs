@@ -1131,6 +1131,10 @@ export async function checkCall(chain, c, ip) {
 const isEvm = (c) => c === "base" || c === "arbitrum";
 let evmMod = null;
 const evm = () => (evmMod ||= import("./evmswap.mjs"));
+// Solana (F12) lives in solana.mjs; the same routes take ?chain=solana
+const isSol = (c) => c === "solana";
+let solMod = null;
+const sol = () => (solMod ||= import("./solana.mjs"));
 export async function register(r, ctx) {
   DATA_DIR = ctx.dataDir;
   try { v4.keys = JSON.parse(await readFile(path.join(DATA_DIR, "v4keys.json"), "utf8")) || {}; } catch { v4.keys = {}; }
@@ -1156,13 +1160,15 @@ export async function register(r, ctx) {
   }
 
   const slipOf = (query) => query.slippageBps ?? (query.slippage ? Number(query.slippage) * 100 : 100);
-  r.get("/api/swap/quote", ({ query }) => isEvm(query.chain) ? evm().then((m) => m.evmQuote({ chain: query.chain, tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query) })) : quoteSwap({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query), from: query.from }), { perMin: 240 });
-  r.post("/api/swap/build", ({ body }) => { const b = body || {}; if (isEvm(b.chain)) return evm().then((m) => m.evmBuild({ chain: b.chain, from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps })); return buildSwapTx({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps }); }, { perMin: 120 });
-  r.get("/api/swap/gate", ({ query }) => isEvm(query.chain) ? evm().then((m) => m.evmGate({ chain: query.chain, tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) })) : gateCheck({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) }), { perMin: 90 });
+  r.get("/api/swap/quote", ({ query }) => isSol(query.chain) ? sol().then((m) => m.solQuote({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query) })) : isEvm(query.chain) ? evm().then((m) => m.evmQuote({ chain: query.chain, tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query) })) : quoteSwap({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query), from: query.from }), { perMin: 240 });
+  r.post("/api/swap/build", ({ body }) => { const b = body || {}; if (isSol(b.chain)) return sol().then((m) => m.solBuild({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, slippageBps: b.slippageBps })); if (isEvm(b.chain)) return evm().then((m) => m.evmBuild({ chain: b.chain, from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps })); return buildSwapTx({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps }); }, { perMin: 120 });
+  r.get("/api/swap/gate", ({ query }) => isSol(query.chain) ? sol().then((m) => m.solGate({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) })) : isEvm(query.chain) ? evm().then((m) => m.evmGate({ chain: query.chain, tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) })) : gateCheck({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) }), { perMin: 90 });
 
   r.get("/api/token/health", ({ query }) => tokenHealth(query.address), { perMin: 120 });
-  r.get("/api/token/meta", ({ query }) => isEvm(query.chain) ? evm().then((m) => m.evmTokenMeta(query.chain, query.address)) : tokenMeta(query.address).then(pub), { perMin: 240 });
-  r.get("/api/swap/tokens", ({ query }) => evm().then((m) => m.evmSearch({ chain: query.chain, q: query.q })), { perMin: 120 });
+  r.get("/api/token/meta", ({ query }) => isSol(query.chain) ? sol().then((m) => m.solTokenMeta(query.address)) : isEvm(query.chain) ? evm().then((m) => m.evmTokenMeta(query.chain, query.address)) : tokenMeta(query.address).then(pub), { perMin: 240 });
+  r.get("/api/swap/tokens", ({ query }) => (isSol(query.chain) ? sol().then((m) => m.solSearch({ q: query.q })) : evm().then((m) => m.evmSearch({ chain: query.chain, q: query.q }))), { perMin: 120 });
+  r.get("/api/sol/balance", ({ query }) => sol().then((m) => m.solBalance({ owner: query.owner, mint: query.mint })), { perMin: 240 });
+  r.get("/api/sol/status", ({ query }) => sol().then((m) => m.solStatus({ sig: query.sig })), { perMin: 240 });
   r.get("/api/token/pons", async ({ query }) => {
     const s = await ponsState(query.address, query.account && isAddress(query.account) ? getAddress(query.account) : ZERO);
     return s ? { pons: true, ...ponsPublic(s), profile: await ponsProfile(s.token).catch(() => null) } : { pons: false };

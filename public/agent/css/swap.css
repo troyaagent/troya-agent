@@ -73,3 +73,9 @@
 /* network picker (Robinhood Chain, Base, Arbitrum) */
 .sw-nets button { display: inline-flex; align-items: center; gap: 7px; }
 .sw-nets .chain-logo { flex: none; }
+
+/* Solana wallet chooser */
+.sw-solw { display: grid; gap: 6px; }
+.sw-solw-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 10px; text-align: left; font-size: 14px; }
+.sw-solw-row:hover { border-color: var(--line-3); background: var(--bg-2); }
+.sw-solw-row img { border-radius: 6px; }

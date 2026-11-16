@@ -883,7 +883,11 @@ export async function gateCheck({ tokenIn, tokenOut, amountIn, amountInRaw, from
   } catch (e) { add("sim", "fail", "Transaction simulation", e.message); }
   // test sell of what a buy returns (or of the amount being sold)
   const coin = q.side === "buy" ? q.tokenOut.address : q.side === "sell" ? q.tokenIn.address : null;
-  if (coin && coin !== "native" && q.venue !== "wrap") {
+  // WETH and USDG (Paxos, with freeze and pause controls) are major tokens: a test sell says nothing useful about
+  // them and USDG's controls make the simulation revert, so they skip it, as stablecoins do on Base and Arbitrum
+  const major = coin && [lower(ADDR.weth), lower(ADDR.usdg)].includes(lower(coin));
+  if (major) { add("sell", "skip", "Test sell", "A major token (USDG or WETH): no test sell needed"); add("tax", "skip", "Transfer tax", "A major token: none expected"); }
+  else if (coin && coin !== "native" && q.venue !== "wrap") {
     const sellAmt = q.side === "buy" ? q.amountOutRaw : q.amountInRaw;
     try {
       const sc = await sellCheck({ token: coin, amountRaw: sellAmt });

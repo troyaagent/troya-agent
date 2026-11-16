@@ -17,7 +17,7 @@ const P2 = new Interface(["function approve(address token, address spender, uint
 const POS = new Interface(["function modifyLiquidities(bytes unlockData, uint256 deadline) payable"]);
 const DEAD = "0x000000000000000000000000000000000000dEaD";
 const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-const RESERVE = 0.002;                                   // ETH kept in the creator wallet for gas
+const RESERVE = 0.0002;                                  // ETH kept in the creator wallet for gas (a cycle's 4-5 txs cost ~0.00005 on Robinhood Chain)
 const KEY = "troya.flywheel.cycle";
 const lc = (s) => String(s || "").toLowerCase();
 const fx = (n) => (n == null || !isFinite(n) ? "–" : tiny(n));

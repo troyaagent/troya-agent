@@ -228,7 +228,7 @@ export async function evmTransferTaxProbe(n, token, amt) {
   if (a == null && b == null) return { pct: null, blocked: true };
   return { pct: Math.max(a ?? 0, b ?? 0) };
 }
-export async function evmSellCheck({ chain, token, amountRaw }) {
+export async function evmSellCheck({ chain, token, amountRaw, _recheck = true }) {
   const n = netOf(chain);
   const t = getAddress(token);
   const amt = BigInt(amountRaw);
@@ -248,6 +248,15 @@ export async function evmSellCheck({ chain, token, amountRaw }) {
   const quoted = BigInt(q.amountOutRaw);
   let taxPct = actual != null && quoted > 0n ? Math.max(0, 1 - Number(actual) / Number(quoted)) * 100 : null, taxVia = taxPct != null ? "sell" : null;
   if (taxPct == null) { const p = await evmTransferTaxProbe(n, t, amt).catch(() => null); if (p?.pct != null) { taxPct = p.pct; taxVia = "transfer"; } }
+  else if (taxPct > 0.5 && _recheck) {
+    // a quote and its simulation can straddle a block: confirm with the transfer itself, then one more sell
+    const p = await evmTransferTaxProbe(n, t, amt).catch(() => null);
+    if (p?.pct != null && p.pct > 0.5) { taxPct = Math.max(taxPct, p.pct); taxVia = "transfer"; }
+    else {
+      const again = await evmSellCheck({ chain: n.key, token: t, amountRaw: amt.toString(), _recheck: false }).catch(() => null);
+      if (again?.transferTaxPct != null) taxPct = Math.min(taxPct, again.transferTaxPct);
+    }
+  }
   return { ok: true, sellable: true, quote: q, actualOut: actual != null ? fmt(actual, 18) : null, outSymbol: "ETH", transferTaxPct: taxPct, transferTaxVia: taxVia };
 }
 

@@ -763,15 +763,16 @@ export async function simulateTx(tx, overrides) {
  * transfer goes through at all, or null when the balance storage cannot be found.
  */
 const SIM_WALLET_2 = "0x7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0a7e0b"; // no key exists for this either
-export async function transferTaxProbe(token, amountRaw) {
+export async function transferTaxProbe(token, amountRaw, extra = []) {
   const t = addr(token, "token address"), amt = BigInt(amountRaw), MC = ADDR.multicall3;
   if (amt <= 0n) return null;
   const keys = await touchedKeys(t, iface.erc20.encodeFunctionData("balanceOf", [MC]));
   if (!keys.length) return null;
   const bal = (a) => ({ target: t, allowFailure: true, callData: iface.erc20.encodeFunctionData("balanceOf", [a]) });
   const send = (a) => ({ target: t, allowFailure: true, callData: iface.erc20.encodeFunctionData("transfer", [a, amt]) });
-  const calls = [ADDR.poolManager, SIM_WALLET_2].flatMap((a) => [bal(a), send(a), bal(a)]);
-  const ov = { [t]: { stateDiff: Object.fromEntries(keys.map((k) => [k, toBeHex(amt * 3n, 32)])) } };
+  const to = [ADDR.poolManager, SIM_WALLET_2, ...extra.filter(Boolean)];
+  const calls = to.flatMap((a) => [bal(a), send(a), bal(a)]);
+  const ov = { [t]: { stateDiff: Object.fromEntries(keys.map((k) => [k, toBeHex(amt * BigInt(to.length + 1), 32)])) } };
   const raw = await rpc("robinhood", "eth_call", [{ to: MC, data: iface.mc.encodeFunctionData("aggregate3", [calls]), gas: "0x1c9c380" }, "latest", ov]);
   const res = iface.mc.decodeFunctionResult("aggregate3", raw)[0];
   const lost = (i) => {
@@ -781,15 +782,23 @@ export async function transferTaxProbe(token, amountRaw) {
     const got = BigInt(b1.returnData) - BigInt(b0.returnData);
     return got >= amt ? 0 : (Number(amt - got) / Number(amt)) * 100;
   };
-  const toPool = lost(0), toWallet = lost(3);
-  if (toPool == null && toWallet == null) return { pct: null, blocked: true };   // both transfers reverted or said false
-  return { pct: Math.max(toPool ?? 0, toWallet ?? 0), toPool, toWallet };
+  const each = to.map((_, i) => lost(i * 3));
+  if (each.every((x) => x == null)) return { pct: null, blocked: true };   // every transfer reverted or said false
+  return { pct: Math.max(...each.map((x) => x ?? 0)), toPool: each[0], toWallet: each[1], toOthers: each.slice(2) };
 }
 /**
  * sellCheck({ token, amountRaw, to? }) — a throwaway address gets the tokens + approvals inside an eth_call and sells
  * them back (to ETH unless `to` is given) through the best route. Reveals honeypots and transfer tax.
  */
-export async function sellCheck({ token, amountRaw, to = "ETH" }) {
+// the v3 pool a sell starts in (a token that taxes transfers into its own pool shows up when the probe sends there)
+async function firstV3Pool(q) {
+  const h = q?.plan?.venue === "v3" ? q.plan.c?.hops?.[0] : null;
+  if (!h) return null;
+  const r = await ethCall(ADDR.v3Factory, iface.v3Factory.encodeFunctionData("getPool", [h.a, h.b, h.fee]));
+  const p = iface.v3Factory.decodeFunctionResult("getPool", r)[0];
+  return p && p !== ZeroAddress ? p : null;
+}
+export async function sellCheck({ token, amountRaw, to = "ETH", _recheck = true }) {
   const t = addr(token, "token address");
   let amt = BigInt(amountRaw);
   if (amt <= 0n) throw new HttpError(400, "Nothing to sell.");
@@ -833,6 +842,16 @@ export async function sellCheck({ token, amountRaw, to = "ETH" }) {
   let taxPct = actual != null && quoted > 0n ? Math.max(0, 1 - Number(actual) / Number(quoted)) * 100 : null, taxVia = taxPct != null ? "sell" : null;
   // the Universal Router (Uniswap v4) returns nothing, so measure the transfer itself
   if (taxPct == null) { const p = await transferTaxProbe(t, amt).catch(() => null); if (p?.pct != null) { taxPct = p.pct; taxVia = "transfer"; } }
+  else if (taxPct > 0.5 && _recheck) {
+    // the quote and its simulation can land on different blocks (a trade in between reads as "tax"). Before calling it
+    // a tax: measure the transfer itself (into the pool too), and if that shows none, measure the sell once more
+    const p = await transferTaxProbe(t, amt, [await firstV3Pool(q).catch(() => null)]).catch(() => null);
+    if (p?.pct != null && p.pct > 0.5) { taxPct = Math.max(taxPct, p.pct); taxVia = "transfer"; }
+    else {
+      const again = await sellCheck({ token: t, amountRaw: amt.toString(), to, _recheck: false }).catch(() => null);
+      if (again?.transferTaxPct != null) taxPct = Math.min(taxPct, again.transferTaxPct);
+    }
+  }
   return { ok: true, sellable: true, partial, quote: q, actualOut: actual != null ? fmt(actual, q.tokenOut.decimals) : null, quotedOut: q.amountOut, outSymbol: q.tokenOut.symbol, transferTaxPct: taxPct, transferTaxVia: taxVia };
 }
 

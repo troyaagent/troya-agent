@@ -53,7 +53,7 @@ export async function mount(view, ctx) {
 
   function paint() {
     const p = st.prefs;
-    const eth = st.bal?.balances?.find((b) => b.address === "native")?.amount ?? null;
+    const eth = st.bal?.robinhoodEth ?? st.bal?.balances?.find((b) => b.address === "native")?.amount ?? null;   // /api/agent-wallet/balances → robinhoodEth
     const fee = p?.launchFeeEth ?? null;
     const steps = [
       step(1, !!wallet.address, "Connect your wallet", wallet.address ? short(wallet.address) : "The wallet that holds your $TROYA.",
@@ -81,10 +81,11 @@ export async function mount(view, ctx) {
         h("aside", { class: "panel lx-panel" },
           h("h2", {}, "Post it like this"),
           h("div", { class: "lx-tweet" }, h("span", { class: "mono" }, EXAMPLE), h("button", { class: "link", type: "button", onclick: () => copyText(EXAMPLE, "Copied") }, "Copy")),
-          h("p", { class: "muted" }, "Attach the coin's image. Add \"tax 2%\" for a creator tax."),
+          h("p", { class: "muted" }, "Attach the coin's image. Add \"tax 2%\" for a creator tax and \"buy 0.01\" for an initial buy."),
           h("ul", { class: "lx-rules" },
             h("li", {}, "The image is required: PNG or JPEG under 1 MB."),
             h("li", {}, "Creator tax from 0% to 4%, all of it yours."),
+            h("li", {}, "Initial buy: your Agent Wallet buys right after the 3-second Pons snipe tax, through Troya Gate and within its caps. If it cannot pay the launch fee plus the buy, nothing is launched."),
             h("li", {}, "Holders keep the whole creator fee: 0.7% of trading volume plus the tax. Troya takes 0%."),
             h("li", {}, `Up to ${p?.limits?.perDayHolder ?? 10} launches a day.`),
             h("li", {}, "Troya reads X every 10 minutes, so the reply with your coin's address can take up to 10 minutes."),

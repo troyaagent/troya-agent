@@ -112,7 +112,14 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
       summary = `Swap ${q.amountIn} ${q.tokenIn.symbol} → ${q.tokenOut.symbol}`;
       const pc = await checkAction(owner, { kind: "swap", usd, token: q.tokenOut.native ? q.tokenIn.address : q.tokenOut.address });
       const cap = await capCheck(owner, r, usd);
-      const reasons = [...pc.reasons, ...cap, ...(gate.pass ? [] : gate.checks.filter((c) => c.status === "fail").map((c) => `${c.name}: ${c.detail}`)), ...(q.executable ? [] : ["No executable swap route on this server."])];
+      let gateFails = gate.pass ? [] : gate.checks.filter((c) => c.status === "fail");
+      // V6 initial buy: this Agent Wallet buying the coin it launched through Troya minutes ago. Its curve is empty by
+      // definition, so only the pool-depth check is set aside; every other Gate check still applies.
+      if (params.initialBuy && gateFails.length) {
+        const own = (await store.readJson("launches.json", [])).find((x) => lcs(x.token) === lcs(q.tokenOut.address) && lcs(x.owner) === lcs(owner) && lcs(x.wallet) === lcs(r.address) && Date.now() - x.at < 15 * 60_000);
+        if (own) gateFails = gateFails.filter((c) => !/^pool depth$/i.test(String(c.name || "")));
+      }
+      const reasons = [...pc.reasons, ...cap, ...gateFails.map((c) => `${c.name}: ${c.detail}`), ...(q.executable ? [] : ["No executable swap route on this server."])];
       if (reasons.length) return await blocked(owner, kind, summary, reasons, gate, source, proposalId);
       const w = signer(r, owner, "robinhood");
       const native = (t) => !t || t === "native" || /^eth$/i.test(t);

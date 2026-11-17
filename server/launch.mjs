@@ -7,6 +7,8 @@
 //     creator fee goes straight to their own wallet.
 //   · Creator tax 0–4%. At most 3 launches a day per wallet, 10 for holders. Names and tickers that copy ETH, BTC, USDG,
 //     stock tokens, big coins or Troya itself are refused.
+//   · Optional initial buy ("buy 0.01"): the Agent Wallet buys its own coin right after the 3-second Pons snipe tax, as a
+//     normal Agent Wallet swap (Troya Gate, the wallet's caps). Not enough ETH for launch fee + buy → nothing is launched.
 // Routes:
 //   GET  /api/launch/rules              public numbers (holder minimum, limits, Troya's share, the splitter factory)
 //   POST /api/launch/plan               { creator, creatorTaxBps, name?, symbol? } → who receives the creator fee for this launch
@@ -28,6 +30,7 @@ export const HOLDER_MIN = Number(process.env.HOLDER_MIN || 1_000_000);
 export const LIMITS = { perDay: 3, perDayHolder: 10 };
 export const MAX_TAX_BPS = 400;                // 4%
 export const TROYA_VOLUME_BPS = 10;            // Troya's fee: 0.1% of volume, out of the creator's 70 bps
+export const MAX_INITIAL_BUY_ETH = 1;          // the wallet's own caps (per trade, per day) usually bite first
 const CREATOR_FEE_BPS = 70;                    // 70% of the 1% Pons fee
 export const PONS_ESCROW = "0xd3AFEB2a57f70eF218Aa82451c51B2fb0416Ac9e";
 const TOKEN_LAUNCHED = "0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607";
@@ -61,14 +64,14 @@ export async function splitterFactory() { return (await store.readJson("fee-spli
 /* ---------- names ---------- */
 const MAJORS = ["ETH", "WETH", "BTC", "WBTC", "CBBTC", "USDG", "USDC", "USDT", "DAI", "SOL", "HYPE", "BNB", "XRP", "DOGE", "PEPE", "SHIB", "ARB", "OP", "LINK", "UNI", "TAO", "HOOD", "TROYA"];
 const RESERVED_WORDS = /\b(troya|official|admin|team|support|robinhood)\b/i;
-export function nameProblem(name, symbol) {
+export function nameProblem(name, symbol, { team = false } = {}) {
   const n = String(name || "").trim(), s = String(symbol || "").trim().replace(/^\$/, "");
   if (!n || !s) return "The coin needs a name and a $TICKER.";
   if (!/^[A-Za-z0-9]{1,16}$/.test(s)) return "The ticker can only use letters and numbers, 16 at most.";
   if (n.length > 48) return "The name is limited to 48 characters.";
   const S = s.toUpperCase();
   if (MAJORS.includes(S) || STOCKS.some((x) => String(x.symbol).toUpperCase() === S)) return `$${S} is taken by an existing coin or stock token, so Troya will not launch a copy. Pick another ticker.`;
-  if (RESERVED_WORDS.test(n) || RESERVED_WORDS.test(s)) return "Names with Troya, official, admin, team, support or Robinhood in them are reserved.";
+  if (!team && (RESERVED_WORDS.test(n) || RESERVED_WORDS.test(s))) return "Names with Troya, official, admin, team, support or Robinhood in them are reserved.";
   if (MAJORS.some((m) => n.toUpperCase().replace(/[^A-Z0-9]/g, "") === m)) return "That name copies an existing coin. Pick another.";
   return null;
 }
@@ -92,7 +95,7 @@ export async function plan({ owner, creatorTaxBps = 0, name, symbol, source = "w
   owner = getAddress(owner);
   const tax = Math.round(Number(creatorTaxBps) || 0);
   if (tax < 0 || tax > MAX_TAX_BPS) throw new HttpError(400, `Creator tax goes from 0% to ${MAX_TAX_BPS / 100}%.`);
-  if (name != null || symbol != null) { const p = nameProblem(name, symbol); if (p) throw new HttpError(400, p); }
+  if (name != null || symbol != null) { const p = nameProblem(name, symbol, { team: admins().includes(lc(owner)) }); if (p) throw new HttpError(400, p); }
   const h = await holderInfo(owner);
   const used = await usedToday(owner), max = h.holder ? LIMITS.perDayHolder : LIMITS.perDay;
   if (used >= max) throw new HttpError(429, `That is ${used} launches through Troya today, the most for one wallet${h.holder ? "" : ` (holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA get ${LIMITS.perDayHolder})`}. Try again tomorrow (UTC).`);
@@ -161,23 +164,51 @@ async function prefsOf(owner) { return (await store.readJson("launch-prefs.json"
  * Launches a coin from `owner`'s Agent Wallet. The Agent Wallet pays the Pons launch fee; the creator fee follows plan().
  * Returns { ok, launch } or { ok: false, why }.
  */
-export async function launchWithAgentWallet({ owner, name, symbol, logo, creatorTaxBps = 0, description = "", twitter = "", source, ref = null }) {
+export async function launchWithAgentWallet({ owner, name, symbol, logo, creatorTaxBps = 0, description = "", twitter = "", source, ref = null, buyEth = 0 }) {
   const p = await plan({ owner, creatorTaxBps, name, symbol, source });
   const aw = await import("./agentwallet.mjs");
   const w = await aw.getAgentWallet(owner);
   if (!w?.exists) return { ok: false, why: "no-agent-wallet" };
+  buyEth = Number(buyEth) || 0;
+  if (buyEth < 0 || buyEth > MAX_INITIAL_BUY_ETH) return { ok: false, why: "buy-size", reasons: [`The initial buy can be up to ${MAX_INITIAL_BUY_ETH} ETH.`] };
+  if (buyEth > 0) {
+    // the launch fee and the buy must both fit, or nothing is launched (no coin born without the buy that was asked for)
+    const menu = await launchMenu(true);
+    const bal = Number(BigInt(await rpc("robinhood", "eth_getBalance", [w.address, "latest"]))) / 1e18;
+    const need = menu.launchFeeEth + buyEth + 0.0002;
+    if (bal < need) return { ok: false, why: "funds", reasons: [`the Agent Wallet holds ${bal.toFixed(5)} ETH; the launch fee plus a ${buyEth} ETH buy needs about ${need.toFixed(5)} ETH`] };
+  }
   const out = await aw.executeForUser(owner, {
     kind: "launch", source,
     rationale: `Launch requested on ${source}${ref ? ` (${ref})` : ""}`,
-    params: { name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim().toUpperCase(), logo, description, twitter, creatorTaxBps: p.creatorTaxBps, feeRecipient: p.recipient },
+    params: { name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim(), logo, description, twitter, creatorTaxBps: p.creatorTaxBps, feeRecipient: p.recipient },
   });
   if (!out.executed) return { ok: false, why: out.blocked ? "blocked" : "not-sent", reasons: out.reasons || [], result: out.result || null, plan: p };
   const got = out.result?.hash ? await launchedIn(out.result.hash).catch(() => null) : null;
   const token = got?.token || out.result?.token || null;
-  const r = { token, curve: got?.curve || out.result?.curve || null, name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim().toUpperCase(), owner: p.owner, wallet: w.address, source, recipient: p.recipient, split: p.split, troyaBps: p.troyaBps,
+  const r = { token, curve: got?.curve || out.result?.curve || null, name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim(), owner: p.owner, wallet: w.address, source, recipient: p.recipient, split: p.split, troyaBps: p.troyaBps,
     salt: p.salt || null, creatorTaxBps: p.creatorTaxBps, holder: p.holder, tx: out.result?.hash || null, ref, at: Date.now() };
   if (token) await addRecord(r);
+  if (token && buyEth > 0) {
+    // recorded first: the Agent Wallet may set aside the empty-curve check only for a coin it launched through Troya
+    r.initialBuy = await initialBuy({ owner, token, buyEth, source, launchedAt: Date.now() });
+    await store.update("launches.json", [], (l) => { const x = l.find((y) => lc(y.token) === lc(token)); if (x) x.initialBuy = r.initialBuy; return l; });
+  }
   return { ok: !!token, launch: r, why: token ? null : "no-token" };
+}
+
+/** The Agent Wallet buys its own new coin once the Pons launch snipe tax (the first few seconds) is over. */
+async function initialBuy({ owner, token, buyEth, source, launchedAt }) {
+  const menu = await launchMenu().catch(() => ({ snipeTaxSeconds: 3 }));
+  const wait = (Number(menu.snipeTaxSeconds) || 3) * 1000 + 2500 - (Date.now() - launchedAt);
+  if (wait > 0) await new Promise((res) => setTimeout(res, wait));
+  try {
+    const aw = await import("./agentwallet.mjs");
+    const out = await aw.executeForUser(owner, { kind: "swap", source, rationale: "Initial buy right after launch, asked for in the launch request",
+      params: { tokenIn: "ETH", tokenOut: token, amountIn: buyEth, slippagePct: 5, initialBuy: true } });
+    const steps = out.result?.steps || [];
+    return { eth: buyEth, executed: !!out.executed, hash: steps[steps.length - 1]?.hash || null, reasons: out.reasons || [] };
+  } catch (e) { return { eth: buyEth, executed: false, reasons: [String(e.message || e).slice(0, 160)] }; }
 }
 
 /* ---------- F26 · Launch on X ---------- */
@@ -190,11 +221,15 @@ export function parseLaunch(text) {
   let taxBps = 0;
   const tm = rest.match(/\b(?:tax|creator\s*tax)\s*:?\s*(\d+(?:\.\d+)?)\s*%?/i);
   if (tm) { taxBps = Math.round(Number(tm[1]) * 100); rest = rest.replace(tm[0], " "); }
+  let buyEth = 0;
+  const bm = rest.match(/\b(?:initial\s*buy|dev\s*buy|buy)\s*:?\s*(\d*\.?\d+)\s*(?:eth)?(?=\s|$|[,.;!])/i);
+  if (bm) { buyEth = Number(bm[1]); rest = rest.replace(bm[0], " "); }
   const sm = rest.match(/\$([A-Za-z0-9]{1,16})\b/);
-  const symbol = sm ? sm[1].toUpperCase() : "";
+  const symbol = sm ? sm[1] : "";   // kept as written: $XtestTROYA stays XtestTROYA
   if (sm) rest = rest.replace(sm[0], " ");
-  const name = rest.replace(/[^\p{L}\p{N} .'&-]/gu, " ").replace(/\s+/g, " ").trim().replace(/^(?:a|the|coin|token|called|named)\s+/i, "").trim();
-  return { name, symbol, taxBps };
+  const name = rest.replace(/[^\p{L}\p{N} .'&-]/gu, " ").replace(/\s+/g, " ").trim().replace(/^(?:a|the|coin|token|called|named)\s+/i, "").trim()
+    .replace(/(^|\s)[.'&-]+(?=\s|$)/g, " ").replace(/\s+/g, " ").trim();   // a stray full stop or dash is not part of the name
+  return { name, symbol, taxBps, buyEth };
 }
 
 async function linkedOwner(authorId) {
@@ -241,24 +276,26 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   if (!(await prefsOf(owner)).x) return { reply: `Launch from X is switched off for your wallet. Turn it on here first: ${DESK()}` };
   const h = await holderInfo(owner);
   if (!h.holder) return { reply: `Launching from X is for holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA (main wallet plus Agent Wallet). Anyone can launch from the Telegram bot or troya.codes.` };
-  if (!ask.symbol || !ask.name) return { reply: "Write it like this, with an image attached: @Troyaagent launch Wooden Horse $HORSE (add \"tax 2%\" for a creator tax, 4% at most)" };
-  const np = nameProblem(ask.name, ask.symbol);
+  if (!ask.symbol || !ask.name) return { reply: "Write it like this, with an image attached: @Troyaagent launch Wooden Horse $HORSE (add \"tax 2%\" for a creator tax, \"buy 0.01\" for an initial buy)" };
+  const np = nameProblem(ask.name, ask.symbol, { team: admins().includes(lc(owner)) });
   if (np) return { reply: np };
   if (ask.taxBps > MAX_TAX_BPS) return { reply: `The creator tax can be 4% at most. Post again with a lower tax.` };
+  if (ask.buyEth > MAX_INITIAL_BUY_ETH) return { reply: `The initial buy can be up to ${MAX_INITIAL_BUY_ETH} ETH. Post again with a smaller buy.` };
   if (!mediaUrl) return { reply: "Attach the coin's image to the post, then post the launch again." };
   let logo;
   try { logo = await fetchLogo(mediaUrl); } catch { return { reply: "Troya could not read that image. Post again with a PNG or JPEG under 1 MB." }; }
   let out;
   try {
-    out = await launchWithAgentWallet({ owner, name: ask.name, symbol: ask.symbol, logo, creatorTaxBps: ask.taxBps, twitter: `https://x.com/i/status/${tweetId}`, source: "x", ref: `x:${tweetId}` });
+    out = await launchWithAgentWallet({ owner, name: ask.name, symbol: ask.symbol, logo, creatorTaxBps: ask.taxBps, twitter: `https://x.com/i/status/${tweetId}`, source: "x", ref: `x:${tweetId}`, buyEth: ask.buyEth });
   } catch (e) { return { reply: String(e.message || "The launch failed.").slice(0, 240) }; }
   if (!out.ok) {
     if (out.why === "no-agent-wallet") return { reply: `Your wallet has no Agent Wallet yet. Create one and add a little ETH on Robinhood Chain: ${DESK()}` };
     const why = (out.reasons || [])[0] || "the launch could not be sent";
     return { reply: `Not launched: ${why}`.slice(0, 260) };
   }
-  const ca = out.launch.token;
-  return { launch: out.launch, reply: `$${ask.symbol} is live on Pons, launched from your Agent Wallet. CA ${ca} · Gate: ${SITE().replace(/^https?:\/\//, "")}/agent#/gate/${ca} · Buy: fomo.family/tokens/robinhood/${ca}` };
+  const ca = out.launch.token, ib = out.launch.initialBuy;
+  const buyNote = !ib ? "" : ib.executed ? ` Initial buy of ${ib.eth} ETH done.` : ` Initial buy not sent: ${String(ib.reasons?.[0] || "it was refused").slice(0, 70)}.`;
+  return { launch: out.launch, reply: `$${ask.symbol} is live on Pons.${buyNote} CA ${ca} · Gate: ${SITE().replace(/^https?:\/\//, "")}/agent#/gate/${ca} · Buy: fomo.family/tokens/robinhood/${ca}` };
 }
 
 /* ---------- routes ---------- */

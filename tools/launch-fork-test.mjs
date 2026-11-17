@@ -113,7 +113,9 @@ process.env.X_ADMINS = H.toLowerCase();
 }
 r = await L.fromX({ tweetId: "8", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE tax 1%", mediaUrl: IMG });
 assert.ok(r.launch?.token, `launched: ${r.reply}`);
-assert.ok(r.reply.length <= 280, `reply fits a post (${r.reply.length})`);
+// X counts every link as 23 characters
+const xLen = (t) => t.replace(/\b[\w.-]+\.(?:codes|family|com)\/\S*/g, "x".repeat(23)).length;
+assert.ok(xLen(r.reply) <= 280, `reply fits a post (${xLen(r.reply)})`);
 const pons = new Interface(["function getLaunchedToken(address token) view returns (tuple(address token,address curve,address deployer,address creatorFeeRecipient,address pairToken,uint256 graduationThreshold,uint24 poolFee,int24 tickSpacing,uint16 creatorTaxBps,bool buybackEnabled,uint8 phase,uint256 sweptQuote,uint256 sweptTokens,uint256 sweptAt,bool exists))"]);
 const info = async (t) => pons.decodeFunctionResult("getLaunchedToken", await provider.call({ to: ADDR.ponsFactory, data: pons.encodeFunctionData("getLaunchedToken", [t]) }))[0];
 let li = await info(r.launch.token);
@@ -125,6 +127,21 @@ ok(`test mode, admin holder launch from X: $FHORSE ${r.launch.token}, deployed b
 const again = await L.fromX({ tweetId: "8", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE tax 1%", mediaUrl: IMG });
 assert.equal(again.launch?.token, r.launch.token); assert.equal(again.reply, null);
 ok("the same post read twice does not launch twice");
+
+/* ---------- an initial buy right after launch ---------- */
+const tooBig = await L.fromX({ tweetId: "9a", authorId: "111", text: "@Troyaagent launch Big Horse $BIGH buy 5", mediaUrl: IMG });
+assert.match(tooBig.reply, /up to 1 ETH/); ok("an initial buy above 1 ETH is refused before anything launches");
+const poor = await L.fromX({ tweetId: "9b", authorId: "111", text: "@Troyaagent launch Poor Horse $POOR buy 0.9", mediaUrl: IMG });
+assert.match(poor.reply, /Not launched: the Agent Wallet holds/); ok("not enough ETH for fee + buy: nothing launches");
+r = await L.fromX({ tweetId: "9", authorId: "111", text: "@Troyaagent launch Buy Horse $BUYH buy 0.01", mediaUrl: IMG });
+assert.ok(r.launch?.token, r.reply);
+console.log("   reply:", r.reply);
+assert.ok(r.launch.initialBuy, "initial buy attempted");
+assert.equal(r.launch.initialBuy.executed, true, JSON.stringify(r.launch.initialBuy));
+const held = BigInt(erc.decodeFunctionResult("balanceOf", await provider.call({ to: r.launch.token, data: erc.encodeFunctionData("balanceOf", [awH.address]) }))[0]);
+assert.ok(held > 0n, "the Agent Wallet holds the new coin");
+assert.match(r.reply, /Initial buy of 0.01 ETH done/);
+ok(`launch with an initial buy: $BUYH, the Agent Wallet bought ${(Number(held) / 1e18).toLocaleString("en-US")} tokens for 0.01 ETH`);
 
 /* ---------- a non-holder launch (Telegram path) goes through a splitter ---------- */
 const out = await L.launchWithAgentWallet({ owner: N, name: "Split Horse", symbol: "SPLIT", logo: "https://troya.codes/img/logo-3d-hd.png", creatorTaxBps: 0, source: "tg", ref: "tg:test" });
@@ -180,7 +197,7 @@ assert.ok(b.simulation.ok, b.simulation.error);
 const tx = await W.sendTransaction({ to: b.to, data: b.data, value: BigInt(b.value), nonce: 0 });
 await tx.wait();
 const rec = await L.recordWeb({ hash: tx.hash, owner: W.address, salt: p.salt, troyaBps: p.troyaBps });
-assert.equal(rec.launch.split, true); assert.equal(rec.launch.symbol, "WEBH");
+assert.equal(rec.launch.split, true); assert.equal(String(rec.launch.symbol).toUpperCase(), "WEBH");
 ok("web launch with a 2% tax: splitter at 370 bps (0.1% of volume), checked on chain and recorded");
 await assert.rejects(L.recordWeb({ hash: tx.hash, owner: W.address, salt: "0x" + "11".repeat(32), troyaBps: 370 }), /neither to its creator nor to a Troya splitter/);
 ok("a record with the wrong salt is refused");

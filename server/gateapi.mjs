@@ -62,6 +62,13 @@ async function getAttestor() {
   return attestor;
 }
 const attestMessage = (hash) => `Troya Gate result\n${hash}`;
+export async function attestorAddress() { return (await getAttestor()).address; }
+/** Sign any record with the attestor (the agent registry signs every call it files): keccak256 of the JSON, EIP-191. */
+export async function attest(obj, label = "Troya record") {
+  const hash = keccak256(toUtf8Bytes(JSON.stringify(obj)));
+  const w = await getAttestor();
+  return { hash, signature: await w.signMessage(`${label}\n${hash}`), attestor: w.address };
+}
 
 /* ---------- ledger ---------- */
 const settings = async () => ({ ...DEFAULTS, ...((await store.readJson(FILE, {})).settings || {}) });

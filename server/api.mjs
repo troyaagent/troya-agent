@@ -36,6 +36,7 @@ const MODULES = [
   "./gas.mjs",         // Troya pays gas: the weekly drip for holders and Agent Wallet gas refunds, from a sponsor wallet
   "./gateapi.mjs",     // F23: Gate for every agent, a fresh signed Gate check as an API, paid per check in USDG
   "./portfolio.mjs",   // every token a wallet holds (Blockscout), priced, with PnL from its own trades
+  "./registry.mjs",    // F24: agent registry, agents file signed calls on Robinhood Chain coins and earn a public reputation
   "./community.mjs",   // community inbox: bug reports, ideas and suspicious-activity flags (web + Telegram), admins only
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];

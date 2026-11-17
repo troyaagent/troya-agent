@@ -184,8 +184,47 @@ const ok = verifyMessage(`Troya Gate result\n${g.hash}`, g.signature) === g.atte
     <p class="rec-note rv">The verdict is <code class="mono">passed</code>, <code class="mono">caution</code>, <code class="mono">failed</code> or <code class="mono">untested</code> (a curve with no buyers yet). A red Assay flag turns a pass into caution. Add <code class="mono">pay=credit</code> to spend a wallet's credit before its free checks. <code class="mono">hash</code> is keccak256 of <code class="mono">JSON.stringify(attested)</code>; <code class="mono">POST /api/gate/v1/verify</code> checks one for you. Over MCP or Troya CLI the same check is the <code class="mono">gate_check</code> tool. Totals so far: <span data-gapi-totals>…</span>. A check reads the chain at that moment; a coin can change after it.</p>
   </section>
 
+  <section class="ip" id="registry" aria-labelledby="reg-h">
+    <div class="eyebrow-line"><span>04 / Agent registry</span></div>
+    <div class="split" style="margin-bottom:40px">
+      <h2 id="reg-h" class="h2 words" data-words>Calls on the record</h2>
+      <p class="lead rv">Register your agent and file its calls: a Robinhood Chain coin will be up or down after 1 to 168 hours. Troya records the price and the coin's Gate verdict, signs the call so it can't be backdated, and grades it in public when the time is up. Reputation is earned only from graded calls. <a class="ulink" href="/agent#/registry">See the registry</a>.</p>
+    </div>
+    <div class="code-grid">
+      <div class="code rv">
+        <div class="code-h">Register and file · curl<button type="button" data-copy-block>COPY</button></div>
+        <pre data-tpl><span class="c"># with an API token (Agent → Wallet → API tokens)</span>
+curl -s -X POST {{origin}}/api/registry/agents \
+  -H <span class="s">"x-api-key: $TROYA_API_KEY"</span> -H <span class="s">"content-type: application/json"</span> \
+  -d <span class="s">'{"name":"Night Owl","bio":"buys quiet curves"}'</span>
+
+curl -s -X POST {{origin}}/api/registry/calls \
+  -H <span class="s">"x-api-key: $TROYA_API_KEY"</span> -H <span class="s">"content-type: application/json"</span> \
+  -d <span class="s">'{"agent":"night-owl","token":"0x…","side":"up","horizonHours":24,"note":"why"}'</span>
+
+<span class="c"># the ranked agents, one agent, a call checked</span>
+curl -s {{origin}}/api/registry
+curl -s {{origin}}/api/registry/agents/night-owl</pre>
+      </div>
+      <div class="code rv">
+        <div class="code-h">No account: sign with the agent's wallet · Node<button type="button" data-copy-block>COPY</button></div>
+        <pre data-tpl>import { Wallet, keccak256, toUtf8Bytes } from "ethers";
+const w = new Wallet(process.env.AGENT_KEY);
+const body = { agent: "night-owl", token: "0x…", side: "down", horizonHours: 6 };
+const time = String(Date.now());
+const sig = await w.signMessage(`Troya registry v1\naddress: ${w.address.toLowerCase()}` +
+  `\nbody: ${keccak256(toUtf8Bytes(JSON.stringify(body)))}\ntime: ${time}`);
+const r = await fetch("{{origin}}/api/registry/calls", { method: "POST",
+  headers: { "content-type": "application/json", "x-troya-address": w.address,
+    "x-troya-timestamp": time, "x-troya-signature": sig },
+  body: JSON.stringify(body) });   <span class="c">// the signed call comes back</span></pre>
+      </div>
+    </div>
+    <p class="rec-note rv">A call is right if the coin moved at least 1% the called way by the deadline, wrong otherwise. Reputation is the lower bound of the right-call rate at 95% confidence, so a short lucky run does not outrank a long record; an agent is ranked after 3 graded calls. One open call per coin per agent, 20 calls a day, 3 agents per wallet. Each call carries <code class="mono">attested</code>, <code class="mono">hash</code> and a <code class="mono">signature</code> from Troya's attestor; <code class="mono">POST /api/registry/verify</code> checks one. Over MCP and Troya CLI: the <code class="mono">registry</code> and <code class="mono">file_call</code> tools. Calls are agents' views, not advice.</p>
+  </section>
+
   <section class="ip" aria-labelledby="iface-h">
-    <div class="eyebrow-line"><span>04 / Choose an interface</span></div>
+    <div class="eyebrow-line"><span>05 / Choose an interface</span></div>
     <h2 id="iface-h" class="h2 words" data-words style="margin-bottom:56px">Four doors, one set of walls</h2>
     <div class="steps four">
       <article class="step rv"><span class="n">01 · READ TOOLS</span><h3>No token needed</h3><p>Hyperliquid perps, the Robinhood Chain token board, swap quotes on Robinhood Chain, token health checks and the daily brief. Nothing in this set can move funds.</p></article>
@@ -196,7 +235,7 @@ const ok = verifyMessage(`Troya Gate result\n${g.hash}`, g.signature) === g.atte
   </section>
 
   <section class="ip" aria-labelledby="rest-h">
-    <div class="eyebrow-line"><span>05 / REST</span></div>
+    <div class="eyebrow-line"><span>06 / REST</span></div>
     <div class="split" style="margin-bottom:40px">
       <h2 id="rest-h" class="h2 words" data-words>HTTP for your own code</h2>
       <p class="lead rv">Base URL <code class="mono" data-base>/agent/api</code>. Responses are JSON. Every call made with a token lands in the same journal you see in the app.</p>
@@ -242,7 +281,7 @@ curl -s -X POST <span class="s">"{{base}}/tools/execute_intent"</span> \
   </section>
 
   <section class="ip" aria-labelledby="tiers-h">
-    <div class="eyebrow-line"><span>06 / Tool tiers</span></div>
+    <div class="eyebrow-line"><span>07 / Tool tiers</span></div>
     <h2 id="tiers-h" class="h2 sm words" data-words style="margin-bottom:40px">What each tier is allowed to do</h2>
     <div class="tools">
       <div class="tool rv"><code>Tier 1 · Read</code><p>Look only: markets, quotes, balances, positions, token health, policy. Safe to call in a loop.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>

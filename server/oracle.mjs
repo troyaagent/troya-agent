@@ -102,6 +102,11 @@ async function write() {
       if (!r) continue;
       s.notes.push({ ...sub, at: now, ...r, status: "open" });
       await save();
+      // F24: a lean on a Robinhood Chain coin is also filed in the agent registry, signed and graded there
+      if (sub.kind === "rh" && (r.call === "up" || r.call === "down") && process.env.ORACLE_REGISTRY !== "0") {
+        import("./registry.mjs").then((m) => m.houseCall({ slug: "troya-chart-oracle", name: "Troya Chart Oracle", bio: "Troya's chart notes: 20/50-hour averages, RSI, volume and the two-day range", token: sub.id, side: r.call, horizonHours: 24, note: r.text }))
+          .catch((e) => console.warn("[oracle] registry", e.message));
+      }
     } catch (e) { console.warn("[oracle]", sub.symbol, e.message); }
   }
 }

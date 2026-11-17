@@ -54,7 +54,7 @@ export async function mount(view, ctx) {
   }
 
   async function refresh() {
-    try { st.d = await api.get("/api/launch/board"); st.err = null; setBorn([...st.d.new, ...st.d.almost, ...st.d.migrated].map((x) => x.token)); }
+    try { st.d = await api.get("/api/launch/board"); st.err = null; setBorn([...st.d.new, ...st.d.almost].map((x) => x.token), st.d.migrated.map((x) => x.token)); }
     catch (e) { st.err = e.message; }
     if (alive) paint();
   }

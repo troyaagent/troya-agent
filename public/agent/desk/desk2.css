@@ -950,6 +950,9 @@ body { touch-action: manipulation; }
 .tok-wrap > .tok-net img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .tok-wrap > .tok-troya { background: radial-gradient(circle at 35% 30%, #23434e, #060b0d 72%); box-shadow: 0 0 0 2px var(--bg-1, #0a0f12), 0 0 8px rgba(142, 223, 245, .35); }
 .tok-wrap > .tok-troya img { object-fit: contain; padding: 9%; filter: drop-shadow(0 0 2px rgba(142, 223, 245, .55)); }
+/* graduated: the horse turns gold */
+.tok-wrap > .tok-troya.gold { background: radial-gradient(circle at 35% 30%, #6b4f17, #140d02 72%); box-shadow: 0 0 0 2px var(--bg-1, #0a0f12), 0 0 9px rgba(242, 194, 107, .55); }
+.tok-wrap > .tok-troya.gold img { filter: sepia(1) saturate(4.2) hue-rotate(-10deg) brightness(1.08) contrast(1.05) drop-shadow(0 0 2px rgba(255, 210, 120, .75)); }
 .tok-ico.xl { width: 56px; height: 56px; font-size: 15px; }
 
 /* Hippodrome (#/hippodrome): coins born through Troya, three lanes */

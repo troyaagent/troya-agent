@@ -411,7 +411,7 @@ addEventListener("keydown", (e) => {
 window.troya = { go, openAsk, openConnect, signIn, CHAINS, ask: openDrawer };
 
 // the coins born through Troya, so every logo of one carries the horse badge
-api.get("/api/launch/born").then((d) => setBorn(d?.tokens)).catch(() => {});
+api.get("/api/launch/born").then((d) => setBorn(d?.tokens, d?.graduated)).catch(() => {});
 addEventListener("hashchange", route);
 restore();
 renderRight();

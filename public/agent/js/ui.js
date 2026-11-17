@@ -198,8 +198,11 @@ export function walletLogo(name, icon, size = 26) {
 /* ---------- token icon ---------- */
 // sources: brand logo for ETH/WETH/USDG → Troya icon cache (GeckoTerminal, DexScreener, Pons on-chain logo) → listing image → monogram
 // coins born through Troya (and $TROYA itself) wear the chrome horse in the corner of their logo, everywhere in the app
-const BORN = new Set();
-export function setBorn(list) { for (const a of list || []) if (ADDR.test(String(a))) BORN.add(String(a).toLowerCase()); }
+const BORN = new Set(), GOLD = new Set();   // GOLD: born through Troya and graduated to its own pool
+export function setBorn(list, graduated = []) {
+  for (const a of list || []) if (ADDR.test(String(a))) BORN.add(String(a).toLowerCase());
+  for (const a of graduated || []) if (ADDR.test(String(a))) { BORN.add(String(a).toLowerCase()); GOLD.add(String(a).toLowerCase()); }
+}
 export const isBorn = (a) => BORN.has(String(a || "").toLowerCase());
 export function tokenIcon(t, size = "") {
   const sym = String(t?.symbol || "").toUpperCase();
@@ -222,7 +225,8 @@ export function tokenIcon(t, size = "") {
   const hue = [...(addr || sym || "x")].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
   box.style.background = `linear-gradient(135deg, hsl(${(hue % 60) + 170} 45% 26%), hsl(${(hue % 60) + 190} 50% 14%))`;
   if (ADDR.test(addr) && !other && BORN.has(addr.toLowerCase())) {
-    const horse = h("span", { class: "tok-net tok-troya", title: "Born through Troya" }, h("img", { src: "/img/logo-3d-128.png", alt: "", decoding: "async" }));
+    const gold = GOLD.has(addr.toLowerCase());
+    const horse = h("span", { class: `tok-net tok-troya${gold ? " gold" : ""}`, title: gold ? "Born through Troya · graduated" : "Born through Troya" }, h("img", { src: "/img/logo-3d-128.png", alt: "", decoding: "async" }));
     return h("span", { class: `tok-wrap ${size}` }, box, horse);
   }
   // network badge in the corner (like a wallet's token list): pass t.chain = "robinhood" | "base" | "arbitrum" | …

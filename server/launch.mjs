@@ -430,7 +430,12 @@ export async function register(r, ctx) {
   r.post("/api/launch/record", async ({ req, body }) => recordWeb({ hash: body?.hash, owner: getSession(req)?.address || body?.creator || null, salt: body?.salt, troyaBps: body?.troyaBps }), { perMin: 20 });
   r.get("/api/launch/mine", async ({ req }) => ({ launches: (await launchesOf(requireSession(req).address)).slice().reverse() }));
   r.get("/api/launch/board", () => board(), { perMin: 120 });
-  r.get("/api/launch/born", async () => ({ tokens: (await bornRecords()).map((x) => lc(x.token)) }), { perMin: 120 });
+  // graduated ones wear the horse in gold
+  r.get("/api/launch/born", async () => {
+    const tokens = (await bornRecords()).map((x) => lc(x.token));
+    const graduated = await board().then((b) => b.migrated.map((x) => lc(x.token))).catch(() => []);
+    return { tokens, graduated };
+  }, { perMin: 120 });
   r.get("/api/launch/prefs", async ({ req }) => {
     const a = requireSession(req).address;
     const x = await import("./xsocial.mjs").then((m) => m.handleOf(a)).catch(() => null);

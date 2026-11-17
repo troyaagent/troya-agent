@@ -739,10 +739,11 @@ html[data-theme="light"] .pp-ticket .gate-box, html[data-theme="light"] .sw-gate
 /* flywheel automatic mode */
 .fw-auto { margin-top: 16px; padding: 20px 22px; border-radius: 22px; display: grid; gap: 14px; }
 .fw-auto-h { display: flex; align-items: center; gap: 12px; } .fw-auto-h h3 { margin: 0; font-size: 16px; } .fw-auto-h .dk-v { margin-left: auto; }
-.fw-auto-g { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.fw-auto-g { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.fw-auto-ex { margin: 0; padding: 10px 12px; border-radius: 12px; background: rgba(142, 223, 245, .06); border: 1px solid rgba(142, 223, 245, .2); }
 .fw-auto-g .field span { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; } .fw-auto-g .field i { font-style: normal; text-transform: none; letter-spacing: 0; }
 .fw-auto-key { display: grid; gap: 10px; } .fw-auto-key.ok { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(142, 223, 245, .3); background: rgba(142, 223, 245, .06); }
 .fw-auto-key.ok .btn { margin-left: auto; }
 .fw-auto-key .fw-row .input { flex: 1; min-width: 0; font-family: var(--mono); }
 .fw-auto-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 12.5px; color: var(--fg-2); }
-@media (max-width: 760px) { .fw-auto-g { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 1100px) { .fw-auto-g { grid-template-columns: 1fr 1fr; } }

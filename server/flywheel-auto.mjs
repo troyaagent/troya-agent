@@ -34,7 +34,8 @@ const POS = new Interface(["function modifyLiquidities(bytes unlockData, uint256
 const lc = (s) => String(s || "").toLowerCase();
 const admins = () => String(process.env.X_ADMINS || process.env.TROYA_ADMINS || "").split(",").map((a) => a.trim().toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a));
 const isAdmin = (req) => { const s = getSession(req); return !!s && admins().includes(lc(s.address)); };
-const DEFAULTS = { enabled: false, minEth: 0.02, burnPct: 70, maxEth: 0.5, everyHours: 6, reserveEth: 0.0003 };
+// flywheelPct: the share of each claim the flywheel uses; the rest stays in the creator wallet as the creator's income
+const DEFAULTS = { enabled: false, minEth: 0.02, flywheelPct: 30, burnPct: 70, maxEth: 0.5, everyHours: 6, reserveEth: 0.0003 };
 
 let store = null, dir = null, port = 0, provider = null, running = false;
 const SET = "flywheel-auto.json";
@@ -110,14 +111,17 @@ async function cycle(reason = "schedule") {
     const w = await signer();
     if (!w) throw new Error("No creator key is stored.");
     let d = await flywheelView();
-    // 1 claim what is waiting
-    if (d.fees.waitingEth >= Math.max(0.001, s.minEth / 4)) {
-      const { hash } = await send(w, { to: ESCROW, data: ESC.encodeFunctionData("claim"), value: 0 }, log, "claim");
-      await recordStep({ cycle: id, step: "claim", hash }).catch(() => {});
-    }
+    // 1 claim what is waiting; the cycle works only with this claim, never with the rest of the wallet
+    const claimed = d.fees.waitingEth;
+    if (!(claimed >= s.minEth)) { log.note = `Waiting for fees: ${claimed.toFixed(5)} ETH in the escrow, ${s.minEth} ETH needed.`; return log; }
+    const { hash: claimHash } = await send(w, { to: ESCROW, data: ESC.encodeFunctionData("claim"), value: 0 }, log, "claim");
+    await recordStep({ cycle: id, step: "claim", hash: claimHash }).catch(() => {});
+    const fwShare = Math.max(0, Math.min(100, s.flywheelPct)) / 100;
+    const kept = claimed * (1 - fwShare);
     const bal = Number(formatEther(await provider.getBalance(CREATOR)));
-    const E = Math.min(s.maxEth, bal - s.reserveEth);
-    if (!(E >= s.minEth)) { log.note = `Below the threshold: ${E > 0 ? E.toFixed(5) : 0} ETH available, ${s.minEth} ETH needed.`; return log; }
+    const E = Math.min(s.maxEth, claimed * fwShare, Math.max(0, bal - s.reserveEth));
+    log.claimed = claimed; log.kept = kept;
+    if (!(E > 0.0005)) { log.note = `Claimed ${claimed.toFixed(5)} ETH; all of it stays in the creator wallet (flywheel share ${s.flywheelPct}%).`; await tell(`<b>Creator fees claimed</b> (automatic)\n${claimed.toFixed(5)} ETH into the creator wallet. Flywheel share ${s.flywheelPct}%: nothing to buy back this time.`); return log; }
     const share = Math.max(0, Math.min(100, s.burnPct)) / 100;
     const burnEth = E * share, lockEth = E * (1 - share) / 2, buyEth = burnEth + lockEth;
     const amt = +buyEth.toFixed(8);
@@ -163,8 +167,8 @@ async function cycle(reason = "schedule") {
         await recordStep({ cycle: id, step: "lock", hash }).catch(() => {});
       } else log.note = "Too small for a liquidity position; the $TROYA stays in the creator wallet for the next cycle.";
     }
-    log.summary = { eth: E, buyEth, burnEth, lockEth, troyaBought: Number(formatEther(got)), troyaBurned: Number(formatEther(burnAmt)) };
-    await tell(`<b>Flywheel cycle done</b> (automatic)\n${E.toFixed(5)} ETH: bought back ${Math.round(log.summary.troyaBought).toLocaleString("en-US")} $TROYA, burned ${Math.round(log.summary.troyaBurned).toLocaleString("en-US")}, locked the rest to 0x…dEaD.\n${log.steps.map((x) => `${x.step}: robinhoodchain.blockscout.com/tx/${x.hash}`).join("\n")}\ntroya.codes/flywheel`);
+    log.summary = { claimed, kept, eth: E, buyEth, burnEth, lockEth, troyaBought: Number(formatEther(got)), troyaBurned: Number(formatEther(burnAmt)) };
+    await tell(`<b>Flywheel cycle done</b> (automatic)\nClaimed ${claimed.toFixed(5)} ETH: ${kept.toFixed(5)} ETH stays in the creator wallet (yours), ${E.toFixed(5)} ETH went to the flywheel.\nBought back ${Math.round(log.summary.troyaBought).toLocaleString("en-US")} $TROYA, burned ${Math.round(log.summary.troyaBurned).toLocaleString("en-US")}, locked the rest to 0x…dEaD.\n${log.steps.map((x) => `${x.step}: robinhoodchain.blockscout.com/tx/${x.hash}`).join("\n")}\ntroya.codes/flywheel`);
     return log;
   } catch (e) {
     log.error = String(e?.shortMessage || e?.message || e).slice(0, 400);
@@ -184,7 +188,7 @@ export async function register(r, ctx) {
   r.get("/api/flywheel/auto", async ({ req }) => {
     if (!isAdmin(req)) throw new HttpError(403, "Admins only.");
     const s = { ...DEFAULTS, ...(await store.readJson(SET, {})) };
-    return { keySet: await keySet(), creator: CREATOR, running, settings: { enabled: s.enabled, minEth: s.minEth, burnPct: s.burnPct, maxEth: s.maxEth, everyHours: s.everyHours, reserveEth: s.reserveEth }, lastRun: s.lastRun || null, runs: (s.runs || []).slice(0, 10) };
+    return { keySet: await keySet(), creator: CREATOR, running, settings: { enabled: s.enabled, minEth: s.minEth, flywheelPct: s.flywheelPct, burnPct: s.burnPct, maxEth: s.maxEth, everyHours: s.everyHours, reserveEth: s.reserveEth }, lastRun: s.lastRun || null, runs: (s.runs || []).slice(0, 10) };
   }, { weight: 1 });
   r.post("/api/flywheel/auto/key", async ({ req, body }) => {
     if (!isAdmin(req)) throw new HttpError(403, "Admins only.");
@@ -211,6 +215,7 @@ export async function register(r, ctx) {
       if (body?.enabled != null) s.enabled = !!body.enabled;
       s.minEth = num(body?.minEth ?? s.minEth, 0.002, 10, s.minEth);
       s.burnPct = num(body?.burnPct ?? s.burnPct, 0, 100, s.burnPct);
+      s.flywheelPct = num(body?.flywheelPct ?? s.flywheelPct, 0, 100, s.flywheelPct);
       s.maxEth = num(body?.maxEth ?? s.maxEth, 0.005, 50, s.maxEth);
       s.everyHours = num(body?.everyHours ?? s.everyHours, 1, 168, s.everyHours);
       out = s; return { ...x, ...s };
@@ -230,8 +235,7 @@ export async function register(r, ctx) {
       if (!s.enabled || running || !(await keySet())) return;
       if (s.lastRun && Date.now() - s.lastRun < s.everyHours * 3600_000) return;
       const d = await flywheelView();
-      const ready = d.fees.waitingEth + Math.max(0, d.fees.creatorWalletEth - s.reserveEth);
-      if (ready < s.minEth) return;
+      if (d.fees.waitingEth < s.minEth) return;
       await cycle("schedule");
     } catch (e) { console.warn("[flywheel-auto]", e.message); }
   }, 10 * 60_000).unref();

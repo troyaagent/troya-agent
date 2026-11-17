@@ -211,7 +211,14 @@ export async function mount(view) {
     autoBox.hidden = false;
     const s = a.settings;
     const num = (k, v, step, label, suffix) => { const el = h("input", { class: "input", type: "number", step, value: v, "aria-label": label }); el.dataset.k = k; return h("label", { class: "field" }, h("span", {}, label, suffix ? h("i", {}, ` ${suffix}`) : null), el); };
-    const fields = h("div", { class: "fw-auto-g" }, num("minEth", s.minEth, "0.001", "Run when at least", "ETH"), num("burnPct", s.burnPct, "1", "Burn share", "% (rest is locked)"), num("maxEth", s.maxEth, "0.01", "At most per cycle", "ETH"), num("everyHours", s.everyHours, "1", "At most every", "hours"));
+    const fields = h("div", { class: "fw-auto-g" },
+      num("flywheelPct", s.flywheelPct, "1", "Flywheel share of each claim", "% (the rest stays in the creator wallet: yours)"),
+      num("burnPct", s.burnPct, "1", "Of the flywheel share, burn", "% (the rest is locked)"),
+      num("minEth", s.minEth, "0.001", "Claim when fees reach", "ETH"),
+      num("maxEth", s.maxEth, "0.01", "Flywheel spends at most", "ETH per cycle"),
+      num("everyHours", s.everyHours, "1", "At most one cycle every", "hours"));
+    const ex = 0.05, fw = ex * s.flywheelPct / 100;
+    const exampleEl = h("p", { class: "fine fw-auto-ex" }, `Example: ${ex} ETH of fees → ${(ex - fw).toFixed(4)} ETH stays yours, ${fw.toFixed(4)} ETH to the flywheel (${(fw * s.burnPct / 100).toFixed(4)} burn, ${(fw * (100 - s.burnPct) / 100).toFixed(4)} lock). The flywheel only uses fees it just claimed, never the rest of the wallet.`);
     const save = async (extra = {}) => {
       const body = { ...extra }; for (const el of fields.querySelectorAll("input")) body[el.dataset.k] = Number(el.value);
       try { await api.post("flywheel/auto/settings", body); toast("Saved", "ok"); paintAuto(); } catch (e) { toast(e.message, "error", 7000); }
@@ -219,7 +226,7 @@ export async function mount(view) {
     const pk = h("input", { class: "input", type: "password", autocomplete: "off", spellcheck: "false", placeholder: "Creator wallet private key (0x…, 64 hex)", "aria-label": "Creator wallet private key" });
     clear(autoBox,
       h("div", { class: "fw-auto-h" }, h("h3", {}, "Automatic mode"), h("span", { class: `dk-v ${s.enabled && a.keySet ? "v-passed" : ""}` }, s.enabled && a.keySet ? "On" : "Off")),
-      h("p", { class: "fine", style: { margin: 0 } }, `The server claims the creator fees, buys $TROYA back through Troya Gate, burns the burn share and locks the rest to 0x…dEaD, by itself. It signs only those calls, keeps ${s.reserveEth} ETH for gas and spends at most the limit per cycle. Each cycle is reported to your Telegram chat linked for reports; /flywheel off there stops it.`),
+      h("p", { class: "fine", style: { margin: 0 } }, `The server claims the creator fees, keeps your share in the creator wallet, buys $TROYA back with the flywheel share through Troya Gate, burns the burn part and locks the rest to 0x…dEaD, by itself. It signs only those calls, keeps ${s.reserveEth} ETH for gas and spends at most the limit per cycle. Each cycle is reported to your Telegram chat linked for reports; /flywheel off there stops it.`),
       a.keySet
         ? h("div", { class: "fw-auto-key ok" }, h("b", {}, "Creator key stored, encrypted."), h("span", { class: "fine" }, `Signs as ${short(a.creator)}.`), h("button", { class: "btn sm danger", type: "button", onclick: async () => { if (!(await review({ title: "Delete the stored key?", summary: "Automatic mode stops. You can import it again later.", confirmLabel: "Delete key", danger: true }))) return; try { await api.post("flywheel/auto/forget", {}); toast("Key deleted", "ok"); paintAuto(); } catch (e) { toast(e.message, "error"); } } }, "Delete key"))
         : h("div", { class: "fw-auto-key" },
@@ -229,7 +236,7 @@ export async function mount(view) {
               if (!v) return toast("Paste the creator wallet's private key.", "");
               try { const r = await api.post("flywheel/auto/key", { privateKey: v }); toast(`Key stored for ${short(r.address)}.`, "ok", 6000); paintAuto(); } catch (e) { toast(e.message, "error", 8000); }
             } }, "Store the key"))),
-      fields,
+      fields, exampleEl,
       h("div", { class: "fw-row" },
         h("button", { class: "btn primary", type: "button", disabled: !a.keySet, onclick: () => save({ enabled: !(s.enabled && a.keySet) }) }, s.enabled && a.keySet ? "Switch off" : "Switch on"),
         h("button", { class: "btn", type: "button", onclick: () => save() }, "Save limits"),

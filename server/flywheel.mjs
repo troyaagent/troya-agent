@@ -184,7 +184,7 @@ export async function flywheelView() {
     cycles, totals: { cycles: cycles.length, ethToBuyback: sum((c) => c.steps?.buyback?.ethIn), troyaBought: sum((c) => c.steps?.buyback?.troyaOut), troyaBurned: sum((c) => c.steps?.burn?.troya),
       ethLocked: sum((c) => c.steps?.lock?.eth), troyaLocked: sum((c) => c.steps?.lock?.troya) },
     scannedTo: d.scanned, updatedAt: Date.now(),
-    rules: "Creator fees on $TROYA (70% of the 1% Pons fee plus the 1.9% creator tax) are credited to the creator wallet in the Pons fee escrow. A cycle claims them, buys $TROYA back through Troya Gate, burns it with the token's own burn() so the supply goes down, and adds liquidity to the $TROYA pool as a position minted straight to 0x…dEaD, so nobody can remove it. The creator wallet signs each step; this page reads every number back from the chain.",
+    rules: "Creator fees on $TROYA (70% of the 1% Pons fee plus the 1.9% creator tax) are credited to the creator wallet in the Pons fee escrow. A cycle claims them; a share goes to the flywheel and the rest stays with the creator. The flywheel share buys $TROYA back through Troya Gate, burns part of it with the token's own burn() so the supply goes down, and adds the rest as liquidity to the $TROYA pool, a position minted straight to 0x…dEaD so nobody can remove it. Each step is signed by the creator wallet, by hand or by the automatic mode; this page reads every number back from the chain.",
   };
   view = { at: Date.now(), v };
   return v;

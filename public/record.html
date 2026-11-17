@@ -50,7 +50,7 @@
     <canvas class="rain" data-rain aria-hidden="true"></canvas>
     <span class="eyebrow"><i class="dot"></i>The Record</span>
     <h1 id="ph" class="words" data-words>The Oracle's ledger</h1>
-    <p class="lead rv">Every coin Troya Sentry posts is a call. Its price is written down the moment it is posted, watched for a day, and graded in public: a win if it is higher 24 hours later, a miss if not. Nothing is deleted.</p>
+    <p class="lead rv">Every coin Troya Sentry posts is a call. Its price is written down the moment it is posted, watched for a day, and graded in public: a win if it is higher 24 hours later, a miss if not. Below it, <a class="ulink" href="#chart-oracle">the chart oracle</a>: a chart note for ETH, BTC, $TROYA and the top picks every 6 hours, graded the same way. Nothing is deleted.</p>
   </section>
 
   <section class="ip" aria-labelledby="st-h">
@@ -70,6 +70,18 @@
     </div>
     <div class="rec-wrap"><table class="rec-tbl"><thead><tr><th>Coin</th><th>Called</th><th>Price at call</th><th>1 h</th><th>24 h</th><th>Peak</th><th>Result</th></tr></thead><tbody data-rec-rows><tr><td colspan="7" class="rec-empty">Loading…</td></tr></tbody></table></div>
     <p class="rec-note">Prices in USD. Pons curve prices are read on chain while a coin is on its curve, pool prices after. Rows marked “candles” were filled from GeckoTerminal candles because the call was noticed late. Past calls do not predict future ones. Not financial advice.</p>
+  </section>
+
+  <section class="ip" id="chart-oracle" aria-labelledby="or-h">
+    <div class="eyebrow-line"><span>02 / The chart oracle</span></div>
+    <div class="split" style="margin-bottom:28px">
+      <h2 id="or-h" class="h2 words" data-words>Chart notes, graded</h2>
+      <p class="lead rv" data-orc-rules>Loading the chart notes…</p>
+    </div>
+    <div class="orc-grid" data-orc-now></div>
+    <div class="rec-stats orc-stats" data-orc-stats></div>
+    <div class="rec-wrap"><table class="rec-tbl"><thead><tr><th>Coin</th><th>Written</th><th>Lean</th><th>Price then</th><th>Range read</th><th>24 h later</th><th>Result</th></tr></thead><tbody data-orc-rows><tr><td colspan="7" class="rec-empty">Loading…</td></tr></tbody></table></div>
+    <p class="rec-note">Hourly candles from Hyperliquid for ETH and BTC, from GeckoTerminal for coins on Robinhood Chain. The rules are fixed and the same for every coin. A chart read, not a promise: past notes do not predict future ones.</p>
   </section>
 
   <section class="ip" aria-labelledby="no-h">

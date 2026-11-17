@@ -50,4 +50,55 @@
   }
   load();
   setInterval(load, 60_000);
+
+  /* F21 · the chart oracle */
+  const LEAN = { up: "Leaning up", down: "Leaning down", sideways: "Sideways" };
+  const num = (p) => (p == null ? "–" : p >= 100 ? "$" + p.toLocaleString("en-US", { maximumFractionDigits: 0 }) : price(p));
+  const coinHref = (n) => (n.kind === "hl" ? `/agent#/perps/${esc(n.id)}` : `/agent#/token/${esc(n.id)}`);
+  function oracleNow(notes) {
+    const seen = new Set(), now = [];
+    for (const n of notes) if (!seen.has(n.id)) { seen.add(n.id); now.push(n); }
+    $("[data-orc-now]").innerHTML = now.length ? now.map((n) => {
+      const span = n.resistance - n.support, pos = span > 0 ? Math.max(0, Math.min(1, (n.price - n.support) / span)) : 0.5;
+      return `<article class="orc-card orc-${n.call}">
+        <header><a class="rec-coin" href="${coinHref(n)}">${n.kind === "rh" ? "$" : ""}${esc(n.symbol)}</a><b class="orc-lean">${LEAN[n.call] || esc(n.call)}</b></header>
+        <p class="orc-text">${n.call === "up" ? `Leaning up toward ${num(n.resistance)}, support at ${num(n.support)}.` : n.call === "down" ? `Leaning down toward ${num(n.support)}, resistance at ${num(n.resistance)}.` : `Sideways between ${num(n.support)} and ${num(n.resistance)} more likely than a break.`}</p>
+        <div class="orc-range" aria-label="Price inside its two-day range"><i style="left:${(pos * 100).toFixed(1)}%"></i></div>
+        <div class="orc-ends"><span>${num(n.support)}</span><span>${num(n.price)} now</span><span>${num(n.resistance)}</span></div>
+        <ul class="orc-why">${n.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>
+        <small class="orc-at">Written ${ago(n.at)} · graded ${n.status === "graded" ? "already" : "in " + Math.max(0, Math.round((n.at + 864e5 - Date.now()) / 36e5)) + " h"}</small>
+      </article>`;
+    }).join("") : '<p class="rec-empty">The first notes are written a minute after the server starts.</p>';
+  }
+  function oracleStats(s) {
+    const tile = (k, v, sub = "") => `<div class="rec-tile"><span>${k}</span><b>${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+    const rate = (o) => (o.graded ? `${Math.round((o.wins / o.graded) * 100)}%` : "–");
+    $("[data-orc-stats]").innerHTML = [
+      tile("Notes written", s.notes.toLocaleString("en-US"), `${s.open} still inside their 24 hours`),
+      tile("Graded", s.graded.toLocaleString("en-US"), `${s.wins} right · ${s.graded - s.wins} wrong`),
+      tile("Right, all leans", s.winRate == null ? "–" : `${Math.round(s.winRate * 100)}%`, "graded against the price 24 h later"),
+      tile("Leaning up", rate(s.up), `${s.up.graded} graded`),
+      tile("Leaning down", rate(s.down), `${s.down.graded} graded`),
+      tile("Sideways", rate(s.sideways), `${s.sideways.graded} graded`),
+    ].join("");
+  }
+  function oracleRows(notes) {
+    const g = notes.filter((n) => n.status === "graded");
+    if (!g.length) { $("[data-orc-rows]").innerHTML = '<tr><td colspan="7" class="rec-empty">No note is a day old yet. The first grades land 24 hours after the first notes.</td></tr>'; return; }
+    $("[data-orc-rows]").innerHTML = g.map((n) => `<tr>
+      <td><a class="rec-coin" href="${coinHref(n)}">${n.kind === "rh" ? "$" : ""}${esc(n.symbol)}</a></td>
+      <td>${ago(n.at)}</td><td><span class="orc-tag orc-${n.call}">${LEAN[n.call] || esc(n.call)}</span></td>
+      <td>${num(n.price)}</td><td>${num(n.support)} – ${num(n.resistance)}</td><td>${ch(n.move)}</td>
+      <td>${n.result === "win" ? '<b class="rec-win">Right</b>' : '<b class="rec-miss">Wrong</b>'}</td></tr>`).join("");
+  }
+  async function loadOracle() {
+    try {
+      const d = await (await fetch("/api/oracle?limit=300", { cache: "no-store" })).json();
+      $("[data-orc-rules]").textContent = d.rules;
+      oracleNow(d.notes); oracleStats(d.stats); oracleRows(d.notes);
+    } catch {
+      $("[data-orc-rules]").textContent = "The chart notes could not be read right now. Try again in a minute.";
+    }
+  }
+  if ($("[data-orc-now]")) { loadOracle(); setInterval(loadOracle, 120_000); }
 })();

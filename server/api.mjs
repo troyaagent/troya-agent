@@ -24,6 +24,7 @@ const MODULES = [
   "./onboard.mjs",     // Phase 8: 60-second start (setup status) · Phase 9: leaderboard + copy rules
   "./proof.mjs",       // proof for checkers: the test wallet's Hyperliquid fills as JSON
   "./record.mjs",      // F13: the Oracle's ledger, every Sentry call graded in public
+  "./oracle.mjs",      // F21: the chart oracle, a chart note per coin every 6 hours, graded 24 hours later
   "./assay.mjs",       // F14: The Assay, dev, holders, bundles, clusters, wash trades and funders of a coin
   "./stocks.mjs",      // F17: Stock desk, multipliers, dividends and splits, Morpho loans against stock tokens
   "./liquidity.mjs",   // F18: Liquidity desk, Uniswap v3 ranges from volatility, positions, fees

@@ -822,3 +822,15 @@ html[data-theme="light"] .mk2-cats button[aria-selected="true"] { background: #f
 .mk2-why { margin: 0 0 0 46px; font-size: 11.5px; line-height: 1.35; color: var(--c3); white-space: normal; }
 @media (max-width: 720px) { .mk2-why { margin-left: 0; font-size: 11px; } }
 html[data-theme="light"] .mk2-why { color: var(--blue); }
+
+/* F21: the chart note on a token page */
+.tk2-orc { padding-bottom: 14px; }
+.tk2-orc .panel-h { align-items: center; }
+.tk2-lean { font: 600 10px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; padding: 6px 9px; border-radius: 999px; border: 1px solid currentColor; color: var(--fg-2); }
+.tk2-orc.orc-up .tk2-lean { color: var(--up); } .tk2-orc.orc-down .tk2-lean { color: var(--down); }
+.tk2-orc-t { margin: 4px 16px 12px; font-size: 14px; line-height: 1.45; font-weight: 550; }
+.tk2-orc-r { position: relative; height: 6px; margin: 0 16px; border-radius: 6px; background: linear-gradient(90deg, rgba(255,125,139,.45), rgba(142,223,245,.35), rgba(111,211,154,.45)); }
+.tk2-orc-r i { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--fg, #fff); box-shadow: 0 0 0 3px rgba(142,223,245,.3); }
+.tk2-orc-e { display: flex; justify-content: space-between; margin: 6px 16px 0; font-variant-numeric: tabular-nums; }
+.tk2-orc-w { margin: 10px 16px 0; line-height: 1.5; }
+.tk2-orc-f { margin: 8px 16px 0; }

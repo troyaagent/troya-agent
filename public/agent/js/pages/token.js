@@ -66,7 +66,8 @@ export async function mount(view, { parts, go }) {
       t.launchpad === "pons" ? h("a", { class: "tk2-ext", href: `https://ponsfamily.com/launchpad/${address}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/pons.svg", alt: "" }), "Pons") : null,
       h("a", { class: "tk2-ext", href: `https://fomo.family/tokens/robinhood/${address}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/fomo.png", alt: "" }), "Fomo"),
       h("a", { class: "tk2-ext", href: `https://dexscreener.com/robinhood/${address}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/dexscreener.png", alt: "" }), "DEX Screener")));
-  const tell = (gateLine = "") => dispatchEvent(new CustomEvent("troya:ctx", { detail: { text: `Token page for $${t.symbol} (${address})${t.stock ? ", a Robinhood stock token" : ""}: price ${t.priceUsd != null ? "$" + tiny(t.priceUsd) : "unknown"}, 24h ${t.change24h != null ? t.change24h.toFixed(1) + "%" : "?"}, liquidity ${t.liquidityUsd != null ? usd(t.liquidityUsd, { compact: true }) : "?"}, 24h volume ${t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : "?"}, holders ${t.holders ?? "?"}, launchpad ${t.launchpad || "?"}. ${gateLine}` } }));
+  let ctxGate = "", ctxNote = "";
+  const tell = (gateLine) => { if (gateLine != null) ctxGate = gateLine; dispatchEvent(new CustomEvent("troya:ctx", { detail: { text: `Token page for $${t.symbol} (${address})${t.stock ? ", a Robinhood stock token" : ""}: price ${t.priceUsd != null ? "$" + tiny(t.priceUsd) : "unknown"}, 24h ${t.change24h != null ? t.change24h.toFixed(1) + "%" : "?"}, liquidity ${t.liquidityUsd != null ? usd(t.liquidityUsd, { compact: true }) : "?"}, 24h volume ${t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : "?"}, holders ${t.holders ?? "?"}, launchpad ${t.launchpad || "?"}. ${ctxGate} ${ctxNote}`.trim() } })); };
   tell();
   api.get(`/api/badge/${address}`).then((r) => {
     const checks = r.checks || [];
@@ -153,8 +154,26 @@ export async function mount(view, { parts, go }) {
     else clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "No recent trades in the main pool.")));
   }).catch(() => { if (!chartStop) clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Recent trades are unavailable right now."))); });
 
+  // F21: the chart oracle's latest note for this coin, when Troya has written one
+  const orcCard = h("div", { hidden: true });
+  api.get(`/api/oracle/coin/${address}`).then((r) => {
+    const n = r?.note;
+    if (!n || !n.text) return;
+    const lean = { up: "Leaning up", down: "Leaning down", sideways: "Sideways" }[n.call] || n.call;
+    const span = n.resistance - n.support, pos = span > 0 ? Math.max(0, Math.min(1, (n.price - n.support) / span)) : 0.5;
+    const dot = h("i", { style: { left: `${(pos * 100).toFixed(1)}%` } });
+    orcCard.replaceWith(h("section", { class: `panel tk2-orc orc-${n.call}` },
+      h("div", { class: "panel-h" }, h("h2", {}, "Chart note"), h("span", { class: "tk2-lean" }, lean)),
+      h("p", { class: "tk2-orc-t" }, n.call === "up" ? `Leaning up toward $${tiny(n.resistance)}, support at $${tiny(n.support)}.` : n.call === "down" ? `Leaning down toward $${tiny(n.support)}, resistance at $${tiny(n.resistance)}.` : `Sideways between $${tiny(n.support)} and $${tiny(n.resistance)} more likely than a break.`),
+      h("div", { class: "tk2-orc-r" }, dot),
+      h("div", { class: "tk2-orc-e fine muted" }, h("span", {}, "$" + tiny(n.support)), h("span", {}, "$" + tiny(n.price) + " then"), h("span", {}, "$" + tiny(n.resistance))),
+      h("p", { class: "fine muted tk2-orc-w" }, (n.why || []).join(" · ")),
+      h("p", { class: "fine tk2-orc-f" }, `Written ${ago(n.at)}, graded 24 hours later in public. `, h("a", { class: "link", href: "/record#chart-oracle" }, "Every note"))));
+    ctxNote = `Troya's chart note (${lean}, graded in public 24 h later): ${n.text}`; tell();
+  }).catch(() => {});
+
   clear(view, back, head, actions,
-    h("div", { class: "tk-grid" }, h("div", {}, chartPanel, tabsEl ? h("div", { class: "tk-tabs" }, tabsEl, tabBody) : null), h("div", { class: "tk-side" }, gateCard, stats, info)));
+    h("div", { class: "tk-grid" }, h("div", {}, chartPanel, tabsEl ? h("div", { class: "tk-tabs" }, tabsEl, tabBody) : null), h("div", { class: "tk-side" }, gateCard, orcCard, stats, info)));
   view.classList.add("tk2");
   const offClass = () => view.classList.remove("tk2");
 

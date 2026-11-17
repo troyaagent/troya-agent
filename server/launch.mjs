@@ -217,7 +217,8 @@ async function initialBuy({ owner, token, buyEth, source, launchedAt }) {
 /** "@Troyaagent launch Wooden Horse $HORSE tax 2%" → { name, symbol, taxBps } or null when the post is not a launch. */
 export function parseLaunch(text) {
   const t = String(text || "").replace(/(^|\s)@\w+/g, " ").replace(/https?:\/\/\S+/g, " ").replace(/\s+/g, " ").trim();
-  const m = t.match(/^(?:please\s+|pls\s+)?launch\b\s*(.*)$/i);
+  // a short greeting may come first: "hey launch …", "gm, please launch …"
+  const m = t.match(/^(?:(?:hey|hi|hello|gm|yo|ok|okay|ser|sir)[\s,!.:-]+)?(?:please\s+|pls\s+)?launch\b\s*(.*)$/i);
   if (!m) return null;
   let rest = m[1];
   let taxBps = 0;

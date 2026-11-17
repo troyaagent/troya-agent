@@ -176,7 +176,7 @@ html[data-theme="light"] .d-drawer-b .ag-dock { background: linear-gradient(to b
 .d2-tag:hover { border-color: rgba(142, 223, 245, .45); }
 .d2-tag b { display: block; font-size: 13.5px; font-weight: 650; }
 .d2-tag small { display: block; color: var(--muted); font-size: 12px; }
-.d2-tag.t1 { right: 5%; top: 12%; } .d2-tag.t2 { left: 4%; bottom: 16%; animation-delay: 2s; }
+.d2-tag.t1 { left: 2%; top: 7%; } .d2-tag.t2 { right: 3%; bottom: 9%; animation-delay: 2s; }   /* in the empty corners: the horse rears up-right, its tail falls down-left */
 @keyframes d2-float { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(0, -6px, 0); } }
 .d2-tile { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; flex: none;
   background: radial-gradient(circle at 50% 25%, rgba(142, 223, 245, .22), rgba(142, 223, 245, .03) 70%); border: 1px solid rgba(142, 223, 245, .22); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12); }
@@ -421,9 +421,123 @@ html[data-theme="light"] .sw2-l .sw-flip { background: var(--bg-2); }
 html[data-theme="light"] .sw2-l .sw-rows { background: var(--bg-2); }
 
 /* the hero's Troya logo: floats slowly over a soft pool of light */
-.d2-logo-w { position: absolute; inset: 4% 4% 10% 4%; display: grid; place-items: center; animation: d2-logo-float 9s ease-in-out infinite; will-change: transform; }
-.d2-logo { width: auto; height: 100%; max-width: 100%; object-fit: contain; filter: drop-shadow(0 24px 40px rgba(0, 0, 0, .55)) drop-shadow(0 0 34px rgba(110, 200, 235, .22)); }
+.d2-logo-w { position: absolute; inset: 9% 12% 13% 12%; display: flex; align-items: center; justify-content: center; animation: d2-logo-float 9s ease-in-out infinite; will-change: transform; }
+.d2-logo { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 24px 40px rgba(0, 0, 0, .55)) drop-shadow(0 0 34px rgba(110, 200, 235, .22)); }
 @keyframes d2-logo-float { 0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); } 50% { transform: translate3d(0, -10px, 0) rotate(-.6deg); } }
 @media (prefers-reduced-motion: reduce) { .d2-logo-w { animation: none; } }
 html[data-theme="light"] .d2-logo { filter: drop-shadow(0 18px 30px rgba(10, 60, 80, .22)); }
 html[data-theme="light"] .d2-floor { background: radial-gradient(50% 50% at 50% 50%, rgba(10, 126, 163, .18), transparent 70%); }
+
+/* =====================================================================================================
+   Desk 2.0 pages: Perps, Spot, Lighter, Liquidity, Bridge, Portfolio, Agent, Stocks, Social, Flywheel
+   ===================================================================================================== */
+
+/* ---------- shared page header: a glass card instead of a bare title ---------- */
+.page-head { position: relative; margin-top: 22px; padding: 26px 30px 24px; border-radius: 26px; overflow: hidden; isolation: isolate;
+  border: 1px solid var(--line); background: linear-gradient(180deg, rgba(255, 255, 255, .03), rgba(255, 255, 255, .008)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07); }
+.page-head::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(520px 240px at 88% 0%, rgba(110, 200, 235, .14), transparent 70%), repeating-linear-gradient(180deg, rgba(160, 230, 255, .035) 0 1px, transparent 1px 9px); }
+.page-head h1 { font-size: clamp(30px, 3.2vw, 46px); line-height: 1; text-transform: uppercase; }
+.page-head p { max-width: 760px; color: var(--fg-2); }
+html[data-theme="light"] .page-head { background: var(--bg-1); }
+html[data-theme="light"] .page-head::after { background: radial-gradient(520px 240px at 88% 0%, rgba(10, 126, 163, .1), transparent 70%); }
+
+/* ---------- Perps ---------- */
+.pp-head { position: relative; margin-top: 10px; padding: 16px 20px; gap: 26px; border-radius: 22px; border: 1px solid var(--line); background: var(--glass-solid); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05); }
+.pp-mkt { height: 46px; padding: 0 14px 0 8px; border-radius: 14px; border-color: var(--line-2); background: var(--glass); font-size: 17px; font-weight: 650; }
+.pp-mkt .pp-coin, .pp-mkt .coin-ico { width: 30px; height: 30px; }
+.pp-px { font-size: 32px; font-weight: 700; letter-spacing: -0.035em; }
+.pp-stat { padding-left: 18px; border-left: 1px solid var(--line); }
+.pp-stat .k { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; }
+.pp-stat span:last-child { font-size: 14px; font-weight: 600; color: var(--fg); }
+.pp-grid { gap: 16px; margin-top: 16px; grid-template-columns: minmax(0, 1fr) 360px; }
+.pp-left { gap: 16px; }
+.pp-chart { padding: 12px 14px; border-radius: 22px; }
+.pp-ivals { gap: 4px; padding: 4px; border-radius: 12px; background: rgba(0, 0, 0, .25); border: 1px solid var(--line); width: max-content; margin-bottom: 10px; }
+.pp-ivals button { height: 28px; padding: 0 11px; border-radius: 9px; }
+.pp-ivals button[aria-pressed="true"] { background: linear-gradient(180deg, rgba(142, 223, 245, .18), rgba(142, 223, 245, .06)); box-shadow: inset 0 0 0 1px rgba(142, 223, 245, .3); }
+.pp-chart-box { height: 470px; }
+.pp-book { border-radius: 22px; }
+.pp-book-h { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; }
+.pp-lv { padding: 4px 8px; border-radius: 6px; font-size: 12.5px; }
+.pp-lv.bid i { background: linear-gradient(270deg, rgba(142, 223, 245, .22), rgba(142, 223, 245, .04)); }
+.pp-lv.ask i { background: linear-gradient(270deg, rgba(255, 125, 138, .22), rgba(255, 125, 138, .04)); }
+.pp-pos { border-radius: 22px; }
+.pp-ticket { top: calc(var(--top) + 16px); padding: 18px; gap: 14px; border-radius: 24px; }
+.pp-ticket .seg.long { padding: 5px; border-radius: 16px; }
+.pp-ticket .seg.long button { height: 44px; border-radius: 12px; font-size: 15px; font-weight: 650; }
+.pp-ticket .seg.long button[data-v="long"][aria-pressed="true"] { background: var(--chrome); color: #04131a; box-shadow: var(--chrome-shadow); }
+.pp-ticket .seg.long button[data-v="short"][aria-pressed="true"] { background: linear-gradient(180deg, #ffd3d8, #ff8f9c 55%, #e0566a); color: #2a0509; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 8px 24px rgba(255, 110, 130, .25); }
+.pp-size .input { height: 52px; font-size: 24px; font-weight: 650; border-radius: 14px; }
+.pp-pcts button { height: 32px; border-radius: 999px; background: var(--glass); }
+.pp-range { accent-color: #8edff5; }
+.pp-ticket .btn.big { height: 54px; border-radius: 999px; font-size: 15.5px; }
+.pp-ticket .btn.big.danger { border: 0; color: #2a0509; font-weight: 650; background: linear-gradient(180deg, #ffd3d8, #ff8f9c 55%, #e0566a); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 10px 28px rgba(255, 110, 130, .28); }
+.pp-ticket .btn.big.danger:hover { transform: translateY(-1px); }
+.pp-ticket .gate-box, .sw-gate { border-radius: 16px; border: 1px solid var(--line); background: rgba(0, 0, 0, .2); }
+@media (max-width: 1100px) { .pp-grid { grid-template-columns: 1fr; } .pp-ticket { position: static; } }
+@media (max-width: 560px) { .pp-head { gap: 14px; padding: 14px; } .pp-stat { padding-left: 12px; } .pp-px { font-size: 26px; } .pp-chart-box { height: 340px; } }
+
+/* ---------- Spot, Lighter, Liquidity: market list on the left, ticket on the right ---------- */
+.sp-grid { gap: 16px; margin-top: 16px; }
+.sp-side { border-radius: 22px; padding: 14px; }
+.sp-side > .input, .sp-side .cs-wrap > .input { height: 44px; border-radius: 14px; }
+.sp-list { gap: 4px; margin-top: 10px; }
+.sp-row { padding: 10px 12px; border-radius: 14px; border: 1px solid transparent; transition: background .25s, border-color .25s; }
+.sp-row:hover { background: rgba(142, 223, 245, .05); }
+.sp-row.on, .sp-row[aria-pressed="true"] { background: linear-gradient(180deg, rgba(142, 223, 245, .14), rgba(142, 223, 245, .04)); border-color: rgba(142, 223, 245, .3); }
+.sp-row-n b { font-weight: 650; }
+.sp-card { border-radius: 24px; padding: 20px; }
+.sp-head { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.sp-leg { border-radius: 18px; padding: 16px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line); }
+.sp-amt { font-size: 32px !important; font-weight: 650; height: auto !important; border: 0 !important; background: transparent !important; padding: 4px 0 !important; }
+.sp-card .btn.big, .lq-card .btn.big { height: 54px; border-radius: 999px; font-size: 15.5px; }
+.lt-acct { border-radius: 22px; padding: 18px 20px; }
+.lq-preset { border-radius: 16px; transition: border-color .3s, background .3s, transform .35s var(--soft); }
+.lq-preset:hover { transform: translateY(-2px); }
+.lq-preset.on, .lq-preset[aria-pressed="true"] { border-color: rgba(142, 223, 245, .5); background: linear-gradient(180deg, rgba(142, 223, 245, .14), rgba(142, 223, 245, .04)); }
+.lq-amt { border-radius: 16px; }
+
+/* ---------- Bridge ---------- */
+.br-box { gap: 14px; }
+.br-card { border-radius: 24px; padding: 18px; }
+.br-leg { border-radius: 18px; padding: 16px 18px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line); }
+.br-leg-top span:first-child { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); font-weight: 650; }
+.br-amt { font-size: 38px !important; font-weight: 650; letter-spacing: -0.03em; }
+.br-card .btn.big { height: 54px; border-radius: 999px; font-size: 15.5px; }
+.br-section { border-radius: 22px; }
+
+/* ---------- Portfolio ---------- */
+.pf-tiles { gap: 12px; }
+.pf-tiles .stat { border-radius: 20px; border: 1px solid var(--line); background: var(--glass-solid); padding: 18px 20px; }
+.pf-tiles .stat .v { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; }
+.pf-step { border-radius: 18px; }
+
+/* ---------- Agent pages (Chat, Agent Wallet, Autopilot, Sentry, Playbooks) ---------- */
+.ag-tabs { gap: 4px; padding: 5px; border-radius: 16px; background: rgba(0, 0, 0, .25); border: 1px solid var(--line); width: max-content; max-width: 100%; overflow-x: auto; margin-top: 18px; }
+.ag-tabs a { height: 36px; padding: 0 14px; border-radius: 11px; display: inline-flex; align-items: center; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.ag-tabs a:hover { color: var(--fg); }
+.ag-tabs a[aria-current="page"] { color: var(--fg); background: linear-gradient(180deg, rgba(142, 223, 245, .16), rgba(142, 223, 245, .05)); box-shadow: inset 0 0 0 1px rgba(142, 223, 245, .3); }
+.ag-tabs a[aria-current="page"]::after { display: none; }
+.ag-intro { position: relative; padding: 24px 26px; border-radius: 24px; border: 1px solid var(--line); background: var(--glass-solid); overflow: hidden; }
+.ag-intro::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(420px 200px at 90% 0%, rgba(110, 200, 235, .12), transparent 70%); }
+.ag-intro h2 { font-size: clamp(24px, 2.4vw, 34px); font-weight: 700; letter-spacing: -0.03em; text-transform: uppercase; background: linear-gradient(180deg, #ffffff 30%, #bfeffd 75%, #8edff5); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ag-panel, .ag-signin { border-radius: 22px; }
+.ag-hero h1 { font-weight: 700; letter-spacing: -0.035em; }
+.ag-card { border-radius: 18px; transition: transform .4s var(--soft), border-color .3s; }
+.ag-card:hover { transform: translateY(-2px); border-color: rgba(142, 223, 245, .35); }
+.ag-box, .ag-composer { border-radius: 20px; }
+html[data-theme="light"] .ag-intro { background: var(--bg-1); }
+html[data-theme="light"] .ag-intro h2 { background: linear-gradient(180deg, #151310 40%, #0a5f7b); -webkit-background-clip: text; background-clip: text; }
+
+/* ---------- Stock desk, Social, Flywheel: tabs and panels ---------- */
+.sd-tabs { margin-top: 16px; }
+.sd-tabs .seg { padding: 5px; border-radius: 16px; }
+.sd-tabs .seg button { height: 36px; padding: 0 16px; border-radius: 11px; }
+.sd-panel, .so-card { border-radius: 22px; }
+.fw-tile { border-radius: 20px; border: 1px solid var(--line); background: var(--glass-solid); }
+
+/* ---------- Leaderboard, Launchpad, Create ---------- */
+.lb-box, .lc-sec, .lc-prev { border-radius: 22px; }
+.lp-tabs .tabs { gap: 4px; }
+@media (max-width: 560px) { .d2-tag.t2 { display: none; } .d2-tag.t1 { left: 3%; top: 4%; } }   /* one chip on phones: the Guide button sits bottom right */

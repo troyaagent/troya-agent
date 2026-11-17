@@ -163,7 +163,7 @@ export async function mount(view, ctx) {
       timeScale: { borderColor: "#142026", timeVisible: true, secondsVisible: false },
       crosshair: { mode: 0, vertLine: { color: "#2a3e47", labelBackgroundColor: "#0f181c" }, horzLine: { color: "#2a3e47", labelBackgroundColor: "#0f181c" } },
     });
-    candles = chart.addCandlestickSeries({ upColor: "#5fd3ef", downColor: "#ff6b7d", borderVisible: false, wickUpColor: "#5fd3ef", wickDownColor: "#ff6b7d" });
+    candles = chart.addCandlestickSeries({ upColor: "#8edff5", downColor: "#ff7d8a", borderVisible: false, wickUpColor: "#8edff5", wickDownColor: "#ff7d8a" });
     volume = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "", color: "rgba(95,211,239,.25)" });
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     await loadCandles(true);

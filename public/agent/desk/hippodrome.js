@@ -3,7 +3,7 @@
 //   Almost bonded  a curve at least half full
 //   Migrated       graduated to its own Uniswap v4 pool ($TROYA leads it)
 // Numbers come from /api/launch/board (Pons on chain, DexScreener, GeckoTerminal, Blockscout), refreshed every 15 s.
-import { h, clear, useCss, pageHead, short, ago, tokenIcon, setBorn, compact, usd, every, icon } from "/agent/js/ui.js";
+import { h, clear, useCss, pageHead, short, ago, tokenIcon, setBorn, compact, usd, every, icon, tipOn } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
 
 const LANES = [
@@ -16,6 +16,9 @@ const TG_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 4.2 
 const WEB_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>';
 const svg = (s, cls) => { const e = h("span", { class: cls, "aria-hidden": "true" }); e.innerHTML = s; return e; };
 const SOURCE = { x: ["X", X_ICON], tg: ["Telegram", TG_ICON], web: ["Web", WEB_ICON] };
+// CTO: a group of people; Dex Paid: a blue verified badge
+const PEOPLE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.25 6.75a3.75 3.75 0 1 1 7.5 0 3.75 3.75 0 0 1-7.5 0zM15.75 9.75a3 3 0 1 1 6 0 3 3 0 0 1-6 0zM2.25 9.75a3 3 0 1 1 6 0 3 3 0 0 1-6 0zM6.31 15.12A6.75 6.75 0 0 1 12 12a6.75 6.75 0 0 1 6.71 7.5.75.75 0 0 1-.37.57A12.7 12.7 0 0 1 12 21.75c-2.3 0-4.47-.61-6.34-1.68a.75.75 0 0 1-.37-.57 6.79 6.79 0 0 1 1.02-4.38zM5.08 14.25a8.29 8.29 0 0 0-1.3 5.14 9.7 9.7 0 0 1-1.77-.44l-.11-.04a.56.56 0 0 1-.38-.49l-.01-.12a3.75 3.75 0 0 1 3.57-4.05zM20.23 19.39a8.29 8.29 0 0 0-1.31-5.14 3.75 3.75 0 0 1 3.57 4.05l-.01.12a.56.56 0 0 1-.37.49l-.12.04c-.56.2-1.15.35-1.76.44z"/></svg>';
+const VERIFIED = '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="vb" d="M8.6 3.8A4.5 4.5 0 0 1 12 2.25c1.36 0 2.57.6 3.4 1.55a4.5 4.5 0 0 1 3.5 1.3 4.5 4.5 0 0 1 1.3 3.5A4.5 4.5 0 0 1 21.75 12a4.5 4.5 0 0 1-1.55 3.4 4.5 4.5 0 0 1-1.3 3.5 4.5 4.5 0 0 1-3.5 1.3A4.5 4.5 0 0 1 12 21.75a4.5 4.5 0 0 1-3.4-1.55 4.5 4.5 0 0 1-3.5-1.3 4.5 4.5 0 0 1-1.3-3.5A4.5 4.5 0 0 1 2.25 12c0-1.36.6-2.57 1.55-3.4a4.5 4.5 0 0 1 1.3-3.5 4.5 4.5 0 0 1 3.5-1.3z"/><path class="vc" d="M8.4 12.3l2.4 2.4 4.8-5.2"/></svg>';
 // besides Troya (Buy, through the Gate), each coin opens on the venues people already trade on
 const VENUES = [
   ["Fomo", "fomo.png", (c) => `https://fomo.family/tokens/robinhood/${c.token}`],
@@ -51,10 +54,10 @@ export async function mount(view, ctx) {
     const fresh = c.at && Date.now() - c.at < 3 * 60_000;
     const pct = Math.max(0, Math.min(100, Number(c.progressPct) || 0));
     const tags = [];
-    if (c.source === "origin") tags.push(h("span", { class: "hp-tag og", title: "The original $TROYA coin, the one Troya is built around" }, "OG"));
-    if (c.cto) tags.push(h("span", { class: "hp-tag cto", title: "Community takeover" }, "CTO"));
-    if (c.dexPaid) tags.push(h("span", { class: "hp-tag ds", title: "DexScreener token profile paid" }, h("img", { src: "/img/logos/dexscreener.png", alt: "" }), "Paid"));
-    if (c.keepsAll === true) tags.push(h("span", { class: "hp-tag gold", title: "The creator holds 1M $TROYA and keeps the whole creator fee" }, "Holder"));
+    if (c.source === "origin") tags.push(tipOn(h("span", { class: "hp-tag og" }, "OG"), "OG", "The original $TROYA, the coin Troya is built around.", "green"));
+    if (c.cto) tags.push(tipOn(h("span", { class: "hp-tag cto ic" }, svg(PEOPLE, "hp-tag-ic")), "Community takeover", "The community runs this coin.", "green"));
+    if (c.dexPaid) tags.push(tipOn(h("span", { class: "hp-tag paid ic" }, svg(VERIFIED, "hp-tag-ic")), "Dex Paid", "This coin's DexScreener profile is paid and approved.", "blue"));
+    if (c.keepsAll === true) tags.push(tipOn(h("span", { class: "hp-tag gold" }, "Holder"), "Holder", "The creator holds 1M $TROYA and keeps the whole creator fee.", "gold"));
     const go = () => { location.hash = `#/token/${c.token.toLowerCase()}`; };
     const stop = (e) => e.stopPropagation();
     return h("article", { class: `hp-card${fresh ? " fresh" : ""}`, tabindex: "0", role: "link", "aria-label": `${c.symbol} ${c.name}`, onclick: go, onkeydown: (e) => { if (e.key === "Enter") go(); } },

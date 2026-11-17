@@ -230,6 +230,37 @@ function bornCard(badge, gold) {
   bornPop.style.left = `${left}px`; bornPop.style.top = `${Math.max(8, top)}px`;
 }
 const hideBorn = () => { clearTimeout(bornHide); bornHide = setTimeout(() => { if (bornPop) bornPop.hidden = true; }, 220); };
+let tipBox = null, tipHide = 0;
+function showTip(el, title, text, tone) {
+  if (!tipBox) {
+    tipBox = h("div", { class: "tip-pop", role: "tooltip", hidden: true });
+    addEventListener("scroll", () => { if (tipBox) tipBox.hidden = true; }, { passive: true, capture: true });
+    document.addEventListener("click", (e) => { if (tipBox && !tipBox.hidden && !e.target.closest?.("[data-tip]")) tipBox.hidden = true; });
+    document.body.append(tipBox);
+  }
+  clearTimeout(tipHide);
+  clear(tipBox, h("b", {}, title), h("span", {}, text));
+  tipBox.className = `tip-pop${tone ? " " + tone : ""}`;
+  tipBox.hidden = false;
+  const r = el.getBoundingClientRect(), w = tipBox.offsetWidth, hh = tipBox.offsetHeight;
+  const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+  let top = r.top - hh - 8;
+  if (top < 8) top = r.bottom + 8;
+  tipBox.style.left = `${left}px`; tipBox.style.top = `${top}px`;
+}
+/** Explains `el` on hover, focus or tap: a title and one line. */
+export function tipOn(el, title, text, tone = "") {
+  el.dataset.tip = "1";
+  el.tabIndex = 0;
+  el.setAttribute("aria-label", `${title}: ${text}`);
+  el.addEventListener("mouseenter", () => showTip(el, title, text, tone));
+  el.addEventListener("focus", () => showTip(el, title, text, tone));
+  const hide = () => { clearTimeout(tipHide); tipHide = setTimeout(() => { if (tipBox) tipBox.hidden = true; }, 120); };
+  el.addEventListener("mouseleave", hide);
+  el.addEventListener("blur", hide);
+  el.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); showTip(el, title, text, tone); });
+  return el;
+}
 export function tokenIcon(t, size = "") {
   const sym = String(t?.symbol || "").toUpperCase();
   const addr = String(t?.address || "");

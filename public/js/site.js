@@ -8,7 +8,7 @@ const store = {
 };
 
 export const NAV_BIG = [
-  ["Troya", "/"], ["Launch app", "/agent"], ["Capabilities", "/capabilities"], ["Philosophy", "/philosophy"], ["Plans", "/plans"],
+  ["Troya", "/"], ["Launch app", "/agent"], ["Capabilities", "/capabilities"], ["Roadmap", "/roadmap"], ["Philosophy", "/philosophy"], ["Plans", "/plans"],
 ];
 export const NAV_SMALL = [
   ["Market", "/agent#/market"], ["Swap", "/agent#/swap"], ["Perps", "/agent#/perps"], ["Bridge", "/agent#/bridge"],

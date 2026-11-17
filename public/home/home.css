@@ -493,3 +493,18 @@ em { padding-right: .12em; margin-right: -.08em; }
 /* phones: no page-level sideways pan while swiping; double-tap no longer zooms (pinch zoom stays for reading) */
 html, body { overflow-x: clip; overscroll-behavior-x: none; }
 body { touch-action: manipulation; }
+
+/* hero: the roadmap pill sits above the free-gas pill */
+.rm-pill { position: absolute; left: var(--gut); bottom: 202px; z-index: 4; display: inline-flex; align-items: center; gap: 10px; height: 38px; padding: 0 6px 0 14px; border-radius: 999px;
+  color: var(--fg); font: 600 12.5px/1 var(--sans); letter-spacing: .02em; background: color-mix(in srgb, var(--bg) 70%, transparent); border: 1px solid var(--line, rgba(255,255,255,.14));
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0, 0, 0, .3); transition: border-color .25s, transform .35s; }
+.rm-pill:hover { border-color: color-mix(in srgb, var(--accent) 60%, transparent); transform: translateY(-1px); }
+.rm-pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+.rm-pill b { display: inline-flex; align-items: center; height: 26px; padding: 0 11px; border-radius: 999px; background: var(--accent); color: var(--on-accent, #04212b); font: 700 10.5px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; }
+/* phones: the roadmap pill shrinks to its button and sits beside the gas pill on one line, clear of the title and the horse */
+@media (max-width: 640px) {
+  .rm-pill { top: 322px; bottom: auto; left: calc(50% + 34px); height: 36px; padding: 0 5px 0 11px; gap: 8px; transform: none; }
+  .rm-pill:hover { transform: none; }
+  .rm-pill span { display: none; }
+  .gas-pill { left: calc(50% - 150px); transform: none; }
+}

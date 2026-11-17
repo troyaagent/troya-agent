@@ -36,6 +36,7 @@ const ROUTES = {
   "/record": "/record.html",
   "/flywheel": "/flywheel.html",
   "/community": "/community.html",
+  "/roadmap": "/roadmap.html",
   "/badge": "/badge.html",
   "/agent": "/agent/index.html",
 };

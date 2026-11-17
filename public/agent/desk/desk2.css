@@ -939,3 +939,7 @@ html[data-theme="light"] .rg-pre { background: rgba(10, 40, 60, .05); }
 .rl-why { color: var(--fg-2, var(--muted)) !important; }
 @media (max-width: 1000px) { .rl-grid { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .rl-nums { grid-template-columns: 1fr 1fr; } .rl-row { grid-template-columns: minmax(0, 1fr) auto; } .rl-v { grid-column: 1 / -1; } }
+
+/* phones: no page-level sideways pan or accidental zoom while swiping (scrollable rows keep their own scroll) */
+html, body { overflow-x: clip; overscroll-behavior-x: none; }
+body { touch-action: manipulation; }

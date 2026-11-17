@@ -223,3 +223,7 @@ p:not(.vlinks) .ulink::before, li .ulink::before, td .ulink::before { display: n
 html[data-theme="light"] .orc-card { background: rgba(255,255,255,.6); }
 html[data-theme="light"] .orc-range i { background: #1f3b42; }
 @media (max-width: 720px) { .orc-grid { grid-template-columns: minmax(0, 1fr); } .orc-ends span:nth-child(2) { display: none; } }
+
+/* phones: no page-level sideways pan while swiping; double-tap no longer zooms (pinch zoom stays for reading) */
+html, body { overflow-x: clip; overscroll-behavior-x: none; }
+body { touch-action: manipulation; }

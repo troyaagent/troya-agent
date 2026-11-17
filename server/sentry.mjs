@@ -331,13 +331,22 @@ export async function checkLaunch(token) {
   return { token, symbol: cleanSymbol(t.symbol), name: cleanName(t.name), checks: g.checks, pons, snipe: !!(ps && ps.snipeBps > 0n), ...vd, at: Date.now() };
 }
 
+// logs for one scan window: the official RPC first, once more after a short pause, and only then the fallbacks (whose
+// free plans refuse wide ranges, which used to turn a single official hiccup into a noisy failed round)
+async function scanLogs(q) {
+  for (let i = 0; i < 2; i++) {
+    try { return await rpc("robinhood", "eth_getLogs", [q], { timeoutMs: 20000, only: CHAINS.robinhood.upstreams[0] }); }
+    catch { await new Promise((r) => setTimeout(r, 1500)); }
+  }
+  return rpc("robinhood", "eth_getLogs", [q], { timeoutMs: 20000 });
+}
 async function scan(s) {
   const head = Number(BigInt(await rpc("robinhood", "eth_blockNumber", [])));
   let from = s.lastBlock ? s.lastBlock + 1 : head - CATCHUP;
   if (head - from > MAX_GAP) from = head - CATCHUP;                     // after downtime: don't flood the channel with stale launches
   while (from <= head) {
     const to = Math.min(head, from + MAX_RANGE - 1);
-    const logs = await rpc("robinhood", "eth_getLogs", [{ address: ADDR.ponsFactory, topics: [LAUNCH_TOPIC], fromBlock: "0x" + from.toString(16), toBlock: "0x" + to.toString(16) }], { timeoutMs: 20000 });
+    const logs = await scanLogs({ address: ADDR.ponsFactory, topics: [LAUNCH_TOPIC], fromBlock: "0x" + from.toString(16), toBlock: "0x" + to.toString(16) });
     for (const l of logs || []) {
       const token = "0x" + l.topics[1].slice(26);
       if (s.seen[token]) continue;
@@ -365,8 +374,8 @@ function notePool(s, token, item) {
 async function scanPools(s, from, to) {
   const range = { fromBlock: "0x" + from.toString(16), toBlock: "0x" + to.toString(16) };
   const [v4, v3] = await Promise.all([
-    rpc("robinhood", "eth_getLogs", [{ address: ADDR.poolManager, topics: [T_V4_INIT], ...range }], { timeoutMs: 20000 }),
-    rpc("robinhood", "eth_getLogs", [{ address: ADDR.v3Factory, topics: [T_V3_CREATED], ...range }], { timeoutMs: 20000 }),
+    scanLogs({ address: ADDR.poolManager, topics: [T_V4_INIT], ...range }),
+    scanLogs({ address: ADDR.v3Factory, topics: [T_V3_CREATED], ...range }),
   ]);
   for (const l of v4 || []) {
     const c0 = "0x" + l.topics[2].slice(26), c1 = "0x" + l.topics[3].slice(26);

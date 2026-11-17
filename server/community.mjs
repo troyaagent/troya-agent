@@ -24,6 +24,30 @@ const isAdmin = (req) => { const s = getSession(req); return !!s && admins().inc
 const clean = (s, n) => String(s ?? "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, n);
 const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 
+/* ---------- sales pitches: paid listings, market making, promotion packages ----------
+   They still land in the inbox (status "spam", with a note) so nothing is lost, but they are not sent to the
+   admins' Telegram. Both must show: the writer speaks as the seller ("our platform", "we offer", "I am a
+   representative"), and it sells at least two things. A member reporting someone else's pitch ("someone offered…",
+   "fake", "scam") or asking for a feature ("your token needs a market maker page") is never auto-marked. */
+const PITCH_VOICE = [
+  /\b(our|we are an?) (platform|exchange|services?|agency|company)\b/i,
+  /\bwe (offer|provide|would be glad|would like|are pleased|can help)\b/i,
+  /\b(i am|i'm)( an?| the)?( verified| official)? (representative|business development|bd manager|marketing|partnership|listing)/i,
+];
+const PITCH_SALE = [
+  /\blisting (packages?|proposals?|offers?|fees?|services?)\b|\bproposal for listing\b|\blist your (token|project|coin)\b/i,
+  /\bmarket[\s-]?mak(er|ers|ing)\b|\bmm daily\b|\bvolume (generation|bot)\b/i,
+  /\b(marketing|promotion|promo) (services?|packages?|campaigns?)\b|\b(kol|influencers?|shill(ing)?|press releases?)\b/i,
+  /\bdiscounts?\b|\bprice list\b|\bpricing plans?\b/i,
+  /\bpayments? (are )?accepted\b|\bpay (in|with) (btc|eth|usdt|bnb|trx)\b/i,
+];
+const THIRD_PARTY = /\b(someone|somebody|scam(mer)?s?|impersonat\w*|pretend\w*|fake|this (guy|person|account|user|wallet))\b/i;
+export function looksLikePitch(it) {
+  const t = `${it?.message || ""}\n${it?.contact || ""}`;
+  if (THIRD_PARTY.test(t)) return false;
+  return PITCH_VOICE.some((re) => re.test(t)) && PITCH_SALE.filter((re) => re.test(t)).length >= 2;
+}
+
 let store = null, dir = null;
 const FILE = "reports.json";
 
@@ -59,8 +83,9 @@ async function add(r) {
   return { id, item };
 }
 async function commit(item) {
+  if (looksLikePitch(item)) { item.status = "spam"; item.note = "Auto-marked: reads like a sales pitch (paid listing, market making or promotion). Not sent to Telegram."; }
   await store.update(FILE, [], (l) => { l.push(item); if (l.length > 3000) l.splice(0, l.length - 3000); return l; });
-  notifyTeam(item).catch(() => {});
+  if (item.status !== "spam") notifyTeam(item).catch(() => {});
   return item;
 }
 

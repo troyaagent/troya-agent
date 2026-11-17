@@ -379,7 +379,23 @@ async function marketCapUsd(token) {
 
 /* ---------- the Hippodrome: every coin born through Troya ---------- */
 // $TROYA itself opens the Migrated column: the coin the whole desk is built around (launched on Pons, 15 Nov 2026).
-const ORIGIN = { token: "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", name: "Troya Agent", symbol: "TROYA", source: "origin", owner: "0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4", at: Date.parse("2026-11-15T12:00:00Z") };
+const ORIGIN = { token: "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", name: "Troya Agent", symbol: "TROYA", source: "origin", owner: "0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4", at: Date.parse("2026-11-15T12:00:00Z"), cto: true };
+// DexScreener orders per coin: a paid token profile ("Dex Paid") and a community takeover ("CTO"), read every 10 minutes
+const dsOrders = new Map();
+async function dexOrders(token) {
+  const k = lc(token), hit = dsOrders.get(k);
+  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.v;
+  let v = { paid: false, cto: false, boosts: 0 };
+  try {
+    const r = await fetch(`https://api.dexscreener.com/orders/v1/robinhood/${k}`, { signal: AbortSignal.timeout(8000) });
+    const j = r.ok ? await r.json() : null;
+    const orders = Array.isArray(j) ? j : j?.orders || [];
+    v = { paid: orders.some((o) => o.type === "tokenProfile" && o.status === "approved"), cto: orders.some((o) => o.type === "communityTakeover" && o.status === "approved"),
+      boosts: (j?.boosts || []).reduce((a, b) => a + (Number(b.amount) || 0), 0) };
+  } catch {}
+  dsOrders.set(k, { at: Date.now(), v });
+  return v;
+}
 export const ALMOST_PCT = 50;                  // a curve at least this full counts as almost bonded
 let boardMemo = null;
 async function bornRecords() {
@@ -390,7 +406,7 @@ async function bornRecords() {
 }
 async function boardItem(rec, handles) {
   const m = await import("./market.mjs");
-  const d = await m.getRobinhoodToken(rec.token).catch(() => null);
+  const [d, ds] = await Promise.all([m.getRobinhoodToken(rec.token).catch(() => null), dexOrders(rec.token)]);
   const t = d?.token || {}, p = d?.pons || null;
   const graduated = !!p?.graduated || (rec.source === "origin" && !p);
   return {
@@ -400,6 +416,7 @@ async function boardItem(rec, handles) {
     priceUsd: t.priceUsd ?? null, mcapUsd: t.mcapUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, holders: t.holders ?? null,
     txns24h: t.txns24h ?? null, buys24h: t.buys24h ?? null, sells24h: t.sells24h ?? null, change1h: t.change1h ?? null, change24h: t.change24h ?? null,
     progressPct: graduated ? 100 : p?.progressPct ?? null, graduated, raisedEth: p?.raised ?? null, ponsUrl: p?.ponsUrl || null,
+    dexPaid: ds.paid, cto: ds.cto || !!rec.cto, boosts: ds.boosts || 0,
   };
 }
 export async function board() {

@@ -948,12 +948,13 @@ body { touch-action: manipulation; }
 .tok-wrap { position: relative; display: inline-flex; flex: none; vertical-align: middle; }
 .tok-wrap > .tok-net { position: absolute; right: -2px; bottom: -2px; width: 44%; height: 44%; min-width: 11px; min-height: 11px; max-width: 24px; max-height: 24px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: #0d161a; box-shadow: 0 0 0 2px var(--bg-1, #0a0f12); }
 .tok-wrap > .tok-net img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.tok-wrap > .tok-troya { background: radial-gradient(circle at 35% 30%, #23434e, #060b0d 72%); box-shadow: 0 0 0 2px var(--bg-1, #0a0f12), 0 0 8px rgba(142, 223, 245, .35); }
+/* line art around the badge: Troya blue on the curve, gold once graduated (no glow) */
+.tok-wrap > .tok-troya { background: radial-gradient(circle at 35% 30%, #23434e, #060b0d 72%); box-shadow: 0 0 0 1.5px var(--bg-1, #0a0f12), 0 0 0 2.6px #8edff5; }
 .tok-wrap > .tok-troya img { object-fit: contain; padding: 9%; filter: drop-shadow(0 0 2px rgba(142, 223, 245, .55)); }
 /* graduated: the horse turns gold */
-.tok-wrap > .tok-troya.gold { box-shadow: 0 0 0 2px var(--bg-1, #0a0f12); }            /* no glow: only the horse turns gold */
+.tok-wrap > .tok-troya.gold { box-shadow: 0 0 0 1.5px var(--bg-1, #0a0f12), 0 0 0 2.6px #e9bd5f; }
 .tok-wrap > .tok-troya.gold img { filter: sepia(1) saturate(4.2) hue-rotate(-10deg) brightness(1.08) contrast(1.05); }
-.tok-ico.xl { width: 56px; height: 56px; font-size: 15px; }
+.tok-ico.xl { width: 80px; height: 80px; font-size: 18px; }
 .tok-wrap > .tok-troya { cursor: pointer; }
 .born-pop { position: fixed; z-index: 120; width: 250px; padding: 10px; border-radius: 14px; border: 1px solid rgba(142, 223, 245, .28); background: color-mix(in srgb, var(--bg-1, #0a0f12) 94%, transparent); backdrop-filter: blur(14px); box-shadow: 0 18px 44px rgba(0, 0, 0, .55); display: grid; gap: 4px; }
 .born-pop[hidden] { display: none; }
@@ -1001,12 +1002,13 @@ body { touch-action: manipulation; }
 .hp-count { margin-left: auto; font: 600 12px/1 var(--mono, monospace); color: var(--muted); padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line, rgba(255,255,255,.1)); }
 .hp-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 10px; display: grid; gap: 8px; align-content: start; scrollbar-width: thin; }
 /* every coin in its own box */
-.hp-card { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px; border-radius: 14px; border: 1px solid var(--line, rgba(255,255,255,.09)); background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012)); cursor: pointer; transition: background .2s, border-color .2s, transform .2s, box-shadow .2s; }
+.hp-card { display: grid; grid-template-columns: 80px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px; border-radius: 14px; border: 1px solid var(--line, rgba(255,255,255,.09)); background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012)); cursor: pointer; transition: background .2s, border-color .2s, transform .2s, box-shadow .2s; }
 .hp-card:hover, .hp-card:focus-visible { background: rgba(142, 223, 245, .05); border-color: rgba(142, 223, 245, .35); box-shadow: 0 8px 24px rgba(0, 0, 0, .35); outline: none; }
 .hp-card.fresh { animation: hp-fresh 2.4s ease-out 1; border-color: rgba(142, 223, 245, .28); }
 @keyframes hp-fresh { 0% { background: rgba(142, 223, 245, .16); } 100% { background: transparent; } }
 .hp-ava .tok-ico { box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 10px 24px rgba(0,0,0,.4); }
-.hp-ava .tok-ico.xl { border-radius: 14px; }
+.hp-ava .tok-ico.xl { border-radius: 16px; }
+.hp-ava .tok-wrap > .tok-net { max-width: 26px; max-height: 26px; right: -4px; bottom: -4px; }
 .hp-body { min-width: 0; display: grid; gap: 5px; }
 .hp-top { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
 .hp-sym { font-size: 15px; letter-spacing: .01em; white-space: nowrap; }
@@ -1018,6 +1020,9 @@ body { touch-action: manipulation; }
 .hp-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); font-size: 11.5px; align-items: center; }
 .hp-chip { font-size: 10.5px; padding: 2px 7px; border-radius: 999px; background: rgba(255,255,255,.05); color: var(--fg-2, #c9d6db); }
 .hp-chip.gold { background: rgba(242, 194, 107, .12); color: #f2c26b; }
+.hp-chip.ds { display: inline-flex; align-items: center; gap: 4px; }
+.hp-chip.ds img { width: 11px; height: 11px; border-radius: 3px; }
+.hp-chip.cto { background: rgba(111, 211, 154, .12); color: #6fd39a; font-weight: 600; letter-spacing: .04em; }
 .hp-stats { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; }
 .hp-st i { font-style: normal; color: var(--muted); margin-right: 4px; }
 .hp-st b { font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -1055,7 +1060,25 @@ body { touch-action: manipulation; }
   .hp-head { flex-direction: column; gap: 0; }
   .hp-create-wrap { margin: 0 0 14px; }
   .hp-menu { left: 0; right: auto; width: min(320px, calc(100vw - 32px)); }
-  .hp-card { grid-template-columns: 48px minmax(0, 1fr); }
-  .hp-card .tok-ico.xl { width: 48px; height: 48px; }
+  .hp-card { grid-template-columns: 64px minmax(0, 1fr); }
+  .hp-card .tok-ico.xl { width: 64px; height: 64px; }
   .hp-act { grid-column: 1 / -1; grid-auto-flow: column; justify-content: end; align-items: center; }
 }
+
+/* Create coin (#/create): the chooser every Create coin button leads to */
+.cc-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 6px; }
+.cc-card { padding: 22px; display: flex; flex-direction: column; gap: 10px; border-radius: 18px; }
+.cc-card.off { opacity: .72; }
+.cc-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cc-ic { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; background: rgba(142, 223, 245, .08); border: 1px solid rgba(142, 223, 245, .22); color: var(--accent, #8edff5); }
+.cc-ic svg { width: 22px; height: 22px; fill: currentColor; }
+.cc-ic svg[fill="none"] { fill: none; }
+.cc-status { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line, rgba(255,255,255,.12)); color: var(--muted); }
+.cc-status.ok { color: #6fd39a; border-color: rgba(111, 211, 154, .4); }
+.cc-status.test { color: #f2c26b; border-color: rgba(242, 194, 107, .4); }
+.cc-card h2 { margin: 6px 0 0; font-size: 20px; }
+.cc-sub { margin: 0; color: var(--muted); font-size: 13.5px; }
+.cc-points { margin: 4px 0 6px; padding-left: 18px; display: grid; gap: 7px; font-size: 13.5px; line-height: 1.5; flex: 1; }
+.cc-cta { justify-content: center; height: 42px; }
+.cc-foot { margin: 18px 0 30px; color: var(--muted); font-size: 13.5px; }
+@media (max-width: 1000px) { .cc-grid { grid-template-columns: 1fr; } }

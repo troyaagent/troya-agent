@@ -1,4 +1,5 @@
-// Launchpad (#/launch): new coins on Robinhood Chain across launchpads. #/launch/create is handled by launch-create.js.
+// All launches (#/launch): new coins on Robinhood Chain across launchpads. #/launch/create (the web form) is handled by
+// launch-create.js and #/launch/x by launch-x.js; the Create coin chooser is the Desk page #/create.
 import { h, clear, useCss, pageHead, tabs, table, pctEl, compact, debounce, icon, padLogo, usd, tokenIcon, tiny } from "../ui.js";
 import { api } from "../api.js";
 import { LAUNCHPADS, tokenCell, priceCell, usdCell, mcapCell, ageText, updatedText } from "../marketlib.js";
@@ -29,8 +30,8 @@ export async function mount(view, ctx) {
   const state = { tab: TABS[ctx.query.tab] ? ctx.query.tab : "trending", pad: "all", q: "", rows: [], total: 0 };
   let reqId = 0;
 
-  const head = pageHead("Launchpad", "New coins on Robinhood Chain, whichever launchpad minted them: Pons, Clanker, Bankr, Virtuals and more. Launch your own on Pons in one transaction.", {
-    act: h("span", { style: { display: "inline-flex", gap: "8px", flexWrap: "wrap" } }, h("a", { class: "btn", href: "#/launch/x" }, "Launch from X"), h("a", { class: "btn primary", href: "#/launch/create" }, icon("rocket"), "Create coin")),
+  const head = pageHead("All launches", "Every new coin on Robinhood Chain, whichever launchpad minted it: Pons, Clanker, Bankr, Virtuals and more. Coins born through Troya are in the Hippodrome.", {
+    act: h("a", { class: "btn primary", href: "#/create" }, icon("rocket"), "Create coin"),
   });
   const tabEl = tabs(Object.entries(TABS).map(([value, t]) => ({ value, label: t.label })), state.tab, (v) => { state.tab = v; reset(); });
   const search = h("input", { class: "input search", type: "search", placeholder: "Search symbol, name or address", "aria-label": "Search launches" });

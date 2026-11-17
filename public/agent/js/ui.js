@@ -219,7 +219,7 @@ function bornCard(badge, gold) {
   clearTimeout(bornHide);
   clear(bornPop,
     h("div", { class: "born-pop-head" }, h("img", { src: "/img/logo-3d-128.png", alt: "" }), h("span", {}, h("b", {}, "Born through Troya"), h("small", {}, gold ? "Graduated to its own Uniswap pool" : "Still on its Pons curve"))),
-    h("a", { class: "born-pop-link", href: "/agent#/launch/create", onclick: () => { bornPop.hidden = true; } }, "Create your coin on troya.codes", h("i", {}, "→")),
+    h("a", { class: "born-pop-link", href: "/agent#/create", onclick: () => { bornPop.hidden = true; } }, "Create your coin", h("i", {}, "→")),
     h("a", { class: "born-pop-link", href: "/agent#/launch/x", onclick: () => { bornPop.hidden = true; } }, "Launch from X", h("i", {}, "→")));
   bornPop.classList.toggle("gold", gold);
   bornPop.hidden = false;

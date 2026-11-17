@@ -162,7 +162,7 @@ export async function mount(view, { go, ask: askDrawer }) {
     ["swap", "Swap", "Coins and tokenized stocks on Robinhood Chain", "#/swap"],
     ["bolt", "Perps", "Hyperliquid perps with stops and take-profit", "#/perps"],
     ["bridge", "Bridge", "Bring ETH in from Ethereum, Arbitrum or Base", "#/bridge"],
-    ["rocket", "Launch", "Create a coin on Pons with the Gate on it", "#/launch/create"],
+    ["rocket", "Launch", "Create a coin on Pons with the Gate on it", "#/create"],
     ["loop", "Copy", "Follow traders from the leaderboard", "#/leaderboard"],
     ["key", "API and MCP", "Give your own agent a scoped token", "#/agent/wallet"],
   ];

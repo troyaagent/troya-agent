@@ -89,7 +89,7 @@ const G = {
     ask: ["Is this coin safe to buy?", "Who are the biggest holders of this coin?"], next: [["Gate it", "#/gate"], ["Swap", "#/swap"]] },
   launch: { t: "Launchpad", what: "Every launch on Robinhood Chain launchpads, newest first, with the Gate one tap away.",
     tour: [[".lp-tabs", "Launchpads", "Pons and the others."], [".mk-panel", "Launches", "Progress, buyers and age."]],
-    ask: ["Which launches have the most independent buyers today?"], next: [["Create a token", "#/launch/create"]] },
+    ask: ["Which launches have the most independent buyers today?"], next: [["Create coin", "#/create"]] },
   "launch/create": { t: "Create a token", what: "Launch a coin on Pons with the Gate on it from the first block.",
     tour: [[".lc-form", "Your coin", "Name, ticker, image and links."], [".lc-side", "Preview", "What people will see."]],
     ask: ["What does it cost to launch on Pons?", "How does a Pons curve graduate?"], next: [["Get a Gate badge", "/badge"]] },

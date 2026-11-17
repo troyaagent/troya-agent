@@ -31,27 +31,12 @@ export async function mount(view, ctx) {
   const kpis = h("div", { class: "hp-kpis" });
   const lanes = h("div", { class: "hp-lanes" });
   const tabs = h("div", { class: "hp-tabs", role: "tablist" });
-  const createBtn = h("button", { class: "btn primary hp-create", type: "button", "aria-haspopup": "true", "aria-expanded": "false", onclick: (e) => { e.stopPropagation(); st.menu = !st.menu; paintMenu(); } }, icon("plus"), "Create coin");
-  const menu = h("div", { class: "hp-menu", hidden: true });
+  const createBtn = h("a", { class: "btn primary hp-create", href: "#/create" }, icon("plus"), "Create coin");
   clear(view, h("div", { class: "dk hp" },
     h("div", { class: "hp-head" },
       pageHead("Hippodrome", "Every coin born through Troya, from its first block on the Pons curve to its own Uniswap pool. Launched from X, Telegram or troya.codes."),
-      h("div", { class: "hp-create-wrap" }, createBtn, menu)),
+      h("div", { class: "hp-create-wrap" }, createBtn)),
     kpis, tabs, lanes));
-  const closeMenu = () => { if (st.menu) { st.menu = false; paintMenu(); } };
-  document.addEventListener("click", closeMenu);
-
-  function paintMenu() {
-    createBtn.setAttribute("aria-expanded", String(st.menu));
-    menu.hidden = !st.menu;
-    if (!st.menu) return;
-    const opt = (href, ic, title, text, extra = {}) => h(extra.disabled ? "div" : "a", { class: `hp-opt${extra.disabled ? " off" : ""}`, href: extra.disabled ? null : href, onclick: () => closeMenu() },
-      svg(ic, "hp-opt-ic"), h("span", {}, h("b", {}, title, extra.badge ? h("small", { class: "hp-soon" }, extra.badge) : null), h("small", {}, text)));
-    clear(menu,
-      opt("#/launch/create", WEB_ICON, "On troya.codes", "Sign with your own wallet. Open to everyone."),
-      opt("#/launch/x", X_ICON, "From X", "Post to @Troyaagent. Holders of 1M $TROYA."),
-      opt(null, TG_ICON, "In Telegram", "From the Troya bot. Open to everyone.", { disabled: true, badge: "Soon" }));
-  }
 
   async function refresh() {
     try { st.d = await api.get("/api/launch/board"); st.err = null; setBorn([...st.d.new, ...st.d.almost].map((x) => x.token), st.d.migrated.map((x) => x.token)); }
@@ -68,12 +53,14 @@ export async function mount(view, ctx) {
     if (c.creatorTaxBps) chips.push(h("span", { class: "hp-chip" }, `Tax ${c.creatorTaxBps / 100}%`));
     if (c.keepsAll === true) chips.push(h("span", { class: "hp-chip gold", title: "The creator holds 1M $TROYA and keeps the whole creator fee" }, "Holder"));
     if (c.initialBuyEth) chips.push(h("span", { class: "hp-chip", title: "The creator's Agent Wallet bought right after launch" }, `Dev buy ${c.initialBuyEth} ETH`));
+    if (c.dexPaid) chips.push(h("span", { class: "hp-chip ds", title: "DexScreener token profile paid" }, h("img", { src: "/img/logos/dexscreener.png", alt: "" }), "Paid"));
+    if (c.cto) chips.push(h("span", { class: "hp-chip cto", title: "Community takeover" }, "CTO"));
     const go = () => { location.hash = `#/token/${c.token.toLowerCase()}`; };
     return h("article", { class: `hp-card${fresh ? " fresh" : ""}`, tabindex: "0", role: "link", "aria-label": `${c.symbol} ${c.name}`, onclick: go, onkeydown: (e) => { if (e.key === "Enter") go(); } },
       h("div", { class: "hp-ava" }, tokenIcon({ address: c.token, symbol: c.symbol, image: c.image }, "xl")),
       h("div", { class: "hp-body" },
         h("div", { class: "hp-top" }, h("b", { class: "hp-sym" }, c.symbol || short(c.token)), h("span", { class: "hp-name" }, c.name || ""),
-          c.source === "origin" ? h("span", { class: "hp-src origin" }, "Genesis") : src ? h("span", { class: "hp-src", title: `Launched from ${src[0]}` }, svg(src[1], "hp-src-ic"), c.source === "x" ? null : src[0]) : null),
+          c.source === "origin" ? h("span", { class: "hp-src origin", title: "The original $TROYA coin, the one Troya is built around" }, "OG") : src ? h("span", { class: "hp-src", title: `Launched from ${src[0]}` }, svg(src[1], "hp-src-ic"), c.source === "x" ? null : src[0]) : null),
         h("div", { class: "hp-meta" }, c.at ? h("span", {}, ago(c.at)) : null,
           c.creatorX ? h("span", {}, `@${c.creatorX}`) : c.creator ? h("span", { class: "mono" }, short(c.creator)) : null, ...chips),
         h("div", { class: "hp-stats" }, stat("MC", usd(c.mcapUsd, { compact: true })), stat("Vol", usd(c.volume24hUsd, { compact: true })), stat("Holders", c.holders != null ? compact(c.holders, 0) : "–"),
@@ -103,10 +90,10 @@ export async function mount(view, ctx) {
     clear(lanes, LANES.map((l) => h("section", { class: `panel hp-lane ${l.tone}${st.lane === l.key ? " on" : ""}`, "aria-label": l.title },
       h("header", {}, h("i", { class: "hp-dot" }), h("b", {}, l.title), h("span", { class: "hp-count" }, String(d[l.key].length)), h("small", {}, l.hint)),
       h("div", { class: "hp-list" }, d[l.key].length ? d[l.key].map((c) => card(c, l.key))
-        : h("div", { class: "hp-empty" }, h("p", {}, l.empty), l.key === "new" ? h("div", { class: "hp-empty-acts" }, h("a", { class: "btn primary", href: "#/launch/create" }, "Create on troya.codes"), h("a", { class: "btn", href: "#/launch/x" }, "Launch from X")) : null)))));
+        : h("div", { class: "hp-empty" }, h("p", {}, l.empty), l.key === "new" ? h("div", { class: "hp-empty-acts" }, h("a", { class: "btn primary", href: "#/create" }, "Create coin")) : null)))));
   }
 
   paint();
   const stop = every(15_000, refresh);
-  return () => { alive = false; stop(); document.removeEventListener("click", closeMenu); };
+  return () => { alive = false; stop(); };
 }

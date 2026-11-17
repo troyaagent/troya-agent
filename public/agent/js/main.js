@@ -170,7 +170,7 @@ clear($("[data-foot]"),
 /* ---------- Ask palette (⌘K) ---------- */
 const QUICK = [
   ["What is moving on Robinhood Chain right now?", "Ask"], ["Show funding extremes on Hyperliquid", "Ask"], ["Is this token safe? (paste an address)", "Ask"],
-  ["Open Swap", "#/swap"], ["Open Perps", "#/perps"], ["Open Bridge", "#/bridge"], ["Create a token", "#/launch/create"], ["Read the docs", "#/docs"],
+  ["Open Swap", "#/swap"], ["Open Perps", "#/perps"], ["Open Bridge", "#/bridge"], ["Create coin", "#/launch/create"], ["Read the docs", "#/docs"],
 ];
 function openAsk(prefill = "") {
   const input = h("input", { placeholder: "Ask Troya, or jump to a page…", value: prefill, "aria-label": "Ask Troya" });

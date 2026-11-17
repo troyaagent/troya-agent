@@ -16,7 +16,7 @@ export async function mount(view) {
   clear(view, h("div", { class: "dk cc" },
     pageHead("Create coin", "Three ways to launch a coin on Robinhood Chain through Troya. Each one lands on the Pons curve, gets checked by the Gate, and shows up in Troya Launches."),
     grid,
-    h("p", { class: "cc-foot" }, "Every coin born through Troya: ", h("a", { class: "ulink", href: "#/troya-launches" }, "Troya Launches"), " · Every new coin on Robinhood Chain: ", h("a", { class: "ulink", href: "#/launch" }, "All launches"))));
+    h("p", { class: "cc-foot" }, "Every coin born through Troya: ", h("a", { class: "ulink", href: "#/troya-launches" }, "Troya Launches"), " · Fees from your coins: ", h("a", { class: "ulink", href: "#/creator" }, "Creator desk"), " · Every new coin on Robinhood Chain: ", h("a", { class: "ulink", href: "#/launch" }, "All launches"))));
 
   function card({ ic, title, sub, status, tone, points, cta, href, off, guide }) {
     return h("article", { class: `panel cc-card${off ? " off" : ""}` },

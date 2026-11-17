@@ -109,7 +109,7 @@ export async function mount(view, ctx) {
       h("a", { class: "link", href: `#/token/${String(x.token).toLowerCase()}` }, "Open"),
       sellRow(x))) : [h("p", { class: "muted" }, "No coins launched through Troya from this wallet yet.")];
     return h("section", { class: "panel lx-panel" }, h("h2", {}, "Your launches"),
-      st.mine.length ? h("p", { class: "muted" }, "Coins from your initial buy sit in your Agent Wallet. Sell them here: the sale runs through Troya Gate and your Agent Wallet caps, and the ETH stays in the Agent Wallet.") : null, rows);
+      st.mine.length ? h("p", { class: "muted" }, "Coins from your initial buy sit in your Agent Wallet. Sell them here: the sale runs through Troya Gate and your Agent Wallet caps, and the ETH stays in the Agent Wallet. Creator fees are claimed on the ", h("a", { class: "link", href: "#/creator" }, "Creator desk"), ".") : null, rows);
   }
   // sell part or all of what the Agent Wallet holds of a coin it launched
   function sellRow(x) {

@@ -2,6 +2,8 @@
 import { h, clear, useCss, pageHead, seg, table, sparkline, pctEl, usd, tiny, compact, every, debounce, emptyState, tokenIcon, coinIcon, padLogo, chainLogo, infoTip } from "../ui.js";
 import { api, cached } from "../api.js";
 import { LAUNCHPADS, padName, tokenCell, priceCell, ethAmount, usdCell, mcapCell, ageText, updatedText, fmtFunding, fmtApr, perpPrice } from "../marketlib.js";
+// phones: price on top, market cap under it (instead of the ETH price), so the board stays three columns wide
+const priceMcCell = (t) => h("div", { class: "pcell" }, h("span", {}, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"), h("span", { class: "sub" }, t.mcapUsd != null ? `MC ${usd(t.mcapUsd, { compact: true })}` : "MC –"));
 
 const PAGE = 50;
 const NARROW = matchMedia("(max-width: 720px)").matches;
@@ -57,7 +59,8 @@ function robinhoodTab(box, go, query) {
     cols: [
       { key: "rank", label: "#", render: (t, i) => h("span", { class: "rank" }, state.offset + i + 1), cls: "rank", hide: NARROW },
       { key: "token", label: "Token", align: "l", render: (t) => tokenCell(t, { flagUntradable: true }) },
-      { key: "price", label: "Price", sort: true, render: (t) => priceCell(t.priceEth, t.priceUsd) },
+      { key: "price", label: NARROW ? "Price · MC" : "Price", sort: true, render: (t) => (NARROW ? priceMcCell(t) : priceCell(t.priceEth, t.priceUsd)) },
+      { key: "chart", label: "24h chart", render: (t) => sparkline(t.spark, { w: NARROW ? 56 : 96, h: NARROW ? 26 : 30 }), cls: "mk-spark" },
       { key: "change", label: "24h", sort: true, render: (t) => pctEl(t.change24h) },
       { key: "volume", label: "24h volume", sort: true, render: (t) => usdCell(t.volume24hUsd, t.volume24hEth), hide: NARROW },
       { key: "liquidity", label: "Liquidity", sort: true, render: (t) => usdCell(t.liquidityUsd, null), hide: NARROW },

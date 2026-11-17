@@ -752,3 +752,23 @@ html[data-theme="light"] .pp-ticket .gate-box, html[data-theme="light"] .sw-gate
 .fw-camp-bar { height: 8px; border-radius: 99px; background: rgba(255, 255, 255, .07); overflow: hidden; }
 .fw-camp-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #3c8fa8, #8edff5); box-shadow: 0 0 12px rgba(142, 223, 245, .6); transition: width .8s var(--soft); }
 html[data-theme="light"] .fw-camp-bar { background: rgba(20, 30, 40, .07); }
+
+/* ---------- Market: socials under the name, compact launchpad tag and the 24h chart ---------- */
+.tok small { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tok small .tok-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tok-soc { display: inline-flex; gap: 6px; flex: none; }
+.tok-soc a { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 6px; color: var(--muted); background: rgba(255, 255, 255, .05); border: 1px solid var(--line); transition: color .2s, border-color .2s; }
+.tok-soc a:hover { color: var(--c3); border-color: rgba(142, 223, 245, .4); }
+.tok-soc svg { width: 10px; height: 10px; fill: currentColor; }
+.pad-tag.mini { padding: 0 3px; gap: 0; }
+.mk-panel .tok { min-width: 0; }
+.mk-panel .tok b { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
+.mk-panel td.mk-spark, .mk-panel th.mk-spark { width: 110px; }
+.mk-panel .spark { display: block; margin-left: auto; }
+@media (max-width: 720px) {
+  .mk-panel td.mk-spark, .mk-panel th.mk-spark { width: 62px; padding-left: 4px; padding-right: 4px; }
+  .mk-panel .tbl td:first-child { max-width: 46vw; }
+  .mk-panel .tok b { font-size: 13.5px; }
+  .tok-soc a { width: 16px; height: 16px; }
+}
+html[data-theme="light"] .tok-soc a { background: var(--bg-2); }

@@ -289,6 +289,7 @@ function fold(map, pr, ethUsd) {
   }
   t.volume24hEth = ethUsd ? t.volume24hUsd / ethUsd : null;
   t.liquidityEth = ethUsd && t.liquidityUsd != null ? t.liquidityUsd / ethUsd : null;
+  if (!(t.mcapUsd > 0) && t.launchpad === "pons" && t.priceUsd > 0) t.mcapUsd = t.priceUsd * 1e9;   // Pons: 1B minted once
   t.mcapEth = ethUsd && t.mcapUsd != null ? t.mcapUsd / ethUsd : null;
   if (t.image) IMAGES.set(t.address, t.image);
 }
@@ -342,8 +343,70 @@ async function refreshBoard() {
   })().finally(() => { board.refreshing = null; });
   return board.refreshing;
 }
+const SPARK = new Map();      // address → [[ms, priceUsd], …]
+const SPARK_FILE = process.env.DATA_DIR ? path.join(process.env.DATA_DIR, "sparks.json") : null;
+(function loadSparks() { if (!SPARK_FILE) return; try { const o = JSON.parse(readFileSync(SPARK_FILE, "utf8")); for (const [a, v] of Object.entries(o || {})) if (Array.isArray(v)) SPARK.set(a, v); } catch {} })();
+let sparkSaveAt = 0;
+function notePrices(rows) {
+  const now = Date.now();
+  for (const t of rows) {
+    if (!(t.priceUsd > 0)) continue;
+    const l = SPARK.get(t.address) || [];
+    if (l.length && now - l[l.length - 1][0] < 10 * 60_000) continue;
+    l.push([now, t.priceUsd]);
+    while (l.length && now - l[0][0] > 26 * 3600_000) l.shift();
+    SPARK.set(t.address, l);
+  }
+  if (SPARK_FILE && now - sparkSaveAt > 5 * 60_000) { sparkSaveAt = now; writeFile(SPARK_FILE + ".tmp", JSON.stringify(Object.fromEntries(SPARK))).then(() => rename(SPARK_FILE + ".tmp", SPARK_FILE)).catch(() => {}); }
+}
+// 24 points over the last 24 hours: the recorded prices, with the start and the last hour anchored by the 24h and 1h changes
+function sparkOf(t) {
+  if (!(t.priceUsd > 0)) return null;
+  const now = Date.now(), pts = (SPARK.get(t.address) || []).filter(([ms]) => now - ms <= 24 * 3600_000);
+  if (t.change24h != null && t.change24h > -100) pts.unshift([now - 24 * 3600_000, t.priceUsd / (1 + t.change24h / 100)]);
+  if (t.change1h != null && t.change1h > -100 && !pts.some(([ms]) => now - ms < 70 * 60_000)) pts.push([now - 3600_000, t.priceUsd / (1 + t.change1h / 100)]);
+  pts.push([now, t.priceUsd]);
+  pts.sort((x, y) => x[0] - y[0]);
+  if (pts.length < 2) return null;
+  const out = [], step = 24 * 3600_000 / 23;
+  for (let i = 0; i < 24; i++) {
+    const at = now - 24 * 3600_000 + i * step;
+    let j = pts.findIndex(([ms]) => ms >= at);
+    if (j < 0) j = pts.length - 1;
+    out.push(+pts[Math.max(0, j)][1].toPrecision(6));
+  }
+  return out;
+}
+/* socials for the board: Pons coins from the token contract (socials()), the rest from DexScreener profiles */
+const SOCIALS = new Map();    // address → { twitter, telegram, website, at }
+let socialsBusy = false;
+async function fillSocials() {
+  if (socialsBusy) return;
+  socialsBusy = true;
+  try {
+    const now = Date.now();
+    const due = [...board.rows.values()].filter((t) => !t.stock && (!SOCIALS.has(t.address) || now - SOCIALS.get(t.address).at > 6 * 3600_000))
+      .sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0)).slice(0, 60);
+    if (!due.length) return;
+    const pons = due.filter((t) => t.launchpad === "pons");
+    for (const t of pons) {
+      const p = await ponsProfile(t.address).catch(() => null);
+      SOCIALS.set(t.address, { twitter: p?.twitter || null, telegram: p?.telegram || null, website: p?.website || null, at: now });
+    }
+    const rest = due.filter((t) => t.launchpad !== "pons").map((t) => t.address);
+    if (rest.length) {
+      const rows = dsRows(await dsPairs(rest).catch(() => []), null);
+      for (const a of rest) { const r = rows.get(a); SOCIALS.set(a, { twitter: r?.twitter || null, telegram: r?.telegram || null, website: r?.website || null, at: now }); }
+    }
+  } finally { socialsBusy = false; }
+}
+const cleanLink = (u) => { try { const x = new URL(/^https?:/i.test(u) ? u : `https://${u}`); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
+const socialOf = (a) => { const s = SOCIALS.get(a); if (!s) return null; const tw = s.twitter ? (s.twitter.startsWith("http") ? s.twitter : `https://x.com/${String(s.twitter).replace(/^@/, "")}`) : null; const tg = s.telegram ? (s.telegram.startsWith("http") ? s.telegram : `https://t.me/${String(s.telegram).replace(/^@/, "")}`) : null; const o = { x: cleanLink(tw || ""), telegram: cleanLink(tg || ""), website: s.website ? cleanLink(s.website) : null }; return o.x || o.telegram || o.website ? o : null; };
+
 function publish(map, { full = false } = {}) {
   const now = Date.now();
+  try { notePrices(map.values()); } catch {}
+  setTimeout(() => fillSocials().catch(() => {}), 1000);
   for (const t of map.values()) t.seenAt = now;          // rows this pass reached
   // keep tokens from earlier passes that this pass did not reach (pages shift as volume moves); after a complete pass
   // they go once unseen for 30 minutes, while a pass is still running or was cut short by 429s they stay up to 6 hours
@@ -416,7 +479,7 @@ export async function getRobinhoodTokens(opts = {}) {
     return (x - y) * sgn;
   });
   return {
-    tokens: rows.slice(o.offset, o.offset + o.limit).map(clean), total: rows.length, counts, hiddenTotal: hidden,
+    tokens: rows.slice(o.offset, o.offset + o.limit).map((t) => { const r = { ...clean(t), spark: sparkOf(t), socials: socialOf(t.address) }; if (!(r.mcapUsd > 0) && r.launchpad === "pons" && r.priceUsd > 0) { r.mcapUsd = r.priceUsd * 1e9; r.mcapEth = ethUsd ? r.mcapUsd / ethUsd : null; } return r; }), total: rows.length, counts, hiddenTotal: hidden,
     volume24hUsd: board.volumeUsd, volume24hEth: ethUsd ? board.volumeUsd / ethUsd : null,
     offset: o.offset, limit: o.limit, sort: o.sort, dir: o.dir, launchpad: o.launchpad,
     updatedAt: board.updatedAt, stale: !!board.error, notice: board.error ? `Last refresh failed (${board.error}); showing the previous board.` : null,

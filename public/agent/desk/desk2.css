@@ -584,3 +584,4 @@ body.g-open .g-orb { opacity: 1; pointer-events: auto; transform: none; }
 }
 html[data-theme="light"] .g-bub { background: var(--bg-2); }
 html[data-theme="light"] .g-msg.me { background: rgba(10, 126, 163, .08); border-color: rgba(10, 126, 163, .25); }
+.g-walk { min-height: 66px; flex: none; }

@@ -27,11 +27,15 @@ function md(text) {
   return html;
 }
 // pages an answer points to become buttons: open the page, and walk through it when it has a tour
-function routesIn(text) {
+const KW = [[/\b(swap|buy|sell)\b/i, "swap"], [/\bgate\b|safe to buy|is it safe/i, "gate"], [/\bbridge\b|bring eth|fund hyperliquid/i, "bridge"], [/\bperps?\b|\blong\b|\bshort\b|leverage/i, "perps"],
+  [/liquidity|\brange\b|\blp\b/i, "liquidity"], [/agent wallet/i, "agent/wallet"], [/playbook|stop[- ]loss|take[- ]profit|\bdca\b|\btwap\b|alert/i, "agent/playbooks"], [/flywheel|buyback|burn/i, "flywheel"], [/stock|nvda|tsla|spy\b|morpho|dividend/i, "stocks"]];
+function routesIn(text, q = "") {
   const out = new Set();
+  for (const [re, p] of KW) if (re.test(q)) out.add(p);
   for (const m of String(text).matchAll(/troya\.codes\/agent#\/([a-z][\w\/-]*)/g)) out.add(m[1]);
   for (const m of String(text).matchAll(/(?:^|[\s(])#\/([a-z][\w\/-]*)/g)) out.add(m[1]);
-  return [...out].map((p) => p.replace(/\/$/, "")).filter((p) => G[p] || G[p.split("/")[0]]).slice(0, 3);
+  if (out.size < 2) for (const [re, p] of KW) if (re.test(text)) out.add(p);
+  return [...out].map((p) => p.replace(/\/$/, "")).filter((p) => G[p] || G[p.split("/")[0]]).slice(0, 2);
 }
 
 // tour steps: [selector, title, text]; a step whose element is not on screen is skipped
@@ -152,7 +156,7 @@ function chatSend(q) {
   }, abort.signal).catch((e) => { if (e.name !== "AbortError") body.innerHTML = md(`**${e.message}**`); })
     .finally(() => {
       status.remove(); busy = false;
-      for (const p of routesIn(acc)) {
+      for (const p of routesIn(acc, q)) {
         const gk = G[p] ? p : p.split("/")[0], title = G[gk]?.t || p;
         acts.append(h("a", { class: "g-act", href: `#/${p}` }, chromeIcon("start"), `Open ${title}`));
         if (G[gk]?.tour?.length) acts.append(h("button", { class: "g-act", type: "button", onclick: () => { close(); location.hash = `#/${p}`; setTimeout(() => { const st = (G[gk].tour || []).filter(([s]) => document.querySelector(s)); if (st.length) startTour(st); }, 1600); } }, chromeIcon("eye"), `Show me how`));

@@ -844,3 +844,17 @@ html[data-theme="light"] .mk2-why { color: var(--blue); }
 .ga-deps li { display: flex; gap: 10px; align-items: baseline; }
 .ga-deps li span:first-child { font-weight: 600; min-width: 96px; }
 @media (max-width: 560px) { .ga-stats { grid-template-columns: 1fr 1fr; } .ga-stats .stat:last-child { grid-column: 1 / -1; } }
+
+/* Portfolio tokens: value, 24h and PnL from the wallet's own trades */
+.pf2-tok { flex-direction: column; align-items: stretch; gap: 10px; }
+.pf2-tok-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pf2-tok-id { min-width: 0; } .pf2-tok-id b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf2-tok-v { margin-left: auto; text-align: right; }
+.pf2-tok-v b { font-variant-numeric: tabular-nums; }
+.pf2-tok .up { color: var(--up); } .pf2-tok .down { color: var(--down); }
+.pf2-pnl { display: grid; gap: 2px; font-size: 12.5px; font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); padding-top: 8px; }
+.pf2-pnl:empty { display: none; }
+.pf2-pnl small { font-size: 11.5px; }
+.pf2-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.pf2-dust { margin-top: 12px; } .pf2-dust summary { cursor: pointer; margin-bottom: 10px; }
+.pf2-pnl-note { margin-top: 12px; max-width: 760px; }

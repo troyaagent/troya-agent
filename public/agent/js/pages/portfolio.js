@@ -1,5 +1,5 @@
 // Portfolio: balances on Robinhood Chain and Hyperliquid, setup checklist, positions, inbox, history.
-import { h, clear, icon, pageHead, tabs, table, toast, num, usd, pct, short, useCss, every, store, ago, chainLogo, coinIcon, tokenIcon } from "../ui.js";
+import { h, clear, icon, pageHead, tabs, table, toast, num, usd, pct, short, useCss, every, store, ago, chainLogo, coinIcon, tokenIcon, tiny } from "../ui.js";
 import { api } from "../api.js";
 import { wallet, onWallet, openConnect, reader, signIn } from "../wallet.js";
 import { tradingKeyStatus } from "../hl.js";
@@ -34,11 +34,16 @@ export async function mount(view, ctx) {
       try { st[key] = Number(ethers.formatEther(await reader(chain).getBalance(addr))); delete st.errors[key]; }
       catch { st[key] = null; st.errors[key] = true; }
     };
+    // draw as each source answers (at most every 400 ms), so one slow source never holds the page back
+    let queued = false;
+    const soon = () => { if (queued) return; queued = true; setTimeout(() => { queued = false; if (alive && addr === wallet.address && tab === "overview") render(); }, 400); };
+    const step = (p) => p.finally(soon);
     await Promise.all([
-      one("rh", "robinhood"),
-      api.get(`chain/balances?address=${addr}`).then((b) => { st.toks = (b.balances || []).filter((x) => x.address !== "native" && Number(x.amount) > 0); }).catch(() => { st.toks = null; }),
-      api.get("price/eth").then((p) => { st.eth = Number(p?.usd) || st.eth; }).catch(() => {}),
-      api.get(`hl/user?address=${addr}`).then((u) => { st.hl = u; delete st.errors.hl; }).catch(() => { st.hl = null; st.errors.hl = true; }),
+      step(one("rh", "robinhood")),
+      step(api.get(`/api/portfolio/tokens?address=${addr}`).then((b) => { st.toks = b.tokens || []; st.tokUsd = b.totalUsd || 0; })
+        .catch(() => api.get(`chain/balances?address=${addr}`).then((b) => { st.toks = (b.balances || []).filter((x) => x.address !== "native" && Number(x.amount) > 0); st.tokUsd = 0; }).catch(() => { st.toks = null; }))),
+      step(api.get("price/eth").then((p) => { st.eth = Number(p?.usd) || st.eth; }).catch(() => {})),
+      step(api.get(`hl/user?address=${addr}`).then((u) => { st.hl = u; delete st.errors.hl; }).catch(() => { st.hl = null; st.errors.hl = true; })),
       tradingKeyStatus(addr).then((k) => { st.key = k; }).catch(() => {}),
     ]);
     if (alive && addr === wallet.address && tab === "overview") render();
@@ -94,6 +99,38 @@ export async function mount(view, ctx) {
     const logo = { "Robinhood Chain": "robinhood", Tokens: "robinhood", Hyperliquid: "hyperliquid" }[k];
     return h("div", { class: "stat" }, h("div", { class: "k" }, logo ? chainLogo(logo, 14) : null, k, tip ? h("i", { class: "info", title: tip, tabindex: "0" }, "i") : null), h("div", { class: "v" }, v), h("div", { class: "s" }, s));
   }
+  // token PnL, fetched one at a time (it reads each trade from the chain) and kept per wallet for this visit
+  const pnlCache = new Map();
+  const tokPnlChip = h("span", { class: "pf2-chip", hidden: true });
+  function paintPnlChip() {
+    const vals = [...pnlCache.values()].filter((p) => p?.status === "ok" && p.pnlUsd != null && p.addr === wallet.address);
+    if (!vals.length) { tokPnlChip.hidden = true; return; }
+    const sum = vals.reduce((s, p) => s + p.pnlUsd, 0);
+    tokPnlChip.hidden = false;
+    tokPnlChip.className = `pf2-chip ${sum > 0 ? "up" : sum < 0 ? "down" : ""}`;
+    tokPnlChip.textContent = `Token PnL ${sum > 0 ? "+" : ""}${usd(sum)}`;
+  }
+  function paintPnl(box, p) {
+    if (!p || p.status !== "ok") { clear(box, p?.status === "none" && p.transfersIn ? h("span", { class: "muted" }, "Received by transfer") : null); return; }
+    const up = (p.pnlEth || 0) >= 0, sign = up ? "+" : "−";
+    clear(box,
+      h("span", { class: up ? "up" : "down" }, `PnL ${sign}${num(Math.abs(p.pnlEth), 4)} ETH`, p.pnlUsd != null ? ` · ${sign}${usd(Math.abs(p.pnlUsd))}` : "", p.pnlPct != null ? ` · ${sign}${Math.abs(p.pnlPct).toFixed(1)}%` : ""),
+      h("small", { class: "muted" }, `${p.buys} buy${p.buys === 1 ? "" : "s"}${p.sells ? ` · ${p.sells} sell${p.sells === 1 ? "" : "s"}` : ""}${p.avgEntryUsd != null ? ` · avg entry $${tiny(p.avgEntryUsd)}` : ""}`));
+  }
+  async function fillPnl(slots) {
+    const addr = wallet.address;
+    for (const [x, box] of slots.slice(0, 12)) {
+      if (/^(USDG|WETH)$/.test(x.symbol)) continue;
+      const key = `${addr}:${x.address}`;
+      if (!pnlCache.has(key)) {
+        const p = await api.get(`/api/portfolio/pnl?address=${addr}&token=${x.address}`).catch(() => null);
+        pnlCache.set(key, p ? { ...p, addr } : null);
+      }
+      if (!alive || addr !== wallet.address) return;
+      paintPnl(box, pnlCache.get(key));
+      paintPnlChip();
+    }
+  }
   function overview() {
     const connected = !!wallet.address;
     const ethUsd = (n) => (n != null && st.eth ? usd(n * st.eth) : "");
@@ -105,8 +142,8 @@ export async function mount(view, ctx) {
 
     void tiles;
     // Desk 2.0: one hero with the total, the split and the open PnL, then every token as a card
-    const rhUsd = st.rh != null && st.eth ? st.rh * st.eth : 0, hlUsd = st.hl?.accountValue || 0, total = rhUsd + hlUsd;
-    const C = 2 * Math.PI * 46, slices = [["Robinhood Chain", rhUsd, "#bff0fd"], ["Hyperliquid", hlUsd, "#3c8fa8"]].filter((x) => x[1] > 0);
+    const rhUsd = st.rh != null && st.eth ? st.rh * st.eth : 0, hlUsd = st.hl?.accountValue || 0, tokUsd = st.tokUsd || 0, total = rhUsd + hlUsd + tokUsd;
+    const C = 2 * Math.PI * 46, slices = [["Robinhood Chain", rhUsd, "#bff0fd"], ["Tokens", tokUsd, "#5fc3e0"], ["Hyperliquid", hlUsd, "#3c8fa8"]].filter((x) => x[1] > 0);
     let off = 0;
     const donut = h("span", { class: "pf2-donut" });
     donut.innerHTML = `<svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="46" class="bg"/>${slices.map(([, v, c]) => { const len = total ? (v / total) * C : 0; const el = `<circle cx="60" cy="60" r="46" stroke="${c}" style="stroke-dasharray:${len} ${C};stroke-dashoffset:${-off}"/>`; off += len; return el; }).join("")}</svg>`;
@@ -116,9 +153,10 @@ export async function mount(view, ctx) {
       h("div", { class: "pf2-txt" },
         h("p", { class: "d2-mic" }, h("i", { class: "live-dot" }), connected ? `Portfolio · ${short(wallet.address)}` : "Portfolio"),
         h("div", { class: "pf2-total" }, connected ? (st.rh == null && !st.hl ? "…" : usd(total)) : "Connect a wallet"),
-        h("p", { class: "pf2-sub" }, connected ? "ETH on Robinhood Chain plus your Hyperliquid account. Tokens are listed below with their amounts." : "Your balances on Robinhood Chain and Hyperliquid, your open positions and your alerts, in one place."),
+        h("p", { class: "pf2-sub" }, connected ? "ETH and every token on Robinhood Chain, plus your Hyperliquid account. Each token's PnL is read from your own trades on chain." : "Your balances on Robinhood Chain and Hyperliquid, your open positions and your alerts, in one place."),
         h("div", { class: "pf2-chips" },
-          connected && pnl != null ? h("span", { class: `pf2-chip ${pnl > 0 ? "up" : pnl < 0 ? "down" : ""}` }, `Open PnL ${pnl > 0 ? "+" : ""}${usd(pnl)}`) : null,
+          tokPnlChip,
+          connected && pnl != null && (pnl !== 0 || st.hl?.positions?.length) ? h("span", { class: `pf2-chip ${pnl > 0 ? "up" : pnl < 0 ? "down" : ""}` }, `Perps PnL ${pnl > 0 ? "+" : ""}${usd(pnl)}`) : null,
           connected && st.hl ? h("span", { class: "pf2-chip" }, `${st.hl.positions.length} open position${st.hl.positions.length === 1 ? "" : "s"}`) : null,
           connected && st.toks ? h("span", { class: "pf2-chip" }, `${st.toks.length} token${st.toks.length === 1 ? "" : "s"}`) : null),
         h("div", { class: "d2-acts" },
@@ -127,11 +165,27 @@ export async function mount(view, ctx) {
       h("div", { class: "pf2-split" }, donut,
         h("ul", { class: "pf2-legend" },
           h("li", {}, h("i", { style: { background: "#bff0fd" } }), h("span", {}, "Robinhood Chain"), h("b", {}, connected ? (st.rh == null ? "…" : `${num(st.rh, 5)} ETH`) : "–"), h("small", {}, connected && st.eth && st.rh != null ? usd(rhUsd) : "")),
+          h("li", {}, h("i", { style: { background: "#5fc3e0" } }), h("span", {}, "Tokens"), h("b", {}, connected ? (st.toks == null ? "…" : usd(tokUsd)) : "–"), h("small", {}, connected && st.toks ? `${st.toks.length} on Robinhood Chain` : "")),
           h("li", {}, h("i", { style: { background: "#3c8fa8" } }), h("span", {}, "Hyperliquid"), h("b", {}, connected ? (st.hl ? usd(hlUsd) : "…") : "–"), h("small", {}, connected && st.hl ? `withdrawable ${usd(st.hl.withdrawable)}` : "")))));
+    // tokens worth a cent or more up front; unpriced ones (often airdropped spam) and dust fold away
+    const priced = (st.toks || []).filter((x) => x.valueUsd == null ? x.priceUsd === undefined : x.valueUsd >= 0.01), dust = (st.toks || []).filter((x) => !priced.includes(x));
+    const card = (x) => {
+      const pnlBox = h("div", { class: "pf2-pnl" }, x.valueUsd >= 0.5 && !/^(USDG|WETH)$/.test(x.symbol) ? h("span", { class: "muted" }, "PnL …") : null);
+      if (x.valueUsd >= 0.5) pnlSlots.push([x, pnlBox]);
+      return h("a", { class: "pf2-tok", href: x.address ? `#/token/${x.address}` : "#/market" },
+        h("div", { class: "pf2-tok-top" },
+          tokenIcon({ symbol: x.symbol, address: x.address, chain: "robinhood", image: x.image }),
+          h("span", { class: "pf2-tok-id" }, h("b", {}, x.symbol), h("small", {}, `${num(Number(x.amount), Number(x.amount) >= 1000 ? 0 : 4)}${x.stock ? " · stock" : ""}`)),
+          h("span", { class: "pf2-tok-v" }, h("b", {}, x.valueUsd != null ? usd(x.valueUsd) : "–"), x.change24h != null ? h("small", { class: x.change24h >= 0 ? "up" : "down" }, `${x.change24h >= 0 ? "+" : ""}${x.change24h.toFixed(1)}%`) : h("small", { class: "muted" }, x.priceUsd == null ? "no price" : ""))),
+        pnlBox);
+    };
+    const pnlSlots = [];
     const toks = connected && st.toks?.length ? h("section", { class: "pf2-toks" },
-      h("div", { class: "pf2-sec-h" }, h("h2", {}, "Your tokens"), h("span", { class: "fine muted" }, "Robinhood Chain")),
-      h("div", { class: "pf2-grid" }, st.toks.slice(0, 24).map((x) => h("a", { class: "pf2-tok", href: x.address ? `#/token/${x.address}` : "#/market" },
-        tokenIcon({ symbol: x.symbol, address: x.address, chain: "robinhood" }), h("span", {}, h("b", {}, x.symbol), h("small", {}, num(Number(x.amount), 4))), h("i", {}, "→"))))) : null;
+      h("div", { class: "pf2-sec-h" }, h("h2", {}, "Your tokens"), h("span", { class: "fine muted" }, `Robinhood Chain · ${usd(tokUsd)}`)),
+      h("div", { class: "pf2-grid" }, priced.slice(0, 30).map(card)),
+      dust.length ? h("details", { class: "pf2-dust" }, h("summary", { class: "fine muted" }, `${dust.length} more without a price or worth under one cent`), h("div", { class: "pf2-grid" }, dust.slice(0, 30).map(card))) : null,
+      h("p", { class: "fine muted pf2-pnl-note" }, "PnL is in ETH: what this wallet paid for the token against what it got back from sells plus what it holds now, at today's price. Gas is not counted, and tokens that arrived by plain transfer are not counted as bought.")) : null;
+    fillPnl(pnlSlots);
     const gasCard = h("section", { class: "panel pf2-gas" });
     paintGas(gasCard);
     const parts = [hero, gasCard, toks];

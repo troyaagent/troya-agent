@@ -350,7 +350,16 @@ export const TOOLS = [
   { name: "quote_swap", tier: "read", description: "Quote a swap on Robinhood Chain (Pons curves, Uniswap v3/v4, and the other Robinhood Chain launchpads through KyberSwap). tokenIn/tokenOut: ETH, a symbol or an address. Runs Troya Gate on the result.", schema: S({ tokenIn: str("Default ETH"), tokenOut: str("Token to receive"), amountIn: numS("Amount of tokenIn"), slippagePct: numS("Default 1") }, ["tokenOut", "amountIn"]),
     run: async (a) => { const q = await quoteSwap(a); return { ...q, quote: { ...q.quote, plan: undefined }, gate: await gateSwap(q) }; } },
   { name: "get_balances", tier: "read", description: "ETH and tokens on Robinhood Chain plus the Hyperliquid account for an address (defaults to yours).", schema: S({ address: str("Wallet address (optional when signed in)") }),
-    run: ({ address }, ctx) => getBalances(address || ctx.address) },
+    run: async ({ address }, ctx) => {
+      const b = await getBalances(address || ctx.address);
+      // every token the wallet holds, not only ETH and USDG (Blockscout), with its value
+      try {
+        const { walletTokens } = await import("./portfolio.mjs");
+        const have = new Set(b.balances.map((x) => String(x.address).toLowerCase()));
+        for (const t of await walletTokens(b.address)) if (!have.has(t.address)) b.balances.push({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals, raw: t.raw, amount: String(t.amount) });
+      } catch {}
+      return b;
+    } },
   { name: "get_policy", tier: "read", description: "Your effective limits (stricter of operator and personal caps), today's usage and dry-run state.", schema: S({}),
     run: (_, ctx) => getPolicy(ctx.address || null) },
   { name: "simulate_trade", tier: "read", description: "Walk the live Hyperliquid order book to estimate fill price and slippage for a perp order.", schema: S({ coin: str("Perp"), side: { type: "string", enum: ["long", "short"] }, sizeUsd: numS("Notional in USD") }, ["coin", "sizeUsd"]),

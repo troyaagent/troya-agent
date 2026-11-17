@@ -415,6 +415,8 @@ async function blockscout(path) {
   if (wait) await new Promise((r) => setTimeout(r, wait));
   return getJson(`${BS}${path}`, { timeout: 12000, headers: { authorization: `Bearer ${BS_KEY}` } });
 }
+export const blockscoutApi = (p) => blockscout(p);   // shared rate-limited client (portfolio)
+export const hasBlockscout = () => !!BS_KEY;
 const LABEL = { "0x000000000000000000000000000000000000dead": "dead address (burned)", "0x0000000000000000000000000000000000000000": "zero address (burned)" };
 export async function topHolders(a) {
   if (!BS_KEY) return null;

@@ -139,10 +139,10 @@ export async function mount(view, ctx) {
     if (!ok) return;
     const data = b.bytecode + AbiCoder.defaultAbiCoder().encode(["address", "uint256"], [TROYA, parseUnits(String(minHold), 18)]).slice(2);
     const signer = await signerFor("robinhood");
-    const tx = await signer.sendTransaction({ data });
-    const rc = await waitReceipt("robinhood", tx.hash, { timeoutMs: 180_000 });
+    const txHash = await signer.sendUncheckedTransaction({ data });
+    const rc = await waitReceipt("robinhood", txHash, { timeoutMs: 180_000 });
     if (rc?.status !== 1) throw new Error("The deployment failed on chain.");
-    await api.post("pass/config", { hash: tx.hash });
+    await api.post("pass/config", { hash: txHash });
     toast("The Holder Pass is live.", "ok", 7000);
   });
   const mintPass = () => run("Minting…", async () => {

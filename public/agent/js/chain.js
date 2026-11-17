@@ -46,15 +46,16 @@ export function inputNum(v, maxDp = 6) {
   return s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
 }
 
-/** Sends a transaction through the connected wallet on `chain`; returns the hash. */
+/** Sends a transaction through the connected wallet on `chain`; returns the hash as soon as the wallet sends it.
+ *  sendUncheckedTransaction skips ethers' wait for the wallet's own RPC to show the transaction (retries up to 4 s
+ *  apart, which could add most of a minute); waitReceipt then watches for it through Troya's relay. */
 export async function sendTx(chain, tx) {
   const signer = await signerFor(chain);
-  const res = await signer.sendTransaction({ to: tx.to, data: tx.data, value: BigInt(tx.value || 0), ...(tx.gasLimit ? { gasLimit: BigInt(tx.gasLimit) } : {}) });
-  return res.hash;
+  return signer.sendUncheckedTransaction({ to: tx.to, data: tx.data, value: BigInt(tx.value || 0), ...(tx.gasLimit ? { gasLimit: BigInt(tx.gasLimit) } : {}) });
 }
 
 /** Polls a receipt through the relay until mined or timeout. Returns the receipt or null. */
-export async function waitReceipt(chain, hash, { timeoutMs = 120_000, every = 1200, onTick } = {}) {
+export async function waitReceipt(chain, hash, { timeoutMs = 120_000, every = 900, onTick } = {}) {
   const p = reader(chain);
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {

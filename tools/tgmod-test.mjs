@@ -7,6 +7,8 @@ const ok = (c, name, extra = "") => { c ? pass++ : fail++; console.log(`  ${c ? 
 
 // seen in t.me/troyaagent on 15 Nov 2026
 const SPAM = [
+  "Shared in my private at $12K now at $541K market cap. 🔥",
+  "$BAWSAQ — 45X AND COUNTING! Called in private at $12K MC Now sitting at $541k MARKET CAP!",
   "Hey Dev 👋 Looking to grow your project? I have 30+ TG channels, 10 big X/Twitter accounts & 12 CoinMarketCap communities ready for promotion.",
   "Your dex rocket 🚀 vote is currently at 0 and flames 🔥 is at 0 I can add up the rocket 🚀 to 300 and flames 🔥 to 100",
   "@admin,Boost your token with @MajorsBoostsBot Increase your token’s DEX exposure and reach more potential traders.",
@@ -29,6 +31,7 @@ const SPAM = [
   "If you’re serious about catching early plays, make sure you follow him! 🔥\n\nHe shares quality signals, spots interesting plays, and knows his game 💯 🐳🐳",
 ];
 const LEGIT = [
+  "I shared this in the group yesterday, troya looks good",
   "troya bot communicates well. great tek", "@TrojanTroya_bot what’s the live price for $troya", "We should setup the skeleton bot for raids",
   "holding nicely for past hrs is a green flag", "Ca", "X", "gm", "Gm gm guys",
   "more people should take a look at what Troya is building. definitely worth checking out if you’re interested in AI and trading",

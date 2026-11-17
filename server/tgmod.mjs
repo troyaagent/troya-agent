@@ -74,6 +74,8 @@ const RULES = [
   [3, /rug\s?pull.{0,80}(?:teach|learn|dm)|(?:teach|show)\s+you\s+how|recover\s+(?:your\s+)?(?:funds|wallet|crypto)|guaranteed\s+(?:profit|returns?)|investment\s+(?:manager|plan|account)/i],
   // gains brags: "106X", "(30K >1.1M)", "50k → 1.7m", "NOW AT $10M MC"
   [2, /\b\d{2,4}\s?x\b(?!\s*(?:lev|leverage|long|short))|\(\s*\d+(?:\.\d+)?\s*k\s*>\s*\d|\d+(?:\.\d+)?\s*k\s*(?:>|->|→|to)\s*\d+(?:\.\d+)?\s*m\b|\bnow\s+at\s+\$?\d/i],
+  // private call groups bragging: "shared in my private at $12K, now at $541K", "called in private at 12k MC"
+  [3, /\b(?:called|shared|posted|dropped|alerted|sent)\s+(?:it\s+|this\s+(?:one\s+)?)?(?:in|to)\s+(?:my|our|the)\s+(?:private|vip|alpha|premium|paid)\b|\b(?:called|shared)\s+in\s+private\b/i],
   [2, /profit\s+upon\s+profit|make\s+(?:a\s+)?profit\s+of|invested\s+\$\d+.{0,60}profit|(?:made|making)\s+\$?\d+k?\s+(?:from|in|off)\s|turned\s+\$\d+\s+into/i],
   [2, /\bd\.?\s?m\s+(?:me|now|👉|for)|\bd\.m\.?\s+me|\binbox\s+me|send\s+(?:me\s+)?a\s+dm|make\s+sure\s+you\s+follow|follow\s+(?:him|her)\b/i],
   [1, /\bprinting\b|\bmilestone\b|don.?t\s+miss\s+(?:out|it)|\bgem\b|\b100x\b|\bmoon(?:ing|shot)?\b/i],

@@ -19,6 +19,7 @@
 //   GET  /api/launch/born               addresses of coins born through Troya (the app puts the horse badge on them)
 //   GET  /api/launch/splitter           the tested TroyaFeeSplitterFactory build and whether it is live
 //   POST /api/launch/splitter/register  admins: { hash } of the factory deployment, checked against the tested build
+//   POST /api/launch/tg                 admins: { mode: off|test|live } Launch in Telegram (F27, the bot side is tglaunch.mjs)
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -307,6 +308,9 @@ async function fetchXImage(url) {
   return (await saveLaunchLogo(buf, type === "image/jpg" ? "image/jpeg" : type)).url;
 }
 const xLaunchMode = async () => { const v = (await store.readJson("x-state.json", {})).launch || process.env.X_LAUNCH || "off"; return ["off", "test", "live"].includes(v) ? v : "off"; };
+/** Launch in Telegram (F27): "off", "test" (admin wallets only, for the real-money test) or "live" (everyone). */
+export const tgLaunchMode = async () => { const v = (await store.readJson("tg-launch.json", {})).mode || process.env.TG_LAUNCH || "off"; return ["off", "test", "live"].includes(v) ? v : "off"; };
+export const isAdminWallet = (a) => admins().includes(lc(a));
 /** Launch on X is read from posts when "live" (everyone who qualifies) or "test" (admin wallets only, for the real-money test). */
 export const xLaunchOn = async () => (await xLaunchMode()) !== "off";
 const SITE = () => (process.env.SITE_URL || "https://troya.codes").replace(/\/+$/, "");
@@ -359,7 +363,7 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   return { launch: out.launch, reply: `$${ask.symbol} is live${mcNote}.${buyNote}${imgNote}${feeNote} CA ${ca} · Trade it on Troya: ${SITE().replace(/^https?:\/\//, "")}/agent#/token/${ca.toLowerCase()}` };
 }
 /** a failed launch, said plainly with where to fix it */
-function guide(why) {
+export function guide(why) {
   const w = String(why).replace(/\.$/, "").slice(0, 140);
   const fix = /launches through Troya today|try again tomorrow/i.test(w) ? "try again tomorrow (UTC)"
     : /cap|limit/i.test(w) ? "raise your Agent Wallet caps or post a smaller buy"
@@ -369,7 +373,7 @@ function guide(why) {
   return `Not launched: ${w}. To fix: ${fix}. Nothing was spent. Help: ${DESK()}`.slice(0, 275);
 }
 /** the new coin's market cap right after launch, from its Pons curve (price × supply × ETH/USD) */
-async function marketCapUsd(token) {
+export async function marketCapUsd(token) {
   const R = await import("./robinhood.mjs");
   const m = await import("./market.mjs");
   const [s, eth, menu] = await Promise.all([R.ponsState(token), m.getEthUsd(), launchMenu()]);
@@ -490,7 +494,8 @@ export async function register(r, ctx) {
   r.get("/api/launch/rules", async () => {
     const factory = await splitterFactory();
     return { holderMin: HOLDER_MIN, limits: LIMITS, maxCreatorTaxBps: MAX_TAX_BPS, troyaVolumePct: TROYA_VOLUME_BPS / 100, creatorFeePct: CREATOR_FEE_BPS / 100,
-      holderTroyaPct: 0, splitter: factory ? { factory, live: true } : { live: false }, xLaunch: (await xLaunchMode()) === "live",
+      holderTroyaPct: 0, splitter: factory ? { factory, live: true } : { live: false }, xLaunch: (await xLaunchMode()) === "live", tgLaunch: (await tgLaunchMode()) === "live",
+      tgBot: process.env.TG_BOT_USERNAME || "TrojanTroya_bot",
       text: `Free to launch. Troya takes 0.1% of trading volume out of the creator's 0.7% share of the Pons fee; holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA keep all of it. Launch on X is for holders; Telegram and troya.codes are open to everyone. Creator tax 0–4%, ${LIMITS.perDay} launches a day (${LIMITS.perDayHolder} for holders).` };
   });
   r.post("/api/launch/plan", ({ body }) => plan({ owner: body?.creator, creatorTaxBps: body?.creatorTaxBps, name: body?.name, symbol: body?.symbol, source: "web" }), { perMin: 30 });
@@ -507,7 +512,7 @@ export async function register(r, ctx) {
     const a = requireSession(req).address;
     const x = await import("./xsocial.mjs").then((m) => m.handleOf(a)).catch(() => null);
     const fee = await launchMenu().then((m) => m.launchFeeEth).catch(() => null);
-    return { ...(await prefsOf(a)), xAccount: x, holder: await holderInfo(a), holderMin: HOLDER_MIN, xLaunch: await xLaunchOn(), xLaunchMode: await xLaunchMode(), launchFeeEth: fee,
+    return { ...(await prefsOf(a)), xAccount: x, holder: await holderInfo(a), holderMin: HOLDER_MIN, xLaunch: await xLaunchOn(), xLaunchMode: await xLaunchMode(), tgLaunchMode: await tgLaunchMode(), launchFeeEth: fee,
       limits: LIMITS, admin: isAdmin(req), factory: await splitterFactory() };
   });
   r.post("/api/launch/prefs", async ({ req, body }) => {
@@ -516,6 +521,13 @@ export async function register(r, ctx) {
     await store.update("launch-prefs.json", {}, (m) => { m[a] = { ...(m[a] || {}), x, at: Date.now() }; return m; });
     return { ok: true, x };
   }, { perMin: 20 });
+  r.post("/api/launch/tg", async ({ req, body }) => {
+    if (!isAdmin(req)) throw new HttpError(403, "Admins only.");
+    const v = String(body?.mode || "");
+    if (!["off", "test", "live"].includes(v)) throw new HttpError(400, "Launch in Telegram must be off, test or live.");
+    await store.writeJson("tg-launch.json", { mode: v, by: getSession(req).address, at: Date.now() });
+    return { ok: true, mode: v };
+  });
   r.get("/api/launch/splitter", async () => {
     const b = await buildInfo();
     const s = await store.readJson("fee-splitter.json", {});

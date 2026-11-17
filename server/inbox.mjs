@@ -78,6 +78,8 @@ async function onTelegramMessage(m) {
     await tg("sendMessage", { chat_id: m.chat.id, text: linked ? "Linked. Troya will send your alerts here." : "That link code expired. Make a new one in Troya: Settings → Telegram." }).catch(() => {});
     return;
   }
+  // V6 F27: /launch (a coin from a private chat); the steps of a launch in progress
+  if (await import("./tglaunch.mjs").then((t) => t.handleMessage(m, tg, store)).catch((e) => { console.warn("[telegram launch]", e.message); return false; })) return;
   // Phase 2: trade messages in a private chat (TG_TRADE=1); everything else goes to the normal bot
   if (await import("./tgtrade.mjs").then((t) => t.handleMessage(m, tg, store)).catch((e) => { console.warn("[telegram trade]", e.message); return false; })) return;
   // Phase 5: perps, Fund Hyperliquid, positions, playbooks and the assistant in a linked private chat
@@ -97,7 +99,8 @@ async function telegramLoop() {
         tgOffset = u.update_id + 1;
         if (u.message) await onTelegramMessage(u.message).catch((e) => console.warn("[telegram]", e.message));
         if (u.callback_query) {
-          const traded = await import("./tgtrade.mjs").then((t) => t.handleCallback(u.callback_query, tg)).catch((e) => { console.warn("[telegram trade]", e.message); return false; });
+          const launched = await import("./tglaunch.mjs").then((t) => t.handleCallback(u.callback_query, tg)).catch((e) => { console.warn("[telegram launch]", e.message); return false; });
+          const traded = launched || await import("./tgtrade.mjs").then((t) => t.handleCallback(u.callback_query, tg)).catch((e) => { console.warn("[telegram trade]", e.message); return false; });
           const term = traded || await import("./tgterm.mjs").then((t) => t.handleCallback(u.callback_query, tg)).catch((e) => { console.warn("[telegram terminal]", e.message); return false; });
           if (!term) await import("./tgbot.mjs").then((b) => b.handleCallback(u.callback_query, tg)).catch((e) => console.warn("[telegram guard]", e.message));
         }

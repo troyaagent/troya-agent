@@ -1,5 +1,5 @@
 // Create coin (#/create): the one place every "Create coin" button leads to. Three ways to launch on Robinhood Chain
-// through Troya: troya.codes (own wallet, open to everyone), X (post to @Troyaagent, holders) and Telegram (soon).
+// through Troya: troya.codes (own wallet, open to everyone), X (post to @Troyaagent, holders) and Telegram (/launch to the bot).
 // Numbers and status come from /api/launch/rules, so the page never promises what is not live.
 import { h, clear, useCss, pageHead } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
@@ -23,7 +23,7 @@ export async function mount(view) {
       h("div", { class: "cc-top" }, svg(ic), h("span", { class: `cc-status ${tone}` }, status)),
       h("h2", {}, title), h("p", { class: "cc-sub" }, sub),
       h("ul", { class: "cc-points" }, points.map((p) => h("li", {}, p))),
-      off ? h("span", { class: "btn cc-cta", "aria-disabled": "true" }, cta) : h("a", { class: "btn primary cc-cta", href }, cta),
+      off ? h("span", { class: "btn cc-cta", "aria-disabled": "true" }, cta) : h("a", { class: "btn primary cc-cta", href, ...(/^https?:/.test(href) ? { target: "_blank", rel: "noopener" } : {}) }, cta),
       guide ? h("a", { class: "cc-guide ulink", href: guide, target: "_blank", rel: "noopener" }, "Read the full guide") : null);
   }
 
@@ -38,9 +38,15 @@ export async function mount(view) {
         points: [`For holders of ${min} $TROYA, who keep the whole creator fee.`, "Write \"launch Name $TICKER\", or in your own words; add \"tax 2%\" and \"buy 0.01\".",
           "Attach the coin's image: square (1:1) works best, PNG or JPEG up to 5 MB; other shapes get cropped to the middle. Without one, the coin launches with no image, for good.", "Troya replies in seconds with the address and market cap, or with what to fix."],
         cta: "Set up Launch from X", href: "#/launch/x", guide: "/launch-on-x" }),
-      card({ ic: TG_ICON, title: "In Telegram", sub: "Launch from a private chat with the Troya bot.", status: "Soon", tone: "soon", off: true,
-        points: ["Open to everyone.", "The same steps as X, with a preview and a Confirm button.", "Ships after Launch from X passes its test."],
-        cta: "Coming soon" }));
+      r?.tgLaunch
+        ? card({ ic: TG_ICON, title: "In Telegram", sub: `Send /launch to @${r.tgBot} in a private chat.`, status: "Open to everyone", tone: "ok",
+          points: ["Answer step by step: name, ticker, image, creator tax, initial buy. Or send the image with the caption \"/launch Wooden Horse $HORSE tax 2% buy 0.01\".",
+            fee, "Your Agent Wallet pays the Pons launch fee and the buy; Troya pays the gas. Link the chat once in Settings → Telegram alerts.",
+            "A preview with a Confirm button comes before anything is sent."],
+          cta: "Open the Troya bot", href: `https://t.me/${r.tgBot}?start=launch` })
+        : card({ ic: TG_ICON, title: "In Telegram", sub: "Launch from a private chat with the Troya bot.", status: "In its real-money test", tone: "test", off: true,
+          points: ["Open to everyone.", "Step by step in the chat, or one photo with a caption, then a preview and a Confirm button.", "Opens after its real-money test."],
+          cta: "Opening soon" }));
   }
 
   paint(null);

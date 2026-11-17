@@ -136,6 +136,11 @@ export async function mount(view, ctx) {
     card.append(h("div", { class: "lx-coin" }, h("b", {}, "Launch on X"), h("span", { class: "muted" }, label),
       h("span", { style: { display: "inline-flex", gap: "6px" } }, ["off", "test", "live"].map((m) => h("button", { class: `btn${m === mode ? " primary" : ""}`, type: "button", disabled: !!st.busy || m === mode,
         onclick: run("Saving…", () => api.post("x/launch", { launch: m })) }, m[0].toUpperCase() + m.slice(1))))));
+    const tm = p.tgLaunchMode || "off";
+    const tl = { off: "Off: /launch gets a not-open-yet reply.", test: "Test: only admin wallets can launch in Telegram.", live: "Live: everyone with a linked chat and an Agent Wallet can launch." }[tm];
+    card.append(h("div", { class: "lx-coin" }, h("b", {}, "Launch in Telegram"), h("span", { class: "muted" }, tl),
+      h("span", { style: { display: "inline-flex", gap: "6px" } }, ["off", "test", "live"].map((m) => h("button", { class: `btn${m === tm ? " primary" : ""}`, type: "button", disabled: !!st.busy || m === tm,
+        onclick: run("Saving…", () => api.post("launch/tg", { mode: m })) }, m[0].toUpperCase() + m.slice(1))))));
     if (f?.factory) {
       card.append(h("p", { class: "muted" }, "Fee splitter factory ", h("a", { class: "mono link", href: `https://robinhoodchain.blockscout.com/address/${f.factory}`, target: "_blank", rel: "noopener" }, short(f.factory, 6)), " is live. Non-holder launches pay Troya 0.1% of volume through it."));
       return card;

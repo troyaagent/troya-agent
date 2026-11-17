@@ -1,5 +1,6 @@
 // V6 launch end to end on a local Robinhood Chain fork (anvil): the fee splitter factory, Launch on X from an Agent Wallet,
-// a non-holder launch through a splitter, trading, collecting the split, a web launch recorded, and the refusals.
+// a non-holder launch through a splitter, trading, collecting the split, Launch in Telegram (F27), a web launch recorded,
+// and the refusals.
 // Nothing touches mainnet: every RPC points at the fork.
 //   anvil --fork-url https://robinhood.drpc.org --port 8547 --chain-id 4663 --no-storage-caching
 //   node tools/launch-fork-test.mjs
@@ -16,6 +17,7 @@ process.env.RPC_TIMEOUT_MS = "60000";   // a fork pulls fresh state from the net
 delete process.env.TROYA_NO_BROADCAST;
 const DATA = await mkdtemp(join(tmpdir(), "troya-launch-fork-"));
 process.env.DATA_DIR = DATA;
+process.env.SITE_URL = "https://troya.codes";   // uploaded logos get a public https link, as on the server
 
 const { JsonRpcProvider, Wallet, ContractFactory, Contract, Interface, parseEther, getAddress, AbiCoder } = await import("ethers");
 const provider = new JsonRpcProvider(FORK, 4663, { staticNetwork: true });
@@ -28,7 +30,7 @@ const { initStore } = await import(ROOT + "server/store.mjs");
 const store = await initStore(DATA);
 const router = { get() {}, post() {}, put() {}, delete() {} };
 const ctx = { store, dataDir: DATA };
-for (const m of ["policy", "journal", "agentwallet", "holders", "launch"]) { const mod = await import(ROOT + `server/${m}.mjs`); if (mod.register) await mod.register(router, ctx); }
+for (const m of ["robinhood", "policy", "journal", "agentwallet", "holders", "launch"]) { const mod = await import(ROOT + `server/${m}.mjs`); if (mod.register) await mod.register(router, ctx); }
 const L = await import(ROOT + "server/launch.mjs");
 const { ADDR } = await import(ROOT + "server/robinhood.mjs");
 
@@ -208,11 +210,81 @@ ok("web launch with a 2% tax: splitter at 370 bps (0.1% of volume), checked on c
 await assert.rejects(L.recordWeb({ hash: tx.hash, owner: W.address, salt: "0x" + "11".repeat(32), troyaBps: 370 }), /neither to its creator nor to a Troya splitter/);
 ok("a record with the wrong salt is refused");
 
+/* ---------- F27 · Launch in Telegram: the bot's wizard, a photo, the preview and Confirm (non-holder N) ---------- */
+{
+  const T = await import(ROOT + "server/tglaunch.mjs");
+  const sent = [];
+  let mid = 100;
+  const tg = async (method, body) => { sent.push({ method, body }); return method === "getFile" ? { ok: true, result: { file_path: "photos/file_1.png" } } : { ok: true, result: { message_id: ++mid } }; };
+  const PNG = await readFile(ROOT + "public/img/logos/gmgn.png");
+  T._setImageFetcher(async () => ({ buf: PNG, type: "image/png" }));
+  const CHAT = 5001;
+  await store.writeJson("telegram.json", { links: { [N.toLowerCase()]: CHAT }, codes: {} });
+  const msg = (text, extra = {}) => ({ message_id: ++mid, chat: { id: extra.chat ?? CHAT, type: extra.type || "private" }, from: { id: extra.chat ?? CHAT }, text, ...extra.m });
+  const last = () => sent[sent.length - 1].body;
+  const btn = (re) => { for (let i = sent.length - 1; i >= 0; i--) { const k = sent[i].body?.reply_markup?.inline_keyboard?.flat().find((x) => x.callback_data && re.test(x.text)); if (k) return { data: k.callback_data, mid: 900 + i }; } throw new Error(`no button ${re}`); };
+  const press = (b, from = CHAT) => T.handleCallback({ id: "cq" + (++mid), data: b.data, from: { id: from }, message: { chat: { id: from }, message_id: b.mid } }, tg);
+
+  await T.handleMessage(msg("/launch"), tg, store);
+  assert.match(last().text, /isn't open yet/); ok("Telegram: while Launch in Telegram is off, /launch says it is not open yet");
+  await store.writeJson("tg-launch.json", { mode: "live" });
+  await T.handleMessage(msg("/launch", { chat: -100123, type: "supergroup" }), tg, store);
+  assert.match(last().text, /private chat/); assert.match(last().reply_markup.inline_keyboard[0][0].url, /\?start=launch$/);
+  ok("Telegram: /launch in the group points to a private chat with the bot");
+  await T.handleMessage(msg("/launch", { chat: 5002 }), tg, store);
+  assert.match(last().text, /Link this chat to your wallet first/); ok("Telegram: an unlinked chat is told to link its wallet first");
+  assert.equal(await T.handleMessage(msg("hello"), tg, store), false, "plain chat outside a launch goes on to the assistant");
+
+  await T.handleMessage(msg("/start launch"), tg, store);
+  assert.match(last().text, /What's its name/);
+  await T.handleMessage(msg("Telegram Horse"), tg, store);
+  assert.match(last().text, /Now the ticker/);
+  await T.handleMessage(msg("ETH"), tg, store);
+  assert.match(last().text, /taken by an existing coin/); ok("Telegram wizard: $ETH is refused, the step stays open");
+  await T.handleMessage(msg("$TGH"), tg, store);
+  assert.match(last().text, /send the coin's image/);
+  await T.handleMessage({ ...msg(""), photo: [{ file_id: "small", width: 90 }, { file_id: "big", width: 800 }] }, tg, store);
+  assert.match(last().text, /Image saved/);
+  await press(btn(/^1%$/));
+  await press(btn(/^0\.005 ETH$/));
+  const pv = last().text;
+  assert.match(pv, /Launch preview/); assert.match(pv, /\$TGH/); assert.match(pv, /Creator tax: 1%/); assert.match(pv, /0\.005 ETH/); assert.match(pv, /Troya takes 0\.1%/); assert.match(pv, /which holds 0\.0/);
+  ok("Telegram wizard: name, ticker, photo, tax and buy buttons lead to a preview that names the 0.1% split and the wallet balance");
+  const conf = btn(/Confirm launch/);
+  assert.equal(await press(conf, 7777), true); assert.equal(await T.handleMessage(msg("x", { chat: 7777 }), tg, store), false);
+  ok("Telegram: someone else's chat cannot press the Confirm button");
+  await press(conf);
+  let done = null;
+  for (let i = 0; i < 120 && !done; i++) { await new Promise((res) => setTimeout(res, 1000)); done = sent.slice().reverse().find((c) => c.method === "editMessageText" && /is live|Not launched/.test(c.body.text)); }
+  assert.ok(done, "the launch finished");
+  console.log("   telegram:", done.body.text.replace(/\n+/g, " / "));
+  assert.match(done.body.text, /\$TGH is live/); assert.match(done.body.text, /Initial buy of 0\.005 ETH done/);
+  assert.match(done.body.reply_markup.inline_keyboard[0][0].url, /\/agent#\/token\/0x[0-9a-f]{40}$/);
+  const tgl = (await store.readJson("launches.json", [])).find((x) => x.symbol === "TGH");
+  assert.equal(tgl.source, "tg"); assert.equal(tgl.split, true); assert.ok(/\/api\/launch\/logo\/[0-9a-f]{32}\.png$/.test(tgl.logo), tgl.logo);
+  const tli = await info(tgl.token);
+  assert.equal(getAddress(tli.creatorFeeRecipient), getAddress(tgl.recipient)); assert.equal(getAddress(tli.deployer), awN.address); assert.equal(Number(tli.creatorTaxBps), 100);
+  ok(`Telegram launch: $TGH ${tgl.token} by N's Agent Wallet, tax 1%, creator fee through a splitter, image saved, buy done, Trade on Troya button`);
+  await press(conf);
+  assert.match(sent[sent.length - 1].body.text, /expired|dropped/); ok("Telegram: a used Confirm button does nothing the second time");
+
+  // the quick way: one photo with the whole launch in its caption, straight to the preview
+  await T.handleMessage({ ...msg(""), caption: "/launch Quick Horse $QUICK tax 2%", photo: [{ file_id: "q", width: 640 }] }, tg, store);
+  assert.match(last().text, /Launch preview/); assert.match(last().text, /Quick Horse/); assert.match(last().text, /Image: attached/); assert.match(last().text, /Creator tax: 2%/);
+  await press(btn(/^Cancel$/));
+  assert.match(sent[sent.length - 1].body.text, /dropped/);
+  ok("Telegram quick way: a photo captioned \"/launch Quick Horse $QUICK tax 2%\" goes straight to the preview; Cancel drops it");
+  await T.handleMessage(msg("/launch"), tg, store);
+  assert.equal(await T.handleMessage(msg("/positions"), tg, store), false, "another command leaves the launch");
+  assert.equal(await T.handleMessage(msg("Some Name"), tg, store), false, "and the launch is gone");
+  ok("Telegram: any other command mid-launch drops the launch and goes on to trading or the assistant");
+}
+
 /* ---------- the daily limit ---------- */
 const today = Date.now();
 await store.update("launches.json", [], (l) => [...l, ...[1, 2, 3].map((i) => ({ token: "0x" + String(i).repeat(40), owner: N, at: today, source: "tg" }))]);
 await assert.rejects(L.plan({ owner: N, creatorTaxBps: 0 }), /most for one wallet/);
-ok("a non-holder's 4th launch of the day is refused (the earlier one plus 3 more)");
+ok("a non-holder past 3 launches a day is refused");
 
 console.log(`\n${n}/${n} passed · data ${DATA}`);
 process.exit(0);

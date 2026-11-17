@@ -204,6 +204,32 @@ export function setBorn(list, graduated = []) {
   for (const a of graduated || []) if (ADDR.test(String(a))) { BORN.add(String(a).toLowerCase()); GOLD.add(String(a).toLowerCase()); }
 }
 export const isBorn = (a) => BORN.has(String(a || "").toLowerCase());
+// hovering (or tapping) the horse badge opens a small card: born through Troya, and how to launch your own.
+// One floating card for the whole page, so a lane or a box that clips its content never cuts it off.
+let bornPop = null, bornHide = 0;
+function bornCard(badge, gold) {
+  if (!bornPop) {
+    bornPop = h("div", { class: "born-pop", role: "tooltip", hidden: true });
+    bornPop.addEventListener("mouseenter", () => clearTimeout(bornHide));
+    bornPop.addEventListener("mouseleave", () => hideBorn());
+    document.addEventListener("click", (e) => { if (bornPop && !bornPop.hidden && !bornPop.contains(e.target) && !e.target.closest?.(".tok-troya")) bornPop.hidden = true; });
+    addEventListener("scroll", () => { if (bornPop) bornPop.hidden = true; }, { passive: true, capture: true });
+    document.body.append(bornPop);
+  }
+  clearTimeout(bornHide);
+  clear(bornPop,
+    h("div", { class: "born-pop-head" }, h("img", { src: "/img/logo-3d-128.png", alt: "" }), h("span", {}, h("b", {}, "Born through Troya"), h("small", {}, gold ? "Graduated to its own Uniswap pool" : "Still on its Pons curve"))),
+    h("a", { class: "born-pop-link", href: "/agent#/launch/create", onclick: () => { bornPop.hidden = true; } }, "Create your coin on troya.codes", h("i", {}, "→")),
+    h("a", { class: "born-pop-link", href: "/agent#/launch/x", onclick: () => { bornPop.hidden = true; } }, "Launch from X", h("i", {}, "→")));
+  bornPop.classList.toggle("gold", gold);
+  bornPop.hidden = false;
+  const r = badge.getBoundingClientRect(), w = bornPop.offsetWidth, hh = bornPop.offsetHeight;
+  let left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+  let top = r.bottom + 8;
+  if (top + hh > innerHeight - 8) top = r.top - hh - 8;
+  bornPop.style.left = `${left}px`; bornPop.style.top = `${Math.max(8, top)}px`;
+}
+const hideBorn = () => { clearTimeout(bornHide); bornHide = setTimeout(() => { if (bornPop) bornPop.hidden = true; }, 220); };
 export function tokenIcon(t, size = "") {
   const sym = String(t?.symbol || "").toUpperCase();
   const addr = String(t?.address || "");
@@ -226,7 +252,13 @@ export function tokenIcon(t, size = "") {
   box.style.background = `linear-gradient(135deg, hsl(${(hue % 60) + 170} 45% 26%), hsl(${(hue % 60) + 190} 50% 14%))`;
   if (ADDR.test(addr) && !other && BORN.has(addr.toLowerCase())) {
     const gold = GOLD.has(addr.toLowerCase());
-    const horse = h("span", { class: `tok-net tok-troya${gold ? " gold" : ""}`, title: gold ? "Born through Troya · graduated" : "Born through Troya" }, h("img", { src: "/img/logo-3d-128.png", alt: "", decoding: "async" }));
+    const horse = h("span", { class: `tok-net tok-troya${gold ? " gold" : ""}`, role: "button", tabindex: "0", "aria-label": gold ? "Born through Troya, graduated: launch your own coin" : "Born through Troya: launch your own coin" }, h("img", { src: "/img/logo-3d-128.png", alt: "", decoding: "async" }));
+    horse.addEventListener("mouseenter", () => bornCard(horse, gold));
+    horse.addEventListener("mouseleave", hideBorn);
+    horse.addEventListener("focus", () => bornCard(horse, gold));
+    horse.addEventListener("blur", hideBorn);
+    // a tap opens the card instead of following the row or card the logo sits in
+    horse.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); bornCard(horse, gold); });
     return h("span", { class: `tok-wrap ${size}` }, box, horse);
   }
   // network badge in the corner (like a wallet's token list): pass t.chain = "robinhood" | "base" | "arbitrum" | …

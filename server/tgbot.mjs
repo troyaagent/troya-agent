@@ -335,7 +335,7 @@ export async function handleBotMessage(m, tg, me) {
   try {
     if (cmd === "start" && m.chat.type === "private" && /^rep_[0-9a-f]{16}$/.test(arg.trim())) {
       const r = await import("./community.mjs").then((c) => c.bindReportsChat(arg.trim().slice(4), m.chat, m.from)).catch(() => ({ ok: false }));
-      await tg("sendMessage", { chat_id: chatId, parse_mode: "HTML", text: r.ok
+      await tg("sendMessage", { chat_id: chatId, parse_mode: "HTML", link_preview_options: { is_disabled: true }, text: r.ok
         ? "<b>Reports connected.</b>\nEvery new bug report, idea and suspicious-activity flag from troya.codes/community and Telegram arrives here, screenshots included.\n\n/reports off to pause · /reports on to resume"
         : "That link expired or was already used. Make a new one in the app: Desk → Social → Reports → Get reports in Telegram." });
       return;

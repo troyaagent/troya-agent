@@ -28,7 +28,7 @@ function md(text) {
 }
 // pages an answer points to become buttons: open the page, and walk through it when it has a tour
 const KW = [[/\b(swap|buy|sell)\b/i, "swap"], [/\bgate\b|safe to buy|is it safe/i, "gate"], [/\bbridge\b|bring eth|fund hyperliquid/i, "bridge"], [/\bperps?\b|\blong\b|\bshort\b|leverage/i, "perps"],
-  [/liquidity|\brange\b|\blp\b/i, "liquidity"], [/agent wallet/i, "agent/wallet"], [/playbook|stop[- ]loss|take[- ]profit|\bdca\b|\btwap\b|alert/i, "agent/playbooks"], [/flywheel|buyback|burn/i, "flywheel"], [/stock|nvda|tsla|spy\b|morpho|dividend/i, "stocks"]];
+  [/liquidity|\brange\b|\blp\b/i, "liquidity"], [/agent wallet/i, "agent/wallet"], [/playbook|stop[- ]loss|take[- ]profit|\bdca\b|\btwap\b|alert/i, "agent/playbooks"], [/flywheel|buyback|burn/i, "flywheel"], [/stock|nvda|tsla|spy\b|morpho|dividend/i, "stocks"], [/registry|reputation|file (a )?call/i, "registry"], [/\brail\b|kill switch|robinhood (mcp|agent)|agentic/i, "rail"]];
 function routesIn(text, q = "") {
   const out = new Set();
   for (const [re, p] of KW) if (re.test(q)) out.add(p);
@@ -114,6 +114,10 @@ const G = {
   flywheel: { t: "$TROYA flywheel", what: "Creator fees buy $TROYA back through the Gate, burn it and lock liquidity, every step read back from the chain.", tour: [[".fw-tiles", "The numbers", "Fees earned and claimed, burned and locked."], [".fw-panel", "Cycles", "Every cycle with its transactions."]],
     ask: ["How much $TROYA has been burned so far?"], next: [["Verify", "/verify"]] },
   start: { t: "Start in 60 seconds", what: "The fastest path from nothing to a first checked trade.", tour: [[".st-list", "The steps", "Do them in order; each one says why."]], ask: ["What do I need to start?"], next: [["Desk", "#/"]] },
+  registry: { t: "Agent registry", what: "AI agents ranked by the calls they filed on Robinhood Chain coins. Every call is signed when filed and graded in public when its time is up.", tour: [[".rg-kpis", "The totals", "Agents, calls filed and how many came out right."], [".rg-board", "The ranking", "Reputation is the lower bound of the right-call rate: a short lucky run can't top a long record."], [".rg-mine", "Your agents", "Register one and file its calls; each comes back signed."]],
+    ask: ["How do I register my agent and file a call?", "How is reputation worked out?"], next: [["Audited rail", "#/rail"]] },
+  rail: { t: "Audited rail", what: "Your limits between your AI agent and Robinhood's agentic trading MCP: every order checked, every decision signed, and a kill switch.", tour: [[".rl-kill", "The kill switch", "One click refuses every order until you switch it off."], [".rl-form", "Your policy", "Orders on or off, per order, per day, allowlist, market hours."], [".rl-log", "Audit log", "Every order your agent tried, allowed or refused, with Troya's signature."]],
+    ask: ["How do I connect the rail to my agent?", "What does the rail always refuse?"], next: [["Agent registry", "#/registry"]] },
   docs: { t: "Docs", what: "How every part of Troya works, the API and the MCP server.", tour: [], ask: ["How do I connect Troya to my own AI agent over MCP?"], next: [["API and MCP", "/api-and-mcp"]] },
 };
 const keyOf = () => {

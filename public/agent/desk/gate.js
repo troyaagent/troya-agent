@@ -83,7 +83,8 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
     if (r?.checks) {
       const sum = r.checks.map((c) => `${c.label}: ${c.status}${c.detail ? ` (${c.detail})` : ""}`).join("; ");
       dispatchEvent(new CustomEvent("troya:ctx", { detail: { text: `Troya Gate result for ${r.symbol ? "$" + r.symbol : a} (${a}): ${r.verdict}. ${sum}` } }));
-      if (!example && (r.verdict === "failed" || r.verdict === "caution")) dispatchEvent(new CustomEvent("troya:nudge", { detail: { key: `gate-${a}-${r.verdict}`, text: `${r.symbol ? "$" + r.symbol : "This coin"} ${r.verdict === "failed" ? "failed" : "needs a look at"} the Gate. Want me to explain?`, q: `Explain this Gate result for ${r.symbol ? "$" + r.symbol : a} in plain words: what failed or needs a look, and what it means for me.` } }));
+      const failedOne = r.checks.some((c) => c.status === "fail");
+      if (!example && (r.verdict === "failed" || r.verdict === "caution" || failedOne)) dispatchEvent(new CustomEvent("troya:nudge", { detail: { key: `gate-${a}-${r.verdict}`, text: `${r.symbol ? "$" + r.symbol : "This coin"} ${r.verdict === "caution" && !failedOne ? "needs a look at" : "failed a check at"} the Gate. Want me to explain?`, q: `Explain this Gate result for ${r.symbol ? "$" + r.symbol : a} in plain words: what failed or needs a look, and what it means for me.` } }));
     }
     if (r.verdict === "error" || !r.checks) {
       clear(out, h("div", { class: "dk-empty" }, h("b", {}, "The Gate could not read this coin right now."), h("p", {}, r.error || r.reason || "Try again in a minute."), h("button", { class: "btn sm", type: "button", onclick: () => run(a) }, icon("refresh"), "Try again")));

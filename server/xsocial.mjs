@@ -132,20 +132,69 @@ function tidy(t) {
   if (s.length > 270) s = s.slice(0, 267).replace(/\s+\S*$/, "") + "…";
   return s;
 }
-let polling = false;
+let polling = false, lastPollAt = 0;
+const handled = new Set();           // post ids answered by this process: the stream and the poll never answer one twice
+const FIELDS = { "tweet.fields": "author_id,conversation_id,created_at,referenced_tweets,lang,attachments", expansions: "author_id,attachments.media_keys", "user.fields": "username,name", "media.fields": "url,type" };
+
+/** One mention of @Troyaagent, from the stream or the poll → the log entry (or null when it is not ours to answer). */
+async function handleMention(t, { users, media, bot, m, L }) {
+  if (!t?.id || handled.has(t.id)) return null;
+  handled.add(t.id);
+  if (handled.size > 3000) handled.delete(handled.values().next().value);
+  if (t.author_id === bot.id || (t.referenced_tweets || []).some((x) => x.type === "retweeted")) return null;
+  const log = await store.readJson("x-log.json", []);
+  if (log.some((x) => x.id === t.id)) return null;                        // answered before a restart
+  const u = users.get(t.author_id) || {};
+  const text = String(t.text || "").replace(/(^|\s)@\w+/g, " ").replace(/\s+/g, " ").trim();
+  const recent = log.filter((x) => x.authorId === t.author_id && Date.now() - x.at < 6 * 3600_000).length;
+  const entry = { id: t.id, at: Date.now(), authorId: t.author_id, author: u.username || null, text: text.slice(0, 400), status: "skipped", reply: null };
+  // V6 F26: a launch request is answered by launch.mjs with a fixed text, never by the model
+  const photo = (t.attachments?.media_keys || []).map((k) => media.get(k)).find((x) => x?.type === "photo" && x.url);
+  const lx = L ? await L.fromX({ tweetId: t.id, authorId: t.author_id, text: t.text, mediaUrl: photo?.url || null }).catch((e) => ({ reply: null, error: e.message })) : null;
+  if (lx) {
+    entry.kind = "launch"; entry.token = lx.launch?.token || null; entry.why = lx.error || null;
+    if (lx.reply) {
+      entry.reply = lx.reply;
+      if (await spend("posts")) {
+        const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: lx.reply, reply: { in_reply_to_tweet_id: t.id } } }).catch((e) => { entry.why = e.message; return null; });
+        entry.status = p?.data?.id ? "posted" : "failed"; entry.replyId = p?.data?.id || null;
+      } else { entry.status = "draft"; entry.why = "daily post cap reached"; }
+    }
+    return entry;
+  }
+  if (m === "off") entry.why = "AI replies are off";
+  else if (!text || text.length < 3) entry.why = "nothing to answer";
+  else if (recent >= 3) entry.why = "3 answers to this account in 6 hours";
+  else {
+    const reply = await compose(u.username || "someone", text).catch((e) => { entry.why = e.message; return null; });
+    if (reply) {
+      entry.reply = reply;
+      if (m === "live" && (await spend("posts"))) {
+        const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: reply, reply: { in_reply_to_tweet_id: t.id } } }).catch((e) => { entry.why = e.message; return null; });
+        entry.status = p?.data?.id ? "posted" : "failed"; entry.replyId = p?.data?.id || null;
+      } else { entry.status = "draft"; if (m === "live") entry.why = "daily post cap reached"; }
+    }
+  }
+  return entry;
+}
+const listening = async () => (await mode()) !== "off" || (await import("./launch.mjs").then((x) => x.xLaunchOn()).catch(() => false));
+
 async function poll() {
   if (polling || !on()) return;
+  // with the stream connected, mentions arrive as they are posted; the poll only sweeps every 10 minutes as a safety net
+  // (it reads from the newest post the stream saw, so normally nothing comes back and nothing is billed)
+  if (streamHealthy() && Date.now() - lastPollAt < 10 * 60_000) return;
   polling = true;
   try {
     const m = await mode();
-    const launchLive = await import("./launch.mjs").then((x) => x.xLaunchOn()).catch(() => false);
-    if (m === "off" && !launchLive) return;                                  // AI replies off and Launch on X off: nothing to read
+    if (!(await listening())) return;                                       // AI replies off and Launch on X off: nothing to read
     const bot = await botTokens().catch((e) => { console.warn("[x] bot token:", e.message); return null; });
     if (!bot) return;
     const st = await store.readJson("x-state.json", {});
     if ((await left("reads")) < 10) return;                                // room for a full page of mentions
-    const q = new URLSearchParams({ max_results: "10", "tweet.fields": "author_id,conversation_id,created_at,referenced_tweets,lang,attachments", expansions: "author_id,attachments.media_keys", "user.fields": "username,name", "media.fields": "url,type" });
+    const q = new URLSearchParams({ max_results: "10", ...FIELDS });
     if (st.sinceId) q.set("since_id", st.sinceId);
+    lastPollAt = Date.now();
     const r = await xApi(`/2/users/${bot.id}/mentions?${q}`, { token: bot.access });
     await spend("reads", Math.max(1, (r.data || []).length));                // counted by the posts X returned
     const tweets = (r.data || []).slice().reverse();
@@ -156,48 +205,86 @@ async function poll() {
     // the first look only marks where to start: no replies to an old backlog
     if (!st.sinceId) { await store.update("x-state.json", {}, (s) => ({ ...s, sinceId: newest, lastPoll: Date.now() })); return; }
     const log = [];
-    for (const t of tweets) {
-      if (t.author_id === bot.id || (t.referenced_tweets || []).some((x) => x.type === "retweeted")) continue;
-      const u = users.get(t.author_id) || {};
-      const text = String(t.text || "").replace(/(^|\s)@\w+/g, " ").replace(/\s+/g, " ").trim();
-      const recent = (await store.readJson("x-log.json", [])).filter((x) => x.authorId === t.author_id && Date.now() - x.at < 6 * 3600_000).length;
-      const entry = { id: t.id, at: Date.now(), authorId: t.author_id, author: u.username || null, text: text.slice(0, 400), status: "skipped", reply: null };
-      // V6 F26: a launch request is answered by launch.mjs with a fixed text, never by the model
-      const photo = (t.attachments?.media_keys || []).map((k) => media.get(k)).find((x) => x?.type === "photo" && x.url);
-      const lx = L ? await L.fromX({ tweetId: t.id, authorId: t.author_id, text: t.text, mediaUrl: photo?.url || null }).catch((e) => ({ reply: null, error: e.message })) : null;
-      if (lx) {
-        entry.kind = "launch"; entry.token = lx.launch?.token || null; entry.why = lx.error || null;
-        if (lx.reply) {
-          entry.reply = lx.reply;
-          if (await spend("posts")) {
-            const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: lx.reply, reply: { in_reply_to_tweet_id: t.id } } }).catch((e) => { entry.why = e.message; return null; });
-            entry.status = p?.data?.id ? "posted" : "failed"; entry.replyId = p?.data?.id || null;
-          } else { entry.status = "draft"; entry.why = "daily post cap reached"; }
-        }
-        log.push(entry);
-        continue;
-      }
-      if (m === "off") entry.why = "AI replies are off";
-      else if (!text || text.length < 3) entry.why = "nothing to answer";
-      else if (recent >= 3) entry.why = "3 answers to this account in 6 hours";
-      else {
-        const reply = await compose(u.username || "someone", text).catch((e) => { entry.why = e.message; return null; });
-        if (reply) {
-          entry.reply = reply;
-          if (m === "live" && (await spend("posts"))) {
-            const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: reply, reply: { in_reply_to_tweet_id: t.id } } }).catch((e) => { entry.why = e.message; return null; });
-            entry.status = p?.data?.id ? "posted" : "failed"; entry.replyId = p?.data?.id || null;
-          } else { entry.status = "draft"; if (m === "live") entry.why = "daily post cap reached"; }
-        }
-      }
-      log.push(entry);
-    }
+    for (const t of tweets) { const e = await handleMention(t, { users, media, bot, m, L }); if (e) log.push(e); }
     if (log.length) await store.update("x-log.json", [], (l) => [...l, ...log].slice(-300));
-    await store.update("x-state.json", {}, (s) => ({ ...s, sinceId: newest, lastPoll: Date.now() }));
+    await store.update("x-state.json", {}, (s) => ({ ...s, sinceId: newest && (!s.sinceId || BigInt(newest) > BigInt(s.sinceId)) ? newest : s.sinceId, lastPoll: Date.now() }));
   } catch (e) {
     console.warn("[x] poll:", e.message);
     await store.update("x-state.json", {}, (s) => ({ ...s, lastError: String(e.message).slice(0, 200), lastPoll: Date.now() })).catch(() => {});
   } finally { polling = false; }
+}
+
+/* ---------- the filtered stream: X pushes each mention as it is posted (pay-per-use: billed per post delivered) ---------- */
+const stream = { alive: false, lastBeat: 0, connectedAt: 0, retries: 0, error: null, posts: 0, pausedUntil: 0 };
+const streamHealthy = () => stream.alive && Date.now() - stream.lastBeat < 75_000;
+const streamWanted = () => on() && !!process.env.X_BEARER_TOKEN && process.env.X_STREAM !== "0" && process.env.X_POLL !== "0";
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function appApi(path, { method = "GET", body } = {}) {
+  const r = await fetch(API + path, { method, headers: { authorization: `Bearer ${process.env.X_BEARER_TOKEN}`, ...(body ? { "content-type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(`X answered ${r.status}: ${j?.detail || j?.title || j?.errors?.[0]?.message || "error"}`), { status: r.status });
+  return j;
+}
+async function ensureRule() {
+  const value = `@${BOT_NAME} -is:retweet`;
+  const r = await appApi("/2/tweets/search/stream/rules");
+  if ((r.data || []).some((x) => x.value === value)) return;
+  await appApi("/2/tweets/search/stream/rules", { method: "POST", body: { add: [{ value, tag: "troya-mentions" }] } });
+}
+let queue = Promise.resolve();
+async function onStreamPost(j) {
+  const t = j.data;
+  stream.posts++;
+  await spend("reads", 1);
+  const bot = await botTokens().catch(() => null);
+  if (!bot) return;
+  const users = new Map((j.includes?.users || []).map((u) => [u.id, u]));
+  const media = new Map((j.includes?.media || []).map((x) => [x.media_key, x]));
+  const L = await import("./launch.mjs").catch(() => null);
+  const entry = await handleMention(t, { users, media, bot, m: await mode(), L });
+  if (entry) await store.update("x-log.json", [], (l) => [...l, entry].slice(-300));
+  // if the stream drops, the poll resumes right after the newest post the stream saw
+  await store.update("x-state.json", {}, (s) => ({ ...s, sinceId: !s.sinceId || BigInt(t.id) > BigInt(s.sinceId) ? t.id : s.sinceId, lastStream: Date.now() }));
+}
+async function runStream() {
+  while (streamWanted()) {
+    if (Date.now() < stream.pausedUntil || !(await listening())) { await sleep(60_000); continue; }
+    try {
+      await ensureRule();
+      const ctrl = new AbortController();
+      const res = await fetch(`${API}/2/tweets/search/stream?${new URLSearchParams(FIELDS)}`, { headers: { authorization: `Bearer ${process.env.X_BEARER_TOKEN}` }, signal: ctrl.signal });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw Object.assign(new Error(`stream ${res.status}: ${j?.detail || j?.title || j?.errors?.[0]?.message || "refused"}`), { status: res.status }); }
+      Object.assign(stream, { alive: true, lastBeat: Date.now(), connectedAt: Date.now(), retries: 0, error: null });
+      console.log("[x] stream connected: mentions arrive as they are posted");
+      const watchdog = setInterval(() => { if (Date.now() - stream.lastBeat > 75_000) ctrl.abort(); }, 15_000);   // X sends a heartbeat every ~20 s
+      const dec = new TextDecoder();
+      let buf = "";
+      try {
+        for await (const chunk of res.body) {
+          stream.lastBeat = Date.now();
+          buf += dec.decode(chunk, { stream: true });
+          let i;
+          while ((i = buf.indexOf("\r\n")) >= 0) {
+            const line = buf.slice(0, i).trim();
+            buf = buf.slice(i + 2);
+            if (!line) continue;                                             // heartbeat
+            let j;
+            try { j = JSON.parse(line); } catch { continue; }
+            if (j.data) queue = queue.then(() => onStreamPost(j)).catch((e) => console.warn("[x] stream post:", e.message));
+          }
+        }
+      } finally { clearInterval(watchdog); stream.alive = false; }
+      throw new Error("the stream closed");
+    } catch (e) {
+      stream.alive = false; stream.retries++;
+      stream.error = String(e.message || e).slice(0, 200);
+      // not allowed on this X plan (403): stop trying for an hour, the poll keeps answering every minute
+      if (e.status === 403 || e.status === 401) { stream.pausedUntil = Date.now() + 3600_000; console.warn("[x] stream unavailable:", stream.error, "· polling every minute instead"); continue; }
+      const wait = e.status === 429 ? 60_000 * Math.min(15, stream.retries) : Math.min(300_000, 5_000 * 2 ** Math.min(6, stream.retries));
+      console.warn("[x] stream:", stream.error, `· reconnecting in ${Math.round(wait / 1000)} s (the poll covers the gap)`);
+      await sleep(wait);
+    }
+  }
 }
 /** A reply the team wrote (not composed by the model), posted as @Troyaagent inside the daily X budget and logged. */
 export async function postReply(text, inReplyTo) {
@@ -248,6 +335,7 @@ export async function register(r, ctx) {
     const b = await store.readJson("x-bot.json", null), st = await store.readJson("x-state.json", {});
     const log = await store.readJson("x-log.json", []);
     return { configured: on(), bot: b ? { username: b.username, connectedAt: b.connectedAt } : null, expected: BOT_NAME, mode: await mode(), pollEveryMin: POLL_MIN, lastPoll: st.lastPoll || null, lastError: st.lastError || null,
+      stream: { wanted: streamWanted(), live: streamHealthy(), connectedAt: stream.connectedAt || null, posts: stream.posts, error: stream.error, lastStream: st.lastStream || null },
       usage: await usage(), caps: CAPS, posted: log.filter((x) => x.status === "posted").slice(-10).reverse().map((x) => ({ at: x.at, author: x.author, replyId: x.replyId })), admin: isAdmin(req) };
   });
   r.get("/api/x/log", async ({ req }) => { if (!isAdmin(req)) throw new HttpError(403, "Admins only."); return { log: (await store.readJson("x-log.json", [])).slice(-100).reverse() }; });
@@ -272,4 +360,5 @@ export async function register(r, ctx) {
     return { ok: true, lastPoll: st.lastPoll || null, lastError: st.lastError || null, started: !!st.sinceId };
   }, { perMin: 6 });
   if (on() && process.env.X_POLL !== "0") { setTimeout(() => poll().catch(() => {}), 60_000).unref?.(); setInterval(() => poll().catch(() => {}), POLL_MIN * 60_000).unref?.(); }
+  if (streamWanted()) setTimeout(() => runStream().catch((e) => console.warn("[x] stream stopped:", e.message)), 5_000).unref?.();
 }

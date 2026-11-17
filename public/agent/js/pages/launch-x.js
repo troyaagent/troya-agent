@@ -88,7 +88,8 @@ export async function mount(view, ctx) {
             h("li", {}, "Initial buy: your Agent Wallet buys right after the 3-second Pons snipe tax, through Troya Gate and within its caps. If it cannot pay the launch fee plus the buy, nothing is launched."),
             h("li", {}, "Holders keep the whole creator fee: 0.7% of trading volume plus the tax. Troya takes 0%."),
             h("li", {}, `Up to ${p?.limits?.perDayHolder ?? 10} launches a day.`),
-            h("li", {}, "Troya reads X every minute, so the reply with your coin's address comes within a minute or two."),
+            h("li", {}, "Troya sees your post within seconds and replies with the coin's address and market cap, or with what to fix if it could not launch."),
+            h("li", {}, "Your own words work too, in English: \"please create a token called Moon Cat, ticker MCAT, 2% tax, buy 0.01 ETH\". If Troya is unsure, it shows you the format instead of guessing."),
             h("li", {}, "Tickers and names that copy ETH, BTC, USDG, stock tokens, big coins or Troya are refused.")))),
       mineCard(),
       p?.admin ? adminCard() : null);

@@ -181,7 +181,7 @@ const g = await r.json();            <span class="c">// 402 → g.payment says w
 const ok = verifyMessage(`Troya Gate result\n${g.hash}`, g.signature) === g.attestor;</pre>
       </div>
     </div>
-    <p class="rec-note rv">The verdict is <code class="mono">passed</code>, <code class="mono">caution</code>, <code class="mono">failed</code> or <code class="mono">untested</code> (a curve with no buyers yet). A red Assay flag turns a pass into caution. <code class="mono">hash</code> is keccak256 of <code class="mono">JSON.stringify(attested)</code>; <code class="mono">POST /api/gate/v1/verify</code> checks one for you. Over MCP or Troya CLI the same check is the <code class="mono">gate_check</code> tool. Totals so far: <span data-gapi-totals>…</span>. A check reads the chain at that moment; a coin can change after it.</p>
+    <p class="rec-note rv">The verdict is <code class="mono">passed</code>, <code class="mono">caution</code>, <code class="mono">failed</code> or <code class="mono">untested</code> (a curve with no buyers yet). A red Assay flag turns a pass into caution. Add <code class="mono">pay=credit</code> to spend a wallet's credit before its free checks. <code class="mono">hash</code> is keccak256 of <code class="mono">JSON.stringify(attested)</code>; <code class="mono">POST /api/gate/v1/verify</code> checks one for you. Over MCP or Troya CLI the same check is the <code class="mono">gate_check</code> tool. Totals so far: <span data-gapi-totals>…</span>. A check reads the chain at that moment; a coin can change after it.</p>
   </section>
 
   <section class="ip" aria-labelledby="iface-h">

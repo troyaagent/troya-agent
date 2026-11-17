@@ -10,7 +10,7 @@
 // from the chain every minute (or at once with /credits/claim) and credited to the sender. Nobody can claim someone
 // else's payment: credit always goes to the address the USDG came from.
 //   GET  /api/gate/v1                       price, pay-to address, free tiers, attestor, totals
-//   GET  /api/gate/v1/check/:token          ?amountEth=0.01&from=0x…&assay=0 → the signed result (or 402 with how to pay)
+//   GET  /api/gate/v1/check/:token          ?amountEth=0.01&from=0x…&assay=0&pay=credit → the signed result (or 402 with how to pay)
 //   GET  /api/gate/v1/credits/:address      balance, free checks left today, deposits
 //   POST /api/gate/v1/credits/claim         { txHash } → credit a USDG payment now
 //   POST /api/gate/v1/verify                { attested, signature } → is this a genuine Troya Gate result
@@ -110,7 +110,7 @@ function payInfo(s) {
 }
 
 // take one check: free first, then credit; returns how it was paid and a refund for when the check itself fails
-async function charge(id, ip) {
+async function charge(id, ip, { preferCredit = false } = {}) {
   const s = await settings();
   if (!s.enabled) throw new HttpError(503, "The Gate API is paused right now.");
   const holder = id.address ? await import("./holders.mjs").then((m) => m.holderOf(id.address)).catch(() => null) : null;
@@ -123,7 +123,10 @@ async function charge(id, ip) {
     if (d.usage?.day !== t) d.usage = { day: t, by: {} };
     const used = d.usage.by[key] || 0;
     d.stats ||= { checks: 0, free: 0, paid: 0, deposits: 0, usdg: 0 };
-    if (used < free) { d.usage.by[key] = used + 1; d.stats.checks++; d.stats.free++; paid = { by: "free", freeLeftToday: free - used - 1 }; return d; }
+    const credit = id.address ? d.credits?.[id.address] || 0 : 0;
+    // pay=credit: spend this wallet's own credit first and keep its free checks for later
+    const useCredit = preferCredit && credit >= price;
+    if (used < free && !useCredit) { d.usage.by[key] = used + 1; d.stats.checks++; d.stats.free++; paid = { by: "free", freeLeftToday: free - used - 1 }; return d; }
     if (id.address && (d.credits?.[id.address] || 0) >= price) {
       d.credits[id.address] -= price; d.stats.checks++; d.stats.paid++;
       paid = { by: "credit", costUsdg: s.priceUsdg, balanceUsdg: d.credits[id.address] / 1e6 };
@@ -238,7 +241,7 @@ export async function register(r, ctx) {
   r.get("/api/gate/v1/check/:token", async ({ req, params, query, ip }) => {
     if (!isAddress(params.token)) throw new HttpError(400, "That is not a token address on Robinhood Chain.");
     const id = await who(req, params.token);
-    const { paid, refund } = await charge(id, ip);
+    const { paid, refund } = await charge(id, ip, { preferCredit: query.pay === "credit" });
     try {
       const out = await runCheck(params.token, { amountEth: query.amountEth, from: query.from, withAssay: query.assay !== "0" });
       return { ...out, paid: { ...paid, wallet: id.address ? getAddress(id.address) : null, via: id.via } };

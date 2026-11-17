@@ -34,6 +34,8 @@ const { ADDR } = await import(ROOT + "server/robinhood.mjs");
 
 let n = 0;
 const ok = (name) => { n++; console.log("ok -", name); };
+// every failed launch says why and what to do, and keeps to one cashtag (X refuses posts with more)
+const fixOk = (reply) => { assert.match(reply, /^Not launched: .+To fix: /); assert.ok((reply.match(/\$[A-Za-z][A-Za-z0-9]*/g) || []).length <= 1, reply); };
 
 /* ---------- the factory, deployed on the fork from the tested build ---------- */
 const deployer = Wallet.createRandom().connect(provider);
@@ -77,27 +79,27 @@ L._setLogoFetcher(async () => "https://troya.codes/img/logo-3d-hd.png");
 const IMG = "https://pbs.twimg.com/media/test.jpg";
 
 let r = await L.fromX({ tweetId: "1", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE tax 1%", mediaUrl: IMG });
-assert.match(r.reply, /not open yet/i);
+assert.match(r.reply, /isn't open yet/i); fixOk(r.reply);
 ok("while Launch on X is off, the post gets a not-open-yet reply and nothing launches");
 await store.writeJson("x-state.json", { launch: "live" });
 
 r = await L.fromX({ tweetId: "2", authorId: "999", text: "@Troyaagent launch Fork Horse $FHORSE", mediaUrl: IMG });
-assert.match(r.reply, /link this X account/i); ok("an unlinked X account is told to link first");
+assert.match(r.reply, /isn't linked to a Troya wallet/i); fixOk(r.reply); ok("an unlinked X account is told to link first");
 r = await L.fromX({ tweetId: "3", authorId: "222", text: "@Troyaagent launch Fork Horse $FHORSE", mediaUrl: IMG });
-assert.match(r.reply, /holders of 1,000,000/i); ok("a non-holder cannot launch from X");
+assert.match(r.reply, /needs 1,000,000/i); assert.match(r.reply, /you hold 0/); fixOk(r.reply); ok("a non-holder cannot launch from X");
 r = await L.fromX({ tweetId: "4", authorId: "111", text: "@Troyaagent launch Fake Ether $ETH", mediaUrl: IMG });
-assert.match(r.reply, /taken by an existing coin/i); ok("$ETH is refused");
+assert.match(r.reply, /taken by an existing coin/i); fixOk(r.reply); ok("$ETH is refused");
 r = await L.fromX({ tweetId: "6", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE tax 9%", mediaUrl: IMG });
-assert.match(r.reply, /4% at most/i); ok("a 9% creator tax is refused");
+assert.match(r.reply, /4% at most/i); fixOk(r.reply); ok("a 9% creator tax is refused");
 await store.writeJson("launch-prefs.json", { [H.toLowerCase()]: { x: false } });
 r = await L.fromX({ tweetId: "7", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE", mediaUrl: IMG });
-assert.match(r.reply, /switched off/i); ok("with Launch from X switched off, nothing launches");
+assert.match(r.reply, /switched off/i); fixOk(r.reply); ok("with Launch from X switched off, nothing launches");
 await store.writeJson("launch-prefs.json", { [H.toLowerCase()]: { x: true } });
 // "test" mode: only admin wallets launch from X (the real-money test)
 await store.writeJson("x-state.json", { launch: "test" });
 process.env.X_ADMINS = "";
 r = await L.fromX({ tweetId: "7b", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE", mediaUrl: IMG });
-assert.match(r.reply, /not open yet/i); ok("test mode: a holder who is not an admin gets the not-open-yet reply");
+assert.match(r.reply, /isn't open yet/i); fixOk(r.reply); ok("test mode: a holder who is not an admin gets the not-open-yet reply");
 process.env.X_ADMINS = H.toLowerCase();
 
 // warm the fork up: the first Pons simulation pulls a lot of state from the network (the server's RPC timeout is 9 s)
@@ -134,9 +136,9 @@ ok(`a post without an image launches a coin with no image ($BARE ${r.launch.toke
 
 /* ---------- an initial buy right after launch ---------- */
 const tooBig = await L.fromX({ tweetId: "9a", authorId: "111", text: "@Troyaagent launch Big Horse $BIGH buy 5", mediaUrl: IMG });
-assert.match(tooBig.reply, /up to 1 ETH/); ok("an initial buy above 1 ETH is refused before anything launches");
+assert.match(tooBig.reply, /up to 1 ETH/); fixOk(tooBig.reply); ok("an initial buy above 1 ETH is refused before anything launches");
 const poor = await L.fromX({ tweetId: "9b", authorId: "111", text: "@Troyaagent launch Poor Horse $POOR buy 0.9", mediaUrl: IMG });
-assert.match(poor.reply, /Not launched: the Agent Wallet holds/); ok("not enough ETH for fee + buy: nothing launches");
+assert.match(poor.reply, /Not launched: the Agent Wallet holds/); fixOk(poor.reply); ok("not enough ETH for fee + buy: nothing launches");
 r = await L.fromX({ tweetId: "9", authorId: "111", text: "@Troyaagent launch Buy Horse $BUYH buy 0.01", mediaUrl: IMG });
 assert.ok(r.launch?.token, r.reply);
 console.log("   reply:", r.reply);

@@ -323,29 +323,30 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   const done = (await store.readJson("launches.json", [])).find((x) => x.ref === `x:${tweetId}`);
   if (done) return { reply: null, launch: done };
   const xm = await xLaunchMode();
-  const notYet = { reply: "Launching from X is not open yet. It goes live after its real-money test; the roadmap is on troya.codes/roadmap" };
+  const notYet = { reply: `Not launched: Launch on X isn't open yet, it's in its real-money test. To fix: nothing to do yet; set it up now and it works the day it opens: ${DESK()}` };
   if (xm === "off") return notYet;
   const owner = await linkedOwner(authorId);
   if (xm === "test" && !(owner && admins().includes(lc(owner)))) return notYet;
-  if (!owner) return { reply: `To launch from X, link this X account to your Troya wallet and switch Launch from X on: ${DESK()}` };
-  if (!(await prefsOf(owner)).x) return { reply: `Launch from X is switched off for your wallet. Turn it on here first: ${DESK()}` };
+  if (!owner) return { reply: `Not launched: this X account isn't linked to a Troya wallet. To fix: link it and switch Launch from X on, then post again: ${DESK()}` };
+  if (!(await prefsOf(owner)).x) return { reply: `Not launched: Launch from X is switched off for your wallet. To fix: switch it on, then post again: ${DESK()}` };
   const h = await holderInfo(owner);
-  if (!h.holder) return { reply: `Launching from X is for holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA (main wallet plus Agent Wallet). Anyone can launch from the Telegram bot or troya.codes.` };
-  if (ask.unclear || !ask.symbol || !ask.name) return { reply: "To launch, write it like this, with the image attached: @Troyaagent launch Wooden Horse $HORSE (add \"tax 2%\" for a creator tax, \"buy 0.01\" for an initial buy)" };
+  if (!h.holder) return { reply: `Not launched: launching from X needs ${HOLDER_MIN.toLocaleString("en-US")} $TROYA across your wallet and Agent Wallet (you hold ${Math.floor(h.balance).toLocaleString("en-US")}). To fix: hold 1M, or launch from troya.codes, open to everyone: ${SITE().replace(/^https?:\/\//, "")}/agent#/launch/create` };
+  if (ask.unclear || !ask.symbol || !ask.name) return { reply: "Not launched: Troya couldn't read the coin's name and ticker for sure. To fix: post it like this, image attached: @Troyaagent launch Wooden Horse $HORSE (add \"tax 2%\" for a creator tax, \"buy 0.01\" for an initial buy)" };
   const np = nameProblem(ask.name, ask.symbol, { team: admins().includes(lc(owner)) });
-  if (np) return { reply: np };
-  if (ask.taxBps > MAX_TAX_BPS) return { reply: `The creator tax can be 4% at most. Post again with a lower tax.` };
-  if (ask.buyEth > MAX_INITIAL_BUY_ETH) return { reply: `The initial buy can be up to ${MAX_INITIAL_BUY_ETH} ETH. Post again with a smaller buy.` };
+  if (np) return { reply: `Not launched: ${np.replace(/\.$/, "")}. To fix: post again with another name or ticker. Nothing was spent.` };
+  if (ask.taxBps > MAX_TAX_BPS) return { reply: `Not launched: the creator tax can be 4% at most (you asked for ${ask.taxBps / 100}%). To fix: post again with "tax 4%" or less. Nothing was spent.` };
+  if (ask.buyEth > MAX_INITIAL_BUY_ETH) return { reply: `Not launched: the initial buy can be up to ${MAX_INITIAL_BUY_ETH} ETH (you asked for ${ask.buyEth}). To fix: post again with a smaller "buy". Nothing was spent.` };
   // the image is up to the poster (owner's rule, 17 Nov): no image attached → the coin launches without one
   let logo = "";
-  if (mediaUrl) { try { logo = await fetchLogo(mediaUrl); } catch { return { reply: "Troya could not read that image. Post again with a PNG or JPEG under 1 MB." }; } }
+  if (mediaUrl) { try { logo = await fetchLogo(mediaUrl); } catch { return { reply: "Not launched: Troya couldn't read the attached image. To fix: attach a PNG or JPEG under 1 MB and post again. Nothing was spent." }; } }
   let out;
   try {
     out = await launchWithAgentWallet({ owner, name: ask.name, symbol: ask.symbol, logo, creatorTaxBps: ask.taxBps, twitter: `https://x.com/i/status/${tweetId}`, source: "x", ref: `x:${tweetId}`, buyEth: ask.buyEth });
   } catch (e) { return { reply: guide(String(e.message || "the launch failed")) }; }
   if (!out.ok) {
-    if (out.why === "no-agent-wallet") return { reply: `Not launched: your wallet has no Agent Wallet yet. Create one, add a little ETH on Robinhood Chain, then post again: ${DESK()}` };
-    if (out.why === "funds") return { reply: `Not launched: ${out.reasons?.[0] || "not enough ETH"}. Top up your Agent Wallet and post again: ${SITE().replace(/^https?:\/\//, "")}/agent#/agent/wallet` };
+    if (out.why === "no-agent-wallet") return { reply: `Not launched: your wallet has no Agent Wallet yet. To fix: create one and add a little ETH on Robinhood Chain, then post again: ${DESK()}` };
+    if (out.why === "funds") return { reply: `Not launched: ${out.reasons?.[0] || "not enough ETH in the Agent Wallet"}. To fix: top up your Agent Wallet and post again. Nothing was spent: ${SITE().replace(/^https?:\/\//, "")}/agent#/agent/wallet` };
+    if (out.why === "no-token") return { reply: `Not launched: the launch transaction did not go through on Robinhood Chain. To fix: wait a minute and post again; check it here: ${DESK()}` };
     return { reply: guide((out.reasons || [])[0] || "the launch could not be sent") };
   }
   const ca = out.launch.token, ib = out.launch.initialBuy;
@@ -358,9 +359,13 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
 }
 /** a failed launch, said plainly with where to fix it */
 function guide(why) {
-  const w = String(why).replace(/\.$/, "").slice(0, 150);
-  const fix = /cap|limit/i.test(w) ? " Raise your Agent Wallet caps or post a smaller buy." : /kill switch|paused/i.test(w) ? " Launches are paused right now; try again later." : "";
-  return `Not launched: ${w}.${fix} Nothing was spent. Setup and help: ${DESK()}`.slice(0, 270);
+  const w = String(why).replace(/\.$/, "").slice(0, 140);
+  const fix = /launches through Troya today|try again tomorrow/i.test(w) ? "try again tomorrow (UTC)"
+    : /cap|limit/i.test(w) ? "raise your Agent Wallet caps or post a smaller buy"
+    : /kill switch|paused/i.test(w) ? "launches are paused right now, try again later"
+    : /pons would refuse|simulation/i.test(w) ? "check the name and ticker, then post again"
+    : "check your setup, then post again";
+  return `Not launched: ${w}. To fix: ${fix}. Nothing was spent. Help: ${DESK()}`.slice(0, 275);
 }
 /** the new coin's market cap right after launch, from its Pons curve (price × supply × ETH/USD) */
 async function marketCapUsd(token) {

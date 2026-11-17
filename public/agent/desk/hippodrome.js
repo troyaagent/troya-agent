@@ -53,10 +53,25 @@ export async function mount(view, ctx) {
     const src = SOURCE[c.source];
     const fresh = c.at && Date.now() - c.at < 3 * 60_000;
     const pct = Math.max(0, Math.min(100, Number(c.progressPct) || 0));
+    // a fixed strip of status tags: lit when true, grey when not, orange when only part of it happened
     const tags = [];
     if (c.source === "origin") tags.push(tipOn(h("span", { class: "hp-tag og" }, "OG"), "OG", "The original $TROYA, the coin Troya is built around.", "green"));
-    if (c.cto) tags.push(tipOn(h("span", { class: "hp-tag cto ic" }, svg(PEOPLE, "hp-tag-ic")), "Community takeover", "The community runs this coin.", "green"));
-    if (c.dexPaid) tags.push(tipOn(h("span", { class: "hp-tag paid ic" }, svg(VERIFIED, "hp-tag-ic")), "Dex Paid", "This coin's DexScreener profile is paid and approved.", "blue"));
+    tags.push(c.cto ? tipOn(h("span", { class: "hp-tag cto ic on" }, svg(PEOPLE, "hp-tag-ic")), "Community takeover", "The community runs this coin.", "yellow")
+      : tipOn(h("span", { class: "hp-tag cto ic" }, svg(PEOPLE, "hp-tag-ic")), "No community takeover", "This coin is still run by the wallet that launched it."));
+    tags.push(c.dexPaid ? tipOn(h("span", { class: "hp-tag paid ic on" }, svg(VERIFIED, "hp-tag-ic")), "Dex Paid", "This coin's DexScreener profile is paid and approved.", "blue")
+      : tipOn(h("span", { class: "hp-tag paid ic" }, svg(VERIFIED, "hp-tag-ic")), "Not Dex Paid", "No paid DexScreener profile for this coin yet."));
+    const dv = c.dev, pc = (x) => `${x >= 10 ? x.toFixed(0) : x.toFixed(1)}%`;
+    if (dv) {
+      const held = `The dev still holds ${pc(dv.heldPct)} of the supply.`;
+      tags.push(dv.never ? tipOn(h("span", { class: "hp-tag dev" }, "DS"), "Dev sold: no", "The dev never held this coin.")
+        : dv.sold === "all" ? tipOn(h("span", { class: "hp-tag dev red" }, "DS"), "Dev sold everything", `The dev sold or moved out ${pc(dv.soldPct)} of what they received and holds none.`, "red")
+        : dv.sold === "part" ? tipOn(h("span", { class: "hp-tag dev part" }, "DS"), "Dev sold part", `The dev sold or moved out ${pc(dv.soldPct)} of what they received. ${held}`, "orange")
+        : tipOn(h("span", { class: "hp-tag dev" }, "DS"), "Dev sold: no", `The dev has not sold. ${held}`));
+      tags.push(dv.never ? tipOn(h("span", { class: "hp-tag dev" }, "DB"), "Dev burn: no", "The dev never held this coin.")
+        : dv.burnt === "all" ? tipOn(h("span", { class: "hp-tag dev green" }, "DB"), "Dev burned everything", `The dev burned ${pc(dv.burnedPct)} of what they received and holds none.`, "green")
+        : dv.burnt === "part" ? tipOn(h("span", { class: "hp-tag dev part" }, "DB"), "Dev burned part", `The dev burned ${pc(dv.burnedPct)} of what they received. ${held}`, "orange")
+        : tipOn(h("span", { class: "hp-tag dev" }, "DB"), "Dev burn: no", `The dev has not burned any. ${held}`));
+    }
     if (c.keepsAll === true) tags.push(tipOn(h("span", { class: "hp-tag gold" }, "Holder"), "Holder", "The creator holds 1M $TROYA and keeps the whole creator fee.", "gold"));
     const go = () => { location.hash = `#/token/${c.token.toLowerCase()}`; };
     const stop = (e) => e.stopPropagation();

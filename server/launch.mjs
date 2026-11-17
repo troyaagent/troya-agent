@@ -377,6 +377,51 @@ async function marketCapUsd(token) {
   return p?.priceInPair && eth ? p.priceInPair * supply * eth : null;
 }
 
+/* ---------- what the dev did with the coin: sold, burned, still holds (read from its Transfer logs) ---------- */
+const TRANSFER_T = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+const BURN_TO = new Set(["0x0000000000000000000000000000000000000000", "0x000000000000000000000000000000000000dead"]);
+const ercI = new Interface(["function balanceOf(address) view returns (uint256)", "function totalSupply() view returns (uint256)"]);
+const pad32 = (a) => "0x" + lc(a).replace(/^0x/, "").padStart(64, "0");
+const devMemo = new Map();
+/**
+ * The dev wallets' story with one coin: how much they received, burned (sent to 0x0 or 0x…dEaD), sent away (sold,
+ * or moved to a pool or another wallet) and still hold. → { never, heldPct, soldPct, burnedPct, sold, burnt } where
+ * sold/burnt are "none" | "part" | "all" (all = nothing left, or under 0.5% of what they received).
+ */
+export async function devStatus(token, devs, fromBlock = null) {
+  const key = lc(token) + ":" + devs.map(lc).sort().join(",");
+  const hit = devMemo.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.v;
+  const head = parseInt(await rpc("robinhood", "eth_blockNumber", []), 16);
+  const from = "0x" + Math.max(0, fromBlock ?? head - 9_500_000).toString(16);    // address + one topic: the RPC allows 10M blocks
+  const mine = new Set(devs.map(lc));
+  let got = 0n, burned = 0n, away = 0n;
+  for (const d of mine) {
+    const [ins, outs] = await Promise.all([
+      rpc("robinhood", "eth_getLogs", [{ address: token, fromBlock: from, toBlock: "latest", topics: [TRANSFER_T, null, pad32(d)] }]),
+      rpc("robinhood", "eth_getLogs", [{ address: token, fromBlock: from, toBlock: "latest", topics: [TRANSFER_T, pad32(d)] }]),
+    ]);
+    for (const l of ins || []) { const src = "0x" + l.topics[1].slice(26); if (!mine.has(src)) got += BigInt(l.data); }
+    for (const l of outs || []) {
+      const to = "0x" + l.topics[2].slice(26);
+      if (mine.has(to)) continue;                                                  // between the dev's own wallets
+      if (BURN_TO.has(to)) burned += BigInt(l.data); else away += BigInt(l.data);
+    }
+  }
+  let held = 0n;
+  for (const d of mine) held += (await call(token, ercI, "balanceOf", [d]))[0];
+  const supply = (await call(token, ercI, "totalSupply"))[0];
+  const pctOf = (x, of) => (of > 0n ? Number((x * 1_000_000n) / of) / 10_000 : 0);
+  const empty = got > 0n ? held * 200n <= got : held === 0n;                   // under 0.5% of what they received
+  const v = {
+    never: got === 0n && held === 0n, heldPct: pctOf(held, supply), soldPct: pctOf(away, got), burnedPct: pctOf(burned, got),
+    sold: away === 0n ? "none" : empty && burned * 2n < away ? "all" : "part",
+    burnt: burned === 0n ? "none" : empty && burned * 2n >= away ? "all" : "part",
+  };
+  devMemo.set(key, { at: Date.now(), v });
+  return v;
+}
+
 /* ---------- the Hippodrome: every coin born through Troya ---------- */
 // $TROYA itself opens the Migrated column: the coin the whole desk is built around (launched on Pons, 15 Nov 2026).
 const ORIGIN = { token: "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", name: "Troya Agent", symbol: "TROYA", source: "origin", owner: "0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4", at: Date.parse("2026-11-15T12:00:00Z"), cto: true };
@@ -406,7 +451,8 @@ async function bornRecords() {
 }
 async function boardItem(rec, handles) {
   const m = await import("./market.mjs");
-  const [d, ds] = await Promise.all([m.getRobinhoodToken(rec.token).catch(() => null), dexOrders(rec.token)]);
+  const devs = [...new Set([rec.wallet, rec.owner].filter((a) => isAddress(String(a || ""))).map(lc))];
+  const [d, ds, dev] = await Promise.all([m.getRobinhoodToken(rec.token).catch(() => null), dexOrders(rec.token), devs.length ? devStatus(rec.token, devs, rec.block || null).catch(() => null) : null]);
   const t = d?.token || {}, p = d?.pons || null;
   const graduated = !!p?.graduated || (rec.source === "origin" && !p);
   return {
@@ -416,7 +462,7 @@ async function boardItem(rec, handles) {
     priceUsd: t.priceUsd ?? null, mcapUsd: t.mcapUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, holders: t.holders ?? null,
     txns24h: t.txns24h ?? null, buys24h: t.buys24h ?? null, sells24h: t.sells24h ?? null, change1h: t.change1h ?? null, change24h: t.change24h ?? null,
     progressPct: graduated ? 100 : p?.progressPct ?? null, graduated, raisedEth: p?.raised ?? null, ponsUrl: p?.ponsUrl || null,
-    dexPaid: ds.paid, cto: ds.cto || !!rec.cto, boosts: ds.boosts || 0,
+    dexPaid: ds.paid, cto: ds.cto || !!rec.cto, boosts: ds.boosts || 0, dev,
   };
 }
 export async function board() {

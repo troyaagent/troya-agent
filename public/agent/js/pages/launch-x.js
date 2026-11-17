@@ -5,7 +5,7 @@ import { AbiCoder } from "ethers";
 import { h, clear, icon, toast, short, tiny, num, review, useCss, copyText, ago } from "../ui.js";
 import { wallet, onWallet, openConnect, signIn, signerFor } from "../wallet.js";
 import { api } from "../api.js";
-import { waitReceipt, errText } from "../chain.js";
+import { waitReceipt, errText, balanceOf } from "../chain.js";
 
 const TROYA = "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074";
 const EXAMPLE = "@Troyaagent launch Wooden Horse $HORSE";
@@ -13,12 +13,12 @@ const EXAMPLE = "@Troyaagent launch Wooden Horse $HORSE";
 export async function mount(view, ctx) {
   useCss("launch");
   let alive = true;
-  const st = { prefs: null, aw: null, bal: null, mine: null, err: null, busy: false, factory: null };
+  const st = { prefs: null, aw: null, bal: null, mine: null, err: null, busy: false, factory: null, held: {} };
   const body = h("div", { class: "lx" });
   clear(view,
     h("a", { class: "lc-back link", href: "#/launch" }, "← Launchpad"),
     h("header", { class: "page-head lc-head" }, h("h1", {}, "Launch from X"),
-      h("p", {}, "Post on X and the coin goes live on Pons from your Agent Wallet. For holders of 1,000,000 $TROYA, who keep the whole creator fee. Anyone can launch from troya.codes or the Telegram bot.")),
+      h("p", {}, "Post on X and the coin goes live on Pons from your Agent Wallet. For holders of 1,000,000 $TROYA, who keep the whole creator fee. Anyone can launch from troya.codes or the Telegram bot. ", h("a", { class: "link", href: "/launch-on-x", target: "_blank", rel: "noopener" }, "Read the full guide"))),
     body);
   if (ctx.query.x === "linked") toast("X account linked.", "ok");
 
@@ -32,6 +32,12 @@ export async function mount(view, ctx) {
       ]);
       st.prefs = p; st.aw = aw; st.mine = mine?.launches || [];
       st.bal = aw?.exists ? await api.get("agent-wallet/balances").catch(() => null) : null;
+      // what the Agent Wallet still holds of each coin it launched (the initial buy), so it can be sold from here
+      st.held = {};
+      if (aw?.exists) for (const x of st.mine.filter((m) => String(m.wallet || "").toLowerCase() === aw.address.toLowerCase()).slice(0, 20)) {
+        const b = await balanceOf(aw.address, { address: x.token, decimals: 18 }).catch(() => null);
+        if (b) st.held[x.token.toLowerCase()] = b.amount;
+      }
       if (p?.admin) st.factory = await api.get("launch/splitter").catch(() => null);
     } else { st.prefs = null; st.aw = null; st.mine = null; st.bal = null; }
     if (alive) paint();
@@ -100,8 +106,26 @@ export async function mount(view, ctx) {
     const rows = st.mine.length ? st.mine.map((x) => h("div", { class: "lx-coin" },
       h("div", {}, h("b", {}, x.symbol ? `$${x.symbol}` : short(x.token)), h("span", { class: "muted" }, ` ${x.name || ""}`)),
       h("span", { class: "muted" }, `${x.source === "x" ? "X" : x.source === "tg" ? "Telegram" : "Web"} · ${ago(x.at)} · ${x.split ? "Troya 0.1% of volume" : "creator fee 100% yours"}`),
-      h("a", { class: "link", href: `#/token/${String(x.token).toLowerCase()}` }, "Open"))) : [h("p", { class: "muted" }, "No coins launched through Troya from this wallet yet.")];
-    return h("section", { class: "panel lx-panel" }, h("h2", {}, "Your launches"), rows);
+      h("a", { class: "link", href: `#/token/${String(x.token).toLowerCase()}` }, "Open"),
+      sellRow(x))) : [h("p", { class: "muted" }, "No coins launched through Troya from this wallet yet.")];
+    return h("section", { class: "panel lx-panel" }, h("h2", {}, "Your launches"),
+      st.mine.length ? h("p", { class: "muted" }, "Coins from your initial buy sit in your Agent Wallet. Sell them here: the sale runs through Troya Gate and your Agent Wallet caps, and the ETH stays in the Agent Wallet.") : null, rows);
+  }
+  // sell part or all of what the Agent Wallet holds of a coin it launched
+  function sellRow(x) {
+    const held = st.held[String(x.token).toLowerCase()];
+    if (!(held > 0)) return null;
+    const fmt = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : n.toFixed(2));
+    return h("div", { class: "lx-sell" }, h("span", { class: "muted" }, `Agent Wallet holds ${fmt(held)} ${x.symbol ? "$" + x.symbol : ""}`),
+      [25, 50, 100].map((pct) => h("button", { class: "btn sm", type: "button", disabled: !!st.busy, onclick: run(`Selling ${pct}%…`, async () => {
+        const amount = pct === 100 ? Math.floor(held * 1e6) / 1e6 : Math.floor(held * pct * 1e4) / 1e6;
+        const ok = await review({ title: `Sell ${pct}% of ${x.symbol ? "$" + x.symbol : "this coin"}`, summary: "From your Agent Wallet, through Troya Gate and within its caps. The ETH stays in the Agent Wallet.",
+          rows: [["Coin", x.symbol ? `$${x.symbol}` : short(x.token)], ["Amount", `${fmt(amount)} (${pct}%)`], ["You get", "ETH, after the 1% fee and any creator tax"], ["Slippage limit", "5%"]], confirmLabel: `Sell ${pct}%` });
+        if (!ok) return;
+        const r = await api.post("agent-wallet/execute", { kind: "swap", params: { tokenIn: x.token, tokenOut: "ETH", amountIn: amount, slippagePct: 5 } });
+        if (r.executed) toast(`Sold ${pct}% of ${x.symbol ? "$" + x.symbol : "the coin"}.`, "ok", 6000);
+        else throw new Error((r.reasons || [])[0] || "The sale was not sent.");
+      }) }, `Sell ${pct}%`)));
   }
 
   function adminCard() {

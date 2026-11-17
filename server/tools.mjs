@@ -252,7 +252,11 @@ export async function gateSwap(q) {
   const checks = [];
   const c = (name, status, detail) => checks.push({ name, status, detail });
   c("Route", q.executable ? "pass" : "warn", q.executable ? `Routed${q.route ? " via " + (typeof q.route === "string" ? q.route : JSON.stringify(q.route).slice(0, 60)) : ""}` : "No executable route on this server, estimate only");
-  if (q.priceImpactPct != null) c("Price impact", q.priceImpactPct <= pol.maxPriceImpactPct ? (q.priceImpactPct > pol.maxPriceImpactPct / 2 ? "warn" : "pass") : "fail", `${q.priceImpactPct.toFixed(2)}% (limit ${pol.maxPriceImpactPct}%)`);
+  // selling a coin for ETH is the holder's way out: a thin pool or a big price impact warns instead of blocking the exit
+  // (a sell that would lose more than half to price impact is still refused); contract, tax and sell checks still apply
+  const selling = !!q.tokenOut?.native && !q.tokenIn?.native;
+  if (q.priceImpactPct != null) c("Price impact", q.priceImpactPct <= pol.maxPriceImpactPct ? (q.priceImpactPct > pol.maxPriceImpactPct / 2 ? "warn" : "pass") : selling && q.priceImpactPct <= 50 ? "warn" : "fail",
+    `${q.priceImpactPct.toFixed(2)}% (limit ${pol.maxPriceImpactPct}%${selling && q.priceImpactPct > pol.maxPriceImpactPct && q.priceImpactPct <= 50 ? ", allowed for a sell" : ""})`);
   else c("Price impact", "warn", "Not reported for this route");
   const tok = q.tokenOut?.native ? q.tokenIn : q.tokenOut;
   if (tok?.sameSymbol > 1) c("Symbol", "warn", `${tok.sameSymbol} tokens use the symbol ${untrusted(tok.symbol)}. Picked the most traded one, ${tok.address.slice(0, 6)}…${tok.address.slice(-4)}. Check the address before you sign.`);
@@ -260,7 +264,7 @@ export async function gateSwap(q) {
     const minEth = Number(pol.minPoolLiquidityEth ?? 0.25);
     const depth = q.quote?.poolLiquidity;
     const eth = depth?.eth != null ? depth.eth : tok.liquidityEth != null ? tok.liquidityEth / 2 : null;
-    if (eth != null) c("Pool depth", eth >= minEth ? "pass" : "fail", `${eth < 1 ? eth.toFixed(3) : eth.toFixed(2)} ETH ${q.quote?.venue === "pons-curve" ? "raised on the Pons curve" : "on the ETH side of the pool"} (minimum ${minEth})`);
+    if (eth != null) c("Pool depth", eth >= minEth ? "pass" : selling ? "warn" : "fail", `${eth < 1 ? eth.toFixed(3) : eth.toFixed(2)} ETH ${q.quote?.venue === "pons-curve" ? "raised on the Pons curve" : "on the ETH side of the pool"} (minimum ${minEth}${eth < minEth && selling ? " for buys; selling out is allowed" : ""})`);
     else if (depth?.pair != null) c("Pool depth", "pass", `${depth.pair.toFixed(2)} ${untrusted(depth.pairSymbol, 10)} raised on the Pons curve`);
     else c("Pool depth", "warn", "Pool depth is not indexed for this token");
     if (tok.address && isAddress(tok.address)) {

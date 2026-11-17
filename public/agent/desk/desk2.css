@@ -1139,3 +1139,4 @@ body { touch-action: manipulation; }
 .tip-pop.red { border-color: rgba(255, 107, 107, .5); } .tip-pop.red b { color: #ff6b6b; }
 .tip-pop.blue { border-color: rgba(47, 155, 255, .5); } .tip-pop.blue b { color: #5fb2ff; }
 .tip-pop.gold { border-color: rgba(242, 194, 107, .45); } .tip-pop.gold b { color: #f2c26b; }
+.cc-guide { align-self: center; font-size: 13px; color: var(--muted); }

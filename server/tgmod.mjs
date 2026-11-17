@@ -60,7 +60,7 @@ export function posesAsProject(u) {
     || /troyaagent|trojantroya|troyasentry|troya(?:support|admin|official|team|help|dev|mod)/.test(h);
 }
 // selling listings, trending spots, boosts or votes: "listed on @x", "boost your token with @x", "I can add the rocket to 300", trending-bot posts
-const SERVICES = /\b(?:list(?:ed|ing)?|trend(?:ing)?|votes?|boost(?:s|ed|ing)?)\b[^\n@]{0,40}\b(?:on|at|with|via|by|in|from)\s+@(?!(?:trojantroya_bot|troyaagent|troyasentry|admin|admins)\b)[A-Za-z0-9_]{4,32}|\bI\s+can\s+(?:add|get|give|push|bring|increase)\b[^\n]{0,60}\b(?:votes?|rockets?|flames?|holders|volume|trending|views|members)\b|\b(?:add|increase)\s+(?:up\s+)?the\s+(?:rockets?|flames?|votes?)|🔥\s*TRENDING\s*🔥/i;
+const SERVICES = /\b(?:list(?:ed|ing)?|trend(?:ing)?|votes?|boost(?:s|ed|ing)?)\b[^\n@]{0,40}\b(?:on|at|with|via|by|in|from)\s+@(?!(?:trojantroya_bot|troyaagent|troyasentry|admin|admins)\b)[A-Za-z0-9_]{4,32}|\bI\s+can\s+(?:add|get|give|push|bring|increase|take|raise|pump|boost|move|send)\b[^\n]{0,60}\b(?:votes?|rockets?|flames?|holders|volume|trending|views|members|engagement)\b|\b(?:add|increase|take|raise|pump)\s+(?:up\s+)?the\s+(?:rockets?|flames?|votes?)|\bnot\s+bots?\b[^\n]{0,30}\bfake\s+users\b|\breal\s+people\b[^\n]{0,20}\breal\s+engagement\b|🔥\s*TRENDING\s*🔥/i;
 const RULES = [
   // links to other chains' charts and launchpads, other groups and bots (Troya is Robinhood Chain only)
   [3, /dexscreener\.com\/(?!robinhood)|pump\.fun|birdeye\.so|dextools\.io|gmgn\.ai|photon-sol|axiom\.trade|bullx\.io|geckoterminal\.com\/(?!robinhood)|t\.me\/(?!troyaagent\b|troyasentry\b|trojantroya_bot\b)|telegram\.me\/|chat\.whatsapp\.com|discord\.gg\//i],

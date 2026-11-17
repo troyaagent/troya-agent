@@ -37,6 +37,7 @@ const ROUTES = {
   "/flywheel": "/flywheel.html",
   "/community": "/community.html",
   "/roadmap": "/roadmap.html",
+  "/launch-on-x": "/launch-on-x.html",
   "/badge": "/badge.html",
   "/agent": "/agent/index.html",
 };

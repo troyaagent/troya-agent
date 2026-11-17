@@ -126,9 +126,12 @@ async function callback(query, res) {
 /* ---------- Troya answering on X ---------- */
 const mode = async () => (await store.readJson("x-state.json", {})).mode || (["off", "draft", "live"].includes(process.env.X_REPLY) ? process.env.X_REPLY : "draft");
 const LINK_OK = /^(https?:\/\/)?(www\.)?(troya\.codes|t\.me\/troyaagent|x\.com\/troyaagent|dexscreener\.com\/robinhood)/i;
+// X refuses a post with more than one cashtag: keep the first $TICKER, write the rest without the $
+export const oneCashtag = (t) => { let n = 0; return String(t || "").replace(/\$([A-Za-z][A-Za-z0-9]{0,15})\b/g, (m, sym) => (n++ ? sym : m)); };
 function tidy(t) {
   let s = String(t || "").replace(/\*\*|__|`/g, "").replace(/^#+\s*/gm, "").replace(/\s+\n/g, "\n").trim();
   s = s.replace(/(^|\s)@\w+/g, "$1").replace(/https?:\/\/\S+/g, (u) => (LINK_OK.test(u) ? u : "")).replace(/[ \t]{2,}/g, " ").trim();
+  s = oneCashtag(s);
   if (s.length > 270) s = s.slice(0, 267).replace(/\s+\S*$/, "") + "…";
   return s;
 }
@@ -154,9 +157,9 @@ async function handleMention(t, { users, media, bot, m, L }) {
   if (lx) {
     entry.kind = "launch"; entry.token = lx.launch?.token || null; entry.why = lx.error || null;
     if (lx.reply) {
-      entry.reply = lx.reply;
+      entry.reply = oneCashtag(lx.reply);
       if (await spend("posts")) {
-        const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: lx.reply, reply: { in_reply_to_tweet_id: t.id } } }).catch((e) => { entry.why = e.message; return null; });
+        const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: entry.reply, reply: { in_reply_to_tweet_id: t.id } } }).catch((e) => { entry.why = e.message; return null; });
         entry.status = p?.data?.id ? "posted" : "failed"; entry.replyId = p?.data?.id || null;
       } else { entry.status = "draft"; entry.why = "daily post cap reached"; }
     }
@@ -291,6 +294,7 @@ export async function postReply(text, inReplyTo) {
   const bot = await botTokens();
   if (!bot?.access) throw new Error("Troya is not connected to X.");
   if (!(await spend("posts"))) throw new Error("Today's X post cap is reached.");
+  text = oneCashtag(text);
   const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: String(text), reply: { in_reply_to_tweet_id: String(inReplyTo) } } });
   const id = p?.data?.id || null;
   await store.update("x-log.json", [], (l) => [...l, { id: String(inReplyTo), at: Date.now(), author: "(team reply)", text: "", status: id ? "posted" : "failed", reply: String(text), replyId: id, manual: true }].slice(-300));
@@ -301,6 +305,7 @@ export async function postTweet(text) {
   const bot = await botTokens();
   if (!bot?.access) throw new Error("Troya is not connected to X.");
   if (!(await spend("posts"))) throw new Error("Today's X post cap is reached.");
+  text = oneCashtag(text);
   const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: String(text) } });
   const id = p?.data?.id || p?.id || null;      // X accepted it (xApi throws otherwise), even when no id comes back
   await store.update("x-log.json", [], (l) => [...l, { id: id || "post", at: Date.now(), author: "(team post)", text: "", status: "posted", reply: String(text), replyId: id, manual: true }].slice(-300));

@@ -586,3 +586,22 @@ html[data-theme="light"] .g-bub { background: var(--bg-2); }
 html[data-theme="light"] .g-msg.me { background: rgba(10, 126, 163, .08); border-color: rgba(10, 126, 163, .25); }
 .g-walk { min-height: 66px; flex: none; }
 .g-panel.chatting .g-nx { display: none; }
+/* highlight anything → Ask Troya */
+.g-pill { position: fixed; z-index: 400; display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px 0 10px; border-radius: 999px; cursor: pointer;
+  font: 650 12.5px/1 var(--sans); color: #04131a; background: var(--chrome); box-shadow: var(--chrome-shadow), 0 12px 30px rgba(0, 0, 0, .45); border: 0; animation: g-pop .25s var(--soft); }
+.g-pill[hidden] { display: none; }
+.g-pill svg.ci { width: 15px; height: 15px; }
+.g-pill svg.ci g[fill] { fill: #06303d; }
+@keyframes g-pop { from { opacity: 0; transform: translateY(6px) scale(.94); } to { opacity: 1; transform: none; } }
+/* the nudge, above the Ask Troya button */
+.g-nudge { position: fixed; right: 24px; bottom: 96px; z-index: 86; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px 12px; align-items: center; width: min(340px, calc(100vw - 32px));
+  padding: 14px; border-radius: 20px; border: 1px solid rgba(142, 223, 245, .35); background: linear-gradient(180deg, rgba(15, 24, 32, .97), rgba(7, 11, 16, .98)); box-shadow: 0 24px 60px rgba(0, 0, 0, .55); animation: g-pop .35s var(--soft); }
+.g-nudge[hidden] { display: none; }
+.g-nudge img { width: 34px; height: 34px; object-fit: contain; filter: drop-shadow(0 2px 8px rgba(142, 223, 245, .45)); }
+.g-nudge p { margin: 0; font-size: 13.5px; line-height: 1.45; }
+.g-nudge-a { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+.g-nudge-a .btn { height: 36px; padding: 0 18px; border-radius: 999px; }
+.g-nudge-a .g-x { width: 36px; height: 36px; margin: 0; }
+body.g-open .g-nudge { display: none; }
+@media (max-width: 860px) { .g-nudge { right: 8px; left: 8px; width: auto; bottom: calc(132px + env(safe-area-inset-bottom)); } }
+html[data-theme="light"] .g-nudge { background: var(--bg-1); border-color: rgba(10, 126, 163, .3); }

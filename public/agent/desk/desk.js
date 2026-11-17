@@ -132,7 +132,7 @@ async function route() {
   if (id !== routeId) return;
   clear(view);
   window.scrollTo(0, 0);
-  try { cleanup = (await mod.mount(view, { parts: r.parts, query: r.query, go, prefs, ask: openDrawer })) || null; }
+  try { cleanup = (await mod.mount(view, { parts: r.parts, query: r.query, go, prefs, ask: askTroya })) || null; }
   catch (e) { console.error(e); clear(view, h("div", { class: "empty", style: { padding: "120px 0" } }, h("b", {}, "Something broke on this page."), h("div", {}, String(e.message || e)))); }
   document.title = `${act?.t || page[0].toUpperCase() + page.slice(1)} · Troya Agent`;
 }
@@ -170,7 +170,7 @@ scrim.addEventListener("click", closeSide);
 clear($("[data-tabbar]"),
   h("a", { href: "#/" }, si("desk"), h("span", {}, "Desk")),
   h("a", { href: "#/market" }, si("market"), h("span", {}, "Market")),
-  h("button", { type: "button", class: "d-tab-ask", onclick: () => openDrawer() }, h("i", { class: "mark" }), h("span", {}, "Ask")),
+  h("button", { type: "button", class: "d-tab-ask", onclick: () => askTroya() }, h("i", { class: "mark" }), h("span", {}, "Ask")),
   h("a", { href: "#/swap" }, si("swap"), h("span", {}, "Swap")),
   h("a", { href: "#/perps" }, si("perps"), h("span", {}, "Perps")));
 
@@ -302,6 +302,8 @@ function sendIn(root, q) {
   if (wallet.session) inp.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   else inp.focus();
 }
+// questions go to the Ask Troya popup; the drawer stays for the full chat
+export function askTroya(q = "") { if (window.TroyaGuide) window.TroyaGuide.ask(q); else openDrawer(q); }
 export async function openDrawer(q = "") {
   if (document.body.classList.contains("on-chat")) { if (q) sendIn(view, q); else view.querySelector(".ag-input")?.focus(); return; }
   drawer.hidden = false;
@@ -355,7 +357,7 @@ function openAsk(prefill = "") {
         { kind: "page", title: `Gate ${t.symbol}`, hint: "Seven checks before you buy", icon: "gate", target: `#/gate/${t.address}` });
       out.push(["Coins", rows]);
     }
-    if (raw && !ca) asks.push({ kind: "ask", title: raw, hint: "Ask Troya: the answer opens beside this page", icon: "spark", target: raw });
+    if (raw && !ca) asks.push({ kind: "ask", title: raw, hint: "Ask Troya: answered right here, in the popup", icon: "spark", target: raw });
     for (const a of ASKS) if (!q || a.toLowerCase().includes(q)) asks.push({ kind: "ask", title: a, hint: "Ask Troya", icon: "spark", target: a });
     if (ca) out.push(["Check this coin", [
       { kind: "page", title: `Run Troya Gate on ${short(ca)}`, hint: "Seven checks: route, impact, depth, fees, simulation, test sell, tax", icon: "gate", target: `#/gate/${ca}` },
@@ -373,7 +375,7 @@ function openAsk(prefill = "") {
     if (!pageFirst && pages.length) out.push(goTo);
     return out;
   };
-  const run = (it) => { m.close(); if (it.kind === "ask") openDrawer(it.target); else if (it.target.startsWith("/")) location.href = it.target; else go(it.target); };
+  const run = (it) => { m.close(); if (it.kind === "ask") askTroya(it.target); else if (it.target.startsWith("/")) location.href = it.target; else go(it.target); };
   const render = () => {
     const secs = sections();
     flat = secs.flatMap(([, rows]) => rows);

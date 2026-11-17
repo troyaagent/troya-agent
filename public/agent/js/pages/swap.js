@@ -315,12 +315,28 @@ export async function mount(view, ctx) {
       if (!alive || seq !== st.seq) return;
       st.gate = g; st.gateAt = Date.now(); st.gating = false;
       paint();
+      tellTroya();
     } catch (e) {
       if (!alive || seq !== st.seq) return;
       st.quote = null; st.quoteErr = e.message; st.loading = false;
       paint();
+      tellTroya();
     }
   }, 380);
+  // the Ask Troya popup reads this, so "why is it blocked?" is answered about this exact swap
+  function tellTroya() {
+    const q = st.quote, g = st.gate;
+    const fails = g ? g.checks.filter((c) => c.status === "fail").map((c) => `${c.label}: ${c.detail}`) : [];
+    const notes = g ? g.checks.filter((c) => c.status === "warn").map((c) => `${c.label}: ${c.detail}`) : [];
+    const text = [`Swap on ${CHAINS[st.chain]?.name || st.chain}: ${st.amount || "?"} ${st.sell?.symbol || "?"} for ${st.buy?.symbol || "?"}${st.buy?.address && st.buy.address !== "native" ? ` (${st.buy.address})` : ""}.`,
+      q ? `Quote ${tiny(Number(q.amountOut))} ${q.tokenOut.symbol}, price impact ${q.priceImpact == null ? "?" : (q.priceImpact * 100).toFixed(2) + "%"}, fees and taxes ${q.feePct == null ? "?" : q.feePct + "%"}, route ${q.route?.label}.` : st.quoteErr ? `No quote: ${st.quoteErr}.` : "",
+      g ? `Troya Gate ${g.pass ? "passed" : "blocked"} (${g.checks.filter((c) => c.status === "pass").length}/${g.checks.length}).` : "",
+      fails.length ? `Failed: ${fails.join("; ")}.` : "", notes.length ? `Notes: ${notes.join("; ")}.` : ""].filter(Boolean).join(" ");
+    dispatchEvent(new CustomEvent("troya:ctx", { detail: { text } }));
+    if (g && !g.pass) dispatchEvent(new CustomEvent("troya:nudge", { detail: { key: `swap-gate-${st.gateAt}`, text: `Troya Gate blocked this swap of ${st.buy?.symbol || "the coin"}. Want me to explain why?`, q: "Why did Troya Gate block this swap, and what can I do instead?" } }));
+    else if (g && notes.length) dispatchEvent(new CustomEvent("troya:nudge", { detail: { key: `swap-note-${st.buy?.address}`, text: `The Gate passed ${st.buy?.symbol || "this coin"} with a note. Want to know what it means?`, q: "The Gate passed this swap with a note. What does the note mean for me?" } }));
+  }
+  const swapFailed = (e) => dispatchEvent(new CustomEvent("troya:nudge", { detail: { key: `swap-err-${Date.now()}`, text: "That swap didn't go through. Want me to explain what happened?", q: `My swap didn't go through. The app said: "${String(e?.gate ? e.message : errText(e)).slice(0, 300)}". What does it mean and what should I do?` } }));
 
   async function refreshBal() {
     st.bal = null;
@@ -511,6 +527,7 @@ export async function mount(view, ctx) {
       }
     } catch (e) {
       toast(e?.gate ? e.message : errText(e), "error", e?.gate ? 8000 : 5000);
+      swapFailed(e);
     } finally {
       st.busy = false;
       if (alive) { paint(); refreshBal(); }
@@ -592,6 +609,7 @@ export async function mount(view, ctx) {
       }
     } catch (e) {
       toast(e?.gate ? e.message : errText(e), "error", e?.gate ? 8000 : 5000);
+      swapFailed(e);
     } finally {
       st.busy = false;
       if (alive) { paint(); refreshBal(); }

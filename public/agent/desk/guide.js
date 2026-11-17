@@ -127,6 +127,10 @@ const keyOf = () => {
 let panel, orb, ask = null, tourEl = null, steps = [], step = 0;
 
 let conv = null, convBox = null, busy = false, abort = null;
+// what the page is showing right now (pages send "troya:ctx"); goes with every question so answers fit the screen
+let screen = { key: null, text: "" };
+addEventListener("troya:ctx", (e) => { screen = { key: keyOf(), text: String(e.detail?.text || "").replace(/\s+/g, " ").slice(0, 800) }; });
+const screenText = () => (screen.key === keyOf() && screen.text ? ` On my screen: ${screen.text}` : "");
 function chatSend(q) {
   q = String(q || "").trim();
   if (!q || busy) return;
@@ -146,7 +150,7 @@ function chatSend(q) {
   abort = new AbortController();
   const guest = !wallet.session;
   const prior = guest ? guestLog.get().slice(-8) : undefined;
-  const context = g ? `(I am on the ${g.t} page of troya.codes/agent.) ` : "";
+  const context = g ? `(I am on the ${g.t} page of troya.codes/agent.${screenText()}) ` : screenText() ? `(${screenText().trim()}) ` : "";
   stream("assistant/stream", { message: context + q, ...(guest ? { history: prior } : {}) }, (type, data) => {
     if (type === "status") status.lastChild.textContent = data.text;
     else if (type === "text") { acc += data.delta; body.innerHTML = md(acc); scroll(); }
@@ -234,12 +238,59 @@ function show() {
   place(); setTimeout(place, 420); setTimeout(place, 900);
 }
 
+/* ---------- highlight anything, then "Ask Troya" ---------- */
+let pill = null, pillText = "";
+function hidePill() { if (pill) pill.hidden = true; pillText = ""; }
+function showPill() {
+  const sel = getSelection();
+  const text = String(sel?.toString() || "").replace(/\s+/g, " ").trim();
+  if (!sel || sel.rangeCount === 0 || text.length < 2 || text.length > 300) return hidePill();
+  const node = sel.anchorNode?.nodeType === 1 ? sel.anchorNode : sel.anchorNode?.parentElement;
+  if (!node || !node.closest("#view, .d-main") || node.closest("input, textarea, .g-panel, .t-tour")) return hidePill();
+  const r = sel.getRangeAt(0).getBoundingClientRect();
+  if (!r.width && !r.height) return hidePill();
+  pillText = text;
+  pill.hidden = false;
+  const w = pill.offsetWidth || 130;
+  pill.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
+  pill.style.top = `${r.top > 56 ? r.top - 46 : r.bottom + 10}px`;
+}
+/* ---------- a small nudge at the moments that matter (Gate blocked, a note, a failed transaction) ---------- */
+let nudgeEl = null, nudgeAt = 0, nudgeTimer = 0;
+const seenNudges = new Set();
+function nudge({ key, text, q }) {
+  if (!text || !q || seenNudges.has(key)) return;
+  seenNudges.add(key);
+  if (document.body.classList.contains("g-open")) return;
+  if (Date.now() - nudgeAt < 30000) return;
+  nudgeAt = Date.now();
+  clearTimeout(nudgeTimer);
+  clear(nudgeEl, h("img", { src: "/img/logo-3d-128.png", alt: "" }), h("p", {}, text),
+    h("span", { class: "g-nudge-a" }, h("button", { class: "btn primary", type: "button", onclick: () => { nudgeEl.hidden = true; askNow(q); } }, "Explain"),
+      h("button", { class: "g-x", type: "button", "aria-label": "Dismiss", onclick: () => { nudgeEl.hidden = true; } }, chromeIcon("close"))));
+  nudgeEl.hidden = false;
+  nudgeTimer = setTimeout(() => { nudgeEl.hidden = true; }, 16000);
+}
+function askNow(q) { open(); if (q) setTimeout(() => chatSend(q), 220); }
+
 export function mountGuide({ askFn }) {
   ask = askFn;
   orb = h("button", { class: "g-orb", type: "button", "aria-label": "Ask Troya", title: "Ask Troya: questions, guidance, walk-throughs", onclick: () => (document.body.classList.contains("g-open") ? close() : open()) },
     h("span", { class: "g-halo" }), h("img", { src: "/img/logo-3d-128.png", alt: "" }), h("span", { class: "g-orb-t" }, "Ask Troya"));
   panel = h("aside", { class: "g-panel", "aria-label": "Troya Guide", "aria-hidden": "true" });
-  document.body.append(orb, panel);
+  pill = h("button", { class: "g-pill", type: "button", hidden: true, onmousedown: (e) => e.preventDefault(), onclick: () => {
+    const t = pillText, k = keyOf(), g = k == null ? null : G[k];
+    hidePill(); getSelection()?.removeAllRanges();
+    askNow(`Explain this${g ? ` from the ${g.t} page` : ""} in plain words: "${t}"`);
+  } }, chromeIcon("spark"), "Ask Troya");
+  nudgeEl = h("div", { class: "g-nudge", role: "status", hidden: true });
+  document.body.append(orb, panel, pill, nudgeEl);
+  document.addEventListener("mouseup", () => setTimeout(showPill, 10));
+  document.addEventListener("touchend", () => setTimeout(showPill, 350), { passive: true });
+  document.addEventListener("selectionchange", () => { if (!String(getSelection()?.toString() || "").trim()) hidePill(); });
+  addEventListener("scroll", hidePill, { passive: true, capture: true });
+  addEventListener("troya:nudge", (e) => nudge(e.detail || {}));
+  window.TroyaGuide = { open, close, ask: askNow };
   addEventListener("hashchange", () => { endTour(); if (document.body.classList.contains("g-open")) render(); });
   addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("g-open")) close(); });
   return { open, close };

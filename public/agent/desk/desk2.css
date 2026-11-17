@@ -772,3 +772,4 @@ html[data-theme="light"] .fw-camp-bar { background: rgba(20, 30, 40, .07); }
   .tok-soc a { width: 16px; height: 16px; }
 }
 html[data-theme="light"] .tok-soc a { background: var(--bg-2); }
+.mk-spark-c { display: grid; justify-items: end; gap: 3px; } .mk-spark-c .pct, .mk-spark-c span { font-size: 11px; }

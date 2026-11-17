@@ -1,4 +1,4 @@
-// Hippodrome (#/hippodrome), V6: every coin born through Troya, in three lanes like a trench board.
+// Troya Launches (#/hippodrome, first called the Hippodrome), V6: every coin born through Troya, in three lanes like a trench board.
 //   New            launched through Troya (X, Telegram or troya.codes), still early on its Pons curve
 //   Almost bonded  a curve at least half full
 //   Migrated       graduated to its own Uniswap v4 pool ($TROYA leads it)
@@ -34,7 +34,7 @@ export async function mount(view, ctx) {
   const lanes = h("div", { class: "hp-lanes" });
   const tabs = h("div", { class: "hp-tabs", role: "tablist" });
   clear(view, h("div", { class: "dk hp" },
-    pageHead("Hippodrome", "Every coin born through Troya, from its first block on the Pons curve to its own Uniswap pool. Launched from X, Telegram or troya.codes.",
+    pageHead("Troya Launches", "Every coin born through Troya, from its first block on the Pons curve to its own Uniswap pool. Launched from X, Telegram or troya.codes.",
       { act: h("a", { class: "btn primary hp-create", href: "#/create" }, icon("plus"), "Create coin") }),
     kpis, tabs, lanes));
 

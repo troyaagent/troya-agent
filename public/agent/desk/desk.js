@@ -60,7 +60,7 @@ export function si(name, cls = "") {
 export const GROUPS = [
   [null, [["Desk", "#/", "desk"]]],
   ["Trade", [["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Perps · Lighter (Robinhood)", "#/lighter", "lighter"], ["Stock desk", "#/stocks", "stocks"], ["Liquidity desk", "#/liquidity", "liquidity"], ["Bridge", "#/bridge", "bridge"]]],
-  ["Discover", [["Gate a coin", "#/gate", "gate"], ["Market", "#/market", "market"], ["Hippodrome", "#/hippodrome", "hippodrome"], ["Create coin", "#/create", "create"], ["All launches", "#/launch", "launch"], ["Leaderboard", "#/leaderboard", "leaderboard"], ["Agent registry", "#/registry", "agent"]]],
+  ["Discover", [["Gate a coin", "#/gate", "gate"], ["Market", "#/market", "market"], ["Troya Launches", "#/hippodrome", "hippodrome"], ["Create coin", "#/create", "create"], ["All launches", "#/launch", "launch"], ["Leaderboard", "#/leaderboard", "leaderboard"], ["Agent registry", "#/registry", "agent"]]],
   ["Agent", [["Chat", "#/agent", "chat"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Sentry Autopilot", "#/agent/sentry", "sentry"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Audited rail", "#/rail", "sentry"]]],
   ["You", [["Portfolio", "#/portfolio", "portfolio"], ["Inbox", "#/portfolio/inbox", "inbox"], ["History", "#/portfolio/history", "history"], ["Social", "#/social", "social"]]],
   ["Help", [["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Verify", "/verify", "verify"], ["The Record", "/record", "verify"], ["$TROYA flywheel", "#/flywheel", "flywheel"]]],

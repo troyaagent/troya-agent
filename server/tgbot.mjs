@@ -285,6 +285,9 @@ async function kick (tg, chat, user) {
 }
 async function expel (tg, st) { await kick(tg, st.chat, st.user); for (const id of [st.msg, st.join]) if (id) await tg('deleteMessage', { chat_id: st.chat, message_id: id }).catch(() => {}) }
 const WELCOME = (name) => `Welcome to Troya Agent, ${name}.\nStart with the pinned post. App: <a href="${SITE}/agent">troya.codes/agent</a>\nTroya Sentry runs every new Robinhood Chain launch (Pons, Uniswap and the other launchpads) through the Gate and posts the clean passes with real buying: <a href="https://t.me/troyasentry">t.me/troyasentry</a>\nThe team never messages first, and nobody here needs your recovery phrase.`
+// buy buttons for any Robinhood Chain coin a reply is about: Troya Swap (through the Gate), Fomo, the chart
+const coinKb = (a) => ({ inline_keyboard: [[{ text: "Buy through Troya Gate", url: `${SITE}/agent#/swap?in=eth&out=${a}` }, { text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${a}` }], [{ text: "Chart", url: `${SITE}/agent#/token/${a}` }, { text: "DexScreener", url: `https://dexscreener.com/robinhood/${a}` }]] });
+const coinOf = (s) => (String(s || "").match(/0x[0-9a-fA-F]{40}/) || [])[0] || null;
 const WELCOME_KB = { inline_keyboard: [[{ text: 'Open Troya', url: `${SITE}/agent` }, { text: 'Troya Sentry', url: 'https://t.me/troyasentry' }]] }
 
 export async function guardJoin (m, tg, me) {
@@ -433,11 +436,11 @@ Nobody from Troya DMs first or asks for a seed phrase or private key.` });
     else if (cmd === "perks") text = await perksText();
     else if (cmd === "links") text = LINKS;
     else if (cmd === "rules") text = (await import("./tgmod.mjs")).rulesText(siteCa());
-    else if (cmd === "ca") { const ca = siteCa(); text = ca ? `<b>Troya Agent CA</b> (Robinhood Chain)\n<code>${ca}</code>` : "The CA is not live yet. It will be announced here and on X at launch. Any address posted before that is fake."; }
-    else if (cmd === "price" || cmd === "p") text = await price(arg);
+    else if (cmd === "ca") { const ca = siteCa(); if (ca) markup = coinKb(ca); text = ca ? `<b>Troya Agent CA</b> (Robinhood Chain)\n<code>${ca}</code>` : "The CA is not live yet. It will be announced here and on X at launch. Any address posted before that is fake."; }
+    else if (cmd === "price" || cmd === "p") { text = await price(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else if (cmd === "gas") text = await gasText();
-    else if (cmd === "assay") text = await assayCmd(arg);
-    else text = await gate(arg);
+    else if (cmd === "assay") { text = await assayCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
+    else { text = await gate(arg); if (coinOf(arg) && !/no contract|Usage/i.test(text)) markup = coinKb(coinOf(arg)); }
   } catch (e) { text = `Could not read that right now (${esc(String(e.message || e).slice(0, 80))}). Try again in a moment.`; }
   await tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true }, ...(markup ? { reply_markup: markup } : {}) });
 }

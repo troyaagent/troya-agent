@@ -113,6 +113,7 @@ async function card(chat, owner, token) {
   else rows.push([{ text: "Buy locked · why", callback_data: issue({ ...base, step: "why", why: fails.map((c) => `${c.name}: ${c.detail}`).join("\n").slice(0, 190) || "A check failed." }, PICK_TTL) }]);
   if (heldN > 0) rows.push(SELLS.map((p) => ({ text: `Sell ${p}%`, callback_data: issue({ ...base, act: "sell", pct: p, raw: held.raw, dec: held.decimals, step: "pick" }, PICK_TTL) })));
   rows.push([{ text: "Refresh", callback_data: issue({ ...base, step: "refresh" }, PICK_TTL) }, { text: "Full check in Troya", url: `${SITE}/agent#/swap?in=eth&out=${token}` }]);
+  rows.push([{ text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${token}` }, { text: "Chart", url: `${SITE}/agent#/token/${token}` }]);
   return { text: lines.join("\n"), markup: { inline_keyboard: rows } };
 }
 

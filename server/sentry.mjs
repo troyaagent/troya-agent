@@ -218,13 +218,15 @@ const quickAssay = async (token) => { try { const m = await import("./assay.mjs"
 const TRADE = process.env.TG_TRADE === "1";
 const buttons = (a) => ({ inline_keyboard: [
   ...(TRADE ? [[{ text: "Trade in Telegram", url: `https://t.me/${process.env.TG_BOT_USERNAME || "TrojanTroya_bot"}?start=t_${a}` }]] : []),
-  [{ text: "Check in Troya", url: `${SITE}/agent#/swap?in=eth&out=${a}` }, { text: "Pons", url: PONS + a.toLowerCase() }],
+  [{ text: "Check in Troya", url: `${SITE}/agent#/swap?in=eth&out=${a}` }, { text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${a}` }],
+  [{ text: "Pons", url: PONS + a.toLowerCase() }, { text: "DexScreener", url: `https://dexscreener.com/robinhood/${a}` }],
   [{ text: "Every call graded: The Record", url: `${SITE}/record` }],
 ] });
 
 const poolButtons = (a) => ({ inline_keyboard: [
   ...(TRADE ? [[{ text: "Trade in Telegram", url: `https://t.me/${process.env.TG_BOT_USERNAME || "TrojanTroya_bot"}?start=t_${a}` }]] : []),
-  [{ text: "Check in Troya", url: `${SITE}/agent#/swap?in=eth&out=${a}` }, { text: "DexScreener", url: `https://dexscreener.com/robinhood/${a}` }],
+  [{ text: "Check in Troya", url: `${SITE}/agent#/swap?in=eth&out=${a}` }, { text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${a}` }],
+  [{ text: "Chart", url: `${SITE}/agent#/token/${a}` }, { text: "DexScreener", url: `https://dexscreener.com/robinhood/${a}` }],
   [{ text: "Every call graded: The Record", url: `${SITE}/record` }],
 ] });
 

@@ -219,12 +219,15 @@ export async function mount(view, ctx) {
   }
   // the route: the exact path the quote takes, pool by pool
   let lastRouteKey = "";
+  // the same coin on Fomo, for people who trade there (Robinhood Chain coins, not ETH, USDG or WETH)
+  const fomoCoin = () => (st.chain === "robinhood" ? [st.buy, st.sell].find((t) => t && !isNative(t) && /^0x[0-9a-fA-F]{40}$/.test(t.address || "") && !/^(USDG|WETH)$/i.test(t.symbol || "")) : null);
+  const fomoRow = () => { const t = fomoCoin(); return t ? h("a", { class: "tk2-ext sw2-fomo", href: `https://fomo.family/tokens/robinhood/${t.address}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/fomo.png", alt: "" }), `Also on Fomo · $${t.symbol}`) : null; };
   function paintRoute() {
     const q = st.quote;
-    const key = q ? `${q.route?.label}|${q.amountIn}|${q.amountOut}` : "none";
+    const key = (q ? `${q.route?.label}|${q.amountIn}|${q.amountOut}` : "none") + `|${fomoCoin()?.address || ""}`;
     if (key === lastRouteKey) return;
     lastRouteKey = key;
-    if (!q) { clear(routeCard, h("p", { class: "sw2-mic" }, "Route"), h("p", { class: "sw2-wait" }, "The path your swap takes appears here with the quote.")); return; }
+    if (!q) { clear(routeCard, h("p", { class: "sw2-mic" }, "Route"), h("p", { class: "sw2-wait" }, "The path your swap takes appears here with the quote."), fomoRow()); return; }
     const node = (t, sub) => h("div", { class: "sw2-node" }, tokenIcon({ ...t, chain: st.chain }, ""), h("small", {}, sub));
     const venue = (label) => h("div", { class: "sw2-node v" }, h("span", { class: "sw2-pool" }, venueLogo(q.route.venue || label, 22)), h("small", {}, label));
     const hops = q.route.hops?.length ? q.route.hops : [{ from: q.tokenIn.symbol, to: q.tokenOut.symbol }];
@@ -234,7 +237,7 @@ export async function mount(view, ctx) {
     else { parts.push(h("i", { class: "sw2-line" })); parts.push(venue(vLabel)); }
     parts.push(h("i", { class: "sw2-line" }));
     parts.push(node(q.tokenOut, `${tiny(Number(q.amountOut))} ${q.tokenOut.symbol}`));
-    clear(routeCard, h("p", { class: "sw2-mic" }, "Route"), h("div", { class: "sw2-path" }, parts));
+    clear(routeCard, h("p", { class: "sw2-mic" }, "Route"), h("div", { class: "sw2-path" }, parts), fomoRow());
   }
   // the chart of the coin you are buying (or selling), Robinhood Chain coins
   let chartAddr = "", chartObj = null, chartSeq = 0;

@@ -94,7 +94,7 @@ export function formatRecap(d) {
 export const formatMilestone = (pct, raised, target) => `<b>$TROYA curve: ${pct}% to graduation</b>\n\n${raised.toFixed(2)} of ${target} ETH raised on the Pons curve. At ${target} ETH, $TROYA graduates to its Uniswap v4 pool.`;
 export const formatGraduated = (target) => `<b>$TROYA has graduated</b>\n\nThe Pons curve filled at ${target} ETH and $TROYA now trades on its Uniswap v4 pool on Robinhood Chain.\n\nThe CA does not change. The buy tracker follows the new pool on its own, and Troya Gate routes swaps there automatically.\n\nThanks to everyone who bought on the curve. On to the next one.`;
 const buttons = (ca) => ({ inline_keyboard: [
-  [{ text: "Buy through Troya Gate", url: `${SITE}/agent#/swap?in=eth&out=${ca}` }],
+  [{ text: "Buy through Troya Gate", url: `${SITE}/agent#/swap?in=eth&out=${ca}` }, { text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${ca}` }],
   [{ text: "Chart", url: `${SITE}/agent#/token/${ca}` }, { text: "DexScreener", url: `https://dexscreener.com/robinhood/${ca}` }],
   [{ text: "Troya Sentry: every new Pons launch, checked", url: "https://t.me/troyasentry" }],
 ] });

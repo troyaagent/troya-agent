@@ -858,3 +858,8 @@ html[data-theme="light"] .mk2-why { color: var(--blue); }
 .pf2-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 .pf2-dust { margin-top: 12px; } .pf2-dust summary { cursor: pointer; margin-bottom: 10px; }
 .pf2-pnl-note { margin-top: 12px; max-width: 760px; }
+
+/* Buy on Fomo, beside Troya's own buttons */
+.dk-fomo { display: inline-flex; align-items: center; gap: 7px; }
+.dk-fomo img { border-radius: 50%; }
+.sw2-fomo { margin-top: 14px; }

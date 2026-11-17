@@ -118,6 +118,7 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
       assayBox(a, compact),
       h("div", { class: "dk-gate-a" },
         failed ? null : h("a", { class: "btn primary sm", href: `#/swap?out=${a}` }, icon("swap"), "Swap"),
+        failed ? null : h("a", { class: "btn sm dk-fomo", href: `https://fomo.family/tokens/robinhood/${a}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/fomo.png", alt: "", width: 18, height: 18 }), "Buy on Fomo"),
         h("a", { class: "btn sm", href: `#/token/${a}` }, "Token page"),
         ask ? h("button", { class: "btn sm", type: "button", onclick: () => ask(`Is this token safe? ${a}`) }, icon("spark"), "Ask Troya") : null,
         h("a", { class: "btn sm ghost", href: `/badge?ca=${a}`, target: "_blank", rel: "noopener" }, "Get the badge")));

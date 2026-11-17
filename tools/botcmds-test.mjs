@@ -35,5 +35,13 @@ r = await ask(`/badge ${CA}`, "supergroup");
 ok(r && /Troya Gate badge · \$TROYA: (PASSED|CAUTION|FAILED|NOT TESTED YET)/.test(r.text) && r.text.includes(`/api/badge/${CA}.svg`), "/badge 0x… gives the live verdict and the SVG line", (r?.text || "").split("\n")[0]);
 r = await ask("/links");
 ok(r && /t\.me\/troyasentry/.test(r.text) && /troya\.codes\/badge/.test(r.text), "/links includes Sentry and the badge page");
+// every reply about a coin carries buy buttons: Troya Swap through the Gate and Fomo
+const fomo = (r, a) => r?.reply_markup?.inline_keyboard?.flat().some((b) => b.url === `https://fomo.family/tokens/robinhood/${a}`);
+r = await ask("/ca", "supergroup");
+ok(fomo(r, CA) && r.reply_markup.inline_keyboard.flat().some((b) => /swap\?in=eth&out=/.test(b.url)), "/ca has Buy through Troya Gate and Buy on Fomo");
+r = await ask(`/gate ${CA}`, "supergroup");
+ok(fomo(r, CA), "/gate 0x… has Buy on Fomo");
+r = await ask("/sentry", "supergroup");
+ok(r && /Troya Sentry/.test(r.text) && !r.reply_markup?.inline_keyboard?.flat().some((b) => /fomo/.test(b.url)), "/sentry still answers as Sentry (the else-if chain is intact)");
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

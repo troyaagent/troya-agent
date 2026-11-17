@@ -78,6 +78,22 @@ async function onTelegramMessage(m) {
     await tg("sendMessage", { chat_id: m.chat.id, text: linked ? "Linked. Troya will send your alerts here." : "That link code expired. Make a new one in Troya: Settings → Telegram." }).catch(() => {});
     return;
   }
+  // the owner's notes to the dev team: the owner's linked admin chat (Reports, linked by an admin wallet) is the dev channel.
+  // Every plain message there (text, photo, a reply to a dev update, "/dev …") is kept in data/owner-inbox.jsonl for the dev
+  // and gets a short receipt, never an assistant answer. Bot commands (/launch, /trade, /start …) still work as usual.
+  if (m.chat?.type === "private" && (m.text || m.caption || m.photo || m.document)) {
+    const C = await import("./community.mjs").catch(() => null);
+    if (C && await C.isReportsChat(m.chat.id).catch(() => false)) {
+      const replyTo = m.reply_to_message;
+      const toDev = /^\/dev\b/i.test(m.text || "") || !/^\//.test(String(m.text || m.caption || "").trim());
+      const photo = Array.isArray(m.photo) && m.photo.length ? m.photo[m.photo.length - 1].file_id : (m.document && /^image\//.test(m.document.mime_type || "") ? m.document.file_id : null);
+      await store.append("owner-inbox.jsonl", { id: m.message_id, at: Date.now(), text: String(m.text || m.caption || "").slice(0, 4000), photo, reply: replyTo?.message_id || null, toDev }).catch(() => {});
+      if (toDev) {
+        await tg("sendMessage", { chat_id: m.chat.id, reply_to_message_id: m.message_id, text: "Diterima, bos. Pesan ini sudah sampai ke tim dev; jawabannya menyusul di sini." }).catch(() => {});
+        return;
+      }
+    }
+  }
   // V6 F27: /launch (a coin from a private chat); the steps of a launch in progress
   if (await import("./tglaunch.mjs").then((t) => t.handleMessage(m, tg, store)).catch((e) => { console.warn("[telegram launch]", e.message); return false; })) return;
   // Phase 2: trade messages in a private chat (TG_TRADE=1); everything else goes to the normal bot

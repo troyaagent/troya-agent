@@ -103,6 +103,7 @@ async function standing(owner) {
 export async function register(r, ctx) {
   store = ctx.store; dir = ctx.dataDir;
   provider = new JsonRpcProvider(RPC, { chainId: 4663, name: "robinhood" }, { staticNetwork: true });
+  sponsor().catch((e) => console.warn("[gas] sponsor", e.message));   // make the sponsor wallet at boot so its address is ready to fund
 
   r.get("/api/gas/status", async ({ req }) => {
     const s = await settings();

@@ -219,7 +219,8 @@ export async function mount(view, { go, ask: askDrawer }) {
       const t = TF[cst.tf];
       const d = cst.sym === "ETH" ? await api.get(`market/hl/candles?coin=ETH&interval=${t.hl[0]}&hours=${t.hl[1]}`) : await api.get(`market/robinhood/candles?address=${CA}&interval=${t.rh}`);
       if (my !== cst.seq || !alive) return;
-      const rows = (d.candles || []).filter((c) => c && c.close > 0).map((c) => ({ time: c.time, value: c.close }));
+      const seen = new Set();
+      const rows = (d.candles || []).filter((c) => c && c.close > 0 && !seen.has(c.time) && seen.add(c.time)).sort((x, y) => x.time - y.time).map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, value: c.close }));
       if (rows.length < 2) { cst.series?.setData([]); clear(chCh); chSrc.textContent = "Not enough trades for a chart yet."; return; }
       const first = rows[0].value, last = rows[rows.length - 1].value, ch = (last / first - 1) * 100;
       chPx.textContent = cst.sym === "ETH" ? usd(last) : tiny(last);
@@ -233,10 +234,10 @@ export async function mount(view, { go, ask: askDrawer }) {
           grid: { vertLines: { color: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.035)" }, horzLines: { color: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.035)" } },
           rightPriceScale: { borderVisible: false }, timeScale: { borderVisible: false, timeVisible: true }, handleScroll: false, handleScale: false,
           crosshair: { vertLine: { color: "rgba(142,223,245,.4)", labelBackgroundColor: "#0f1820" }, horzLine: { color: "rgba(142,223,245,.4)", labelBackgroundColor: "#0f1820" } } });
-        cst.series = cst.chart.addAreaSeries({ lineColor: light ? "#0a7ea3" : "#bff0fd", lineWidth: 2, topColor: light ? "rgba(10,126,163,.22)" : "rgba(142,223,245,.32)", bottomColor: "rgba(142,223,245,0)" });
+        cst.series = cst.chart.addCandlestickSeries({ ...{ upColor: "#8edff5", downColor: "#ff7d8a", borderVisible: false, wickUpColor: "#8edff5", wickDownColor: "#ff7d8a" }, ...(light ? { upColor: "#0a7ea3", wickUpColor: "#0a7ea3", downColor: "#c8303f", wickDownColor: "#c8303f" } : {}) });
       }
       cst.series.applyOptions({ priceFormat: cst.sym === "ETH" ? { type: "price", precision: 2, minMove: 0.01 } : { type: "price", precision: 10, minMove: 1e-10 } });
-      cst.series.setData(rows);
+      cst.series.setData(rows.map(({ value, ...c }) => c));
       cst.chart.timeScale().fitContent();
     } catch (e) { if (my === cst.seq) chSrc.textContent = `Chart unavailable (${e.message}).`; }
   }

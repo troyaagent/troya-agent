@@ -61,9 +61,13 @@ export async function mount(view, ctx) {
   }
   paintNets();
   const body = h("div", { class: "sw-body" });
+  const gateCard = h("section", { class: "panel sw2-gate" });
+  const routeCard = h("section", { class: "panel sw2-route" });
+  const chartCard = h("section", { class: "panel sw2-chart", hidden: true });
   clear(view,
-    pageHead("Swap", "Trade on Robinhood Chain (Pons curves, Uniswap v3/v4 pools and every other Robinhood Chain launchpad), Base, Arbitrum and Solana. Troya Gate checks every swap; you sign it in your own wallet."),
-    h("div", { class: "sw-wrap" }, h("div", { class: "sw-net" }, netChip), body));
+    h("div", { class: "sw2" },
+      h("div", { class: "sw2-l" }, h("div", { class: "sw-net" }, netChip), body),
+      h("div", { class: "sw2-r" }, gateCard, routeCard, chartCard)));
 
   // sell leg
   const sellInput = h("input", { class: "sw-amt", inputmode: "decimal", placeholder: "0", autocomplete: "off", spellcheck: "false", "aria-label": "Amount to sell", value: st.amount });
@@ -78,23 +82,22 @@ export async function mount(view, ctx) {
   const slipSeg = seg(SLIPS, st.slip, (v) => { st.slip = v; const p = ctx.prefs.get(); ctx.prefs.set({ ...p, slippage: v / 100 }); reset(); requote(); });
   slipSeg.classList.add("sm");
   const rows = h("div", { class: "rows sw-rows" });
-  const gateBox = h("div", { class: "gate-box sw-gate" });
   const warnBox = h("div", { class: "sw-warn" });
   const btn = h("button", { class: "btn primary big", type: "button", onclick: () => act() });
   const txBox = h("div", { class: "sw-tx" });
 
   const card = h("div", { class: "sw-card panel" },
     h("div", { class: "sw-leg" },
-      h("div", { class: "sw-leg-top" }, h("span", {}, "Sell"), sellBal),
+      h("div", { class: "sw-leg-top" }, h("span", {}, "You pay"), sellBal),
       h("div", { class: "sw-leg-main" }, sellInput, sellTok),
       quick),
     h("div", { class: "sw-mid" }, flip),
     h("div", { class: "sw-leg" },
-      h("div", { class: "sw-leg-top" }, h("span", {}, "Buy"), buySub),
+      h("div", { class: "sw-leg-top" }, h("span", {}, "You get"), buySub),
       h("div", { class: "sw-leg-main" }, buyOut, buyTok)),
     h("div", { class: "sw-meta" }, h("span", { class: "muted" }, "Slippage"), slipSeg,
       infoTip("The most the price may move against you between quote and inclusion. If it moves further, the swap reverts and only the network fee is spent.")),
-    rows, warnBox, gateBox, btn, txBox);
+    warnBox, btn, h("p", { class: "sw2-sign" }, "Your wallet signs. Troya never holds your funds."), rows, txBox);
   const note = h("p", { class: "note sw-note" });
   function paintNote() {
     if (isSolNet()) return clear(note, "Solana: Troya routes through Jupiter (pump.fun and every other Solana launchpad and pool) and runs a Solana Troya Gate: who can freeze or mint the coin, Token-2022 traps, the exact swap simulated from your address and a sell route back to SOL. You sign in your own Solana wallet (Phantom, Solflare, Backpack or MetaMask). Troya adds no fee of its own.");
@@ -155,15 +158,18 @@ export async function mount(view, ctx) {
         h("div", {}, h("span", {}, "Fees and taxes"), h("span", {}, q.feePct == null ? "–" : `${num(q.feePct, 2)}%`)),
         h("div", {}, h("span", {}, "Route"), h("span", { class: "tok-link" }, venueLogo(q.route.venue || q.route.label, 14), q.route.label)),
         q.route.pons && !q.route.pons.graduated ? h("div", {}, h("span", {}, "Pons curve"), h("span", {}, `${num(q.route.pons.progressPct, 1)}% to graduation`)) : null,
-        h("div", {}, h("span", {}, "Network fee"), h("span", {}, `Shown in your wallet (${nativeOf().symbol})`)));
+        h("div", {}, h("span", {}, "Network fee"), h("span", {}, `Shown in your wallet (${nativeOf().symbol})`)),
+        h("div", {}, h("span", {}, "Troya fee"), h("span", {}, "None")));
     } else clear(rows);
     rows.hidden = !q;
     // warnings
     const warns = [...(q?.warnings || [])];
     if (st.quoteErr) warns.unshift(st.quoteErr);
     clear(warnBox, warns.map((w) => h("div", { class: `alert ${st.quoteErr === w ? "error" : "warn"}` }, w)));
-    // gate
+    // gate, route, chart
     paintGate();
+    paintRoute();
+    syncChart();
     // button state
     const amt = toRaw(st.amount, st.sell?.decimals ?? 18);
     let label = "Review swap", disabled = false;
@@ -179,22 +185,100 @@ export async function mount(view, ctx) {
     btn.disabled = disabled;
   }
 
-  function paintGate() {
-    if (!st.quote && !st.gating) { gateBox.hidden = true; return; }
-    gateBox.hidden = false;
-    const g = st.gate;
-    const head = h("div", { class: "gh" }, icon("shield"), "Troya Gate",
-      g && st.gateAt ? h("span", { class: "gate-age", "data-gate-age": "" }, gateAge()) : null,
-      h("span", { class: `badge-s ${g ? (g.pass ? "blue" : "down") : ""}` }, g ? (g.pass ? (g.checks.some((c) => c.status === "warn") ? "Passed with notes" : "Passed") : "Blocked") : "Checking…"));
-    if (!g) { clear(gateBox, head, h("div", { class: "muted" }, "Simulating the exact swap and a test sell…")); return; }
-    clear(gateBox, head, h("ul", {}, g.checks.map((c) => h("li", { class: c.status === "skip" ? "skipped" : c.status }, h("span", {}, c.label), h("b", { title: c.detail || "" }, c.status === "skip" ? (c.detail || "Skipped") : c.detail || c.status)))),
-      h("div", { class: "gate-note" }, "Runs again the moment you press Swap, on the pool as it is then."));
+  const RC = 2 * Math.PI * 50;
+  function ringEl(passed, total, verdict) {
+    const el = h("span", { class: `dk-ring sw2-ring v-${verdict}`, role: "img", "aria-label": `${passed} of ${total} checks passed` });
+    el.innerHTML = `<svg viewBox="0 0 120 120"><circle class="ra" cx="60" cy="60" r="50"/><circle class="rb" cx="60" cy="60" r="50" style="stroke-dasharray:0 ${RC}"/></svg><span class="sw2-ring-c"><b>${passed}/${total}</b><small>passed</small></span>`;
+    requestAnimationFrame(() => requestAnimationFrame(() => { const c = el.querySelector(".rb"); if (c) c.style.strokeDasharray = `${total ? (passed / total) * RC : 0} ${RC}`; }));
+    return el;
   }
+  let lastGateKey = "";
+  function paintGate() {
+    const g = st.gate;
+    const sym = st.buy && !isNative(st.buy) ? st.buy.symbol : st.sell && !isNative(st.sell) ? st.sell.symbol : null;
+    const key = g ? `${st.gateAt}` : st.gating ? "gating" : st.quote ? "quote" : `idle:${sym}`;
+    if (key === lastGateKey) return;
+    lastGateKey = key;
+    const title = h("p", { class: "sw2-mic" }, `The Gate${sym ? ` · $${sym}` : ""}`);
+    if (!g) {
+      clear(gateCard, h("div", { class: "sw2-gh" }, title, h("span", { class: "dk-v" }, st.gating ? "Checking…" : "Waiting")),
+        h("div", { class: "sw2-gb" }, ringEl(0, 7, "idle"),
+          h("p", { class: "sw2-wait" }, st.gating ? "Simulating the exact swap from your address and a test sell…" : "Pick a coin and an amount. Troya runs seven checks here, a simulated swap and a test sell included, before your wallet can sign.")));
+      return;
+    }
+    const passed = g.checks.filter((c) => c.status === "pass").length;
+    const verdict = g.pass ? (g.checks.some((c) => c.status === "warn") ? "caution" : "passed") : "failed";
+    clear(gateCard,
+      h("div", { class: "sw2-gh" }, title, st.gateAt ? h("span", { class: "fine muted", "data-gate-age": "" }, gateAge()) : null,
+        h("span", { class: `dk-v v-${verdict}` }, g.pass ? (verdict === "caution" ? "Passed with notes" : "Passed") : "Blocked")),
+      h("div", { class: "sw2-gb" }, ringEl(passed, g.checks.length, verdict),
+        h("ul", { class: "sw2-checks" }, g.checks.map((c) => h("li", { class: `c-${c.status}` },
+          h("span", { class: "dk-ck" }, c.status === "pass" ? icon("check") : c.status === "fail" ? icon("close") : h("b", {}, c.status === "warn" ? "!" : "–")),
+          h("span", { class: "l" }, c.label), h("span", { class: "d", title: c.detail || "" }, c.status === "skip" ? (c.detail || "Skipped") : c.detail || ""))))),
+      h("p", { class: "fine muted sw2-gnote" }, "Runs again the moment you press Swap, on the pool as it is then."));
+  }
+  // the route: the exact path the quote takes, pool by pool
+  let lastRouteKey = "";
+  function paintRoute() {
+    const q = st.quote;
+    const key = q ? `${q.route?.label}|${q.amountIn}|${q.amountOut}` : "none";
+    if (key === lastRouteKey) return;
+    lastRouteKey = key;
+    if (!q) { clear(routeCard, h("p", { class: "sw2-mic" }, "Route"), h("p", { class: "sw2-wait" }, "The path your swap takes appears here with the quote.")); return; }
+    const node = (t, sub) => h("div", { class: "sw2-node" }, tokenIcon({ ...t, chain: st.chain }, ""), h("small", {}, sub));
+    const venue = (label) => h("div", { class: "sw2-node v" }, h("span", { class: "sw2-pool" }, venueLogo(q.route.venue || label, 22)), h("small", {}, label));
+    const hops = q.route.hops?.length ? q.route.hops : [{ from: q.tokenIn.symbol, to: q.tokenOut.symbol }];
+    const vLabel = String(q.route.label || "").split(" · ")[0] + (q.route.pons ? " · Pons pool" : "");
+    const parts = [node(q.tokenIn, `${tiny(Number(q.amountIn))} ${q.tokenIn.symbol}`)];
+    if (hops.length > 1) hops.forEach((x, i) => { parts.push(h("i", { class: "sw2-line" })); parts.push(venue(x.venue || vLabel)); if (i < hops.length - 1) { parts.push(h("i", { class: "sw2-line" })); parts.push(h("div", { class: "sw2-node" }, h("span", { class: "sw2-mid" }, x.to), h("small", {}, x.to))); } });
+    else { parts.push(h("i", { class: "sw2-line" })); parts.push(venue(vLabel)); }
+    parts.push(h("i", { class: "sw2-line" }));
+    parts.push(node(q.tokenOut, `${tiny(Number(q.amountOut))} ${q.tokenOut.symbol}`));
+    clear(routeCard, h("p", { class: "sw2-mic" }, "Route"), h("div", { class: "sw2-path" }, parts));
+  }
+  // the chart of the coin you are buying (or selling), Robinhood Chain coins
+  let chartAddr = "", chartObj = null, chartSeq = 0;
+  function syncChart() {
+    const t = st.chain === "robinhood" ? (st.buy && !isNative(st.buy) ? st.buy : st.sell && !isNative(st.sell) ? st.sell : null) : null;
+    const a = t?.address ? String(t.address).toLowerCase() : "";
+    if (a === chartAddr) return;
+    chartAddr = a;
+    try { chartObj?.remove(); } catch {}
+    chartObj = null;
+    if (!a) { chartCard.hidden = true; return; }
+    loadSwapChart(t, "15m");
+  }
+  async function loadSwapChart(t, iv) {
+    const my = ++chartSeq, a = chartAddr;
+    const box = h("div", { class: "sw2-chart-box" });
+    const tf = seg(["15m", "1h", "4h"], iv, (v) => { try { chartObj?.remove(); } catch {} chartObj = null; loadSwapChart(t, v); });
+    tf.classList.add("sm");
+    chartCard.hidden = false;
+    clear(chartCard, h("div", { class: "sw2-ch-h" }, tokenIcon({ ...t, chain: st.chain }, "sm"), h("b", {}, `$${t.symbol}`), st.gate?.pass ? h("span", { class: "dk-v v-passed" }, `Gate ${st.gate.checks.filter((c) => c.status === "pass").length}/${st.gate.checks.length}`) : null, h("span", { class: "sw2-sp" }), tf), box);
+    try {
+      const c = await api.get(`market/robinhood/candles?address=${a}&interval=${iv}`);
+      if (!alive || my !== chartSeq || a !== chartAddr) return;
+      const seen = new Set();
+      const rows = (c.candles || []).filter((x) => x.close > 0 && !seen.has(x.time) && seen.add(x.time)).sort((x, y) => x.time - y.time).map((x) => ({ time: x.time, open: x.open, high: x.high, low: x.low, close: x.close }));
+      if (rows.length < 2) { clear(box, h("p", { class: "sw2-wait" }, "Not enough trades for a chart yet.")); return; }
+      const LW = await import("lightweight-charts");
+      if (!alive || my !== chartSeq) return;
+      const light = document.documentElement.dataset.theme === "light";
+      chartObj = LW.createChart(box, { autoSize: true, layout: { background: { type: "solid", color: "transparent" }, textColor: light ? "#6e685f" : "#6f7c89", fontFamily: "Instrument Sans, system-ui, sans-serif", fontSize: 11 },
+        grid: { vertLines: { color: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.035)" }, horzLines: { color: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.035)" } },
+        rightPriceScale: { borderVisible: false }, timeScale: { borderVisible: false, timeVisible: true }, handleScroll: false, handleScale: false,
+        localization: { priceFormatter: (p) => (p <= 0 ? "" : tiny(p)) } });
+      const s = chartObj.addCandlestickSeries({ ...{ upColor: "#8edff5", downColor: "#ff7d8a", borderVisible: false, wickUpColor: "#8edff5", wickDownColor: "#ff7d8a" }, ...(light ? { upColor: "#0a7ea3", wickUpColor: "#0a7ea3", downColor: "#c8303f", wickDownColor: "#c8303f" } : {}), priceFormat: { type: "price", precision: 10, minMove: 1e-10 } });
+      s.setData(rows);
+      chartObj.timeScale().fitContent();
+    } catch (e) { if (my === chartSeq) clear(box, h("p", { class: "sw2-wait" }, `Chart unavailable (${e.message}).`)); }
+  }
+
   function gateAge() {
     const s = Math.max(0, Math.round((Date.now() - st.gateAt) / 1000));
     return s < 60 ? `checked ${s}s ago` : `checked ${Math.floor(s / 60)}m ago`;
   }
-  const ageTick = setInterval(() => { const el = gateBox.querySelector("[data-gate-age]"); if (el && st.gateAt) el.textContent = gateAge(); }, 1000);
+  const ageTick = setInterval(() => { const el = gateCard.querySelector("[data-gate-age]"); if (el && st.gateAt) el.textContent = gateAge(); }, 1000);
 
   // Troya Gate runs again at the moment of signing: on a new pool, liquidity can move between the quote and the click.
   async function regate(q, label) {
@@ -519,5 +603,5 @@ export async function mount(view, ctx) {
   if (isSolNet()) restoreSol().then(() => { refreshBal(); paint(); });
   render();
   if (st.amount) requote();
-  return () => { alive = false; off(); offSol(); clearInterval(ageTick); };
+  return () => { alive = false; off(); offSol(); clearInterval(ageTick); try { chartObj?.remove(); } catch {} };
 }

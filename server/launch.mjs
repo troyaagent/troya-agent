@@ -15,6 +15,8 @@
 //   POST /api/launch/record             { hash, salt?, troyaBps? } → a web launch checked on chain and added to the creator's list
 //   GET  /api/launch/mine               signed in: coins launched through Troya by this wallet
 //   GET  /api/launch/prefs  POST …      signed in: { x: true|false } "Launch from X" switch
+//   GET  /api/launch/board              the Hippodrome: coins born through Troya in three columns (new, almost bonded, migrated)
+//   GET  /api/launch/born               addresses of coins born through Troya (the app puts the horse badge on them)
 //   GET  /api/launch/splitter           the tested TroyaFeeSplitterFactory build and whether it is live
 //   POST /api/launch/splitter/register  admins: { hash } of the factory deployment, checked against the tested build
 import { readFile } from "node:fs/promises";
@@ -186,7 +188,7 @@ export async function launchWithAgentWallet({ owner, name, symbol, logo, creator
   if (!out.executed) return { ok: false, why: out.blocked ? "blocked" : "not-sent", reasons: out.reasons || [], result: out.result || null, plan: p };
   const got = out.result?.hash ? await launchedIn(out.result.hash).catch(() => null) : null;
   const token = got?.token || out.result?.token || null;
-  const r = { token, curve: got?.curve || out.result?.curve || null, name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim(), owner: p.owner, wallet: w.address, source, recipient: p.recipient, split: p.split, troyaBps: p.troyaBps,
+  const r = { token, curve: got?.curve || out.result?.curve || null, logo: logo || null, name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim(), owner: p.owner, wallet: w.address, source, recipient: p.recipient, split: p.split, troyaBps: p.troyaBps,
     salt: p.salt || null, creatorTaxBps: p.creatorTaxBps, holder: p.holder, tx: out.result?.hash || null, ref, at: Date.now() };
   if (token) await addRecord(r);
   if (token && buyEth > 0) {
@@ -298,6 +300,46 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   return { launch: out.launch, reply: `$${ask.symbol} is live on Pons.${buyNote} CA ${ca} · Gate: ${SITE().replace(/^https?:\/\//, "")}/agent#/gate/${ca} · Buy: fomo.family/tokens/robinhood/${ca}` };
 }
 
+/* ---------- the Hippodrome: every coin born through Troya ---------- */
+// $TROYA itself opens the Migrated column: the coin the whole desk is built around (launched on Pons, 15 Nov 2026).
+const ORIGIN = { token: "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", name: "Troya Agent", symbol: "TROYA", source: "origin", owner: "0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4", at: Date.parse("2026-11-15T12:00:00Z") };
+export const ALMOST_PCT = 50;                  // a curve at least this full counts as almost bonded
+let boardMemo = null;
+async function bornRecords() {
+  const l = await store.readJson("launches.json", []);
+  const seen = new Set(), out = [];
+  for (const x of [ORIGIN, ...l.slice().reverse()]) { const k = lc(x.token); if (!x.token || seen.has(k)) continue; seen.add(k); out.push(x); }
+  return out;
+}
+async function boardItem(rec, handles) {
+  const m = await import("./market.mjs");
+  const d = await m.getRobinhoodToken(rec.token).catch(() => null);
+  const t = d?.token || {}, p = d?.pons || null;
+  const graduated = !!p?.graduated || (rec.source === "origin" && !p);
+  return {
+    token: getAddress(rec.token), name: t.name || rec.name || "", symbol: t.symbol || rec.symbol || "", image: t.image || t.logoUri || rec.logo || null,
+    source: rec.source, at: rec.at || t.createdAt || null, creator: rec.owner ? getAddress(rec.owner) : null, creatorX: handles[lc(rec.owner)]?.username || null,
+    keepsAll: rec.source === "origin" ? null : !rec.split, creatorTaxBps: rec.creatorTaxBps ?? p?.fees?.creatorTaxBps ?? null, initialBuyEth: rec.initialBuy?.executed ? rec.initialBuy.eth : null,
+    priceUsd: t.priceUsd ?? null, mcapUsd: t.mcapUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, holders: t.holders ?? null,
+    txns24h: t.txns24h ?? null, buys24h: t.buys24h ?? null, sells24h: t.sells24h ?? null, change1h: t.change1h ?? null, change24h: t.change24h ?? null,
+    progressPct: graduated ? 100 : p?.progressPct ?? null, graduated, raisedEth: p?.raised ?? null, ponsUrl: p?.ponsUrl || null,
+  };
+}
+export async function board() {
+  if (boardMemo && Date.now() - boardMemo.at < 15_000) return boardMemo.v;
+  const recs = (await bornRecords()).slice(0, 90);
+  const handles = await store.readJson("x-links.json", {});
+  const items = [];
+  for (let i = 0; i < recs.length; i += 6) items.push(...(await Promise.all(recs.slice(i, i + 6).map((r) => boardItem(r, handles).catch(() => null)))).filter(Boolean));
+  // $TROYA (the genesis coin) always leads Migrated; the rest by market cap
+  const migrated = items.filter((x) => x.graduated).sort((a, b) => (b.source === "origin") - (a.source === "origin") || (b.mcapUsd || 0) - (a.mcapUsd || 0));
+  const almost = items.filter((x) => !x.graduated && (x.progressPct || 0) >= ALMOST_PCT).sort((a, b) => (b.progressPct || 0) - (a.progressPct || 0));
+  const fresh = items.filter((x) => !x.graduated && (x.progressPct || 0) < ALMOST_PCT).sort((a, b) => (b.at || 0) - (a.at || 0));
+  const v = { new: fresh, almost, migrated, almostPct: ALMOST_PCT, counts: { born: items.length, graduated: migrated.length }, updatedAt: Date.now() };
+  boardMemo = { at: Date.now(), v };
+  return v;
+}
+
 /* ---------- routes ---------- */
 export async function register(r, ctx) {
   store = ctx.store;
@@ -310,6 +352,8 @@ export async function register(r, ctx) {
   r.post("/api/launch/plan", ({ body }) => plan({ owner: body?.creator, creatorTaxBps: body?.creatorTaxBps, name: body?.name, symbol: body?.symbol, source: "web" }), { perMin: 30 });
   r.post("/api/launch/record", async ({ req, body }) => recordWeb({ hash: body?.hash, owner: getSession(req)?.address || body?.creator || null, salt: body?.salt, troyaBps: body?.troyaBps }), { perMin: 20 });
   r.get("/api/launch/mine", async ({ req }) => ({ launches: (await launchesOf(requireSession(req).address)).slice().reverse() }));
+  r.get("/api/launch/board", () => board(), { perMin: 120 });
+  r.get("/api/launch/born", async () => ({ tokens: (await bornRecords()).map((x) => lc(x.token)) }), { perMin: 120 });
   r.get("/api/launch/prefs", async ({ req }) => {
     const a = requireSession(req).address;
     const x = await import("./xsocial.mjs").then((m) => m.handleOf(a)).catch(() => null);

@@ -343,6 +343,8 @@ export const TOOLS = [
     run: (a) => robinhoodStocks(a) },
   { name: "lp_range", tier: "read", description: "F18 Liquidity desk: for a Uniswap v3 pool on Robinhood Chain (a pair like NVDA/USDG or ETH/USDG, a token address or a pool address) the price, TVL, 24h volume, the pool's fee APR and volatility, and tight, balanced and wide ranges with the chance to stay inside and the fees $1,000 would earn a day while inside. The user opens the position in Liquidity desk, signed by their own wallet.", schema: S({ pair: str("A pair like NVDA/USDG, a token address or a pool address"), days: numS("How many days the range should last: 1, 7 (default) or 30") }, ["pair"]),
     run: async ({ pair, days }) => (await import("./liquidity.mjs")).lpRangeFor(pair, days) },
+  { name: "gate_check", tier: "read", description: "F23 Troya Gate API: a fresh Gate check for a Robinhood Chain coin at your trade size (route, price impact, depth, fees, simulated buy, test sell, transfer tax, plus The Assay's red and amber flags), signed by Troya's attestor so other agents can verify it. Free checks each day per wallet (more for $TROYA holders), then 0.01 USDG of credit per check; with no credit left it returns how to pay.", schema: S({ token: str("Token contract address"), amountEth: numS("Trade size in ETH (default 0.01)"), assay: { type: "boolean", description: "Include The Assay flags (default true)" } }, ["token"]),
+    run: async ({ token, amountEth, assay }, ctx) => (await import("./gateapi.mjs")).paidCheck({ address: ctx.address, ip: ctx.ip, token, amountEth, assay }) },
   { name: "analyze_token_health", tier: "read", description: "Bytecode heuristics on Robinhood Chain: mint, pause, blacklist, fee setters, proxy and owner status, plus Pons curve and creator tax. Not an audit.", schema: S({ address: str("Token contract address") }, ["address"]),
     run: ({ address }) => tokenHealth(address) },
   { name: "quote_swap", tier: "read", description: "Quote a swap on Robinhood Chain (Pons curves, Uniswap v3/v4, and the other Robinhood Chain launchpads through KyberSwap). tokenIn/tokenOut: ETH, a symbol or an address. Runs Troya Gate on the result.", schema: S({ tokenIn: str("Default ETH"), tokenOut: str("Token to receive"), amountIn: numS("Amount of tokenIn"), slippagePct: numS("Default 1") }, ["tokenOut", "amountIn"]),
@@ -457,22 +459,22 @@ export async function runTool(name, args = {}, ctx = {}) {
 export async function register(r) {
   r.get("/api/tools", () => ({ tools: TOOLS.map(({ name, tier, description, schema }) => ({ name, tier, description, inputSchema: schema })), auth: { read: "public", prepare: "session or x-api-key", execute: "x-api-key with execute scope + Idempotency-Key" } }));
 
-  r.get("/api/tools/:name", async ({ params, query, req }) => {
+  r.get("/api/tools/:name", async ({ params, query, req, ip }) => {
     const t = toolByName(params.name);
     if (!t) throw new HttpError(404, "Unknown tool.");
     if (t.tier !== "read") throw new HttpError(405, "Use POST for prepare and execute tools.");
     const args = {};
     for (const [k, v] of Object.entries(query)) { const p = t.schema.properties[k]; if (p) args[k] = p.type === "number" ? Number(v) : p.type === "boolean" ? v === "true" : v; }
     const sess = getSession(req);
-    return { tool: t.name, result: await runTool(t.name, args, { address: sess?.address || null, via: "rest" }) };
+    return { tool: t.name, result: await runTool(t.name, args, { address: sess?.address || null, via: "rest", ip }) };
   });
 
-  r.post("/api/tools/:name", async ({ params, body, req }) => {
+  r.post("/api/tools/:name", async ({ params, body, req, ip }) => {
     const t = toolByName(params.name);
     if (!t) throw new HttpError(404, "Unknown tool.");
     const token = await optionalApiToken(req);
     const sess = token ? null : getSession(req);
-    const ctx = { address: token?.address || sess?.address || null, scopes: token?.scopes || (sess ? ["read", "prepare"] : []), apiToken: !!token, tokenDryRun: token ? token.dryRun !== false : true, via: req.headers["x-troya-client"] === "mcp" ? "mcp" : "rest" };
+    const ctx = { address: token?.address || sess?.address || null, scopes: token?.scopes || (sess ? ["read", "prepare"] : []), apiToken: !!token, tokenDryRun: token ? token.dryRun !== false : true, via: req.headers["x-troya-client"] === "mcp" ? "mcp" : "rest" , ip };
     if (t.tier === "execute") {
       if (!token) throw new HttpError(401, "Execution needs an API token in x-api-key.");
       const idem = idempotent(token.id, String(req.headers["idempotency-key"] || ""));

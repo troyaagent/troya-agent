@@ -303,7 +303,7 @@ function mountWallet(box) {
             h("li", {}, "Export the key any time with a fresh signature"),
             h("li", {}, "On Hyperliquid it trades as an approved agent on your account: trade-only, it cannot withdraw there")),
           h("button", { class: "btn primary", type: "button", onclick: async () => { try { await api.post("agent-wallet/create"); toast("Agent Wallet ready", "ok"); render(); } catch (e) { toast(e.message, "error"); } } }, icon("plus"), "Create Agent Wallet")),
-        tokensPanel());
+        tokensPanel(), gateApiPanel());
       return;
     }
     const balBox = h("div", { class: "stats ag-bal" }, [["robinhood", "Robinhood Chain"], ["robinhood", "Tokens"], ["hyperliquid", "Hyperliquid"]].map(([lk, k]) => h("div", { class: "stat" }, h("div", { class: "k" }, chainLogo(lk, 14), k), h("div", { class: "v" }, h("span", { class: "sk", style: { display: "inline-block", width: "90px", height: "22px" } })))));
@@ -352,6 +352,7 @@ function mountWallet(box) {
           h("button", { class: "btn danger", type: "button", onclick: del }, icon("trash"), "Delete Agent Wallet")),
         aw.exportedAt ? h("p", { class: "note" }, `Key last exported ${ago(aw.exportedAt)} ago.`) : null),
       tokensPanel(),
+      gateApiPanel(),
       activityPanel());
     stopBal = every(20000, async () => {
       try {
@@ -447,6 +448,54 @@ function mountWallet(box) {
           h("button", { class: "btn ghost sm", type: "button", onclick: async () => { try { await api.post("agent-api/tokens/revoke", { id: t.id }); toast("Token revoked", "ok"); load(); } catch (e) { toast(e.message, "error"); } } }, "Revoke")))
           : h("p", { class: "faint", style: { margin: "4px 0 10px" } }, "No tokens yet."));
       } catch (e) { clear(list, h("p", { class: "faint" }, e.message)); }
+    }
+    load();
+    return panel;
+  }
+
+  // F23: Gate API credits. Agents calling the Gate with this wallet's API token spend these after the free checks.
+  function gateApiPanel() {
+    const panel = h("div", { class: "panel ag-panel ga-panel" }, h("h3", {}, "Gate API credits", h("span", { class: "faint", style: { fontWeight: 400, marginLeft: "8px", fontSize: "12px" } }, "for agents that call Troya Gate")));
+    const body = h("div", {}, h("div", { class: "sk", style: { height: "64px" } }));
+    panel.append(body);
+    async function load() {
+      try {
+        const [info, me] = await Promise.all([api.get("/api/gate/v1"), api.get(`/api/gate/v1/credits/${wallet.address}`)]);
+        const amt = h("input", { class: "input", type: "number", min: "0.1", step: "0.1", value: "1", inputmode: "decimal", "aria-label": "USDG to spend" });
+        const checks = h("span", { class: "faint" });
+        const upd = () => { const v = Number(amt.value); checks.textContent = v > 0 ? `= ${Math.floor(v / info.price.amount).toLocaleString("en-US")} checks` : ""; };
+        amt.oninput = upd; upd();
+        const buy = h("button", { class: "btn", type: "button", onclick: async () => {
+          const v = Number(amt.value);
+          if (!(v >= 0.1)) return toast("Spend at least 0.1 USDG.", "error");
+          const ok = await review({ title: "Buy Gate API checks", summary: "USDG goes from your wallet to Troya on Robinhood Chain. Credit lands on this wallet within a minute.",
+            rows: [["You send", `${v} USDG`], ["Checks", Math.floor(v / info.price.amount).toLocaleString("en-US")], ["To", short(info.payTo, 6)], ["Network", "Robinhood Chain"]], confirmLabel: "Send USDG" });
+          if (!ok) return;
+          buy.disabled = true; buy.textContent = "Confirm in your wallet…";
+          try {
+            const { sendTx, waitReceipt, errText } = await import("../chain.js");
+            const raw = BigInt(Math.round(v * 10 ** info.price.decimals));
+            const data = "0xa9059cbb" + info.payTo.slice(2).toLowerCase().padStart(64, "0") + raw.toString(16).padStart(64, "0");
+            let hash;
+            try { hash = await sendTx("robinhood", { to: info.price.token, data, value: 0 }); }
+            catch (e) { toast(errText(e), "error", 6000); return; }
+            buy.textContent = "Waiting for the chain…";
+            const rc = await waitReceipt("robinhood", hash);
+            if (!rc || rc.status !== 1) { toast("The payment did not confirm. Nothing was credited.", "error", 6000); return; }
+            const c = await api.post("/api/gate/v1/credits/claim", { txHash: hash }).catch(() => null);
+            toast(c ? `Credited: ${c.checksLeft.toLocaleString("en-US")} checks on this wallet` : "Paid. Credit lands within a minute.", "ok", 6000);
+            load();
+          } finally { buy.disabled = false; buy.textContent = "Buy checks"; }
+        } }, "Buy checks");
+        clear(body,
+          h("div", { class: "stats ga-stats" },
+            h("div", { class: "stat" }, h("div", { class: "k" }, "Credit"), h("div", { class: "v" }, `${me.balanceUsdg.toFixed(2)} USDG`), h("div", { class: "faint" }, `${me.checksLeft.toLocaleString("en-US")} checks`)),
+            h("div", { class: "stat" }, h("div", { class: "k" }, "Free today"), h("div", { class: "v" }, `${me.freeLeftToday} of ${me.freePerDay}`), h("div", { class: "faint" }, me.holder ? "holder allowance" : "hold 1M $TROYA for 200 a day")),
+            h("div", { class: "stat" }, h("div", { class: "k" }, "Price"), h("div", { class: "v" }, `${info.price.amount} USDG`), h("div", { class: "faint" }, "per fresh, signed check"))),
+          h("div", { class: "row ga-buy" }, amt, h("span", { class: "faint" }, "USDG"), checks, buy),
+          me.deposits.length ? h("ul", { class: "ga-deps" }, me.deposits.slice(0, 5).map((d) => h("li", {}, h("span", {}, `+${d.usdg} USDG`), h("span", { class: "faint" }, ago(d.at) + " ago"), h("a", { class: "link", href: `https://robinhoodchain.blockscout.com/tx/${d.tx}`, target: "_blank", rel: "noopener" }, "tx")))) : null,
+          h("p", { class: "note" }, "Your agents call ", h("code", { class: "mono" }, "GET /api/gate/v1/check/<token>"), " with an API token from above: free checks first, then this credit. Each result is signed, so other agents can verify it. ", h("a", { class: "link", href: "/api-and-mcp#gate-api", target: "_blank", rel: "noopener" }, "Gate API docs")));
+      } catch (e) { clear(body, h("p", { class: "faint" }, e.message)); }
     }
     load();
     return panel;

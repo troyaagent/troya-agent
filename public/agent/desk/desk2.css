@@ -834,3 +834,13 @@ html[data-theme="light"] .mk2-why { color: var(--blue); }
 .tk2-orc-e { display: flex; justify-content: space-between; margin: 6px 16px 0; font-variant-numeric: tabular-nums; }
 .tk2-orc-w { margin: 10px 16px 0; line-height: 1.5; }
 .tk2-orc-f { margin: 8px 16px 0; }
+
+/* F23: Gate API credits panel (Agent → Wallet) */
+.ga-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 4px 0 12px; }
+.ga-stats .stat .v { font-size: 18px; font-weight: 650; letter-spacing: -0.02em; }
+.ga-buy { align-items: center; gap: 10px; flex-wrap: wrap; }
+.ga-buy .input { width: 110px; }
+.ga-deps { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.ga-deps li { display: flex; gap: 10px; align-items: baseline; }
+.ga-deps li span:first-child { font-weight: 600; min-width: 96px; }
+@media (max-width: 560px) { .ga-stats { grid-template-columns: 1fr 1fr; } .ga-stats .stat:last-child { grid-column: 1 / -1; } }

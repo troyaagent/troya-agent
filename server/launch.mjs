@@ -283,9 +283,9 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   if (np) return { reply: np };
   if (ask.taxBps > MAX_TAX_BPS) return { reply: `The creator tax can be 4% at most. Post again with a lower tax.` };
   if (ask.buyEth > MAX_INITIAL_BUY_ETH) return { reply: `The initial buy can be up to ${MAX_INITIAL_BUY_ETH} ETH. Post again with a smaller buy.` };
-  if (!mediaUrl) return { reply: "Attach the coin's image to the post, then post the launch again." };
-  let logo;
-  try { logo = await fetchLogo(mediaUrl); } catch { return { reply: "Troya could not read that image. Post again with a PNG or JPEG under 1 MB." }; }
+  // the image is up to the poster (owner's rule, 17 Nov): no image attached → the coin launches without one
+  let logo = "";
+  if (mediaUrl) { try { logo = await fetchLogo(mediaUrl); } catch { return { reply: "Troya could not read that image. Post again with a PNG or JPEG under 1 MB." }; } }
   let out;
   try {
     out = await launchWithAgentWallet({ owner, name: ask.name, symbol: ask.symbol, logo, creatorTaxBps: ask.taxBps, twitter: `https://x.com/i/status/${tweetId}`, source: "x", ref: `x:${tweetId}`, buyEth: ask.buyEth });
@@ -297,7 +297,8 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   }
   const ca = out.launch.token, ib = out.launch.initialBuy;
   const buyNote = !ib ? "" : ib.executed ? ` Initial buy of ${ib.eth} ETH done.` : ` Initial buy not sent: ${String(ib.reasons?.[0] || "it was refused").slice(0, 70)}.`;
-  return { launch: out.launch, reply: `$${ask.symbol} is live on Pons.${buyNote} CA ${ca} · Gate: ${SITE().replace(/^https?:\/\//, "")}/agent#/gate/${ca} · Buy: fomo.family/tokens/robinhood/${ca}` };
+  const imgNote = logo ? "" : " No image was attached, so the coin has none.";
+  return { launch: out.launch, reply: `$${ask.symbol} is live on Pons.${buyNote}${imgNote} CA ${ca} · Gate: ${SITE().replace(/^https?:\/\//, "")}/agent#/gate/${ca} · Buy: fomo.family/tokens/robinhood/${ca}` };
 }
 
 /* ---------- the Hippodrome: every coin born through Troya ---------- */

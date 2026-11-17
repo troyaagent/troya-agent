@@ -87,8 +87,6 @@ r = await L.fromX({ tweetId: "3", authorId: "222", text: "@Troyaagent launch For
 assert.match(r.reply, /holders of 1,000,000/i); ok("a non-holder cannot launch from X");
 r = await L.fromX({ tweetId: "4", authorId: "111", text: "@Troyaagent launch Fake Ether $ETH", mediaUrl: IMG });
 assert.match(r.reply, /taken by an existing coin/i); ok("$ETH is refused");
-r = await L.fromX({ tweetId: "5", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE", mediaUrl: null });
-assert.match(r.reply, /Attach the coin's image/i); ok("a post without an image is asked for one");
 r = await L.fromX({ tweetId: "6", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE tax 9%", mediaUrl: IMG });
 assert.match(r.reply, /4% at most/i); ok("a 9% creator tax is refused");
 await store.writeJson("launch-prefs.json", { [H.toLowerCase()]: { x: false } });
@@ -127,6 +125,12 @@ ok(`test mode, admin holder launch from X: $FHORSE ${r.launch.token}, deployed b
 const again = await L.fromX({ tweetId: "8", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE tax 1%", mediaUrl: IMG });
 assert.equal(again.launch?.token, r.launch.token); assert.equal(again.reply, null);
 ok("the same post read twice does not launch twice");
+
+// no image attached: the coin launches without one, and the reply says so
+r = await L.fromX({ tweetId: "5", authorId: "111", text: "@Troyaagent launch Bare Horse $BARE", mediaUrl: null });
+assert.ok(r.launch?.token, r.reply);
+assert.match(r.reply, /No image was attached/);
+ok(`a post without an image launches a coin with no image ($BARE ${r.launch.token})`);
 
 /* ---------- an initial buy right after launch ---------- */
 const tooBig = await L.fromX({ tweetId: "9a", authorId: "111", text: "@Troyaagent launch Big Horse $BIGH buy 5", mediaUrl: IMG });

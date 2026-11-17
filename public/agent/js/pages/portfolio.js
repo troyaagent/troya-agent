@@ -134,7 +134,7 @@ export async function mount(view, ctx) {
         tokenIcon({ symbol: x.symbol, address: x.address, chain: "robinhood" }), h("span", {}, h("b", {}, x.symbol), h("small", {}, num(Number(x.amount), 4))), h("i", {}, "→"))))) : null;
     const parts = [hero, toks];
     if (connected && wallet.session) parts.push(briefPanel());
-    if (!connected) parts.push(h("div", { class: "panel pf-connect" }, "Connect a wallet to see your balances.", h("button", { class: "btn primary", type: "button", onclick: () => openConnect() }, icon("wallet"), "Connect wallet")));
+    // the hero already offers Connect when no wallet is connected
 
     // setup checklist: a step is ticked only when there is evidence for it
     if (!hideSetup.get()) {

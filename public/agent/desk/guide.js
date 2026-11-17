@@ -275,6 +275,12 @@ function askNow(q) { open(); if (q) setTimeout(() => chatSend(q), 220); }
 
 export function mountGuide({ askFn }) {
   ask = askFn;
+  const TUCK = "troya.askTucked";
+  const tucked = () => { try { return localStorage.getItem(TUCK) === "1"; } catch { return false; } };
+  const setTuck = (on) => { try { on ? localStorage.setItem(TUCK, "1") : localStorage.removeItem(TUCK); } catch {} document.body.classList.toggle("g-tucked", on); };
+  const tuckBtn = h("button", { class: "g-tuck", type: "button", "aria-label": "Hide the Ask Troya button", title: "Hide (it stays as a small tab on the right)", onclick: (e) => { e.stopPropagation(); setTuck(true); } }, "×");
+  const tab = h("button", { class: "g-tab", type: "button", "aria-label": "Show Ask Troya", title: "Ask Troya", onclick: () => setTuck(false) }, h("img", { src: "/img/logo-3d-128.png", alt: "" }));
+  setTuck(tucked());
   orb = h("button", { class: "g-orb", type: "button", "aria-label": "Ask Troya", title: "Ask Troya: questions, guidance, walk-throughs", onclick: () => (document.body.classList.contains("g-open") ? close() : open()) },
     h("span", { class: "g-halo" }), h("img", { src: "/img/logo-3d-128.png", alt: "" }), h("span", { class: "g-orb-t" }, "Ask Troya"));
   panel = h("aside", { class: "g-panel", "aria-label": "Troya Guide", "aria-hidden": "true" });
@@ -284,7 +290,7 @@ export function mountGuide({ askFn }) {
     askNow(`Explain this${g ? ` from the ${g.t} page` : ""} in plain words: "${t}"`);
   } }, chromeIcon("spark"), "Ask Troya");
   nudgeEl = h("div", { class: "g-nudge", role: "status", hidden: true });
-  document.body.append(orb, panel, pill, nudgeEl);
+  document.body.append(orb, tuckBtn, tab, panel, pill, nudgeEl);
   document.addEventListener("mouseup", () => setTimeout(showPill, 10));
   document.addEventListener("touchend", () => setTimeout(showPill, 350), { passive: true });
   document.addEventListener("selectionchange", () => { if (!String(getSelection()?.toString() || "").trim()) hidePill(); });

@@ -59,7 +59,11 @@ export async function mount(view, { parts, go }) {
   const gateCard = h("section", { class: "panel tk2-gate" },
     h("div", { class: "panel-h" }, h("h2", {}, "Troya Gate"), h("a", { class: "link fine", href: `#/gate/${address}` }, "Full result")),
     h("div", { class: "tk2-gate-b" }, gRing, h("div", {}, gVerdict, gNote)), gList,
-    h("a", { class: "btn primary tk2-buy", href: `#/swap?out=${address}` }, icon("swap"), `Buy $${t.symbol} with Troya Swap`));
+    h("a", { class: "btn primary tk2-buy", href: `#/swap?out=${address}` }, icon("swap"), `Buy $${t.symbol} with Troya Swap`),
+    h("div", { class: "tk2-also" }, h("span", { class: "fine muted" }, "Also on"),
+      t.launchpad === "pons" ? h("a", { class: "tk2-ext", href: `https://ponsfamily.com/launchpad/${address}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/pons.svg", alt: "" }), "Pons") : null,
+      h("a", { class: "tk2-ext", href: `https://fomo.family/tokens/robinhood/${address}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/fomo.png", alt: "" }), "Fomo"),
+      h("a", { class: "tk2-ext", href: `https://dexscreener.com/robinhood/${address}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/dexscreener.png", alt: "" }), "DEX Screener")));
   const tell = (gateLine = "") => dispatchEvent(new CustomEvent("troya:ctx", { detail: { text: `Token page for $${t.symbol} (${address})${t.stock ? ", a Robinhood stock token" : ""}: price ${t.priceUsd != null ? "$" + tiny(t.priceUsd) : "unknown"}, 24h ${t.change24h != null ? t.change24h.toFixed(1) + "%" : "?"}, liquidity ${t.liquidityUsd != null ? usd(t.liquidityUsd, { compact: true }) : "?"}, 24h volume ${t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : "?"}, holders ${t.holders ?? "?"}, launchpad ${t.launchpad || "?"}. ${gateLine}` } }));
   tell();
   api.get(`/api/badge/${address}`).then((r) => {

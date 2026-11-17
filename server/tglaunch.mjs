@@ -130,7 +130,7 @@ export async function handleMessage(m, tg, st) {
     const mode = await L.tgLaunchMode();
     const owner = await ownerOf(chat);
     if (mode === "off" || (mode === "test" && !(owner && L.isAdminWallet(owner)))) {
-      await say("<b>Launching in Telegram isn't open yet.</b> It goes live after its real-money test. Holders of 1M $TROYA can launch from X today, and anyone can launch on troya.codes.", { inline_keyboard: [[{ text: "Create coin", url: `${SITE}/agent#/create` }]] });
+      await say("<b>Launching in Telegram isn't open yet.</b> It goes live after its real-money test. Anyone can launch from X or on troya.codes today.", { inline_keyboard: [[{ text: "Create coin", url: `${SITE}/agent#/create` }]] });
       return true;
     }
     if (!owner) { await say(LINK_FIRST, appBtn("/agent")); return true; }

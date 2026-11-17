@@ -18,7 +18,7 @@ export async function mount(view, ctx) {
   clear(view,
     h("a", { class: "lc-back link", href: "#/launch" }, "← Launchpad"),
     h("header", { class: "page-head lc-head" }, h("h1", {}, "Launch from X"),
-      h("p", {}, "Post on X and the coin goes live on Pons from your Agent Wallet. For holders of 1,000,000 $TROYA, who keep the whole creator fee. Anyone can launch from troya.codes or the Telegram bot. ", h("a", { class: "link", href: "/launch-on-x", target: "_blank", rel: "noopener" }, "Read the full guide"))),
+      h("p", {}, "Post on X and the coin goes live on Pons from your Agent Wallet. Open to everyone: one launch a day, or as many as you like with 1,000,000 $TROYA, which also keeps the whole creator fee for you. ", h("a", { class: "link", href: "/launch-on-x", target: "_blank", rel: "noopener" }, "Read the full guide"))),
     body);
   if (ctx.query.x === "linked") toast("X account linked.", "ok");
 
@@ -71,13 +71,13 @@ export async function mount(view, ctx) {
       step(4, !!(st.aw?.exists && eth != null && fee != null && eth > fee), "Agent Wallet with a little ETH",
         st.aw?.exists ? `${short(st.aw.address)} · ${eth != null ? `${tiny(eth)} ETH` : "…"} on Robinhood Chain. It pays the Pons launch fee${fee != null ? ` (${tiny(fee)} ETH)` : ""}; Troya pays the gas.` : "Launches from X are sent by your Agent Wallet, never by your main wallet.",
         wallet.session ? h("a", { class: "btn", href: "#/agent/wallet" }, st.aw?.exists ? "Open" : "Create") : null),
-      step(5, !!p?.holder?.holder, `Hold ${num(p?.holderMin || 1_000_000, 0)} $TROYA`,
-        p ? `This wallet and its Agent Wallet hold ${num(p.holder?.balance || 0, 0)} $TROYA.` : "Counted across your wallet and its Agent Wallet.",
+      step(5, !!p?.holder?.holder, `Optional: hold ${num(p?.holderMin || 1_000_000, 0)} $TROYA`,
+        p ? `This wallet and its Agent Wallet hold ${num(p.holder?.balance || 0, 0)} $TROYA. ${p.holder?.holder ? "No daily limit, and the whole creator fee is yours." : "Without 1M: one launch from X a day, and you keep 0.6% of volume (Troya 0.1%)."}` : "No daily limit and the whole creator fee. Without it: one launch from X a day.",
         p && !p.holder?.holder ? h("a", { class: "btn", href: `#/swap?out=${TROYA}` }, "Get $TROYA") : null),
       step(6, !!p?.x, "Switch Launch from X on", p?.x ? "On. Posts from your linked X account can launch coins from your Agent Wallet." : "Off until you switch it on, so nobody can launch for you by surprise.",
         p ? h("button", { class: `btn${p.x ? "" : " primary"}`, type: "button", disabled: !!st.busy, onclick: run(p.x ? "Switching off…" : "Switching on…", () => api.post("launch/prefs", { x: !p.x })) }, p.x ? "Switch off" : "Switch on") : null),
     ];
-    const ready = p && p.xAccount && p.holder?.holder && p.x && st.aw?.exists;
+    const ready = p && p.xAccount && p.x && st.aw?.exists;
     clear(body,
       p && p.xLaunchMode !== "live" ? h("div", { class: "alert warn" }, p.xLaunchMode === "test" ? "Launch on X is in its real-money test: only Troya's own wallets can launch from X right now. You can set everything up." : "Launch on X opens after its real-money test. You can set everything up now.") : null,
       st.err ? h("div", { class: "alert error" }, st.err) : null,
@@ -92,8 +92,8 @@ export async function mount(view, ctx) {
             h("li", {}, "Attach the image: square (1:1) works best, since every site shows coin logos in a square or circle and crops other shapes to the middle. PNG or JPEG up to 5 MB (X's own limit); GIFs turn into video on X and don't work. Without an image, the coin launches with none, for good."),
             h("li", {}, "Creator tax from 0% to 4%, all of it yours."),
             h("li", {}, "Initial buy: your Agent Wallet buys right after the 3-second Pons snipe tax, through Troya Gate and within its caps. If it cannot pay the launch fee plus the buy, nothing is launched."),
-            h("li", {}, "Holders keep the whole creator fee: 0.7% of trading volume plus the tax. Troya takes 0%."),
-            h("li", {}, `Up to ${p?.limits?.perDayHolder ?? 10} launches a day.`),
+            h("li", {}, "Creator fee: holders of 1M $TROYA keep all of it (0.7% of trading volume plus the tax). Everyone else keeps 0.6% plus the whole tax, and Troya takes 0.1%."),
+            h("li", {}, `Holders: no daily limit. Without 1M $TROYA: ${p?.limits?.perDayX ?? 1} launch from X a day (${p?.limits?.perDay ?? 3} a day across X, Telegram and troya.codes).`),
             h("li", {}, "Troya sees your post within seconds and replies with the coin's address and market cap, or with what to fix if it could not launch."),
             h("li", {}, "Your own words work too, in English: \"please create a token called Moon Cat, ticker MCAT, 2% tax, buy 0.01 ETH\". If Troya is unsure, it shows you the format instead of guessing."),
             h("li", {}, "Tickers and names that copy ETH, BTC, USDG, stock tokens, big coins or Troya are refused.")))),

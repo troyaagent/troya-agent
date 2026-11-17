@@ -1,11 +1,12 @@
 // V6 "Hermes" · launching coins through Troya: F26 Launch on X, F27 Launch in Telegram, and the web's Create coin.
 // The rules (decided by the owner, 17 Nov 2026):
-//   · Launch from X: holders of 1,000,000 $TROYA only (main wallet + Agent Wallet), and only once "Launch from X" is on in
-//     the Desk. Telegram and the web: everyone.
+//   · Everyone can launch from X, Telegram and the web (X opened to all by the owner on 18 Nov). Launch from X works once
+//     "Launch from X" is on in the Desk. Holding 1,000,000 $TROYA (main wallet + Agent Wallet) means no daily limit.
 //   · Launching is free. Troya's fee is 0.1% of the coin's trading volume, taken from the creator's 0.7% share of the Pons
 //     fee through a TroyaFeeSplitter (the dev keeps 0.6% and 100% of any creator tax). Holders of 1M $TROYA pay 0%: the
 //     creator fee goes straight to their own wallet.
-//   · Creator tax 0–4%. At most 3 launches a day per wallet, 10 for holders. Names and tickers that copy ETH, BTC, USDG,
+//   · Creator tax 0–4%. Without 1M $TROYA: 3 launches a day per wallet, at most 1 of them from X; holders: no daily limit.
+//     Names and tickers that copy ETH, BTC, USDG,
 //     stock tokens, big coins or Troya itself are refused.
 //   · Optional initial buy ("buy 0.01"): the Agent Wallet buys its own coin right after the 3-second Pons snipe tax, as a
 //     normal Agent Wallet swap (Troya Gate, the wallet's caps). Not enough ETH for launch fee + buy → nothing is launched.
@@ -20,6 +21,8 @@
 //   GET  /api/launch/splitter           the tested TroyaFeeSplitterFactory build and whether it is live
 //   POST /api/launch/splitter/register  admins: { hash } of the factory deployment, checked against the tested build
 //   POST /api/launch/tg                 admins: { mode: off|test|live } Launch in Telegram (F27, the bot side is tglaunch.mjs)
+//   GET  /api/launch/fees[?wallet=]     F28 Creator desk: each coin a wallet launched through Troya, the creator fees waiting
+//                                       for it (read from Pons on chain) and the transactions that claim them
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,7 +33,7 @@ import { HttpError } from "./api.mjs";
 import { getSession, requireSession } from "./auth.mjs";
 
 export const HOLDER_MIN = Number(process.env.HOLDER_MIN || 1_000_000);
-export const LIMITS = { perDay: 3, perDayHolder: 10 };
+export const LIMITS = { perDay: 3, perDayX: 1, perDayHolder: null };   // null: holders of 1M $TROYA have no daily limit
 export const MAX_TAX_BPS = 400;                // 4%
 export const TROYA_VOLUME_BPS = 10;            // Troya's fee: 0.1% of volume, out of the creator's 70 bps
 export const MAX_INITIAL_BUY_ETH = 1;          // the wallet's own caps (per trade, per day) usually bite first
@@ -44,7 +47,10 @@ const isAdmin = (req) => { const s = getSession(req); return !!s && admins().inc
 const facI = new Interface([
   "function predict(address creator, uint16 troyaBps, bytes32 salt) view returns (address)",
   "function escrow() view returns (address)", "function treasury() view returns (address)", "function implementation() view returns (address)",
+  "function deployAndCollect(address creator, uint16 troyaBps, bytes32 salt, address[] curves, address[] tokens) returns (address)",
 ]);
+const feeCurveI = new Interface(["function quoteFeeBalance() view returns (uint256)", "function creatorTaxBalance() view returns (uint256)", "function graduated() view returns (bool)", "function sweepFees(uint256 minQuoteOut)"]);
+const escI = new Interface(["function balanceOf(address) view returns (uint256)", "function balanceOfToken(address,address) view returns (uint256)", "function claim() returns (uint256)", "function claimToken(address) returns (uint256)"]);
 const ponsI = new Interface([
   "function getLaunchedToken(address token) view returns (tuple(address token,address curve,address deployer,address creatorFeeRecipient,address pairToken,uint256 graduationThreshold,uint24 poolFee,int24 tickSpacing,uint16 creatorTaxBps,bool buybackEnabled,uint8 phase,uint256 sweptQuote,uint256 sweptTokens,uint256 sweptAt,bool exists))",
 ]);
@@ -82,7 +88,7 @@ export function nameProblem(name, symbol, { team = false } = {}) {
 /* ---------- limits and the record ---------- */
 const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
 async function launchesOf(owner) { return (await store.readJson("launches.json", [])).filter((x) => lc(x.owner) === lc(owner)); }
-async function usedToday(owner) { const d = dayOf(Date.now()); return (await launchesOf(owner)).filter((x) => dayOf(x.at) === d).length; }
+async function launchesToday(owner) { const d = dayOf(Date.now()); return (await launchesOf(owner)).filter((x) => dayOf(x.at) === d); }
 async function holderInfo(owner) {
   try { const h = await import("./holders.mjs"); const v = await h.holderOf(owner); return { holder: v.balance >= HOLDER_MIN, balance: v.balance }; }
   catch { return { holder: false, balance: 0 }; }
@@ -100,8 +106,12 @@ export async function plan({ owner, creatorTaxBps = 0, name, symbol, source = "w
   if (tax < 0 || tax > MAX_TAX_BPS) throw new HttpError(400, `Creator tax goes from 0% to ${MAX_TAX_BPS / 100}%.`);
   if (name != null || symbol != null) { const p = nameProblem(name, symbol, { team: admins().includes(lc(owner)) }); if (p) throw new HttpError(400, p); }
   const h = await holderInfo(owner);
-  const used = await usedToday(owner), max = h.holder ? LIMITS.perDayHolder : LIMITS.perDay;
-  if (used >= max) throw new HttpError(429, `That is ${used} launches through Troya today, the most for one wallet${h.holder ? "" : ` (holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA get ${LIMITS.perDayHolder})`}. Try again tomorrow (UTC).`);
+  // holders of 1M $TROYA launch without a daily limit; everyone else gets 3 a day, at most 1 of them from X (owner, 18 Nov)
+  const today = await launchesToday(owner), used = today.length, max = h.holder ? null : LIMITS.perDay;
+  if (!h.holder) {
+    if (used >= LIMITS.perDay) throw new HttpError(429, `That is ${used} launches through Troya today, the most for one wallet without ${HOLDER_MIN.toLocaleString("en-US")} $TROYA (holders have no daily limit). Try again tomorrow (UTC).`);
+    if (source === "x" && today.filter((x) => x.source === "x").length >= LIMITS.perDayX) throw new HttpError(429, `Without ${HOLDER_MIN.toLocaleString("en-US")} $TROYA it is ${LIMITS.perDayX} launch from X a day, and today's is used. Try again tomorrow (UTC).`);
+  }
   const base = { owner, holder: h.holder, balance: h.balance, holderMin: HOLDER_MIN, creatorTaxBps: tax, limit: { used, max }, source };
   if (h.holder) return { ...base, recipient: owner, troyaBps: 0, troyaVolumePct: 0, split: false, note: `You hold ${HOLDER_MIN.toLocaleString("en-US")} $TROYA: the whole creator fee goes to your own wallet.` };
   const factory = await splitterFactory();
@@ -319,7 +329,7 @@ const DESK = () => `${SITE().replace(/^https?:\/\//, "")}/agent#/launch/x`;
 /**
  * A mention of @Troyaagent that asks for a launch. Returns { reply } (the text to post back) and, when a coin went live,
  * { launch }. Nothing is launched unless Launch on X is live, the author linked a wallet, switched Launch from X on,
- * holds 1M $TROYA and the Agent Wallet can pay the Pons fee.
+ * is within the day's launches (one from X without 1M $TROYA) and the Agent Wallet can pay the Pons fee.
  */
 export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   const ask = await readLaunch(text);
@@ -333,8 +343,12 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   if (xm === "test" && !(owner && admins().includes(lc(owner)))) return notYet;
   if (!owner) return { reply: `Not launched: this X account isn't linked to a Troya wallet. To fix: link it and switch Launch from X on, then post again: ${DESK()}` };
   if (!(await prefsOf(owner)).x) return { reply: `Not launched: Launch from X is switched off for your wallet. To fix: switch it on, then post again: ${DESK()}` };
+  // everyone may launch from X (owner, 18 Nov); without 1M $TROYA once a day, with Troya's 0.1% through a fee splitter
   const h = await holderInfo(owner);
-  if (!h.holder) return { reply: `Not launched: launching from X needs ${HOLDER_MIN.toLocaleString("en-US")} $TROYA across your wallet and Agent Wallet (you hold ${Math.floor(h.balance).toLocaleString("en-US")}). To fix: hold 1M, or launch from troya.codes, open to everyone: ${SITE().replace(/^https?:\/\//, "")}/agent#/launch/create` };
+  if (!h.holder) {
+    const xToday = (await launchesToday(owner)).filter((x) => x.source === "x").length;
+    if (xToday >= LIMITS.perDayX) return { reply: `Not launched: without 1M $TROYA it's one launch from X a day, and today's is used. To fix: post again tomorrow (UTC), launch on troya.codes, or hold 1M for no limit: ${SITE().replace(/^https?:\/\//, "")}/agent#/create` };
+  }
   if (ask.unclear || !ask.symbol || !ask.name) return { reply: "Not launched: Troya couldn't read the coin's name and ticker for sure. To fix: post it like this, image attached: @Troyaagent launch Wooden Horse $HORSE (add \"tax 2%\" for a creator tax, \"buy 0.01\" for an initial buy)" };
   const np = nameProblem(ask.name, ask.symbol, { team: admins().includes(lc(owner)) });
   if (np) return { reply: `Not launched: ${np.replace(/\.$/, "")}. To fix: post again with another name or ticker. Nothing was spent.` };
@@ -358,10 +372,61 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   const mcNote = mc ? `, MC ~$${mc >= 1e6 ? (mc / 1e6).toFixed(2) + "M" : mc >= 1e3 ? (mc / 1e3).toFixed(1) + "K" : mc.toFixed(0)}` : "";
   const buyNote = !ib ? "" : ib.executed ? ` Initial buy of ${ib.eth} ETH done.` : ` Initial buy not sent: ${String(ib.reasons?.[0] || "it was refused").slice(0, 70)}.`;
   const imgNote = logo ? "" : " No image was attached, so the coin has none.";
-  const feeNote = out.launch.split ? "" : " Creator fee: all yours.";
+  const feeNote = out.launch.split ? " Creator fee: 0.6% yours, 0.1% Troya." : " Creator fee: all yours.";
   // one link, to the coin's trading page on Troya (chart, Gate, Buy); no other venue in the reply
   return { launch: out.launch, reply: `$${ask.symbol} is live${mcNote}.${buyNote}${imgNote}${feeNote} CA ${ca} · Trade it on Troya: ${SITE().replace(/^https?:\/\//, "")}/agent#/token/${ca.toLowerCase()}` };
 }
+/* ---------- F28 · Creator desk ---------- */
+const eth = (w) => Number(w) / 1e18;
+/**
+ * The creator fees waiting for `owner`'s coins launched through Troya, and how to claim them, all read from chain.
+ * A coin's fees sit in two places: on its Pons curve until someone with the right sweeps them (the 0.7% creator share of
+ * the 1% fee plus the creator tax), then in the Pons fee escrow credited to the coin's fee recipient.
+ *   · split coins (non-holders): the recipient is a TroyaFeeSplitter. One transaction, factory.deployAndCollect, sweeps the
+ *     curve, claims the escrow and pays the creator their part (Troya keeps 0.1% of volume). Anyone may send it.
+ *   · holder coins: the recipient is the creator's own wallet. It sweeps each curve itself (only the recipient may), then
+ *     one escrow.claim() pays out everything credited to the wallet, those coins and any other.
+ * Graduated coins earn in their Uniswap v4 pool; Pons credits those fees to the escrow on its own schedule.
+ */
+export async function creatorFees(owner) {
+  if (!isAddress(String(owner || ""))) throw new HttpError(400, "Connect a wallet first.");
+  owner = getAddress(owner);
+  const recs = (await launchesOf(owner)).filter((x) => x.token && x.curve).slice(-60).reverse();
+  const big = (p) => p.then((r) => BigInt(r[0])).catch(() => 0n);
+  const escrowEth = (a) => big(call(PONS_ESCROW, escI, "balanceOf", [a]));
+  const [walletEscrow, price] = await Promise.all([escrowEth(owner), import("./tools.mjs").then((t) => t.ethUsd()).catch(() => null)]);
+  const coins = await Promise.all(recs.map(async (x) => {
+    const [qf, ct, graduated, tokenFees, splitEscrow, code] = await Promise.all([
+      big(call(x.curve, feeCurveI, "quoteFeeBalance")), big(call(x.curve, feeCurveI, "creatorTaxBalance")),
+      call(x.curve, feeCurveI, "graduated").then((r) => !!r[0]).catch(() => false),
+      big(call(PONS_ESCROW, escI, "balanceOfToken", [x.recipient, x.token])),
+      x.split ? escrowEth(x.recipient) : Promise.resolve(0n),
+      x.split ? rpc("robinhood", "eth_getCode", [x.recipient, "latest"]).catch(() => "0x") : Promise.resolve("0x"),
+    ]);
+    const onCurve = (qf * BigInt(CREATOR_FEE_BPS)) / 100n + ct;      // the recipient's part, credited to the escrow by a sweep
+    const gross = onCurve + splitEscrow;                             // a holder's escrow is shared by all their coins: counted once, below
+    const yours = x.split ? gross - (gross * BigInt(x.troyaBps || 0)) / 10_000n : gross;
+    const txs = [];
+    if (x.split && x.salt && (gross > 0n || tokenFees > 0n)) {
+      const factory = await splitterFactory();
+      if (factory) txs.push({ label: `Collect $${x.symbol || "coin"} fees`, to: factory, data: facI.encodeFunctionData("deployAndCollect", [owner, x.troyaBps, x.salt, graduated ? [] : [x.curve], tokenFees > 0n ? [x.token] : []]) });
+    } else if (!x.split && lc(x.recipient) === lc(owner)) {
+      if (onCurve > 0n && !graduated) txs.push({ label: `Sweep $${x.symbol || "coin"} curve fees to the escrow`, to: x.curve, data: feeCurveI.encodeFunctionData("sweepFees", [0]) });
+      if (tokenFees > 0n) txs.push({ label: `Claim $${x.symbol || "coin"} paid in tokens`, to: PONS_ESCROW, data: escI.encodeFunctionData("claimToken", [x.token]) });
+    }
+    return { token: x.token, symbol: x.symbol, name: x.name, logo: x.logo || null, source: x.source, at: x.at, curve: x.curve, graduated,
+      split: !!x.split, troyaBps: x.troyaBps || 0, recipient: x.recipient, splitterDeployed: x.split ? code !== "0x" : null, creatorTaxBps: x.creatorTaxBps || 0,
+      onCurveEth: eth(onCurve), inEscrowEth: eth(splitEscrow), tokenFees: eth(tokenFees), yoursEth: eth(yours), txs };
+  }));
+  const holderCoins = coins.filter((c) => !c.split && lc(c.recipient) === lc(owner));
+  const holderTxs = holderCoins.flatMap((c) => c.txs);
+  const holderCurve = holderCoins.reduce((a, c) => a + c.onCurveEth, 0);
+  if (walletEscrow > 0n || holderCurve > 0) holderTxs.push({ label: "Claim everything in the Pons fee escrow to your wallet", to: PONS_ESCROW, data: escI.encodeFunctionData("claim") });
+  const yoursEth = coins.filter((c) => c.split).reduce((a, c) => a + c.yoursEth, 0) + holderCurve + eth(walletEscrow);
+  return { wallet: owner, ethUsd: price, coins, escrow: { address: PONS_ESCROW, walletEth: eth(walletEscrow), holderCurveEth: holderCurve, txs: holderTxs },
+    yoursEth, yoursUsd: price ? yoursEth * price : null, at: Date.now() };
+}
+
 /** a failed launch, said plainly with where to fix it */
 export function guide(why) {
   const w = String(why).replace(/\.$/, "").slice(0, 140);
@@ -496,7 +561,7 @@ export async function register(r, ctx) {
     return { holderMin: HOLDER_MIN, limits: LIMITS, maxCreatorTaxBps: MAX_TAX_BPS, troyaVolumePct: TROYA_VOLUME_BPS / 100, creatorFeePct: CREATOR_FEE_BPS / 100,
       holderTroyaPct: 0, splitter: factory ? { factory, live: true } : { live: false }, xLaunch: (await xLaunchMode()) === "live", tgLaunch: (await tgLaunchMode()) === "live",
       tgBot: process.env.TG_BOT_USERNAME || "TrojanTroya_bot",
-      text: `Free to launch. Troya takes 0.1% of trading volume out of the creator's 0.7% share of the Pons fee; holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA keep all of it. Launch on X is for holders; Telegram and troya.codes are open to everyone. Creator tax 0–4%, ${LIMITS.perDay} launches a day (${LIMITS.perDayHolder} for holders).` };
+      text: `Free to launch. Troya takes 0.1% of trading volume out of the creator's 0.7% share of the Pons fee; holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA keep all of it. X, Telegram and troya.codes are open to everyone. Creator tax 0–4%. Without 1M $TROYA: ${LIMITS.perDay} launches a day, ${LIMITS.perDayX} of them from X; holders have no daily limit.` };
   });
   r.post("/api/launch/plan", ({ body }) => plan({ owner: body?.creator, creatorTaxBps: body?.creatorTaxBps, name: body?.name, symbol: body?.symbol, source: "web" }), { perMin: 30 });
   r.post("/api/launch/record", async ({ req, body }) => recordWeb({ hash: body?.hash, owner: getSession(req)?.address || body?.creator || null, salt: body?.salt, troyaBps: body?.troyaBps }), { perMin: 20 });
@@ -528,6 +593,7 @@ export async function register(r, ctx) {
     await store.writeJson("tg-launch.json", { mode: v, by: getSession(req).address, at: Date.now() });
     return { ok: true, mode: v };
   });
+  r.get("/api/launch/fees", async ({ req, query }) => creatorFees(query?.wallet || requireSession(req).address), { perMin: 30 });
   r.get("/api/launch/splitter", async () => {
     const b = await buildInfo();
     const s = await store.readJson("fee-splitter.json", {});

@@ -59,13 +59,14 @@ function encrypt(pk, owner) {
   const ct = Buffer.concat([c.update(pk, "utf8"), c.final()]);
   return { iv: iv.toString("hex"), tag: c.getAuthTag().toString("hex"), ct: ct.toString("hex") };
 }
-const H = Wallet.createRandom().address, N = Wallet.createRandom().address;
-const awH = Wallet.createRandom(), awN = Wallet.createRandom();
+const H = Wallet.createRandom().address, N = Wallet.createRandom().address, M = Wallet.createRandom().address;
+const awH = Wallet.createRandom(), awN = Wallet.createRandom(), awM = Wallet.createRandom();
 await store.writeJson("agentwallets.json", {
   [H.toLowerCase()]: { address: awH.address, enc: encrypt(awH.privateKey, H), createdAt: Date.now(), enabled: true, caps: { perTradeUsd: 100, dailyUsd: 250 } },
   [N.toLowerCase()]: { address: awN.address, enc: encrypt(awN.privateKey, N), createdAt: Date.now(), enabled: true, caps: { perTradeUsd: 100, dailyUsd: 250 } },
+  [M.toLowerCase()]: { address: awM.address, enc: encrypt(awM.privateKey, M), createdAt: Date.now(), enabled: true, caps: { perTradeUsd: 100, dailyUsd: 250 } },
 });
-await fund(awH.address, 0.05); await fund(awN.address, 0.05);
+await fund(awH.address, 0.05); await fund(awN.address, 0.05); await fund(awM.address, 0.05);
 const TROYA = "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", PM = "0x8366a39CC670B4001A1121B8F6A443A643e40951";
 await anvil("anvil_impersonateAccount", [PM]); await fund(PM, 1);
 const erc = new Interface(["function transfer(address,uint256) returns (bool)", "function balanceOf(address) view returns (uint256)", "function approve(address,uint256) returns (bool)"]);
@@ -75,7 +76,7 @@ await anvil("anvil_stopImpersonatingAccount", [PM]);
 ok("holder H has 1.5M $TROYA on the fork, N has none; both Agent Wallets hold 0.05 ETH");
 
 /* ---------- Launch on X ---------- */
-await store.writeJson("x-links.json", { [H.toLowerCase()]: { id: "111", username: "holder" }, [N.toLowerCase()]: { id: "222", username: "nonholder" } });
+await store.writeJson("x-links.json", { [H.toLowerCase()]: { id: "111", username: "holder" }, [N.toLowerCase()]: { id: "222", username: "nonholder" }, [M.toLowerCase()]: { id: "333", username: "everyone" } });
 await store.writeJson("launch-prefs.json", { [H.toLowerCase()]: { x: true }, [N.toLowerCase()]: { x: true } });
 L._setLogoFetcher(async () => "https://troya.codes/img/logo-3d-hd.png");
 const IMG = "https://pbs.twimg.com/media/test.jpg";
@@ -87,8 +88,6 @@ await store.writeJson("x-state.json", { launch: "live" });
 
 r = await L.fromX({ tweetId: "2", authorId: "999", text: "@Troyaagent launch Fork Horse $FHORSE", mediaUrl: IMG });
 assert.match(r.reply, /isn't linked to a Troya wallet/i); fixOk(r.reply); ok("an unlinked X account is told to link first");
-r = await L.fromX({ tweetId: "3", authorId: "222", text: "@Troyaagent launch Fork Horse $FHORSE", mediaUrl: IMG });
-assert.match(r.reply, /needs 1,000,000/i); assert.match(r.reply, /you hold 0/); fixOk(r.reply); ok("a non-holder cannot launch from X");
 r = await L.fromX({ tweetId: "4", authorId: "111", text: "@Troyaagent launch Fake Ether $ETH", mediaUrl: IMG });
 assert.match(r.reply, /taken by an existing coin/i); fixOk(r.reply); ok("$ETH is refused");
 r = await L.fromX({ tweetId: "6", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE tax 9%", mediaUrl: IMG });
@@ -151,6 +150,29 @@ assert.ok(held > 0n, "the Agent Wallet holds the new coin");
 assert.match(r.reply, /Initial buy of 0.01 ETH done/);
 ok(`launch with an initial buy: $BUYH, the Agent Wallet bought ${(Number(held) / 1e18).toLocaleString("en-US")} tokens for 0.01 ETH`);
 
+/* ---------- Launch on X is open to everyone (owner, 18 Nov): a non-holder once a day, through a splitter; holders without a limit ---------- */
+await store.writeJson("x-state.json", { launch: "live" });
+await store.update("launch-prefs.json", {}, (m) => ({ ...m, [M.toLowerCase()]: { x: true } }));
+r = await L.fromX({ tweetId: "20", authorId: "333", text: "@Troyaagent launch Open Horse $OPENH", mediaUrl: IMG });
+assert.ok(r.launch?.token, r.reply);
+assert.equal(r.launch.split, true, "a non-holder's creator fee goes through a splitter");
+assert.match(r.reply, /Creator fee: 0\.6% yours, 0\.1% Troya/);
+assert.ok(xLen(r.reply) <= 280, `reply fits a post (${xLen(r.reply)})`);
+li = await info(r.launch.token);
+assert.equal(getAddress(li.creatorFeeRecipient), getAddress(r.launch.recipient)); assert.equal(getAddress(li.deployer), awM.address);
+console.log("   reply:", r.reply);
+ok(`a non-holder launches from X: $OPENH ${r.launch.token}, creator fee through a splitter (0.6% / 0.1%)`);
+r = await L.fromX({ tweetId: "21", authorId: "333", text: "@Troyaagent launch Second Horse $SECH", mediaUrl: IMG });
+assert.match(r.reply, /one launch from X a day/); fixOk(r.reply); assert.ok(!r.launch);
+await assert.rejects(L.plan({ owner: M, source: "x" }), /launch from X a day/);
+const pm = await L.plan({ owner: M, source: "web" });
+assert.equal(pm.limit.max, 3);
+ok("the same non-holder's second launch from X that day is refused (troya.codes and Telegram still open, 3 a day in all)");
+await store.update("launches.json", [], (l) => [...l, ...Array.from({ length: 8 }, (_, i) => ({ token: "0x" + "ab".repeat(19) + String(10 + i), owner: H, at: Date.now(), source: "x" }))]);
+const ph = await L.plan({ owner: H, source: "x" });
+assert.equal(ph.limit.max, null); assert.ok(ph.limit.used >= 11, String(ph.limit.used));
+ok(`a holder has no daily limit: ${ph.limit.used} launches today and still allowed, from X too`);
+
 /* ---------- a non-holder launch (Telegram path) goes through a splitter ---------- */
 const out = await L.launchWithAgentWallet({ owner: N, name: "Split Horse", symbol: "SPLIT", logo: "https://troya.codes/img/logo-3d-hd.png", creatorTaxBps: 0, source: "tg", ref: "tg:test" });
 assert.ok(out.ok, JSON.stringify(out).slice(0, 300));
@@ -181,7 +203,11 @@ const ct = feeI.decodeFunctionResult("creatorTaxBalance", await provider.call({ 
 const n0 = await provider.getBalance(N), t0 = await provider.getBalance(treasury);
 const collector = Wallet.createRandom().connect(provider);
 await fund(collector.address, 1);
-await (await factory.connect(collector).deployAndCollect(N, 1428, out.launch.salt, [curve], [out.launch.token], { nonce: 0 })).wait();
+// F28 Creator desk: what it says is waiting, and its own transaction collects it
+const pre = await L.creatorFees(N);
+const pc = pre.coins.find((c) => c.token.toLowerCase() === out.launch.token.toLowerCase());
+assert.equal(pc.txs.length, 1, JSON.stringify(pc.txs)); assert.equal(getAddress(pc.txs[0].to), FACTORY);
+await (await collector.sendTransaction({ to: pc.txs[0].to, data: pc.txs[0].data, nonce: 0 })).wait();
 const toN = (await provider.getBalance(N)) - n0, toT = (await provider.getBalance(treasury)) - t0;
 const income = toN + toT;
 assert.ok(toT > 0n && toN > 0n);
@@ -193,6 +219,29 @@ const creatorOfVolume = Number((toN * 1_000_000n) / vol) / 10_000;
 assert.ok(troyaOfVolume > 0.092 && troyaOfVolume < 0.108, `Troya ${troyaOfVolume}% of volume`);
 assert.ok(creatorOfVolume > 0.55 && creatorOfVolume < 0.65, `creator ${creatorOfVolume}% of volume`);
 ok(`volume ${(Number(vol) / 1e18).toFixed(3)} ETH → creator ${creatorOfVolume.toFixed(3)}%, Troya ${troyaOfVolume.toFixed(3)}% of volume, collected by a stranger`);
+const near = (a, b) => Math.abs(a - b) <= Math.abs(b) * 0.001 + 1e-12;
+assert.ok(near(Number(toN) / 1e18, pc.yoursEth), `split: creator got ${Number(toN) / 1e18}, the desk said ${pc.yoursEth}`);
+assert.ok((await L.creatorFees(N)).coins.find((c) => c.token === pc.token).yoursEth < 1e-12, "nothing left to claim");
+ok(`F28 Creator desk, split coin: it said ${pc.yoursEth.toFixed(8)} ETH was waiting for the creator; its one transaction (deployAndCollect) paid exactly that`);
+
+/* ---------- F28 · a holder's coins: sweep the curve, then one escrow claim to the holder's own wallet ---------- */
+{
+  const hf = await L.creatorFees(H);
+  const bh = hf.coins.find((c) => c.symbol === "BUYH");
+  assert.ok(bh && bh.onCurveEth > 0 && !bh.split, JSON.stringify(bh));
+  assert.ok(hf.escrow.txs.length >= 2 && /Claim everything/.test(hf.escrow.txs[hf.escrow.txs.length - 1].label), JSON.stringify(hf.escrow.txs));
+  await anvil("anvil_impersonateAccount", [H]); await fund(H, 1);
+  const hs = await provider.getSigner(H);
+  const rawBal = async (a) => BigInt(await provider.send("eth_getBalance", [a, "latest"]));   // raw: ethers briefly caches identical reads
+  const h0 = await rawBal(H);
+  let gas = 0n;
+  for (const t of hf.escrow.txs) { const rc = await (await hs.sendTransaction({ to: t.to, data: t.data })).wait(); assert.equal(rc.status, 1, t.label); gas += rc.gasUsed * (rc.gasPrice || 0n); }
+  await anvil("anvil_stopImpersonatingAccount", [H]);
+  const got = Number((await rawBal(H)) - h0 + gas) / 1e18;
+  assert.ok(near(got, hf.yoursEth), `holder got ${got}, the desk said ${hf.yoursEth}`);
+  assert.ok((await L.creatorFees(H)).yoursEth < 1e-12, "nothing left for the holder");
+  ok(`F28 Creator desk, holder coins: ${hf.escrow.txs.length} transactions (sweep the curve, claim the escrow) paid H ${got.toFixed(8)} ETH, as the desk said`);
+}
 
 /* ---------- a web launch (the creator's own wallet) recorded after a check on chain ---------- */
 const W = Wallet.createRandom().connect(provider);

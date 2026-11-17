@@ -974,7 +974,8 @@ body { touch-action: manipulation; }
 .hp-kpi b { display: block; margin-top: 6px; font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
 .hp-tabs { display: none; }
 .hp-lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; padding-bottom: 28px; }
-.hp-lane { padding: 0; overflow: hidden; display: flex; flex-direction: column; max-height: calc(100vh - 250px); min-height: 360px; }
+/* each lane runs to the bottom of the screen and scrolls on its own as coins pile up */
+.hp-lane { padding: 0; overflow: hidden; display: flex; flex-direction: column; height: max(560px, calc(100vh - 200px)); }
 .hp-lane > header { display: flex; align-items: center; gap: 9px; padding: 14px 16px; border-bottom: 1px solid var(--line, rgba(255,255,255,.08)); flex-wrap: wrap; }
 .hp-lane > header b { font-size: 15px; }
 .hp-lane > header small { flex-basis: 100%; color: var(--muted); font-size: 12px; margin-left: 17px; }
@@ -982,9 +983,10 @@ body { touch-action: manipulation; }
 .hp-lane.almost .hp-dot { background: #f2c26b; color: #f2c26b; }
 .hp-lane.migrated .hp-dot { background: #6fd39a; color: #6fd39a; }
 .hp-count { margin-left: auto; font: 600 12px/1 var(--mono, monospace); color: var(--muted); padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line, rgba(255,255,255,.1)); }
-.hp-list { overflow-y: auto; overscroll-behavior: contain; padding: 6px; display: grid; gap: 6px; align-content: start; }
-.hp-card { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px; border-radius: 14px; border: 1px solid transparent; cursor: pointer; transition: background .2s, border-color .2s, transform .2s; }
-.hp-card:hover, .hp-card:focus-visible { background: rgba(142, 223, 245, .045); border-color: rgba(142, 223, 245, .16); outline: none; }
+.hp-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 10px; display: grid; gap: 8px; align-content: start; scrollbar-width: thin; }
+/* every coin in its own box */
+.hp-card { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px; border-radius: 14px; border: 1px solid var(--line, rgba(255,255,255,.09)); background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012)); cursor: pointer; transition: background .2s, border-color .2s, transform .2s, box-shadow .2s; }
+.hp-card:hover, .hp-card:focus-visible { background: rgba(142, 223, 245, .05); border-color: rgba(142, 223, 245, .35); box-shadow: 0 8px 24px rgba(0, 0, 0, .35); outline: none; }
 .hp-card.fresh { animation: hp-fresh 2.4s ease-out 1; border-color: rgba(142, 223, 245, .28); }
 @keyframes hp-fresh { 0% { background: rgba(142, 223, 245, .16); } 100% { background: transparent; } }
 .hp-ava .tok-ico { box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 10px 24px rgba(0,0,0,.4); }
@@ -1029,7 +1031,7 @@ body { touch-action: manipulation; }
   .hp-tab small { color: var(--muted); font-weight: 500; }
   .hp-tab[aria-selected="true"] { border-color: rgba(142, 223, 245, .5); background: rgba(142, 223, 245, .08); }
   .hp-lanes { grid-template-columns: 1fr; }
-  .hp-lane { display: none; max-height: none; }
+  .hp-lane { display: none; height: auto; min-height: 420px; }
   .hp-lane.on { display: flex; }
 }
 @media (max-width: 640px) {

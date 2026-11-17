@@ -1,0 +1,13 @@
+{
+  "name": "@troyaagent/cli",
+  "version": "0.1.0",
+  "description": "Troya Agent from the terminal: Troya Gate, Troya picks, the chart oracle, quotes and Hyperliquid perps on Robinhood Chain. Read commands need no key; trading runs through your own limits and is a dry run by default.",
+  "type": "module",
+  "bin": { "troya": "index.mjs" },
+  "files": ["index.mjs", "README.md"],
+  "engines": { "node": ">=18" },
+  "keywords": ["cli", "robinhood-chain", "hyperliquid", "pons", "trading", "agent", "troya"],
+  "homepage": "https://troya.codes/api-and-mcp",
+  "repository": { "type": "git", "url": "git+https://github.com/troyaagent/troya-agent.git", "directory": "cli" },
+  "license": "MIT"
+}

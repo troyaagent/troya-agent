@@ -78,6 +78,7 @@ server/             API: chain engine and Gate (robinhood.mjs), tools and limits
                     Agent Wallet, assistant, Hyperliquid signing (hl.mjs), journal, Telegram bot
 public/             the site (index, capabilities, verify, risk-controls, api-and-mcp…) and the app (public/agent)
 mcp/                @troyaagent/mcp, the MCP server; holds no keys, forwards to the REST API
+cli/                @troyaagent/cli, Troya CLI (`troya gate TROYA`, `troya oracle`); one file, no dependencies
 tools/              rh-smoke.mjs (read-only live checks), regate-test.mjs (Swap re-check), crawl.mjs (page and link check)
 ```
 

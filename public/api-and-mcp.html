@@ -50,7 +50,7 @@
     <canvas class="rain" data-rain aria-hidden="true"></canvas>
     <span class="eyebrow"><i class="dot"></i>API and MCP</span>
     <h1 id="ph" class="words" data-words>Give your own agent a desk with walls</h1>
-    <p class="lead rv">Install the Troya MCP server with one command, or call the REST API directly. Read tools work for everyone. Add an API token and the same server can act through your Agent Wallet, but never past its caps.</p>
+    <p class="lead rv">Install the Troya MCP server with one command, run <a class="ulink" href="#cli">Troya CLI</a> in your terminal, or call the REST API directly. Read tools work for everyone. Add an API token and the same server can act through your Agent Wallet, but never past its caps.</p>
     <div class="hero-act rv" style="align-items:center">
       <div class="cmd" style="margin:0"><span>$</span><code data-mcp-cmd>npx -y @troyaagent/mcp</code><button type="button" data-copy-cmd>COPY</button></div>
       <a class="ulink" href="/agent">Launch app</a>
@@ -108,18 +108,49 @@ claude mcp add troya -e TROYA_BASE_URL={{base}} -e TROYA_API_KEY=&lt;your-token&
     </div>
   </section>
 
+  <section class="ip" id="cli" aria-labelledby="cli-h">
+    <div class="eyebrow-line"><span>02 / Troya CLI</span></div>
+    <div class="split" style="margin-bottom:40px">
+      <h2 id="cli-h" class="h2 words" data-words>The desk in your terminal</h2>
+      <p class="lead rv">One file, no dependencies, Node 18 or newer. Run the Gate on a coin, read Troya picks and the chart oracle, quote a swap or check a perp without opening a browser. A coin can be a 0x… address or a ticker. Add <code class="mono">--json</code> to pipe any answer into your own scripts.</p>
+    </div>
+    <div class="code-grid">
+      <div class="code rv">
+        <div class="code-h">Read, no token<button type="button" data-copy-block>COPY</button></div>
+        <pre><span class="c"># run once with npx, or install: npm i -g @troyaagent/cli</span>
+npx @troyaagent/cli gate TROYA
+npx @troyaagent/cli market picks
+npx @troyaagent/cli oracle ETH
+npx @troyaagent/cli quote 0.01 ETH TROYA
+npx @troyaagent/cli token TROYA --json</pre>
+      </div>
+      <div class="code rv">
+        <div class="code-h">Trade, with an API token<button type="button" data-copy-block>COPY</button></div>
+        <pre>export TROYA_API_KEY=&lt;your-token&gt;
+
+<span class="c"># quote + Troya Gate + your limits, then a confirmation id (120 s)</span>
+troya swap 0.01 ETH TROYA
+
+<span class="c"># a dry run until you add --live and switch dry-run off for the token</span>
+troya execute &lt;confirmationId&gt; --live</pre>
+      </div>
+    </div>
+    <p class="rec-note rv">Every command: <code class="mono">gate</code>, <code class="mono">token</code>, <code class="mono">search</code>, <code class="mono">market</code>, <code class="mono">holders</code>, <code class="mono">health</code>, <code class="mono">quote</code>, <code class="mono">stocks</code>, <code class="mono">oracle</code>, <code class="mono">record</code>, <code class="mono">flywheel</code>, <code class="mono">perp</code>, <code class="mono">movers</code>, <code class="mono">funding</code>, <code class="mono">swap</code>, <code class="mono">execute</code>, <code class="mono">balances</code>, <code class="mono">policy</code>, <code class="mono">tools</code> and <code class="mono">call</code> for any REST tool. <code class="mono">troya help</code> lists them. Source on <a class="ulink" href="https://github.com/troyaagent/troya-agent/tree/main/cli" target="_blank" rel="noopener">GitHub</a>.</p>
+  </section>
+
   <section class="ip" aria-labelledby="iface-h">
-    <div class="eyebrow-line"><span>02 / Choose an interface</span></div>
-    <h2 id="iface-h" class="h2 words" data-words style="margin-bottom:56px">Three doors, one set of walls</h2>
-    <div class="steps">
+    <div class="eyebrow-line"><span>03 / Choose an interface</span></div>
+    <h2 id="iface-h" class="h2 words" data-words style="margin-bottom:56px">Four doors, one set of walls</h2>
+    <div class="steps four">
       <article class="step rv"><span class="n">01 · READ TOOLS</span><h3>No token needed</h3><p>Hyperliquid perps, the Robinhood Chain token board, swap quotes on Robinhood Chain, token health checks and the daily brief. Nothing in this set can move funds.</p></article>
       <article class="step rv"><span class="n">02 · AGENT WALLET TOOLS</span><h3>With an API token</h3><p>Add a token and the server can also swap, bridge, trade perps and launch tokens from your Agent Wallet, each call passing Troya Gate and your caps first.</p></article>
       <article class="step rv"><span class="n">03 · REST</span><h3>Plain HTTP</h3><p>Public GET routes for markets and quotes. POST routes for execution need an <code class="mono">x-api-key</code> header and an <code class="mono">Idempotency-Key</code>, so retries are safe.</p></article>
+      <article class="step rv"><span class="n">04 · CLI</span><h3>From the terminal</h3><p><code class="mono">npx @troyaagent/cli</code> wraps the same tools for people: the Gate, picks, the chart oracle and quotes in plain tables, and swaps that stay dry runs until you say otherwise.</p></article>
     </div>
   </section>
 
   <section class="ip" aria-labelledby="rest-h">
-    <div class="eyebrow-line"><span>03 / REST</span></div>
+    <div class="eyebrow-line"><span>04 / REST</span></div>
     <div class="split" style="margin-bottom:40px">
       <h2 id="rest-h" class="h2 words" data-words>HTTP for your own code</h2>
       <p class="lead rv">Base URL <code class="mono" data-base>/agent/api</code>. Responses are JSON. Every call made with a token lands in the same journal you see in the app.</p>
@@ -165,7 +196,7 @@ curl -s -X POST <span class="s">"{{base}}/tools/execute_intent"</span> \
   </section>
 
   <section class="ip" aria-labelledby="tiers-h">
-    <div class="eyebrow-line"><span>04 / Tool tiers</span></div>
+    <div class="eyebrow-line"><span>05 / Tool tiers</span></div>
     <h2 id="tiers-h" class="h2 sm words" data-words style="margin-bottom:40px">What each tier is allowed to do</h2>
     <div class="tools">
       <div class="tool rv"><code>Tier 1 · Read</code><p>Look only: markets, quotes, balances, positions, token health, policy. Safe to call in a loop.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>

@@ -78,6 +78,7 @@ async function addSpent(owner, usd) {
   });
 }
 
+const lcs = (s) => String(s || "").toLowerCase();
 async function send(owner, w, tx, label) {
   if (NO_BROADCAST) {
     const populated = await w.populateTransaction(tx).catch((e) => ({ error: e.shortMessage || e.message }));
@@ -85,6 +86,11 @@ async function send(owner, w, tx, label) {
   }
   const sent = await w.sendTransaction(tx);
   const receipt = await sent.wait(1, 90_000).catch(() => null);
+  // Troya pays gas: the fee goes back to the Agent Wallet (daily limits in gas.mjs); never for a withdrawal to the owner
+  if (receipt?.status === 1 && lcs(tx.to) !== lcs(owner)) {
+    const fee = (receipt.gasUsed || 0n) * (receipt.gasPrice || receipt.effectiveGasPrice || 0n);
+    import("./gas.mjs").then((g) => g.refundGas(owner, w.address, fee)).catch(() => {});
+  }
   return { broadcast: true, hash: sent.hash, status: receipt ? (receipt.status === 1 ? "confirmed" : "reverted") : "pending", label };
 }
 

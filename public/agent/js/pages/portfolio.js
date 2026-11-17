@@ -132,7 +132,9 @@ export async function mount(view, ctx) {
       h("div", { class: "pf2-sec-h" }, h("h2", {}, "Your tokens"), h("span", { class: "fine muted" }, "Robinhood Chain")),
       h("div", { class: "pf2-grid" }, st.toks.slice(0, 24).map((x) => h("a", { class: "pf2-tok", href: x.address ? `#/token/${x.address}` : "#/market" },
         tokenIcon({ symbol: x.symbol, address: x.address, chain: "robinhood" }), h("span", {}, h("b", {}, x.symbol), h("small", {}, num(Number(x.amount), 4))), h("i", {}, "→"))))) : null;
-    const parts = [hero, toks];
+    const gasCard = h("section", { class: "panel pf2-gas" });
+    paintGas(gasCard);
+    const parts = [hero, gasCard, toks];
     if (connected && wallet.session) parts.push(briefPanel());
     // the hero already offers Connect when no wallet is connected
 
@@ -178,6 +180,40 @@ export async function mount(view, ctx) {
       }
     }
     return parts;
+  }
+
+  /* ---------- free gas: the weekly drip for holders, and the sponsor for admins ---------- */
+  async function paintGas(box) {
+    let g; try { g = await api.get("gas/status"); } catch { box.remove(); return; }
+    const you = g.you;
+    const claim = async (btn) => {
+      btn.disabled = true; btn.textContent = "Sending…";
+      try { const r = await api.post("gas/claim", {}); toast(`${r.eth} ETH sent for gas.`, "ok", 7000); window.open(r.explorer, "_blank", "noopener"); }
+      catch (e) { toast(e.message, "error", 7000); }
+      paintGas(box); loadBalances();
+    };
+    const btn = h("button", { class: "btn primary", type: "button", disabled: !you?.can, onclick: (e) => claim(e.currentTarget) }, wallet.session ? "Claim free gas" : "Sign in to claim");
+    if (!wallet.session) { btn.disabled = false; btn.onclick = async () => { try { if (!wallet.address) await openConnect(); if (wallet.address) await signIn(); paintGas(box); } catch (e) { toast(e.message, "error"); } }; }
+    clear(box,
+      h("div", { class: "pf2-gas-h" }, h("h2", {}, "Troya pays your gas"), h("span", { class: `dk-v ${g.enabled ? "v-passed" : ""}` }, g.enabled ? "On" : "Off")),
+      h("p", { class: "fine", style: { margin: 0 } }, `Holders of 1,000,000 $TROYA or more claim ${g.dripEth} ETH on Robinhood Chain once every ${g.everyDays} days, enough for dozens of trades.${g.refund ? ` Agent Wallet trades also get their gas back, up to ${g.refundPerDayEth} ETH a day.` : ""}`),
+      h("p", { class: "fine muted", style: { margin: 0 } }, g.wallets),
+      you ? h("p", { class: `fine ${you.can ? "" : "muted"}`, style: { margin: 0 } }, you.can ? `You can claim now · you hold ${Math.round(you.balance || 0).toLocaleString("en-US")} $TROYA` : you.why) : null,
+      h("div", { class: "fw-row" }, btn));
+    // admins: the sponsor wallet, its balance and limits
+    let a; try { a = wallet.session ? await api.get("gas/admin") : null; } catch { a = null; }
+    if (!a) return;
+    const s = a.settings;
+    const num = (k, v, label, step) => { const el = h("input", { class: "input", type: "number", step, value: v }); el.dataset.k = k; return h("label", { class: "field" }, h("span", {}, label), el); };
+    const form = h("div", { class: "fw-auto-g" }, num("dripEth", s.dripEth, "Drip (ETH)", "0.00001"), num("everyDays", s.everyDays, "Every (days)", "1"), num("refundPerDayEth", s.refundPerDayEth, "Agent refund per wallet/day (ETH)", "0.0001"), num("dailyBudgetEth", s.dailyBudgetEth, "Total budget per day (ETH)", "0.001"), num("skipAboveEth", s.skipAboveEth, "Skip wallets holding over (ETH)", "0.0001"));
+    const save = async (extra = {}) => { const body = { ...extra }; for (const el of form.querySelectorAll("input")) body[el.dataset.k] = Number(el.value); try { await api.post("gas/admin/settings", body); toast("Saved", "ok"); paintGas(box); } catch (e) { toast(e.message, "error"); } };
+    box.append(h("div", { class: "pf2-gas-admin" },
+      h("b", {}, "Sponsor wallet (admin)"),
+      h("div", { class: "fw-row" }, h("span", { class: "mono", style: { wordBreak: "break-all" } }, a.address), h("button", { class: "btn sm", type: "button", onclick: () => { navigator.clipboard?.writeText(a.address); toast("Address copied", "ok"); } }, "Copy")),
+      h("p", { class: "fine", style: { margin: 0 } }, `Balance ${a.balanceEth.toFixed(5)} ETH · spent today ${a.todaySpentEth.toFixed(5)} of ${s.dailyBudgetEth} ETH · send ETH on Robinhood Chain to this address to fund it.`),
+      form,
+      h("div", { class: "fw-row" }, h("button", { class: "btn", type: "button", onclick: () => save() }, "Save limits"), h("button", { class: "btn", type: "button", onclick: () => save({ enabled: !s.enabled }) }, s.enabled ? "Switch off" : "Switch on"), h("button", { class: "btn", type: "button", onclick: () => save({ refund: !s.refund }) }, s.refund ? "Stop Agent refunds" : "Start Agent refunds")),
+      a.log?.length ? h("ul", { class: "fw-auto-log" }, a.log.slice(0, 8).map((x) => h("li", {}, h("b", {}, new Date(x.at).toLocaleString()), ` · ${x.kind} · ${x.eth} ETH → ${short(x.to)} · `, h("a", { class: "ulink", href: `https://robinhoodchain.blockscout.com/tx/${x.hash}`, target: "_blank", rel: "noopener" }, "tx")))) : null));
   }
 
   /* ---------- inbox ---------- */

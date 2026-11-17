@@ -180,6 +180,68 @@ async function cycle(reason = "schedule") {
   }
 }
 
+/* ---------- burn campaign: small buybacks spread over time, each burned in full ----------
+   e.g. $100 over 24 hours, a random $1–3 every 30 minutes, paid from the ETH in the creator wallet. Same rails:
+   the Gate on every buy, the Universal Router only, burn() only, the gas reserve kept. */
+const CAMP = "flywheel-campaign.json";
+let campBusy = false;
+const usdNow = async () => { try { const p = await local("/api/price/eth"); return Number(p.usd) || null; } catch { return null; } };
+async function campaignTick() {
+  if (campBusy) return;
+  const c = await store.readJson(CAMP, null);
+  if (!c?.active) return;
+  const now = Date.now();
+  if (now >= c.endsAt || c.spentUsd >= c.totalUsd - 0.01) { await finishCampaign(c, now >= c.endsAt ? "The time window ended." : "The target was reached."); return; }
+  if (now < (c.nextAt || 0) || running) return;
+  campBusy = true;
+  const log = { at: now, steps: [] };
+  try {
+    const w = await signer();
+    if (!w) throw new Error("No creator key is stored.");
+    const usd = await usdNow();
+    if (!usd) throw new Error("No ETH price right now.");
+    const left = c.totalUsd - c.spentUsd;
+    const pick = Math.min(left, c.minUsd + Math.random() * (c.maxUsd - c.minUsd));
+    const ethAmt = +(pick / usd).toFixed(8);
+    const bal = Number(formatEther(await provider.getBalance(CREATOR)));
+    if (bal - ethAmt < DEFAULTS.reserveEth) throw new Error(`The creator wallet holds ${bal.toFixed(5)} ETH; it needs ${ethAmt.toFixed(5)} ETH plus ${DEFAULTS.reserveEth} for gas. Add ETH to keep the campaign going.`);
+    const gate = await local(`/api/swap/gate?in=eth&out=${TROYA}&amount=${ethAmt}`);
+    if (gate.pass === false) throw new Error(`Troya Gate stopped this buy: ${(gate.checks || []).filter((x) => x.status === "fail").map((x) => `${x.label || x.name}: ${x.detail}`).join("; ")}`);
+    const built = await local("/api/swap/build", { from: CREATOR, tokenIn: "ETH", tokenOut: TROYA, amountIn: String(ethAmt), slippageBps: 300 });
+    if (lc(built.to) !== lc(UR)) throw new Error("The swap route is not the Universal Router; skipped for safety.");
+    if (BigInt(built.value || 0) > parseEther(ethAmt.toFixed(18)) + 1000n) throw new Error("The swap would spend more than planned; skipped.");
+    const id = `burn${now}`;
+    const before = await troyaOf(CREATOR);
+    const b = await send(w, built, log, "buyback");
+    await recordStep({ cycle: id, step: "buyback", hash: b.hash }).catch(() => {});
+    const got = (await troyaOf(CREATOR)) - before;
+    if (got <= 0n) throw new Error("The buy brought no $TROYA.");
+    const bu = await send(w, { to: TROYA, data: TOK.encodeFunctionData("burn", [got]), value: 0 }, log, "burn");
+    await recordStep({ cycle: id, step: "burn", hash: bu.hash }).catch(() => {});
+    const burned = Number(formatEther(got));
+    await store.update(CAMP, null, (x) => {
+      if (!x) return x;
+      x.spentUsd = +(x.spentUsd + pick).toFixed(2); x.spentEth = +((x.spentEth || 0) + ethAmt).toFixed(8); x.burned = (x.burned || 0) + burned; x.count = (x.count || 0) + 1;
+      x.buys = [{ at: now, usd: +pick.toFixed(2), eth: ethAmt, burned, buy: b.hash, burn: bu.hash }, ...(x.buys || [])].slice(0, 80);
+      x.nextAt = now + x.everyMinutes * 60_000; x.error = null;
+      return x;
+    });
+    const c2 = await store.readJson(CAMP, null);
+    // a short note to the admins every 12 buys, so Telegram is not flooded
+    if (c2 && c2.count % 12 === 0) await tell(`<b>Burn campaign</b>: ${c2.count} buys, $${c2.spentUsd.toFixed(2)} of $${c2.totalUsd} spent, ${Math.round(c2.burned).toLocaleString("en-US")} $TROYA burned. troya.codes/flywheel`);
+  } catch (e) {
+    const msg = String(e?.shortMessage || e?.message || e).slice(0, 300);
+    await store.update(CAMP, null, (x) => { if (x) { x.error = msg; x.nextAt = Date.now() + 10 * 60_000; x.fails = (x.fails || 0) + 1; if (x.fails >= 6) x.active = false; } return x; });
+    const c3 = await store.readJson(CAMP, null);
+    if (c3 && !c3.active) await tell(`<b>Burn campaign paused</b> after repeated problems: ${msg}`);
+    else if (c3?.fails === 1) await tell(`<b>Burn campaign</b>: a buy was skipped (${msg}). It tries again in 10 minutes.`);
+  } finally { campBusy = false; }
+}
+async function finishCampaign(c, why) {
+  await store.update(CAMP, null, (x) => { if (x) { x.active = false; x.finishedAt = Date.now(); x.why = why; } return x; });
+  await tell(`<b>Burn campaign finished</b>: ${why}\n${c.count || 0} buys, $${(c.spentUsd || 0).toFixed(2)} spent, ${Math.round(c.burned || 0).toLocaleString("en-US")} $TROYA bought back and burned. troya.codes/flywheel`);
+}
+
 export async function register(r, ctx) {
   store = ctx.store; dir = ctx.dataDir; port = Number(process.env.PORT) || 9270;
   provider = new JsonRpcProvider(RPC, { chainId: 4663, name: "robinhood" }, { staticNetwork: true });
@@ -223,6 +285,29 @@ export async function register(r, ctx) {
     if (out.enabled && !(await keySet())) throw new HttpError(400, "Import the creator key first, then switch it on.");
     return { settings: out };
   }, { weight: 2 });
+  r.get("/api/flywheel/auto/campaign", async ({ req }) => {
+    if (!isAdmin(req)) throw new HttpError(403, "Admins only.");
+    return { campaign: await store.readJson(CAMP, null) };
+  }, { weight: 1 });
+  r.post("/api/flywheel/auto/campaign", async ({ req, body }) => {
+    if (!isAdmin(req)) throw new HttpError(403, "Admins only.");
+    if (!(await keySet())) throw new HttpError(400, "Import the creator key first.");
+    const num = (v, lo, hi) => { const n = Number(v); if (!Number.isFinite(n) || n < lo || n > hi) throw new HttpError(400, `A value is out of range (${lo}–${hi}).`); return n; };
+    const totalUsd = num(body?.totalUsd, 1, 100000), minUsd = num(body?.minUsd, 0.5, 1000), maxUsd = num(body?.maxUsd, minUsd, 5000);
+    const everyMinutes = num(body?.everyMinutes, 5, 1440), hours = num(body?.hours, 1, 720);
+    const c = { active: true, startedAt: Date.now(), endsAt: Date.now() + hours * 3600_000, totalUsd, minUsd, maxUsd, everyMinutes, hours, spentUsd: 0, spentEth: 0, burned: 0, count: 0, buys: [], nextAt: Date.now(), fails: 0, by: getSession(req)?.address || null };
+    await store.writeJson(CAMP, c);
+    await tell(`<b>Burn campaign started</b>: $${totalUsd} over ${hours} hours, a random $${minUsd}–$${maxUsd} every ${everyMinutes} minutes, each buy burned in full. /flywheel off stops it.`);
+    setTimeout(() => campaignTick().catch(() => {}), 2000);
+    return { campaign: c };
+  }, { weight: 3, perMin: 5 });
+  r.post("/api/flywheel/auto/campaign/stop", async ({ req }) => {
+    if (!isAdmin(req)) throw new HttpError(403, "Admins only.");
+    const c = await store.readJson(CAMP, null);
+    if (c?.active) await finishCampaign(c, "Stopped from the app.");
+    return { campaign: await store.readJson(CAMP, null) };
+  }, { weight: 2 });
+
   r.post("/api/flywheel/auto/run", async ({ req }) => {
     if (!isAdmin(req)) throw new HttpError(403, "Admins only.");
     return await cycle("run now");
@@ -239,11 +324,13 @@ export async function register(r, ctx) {
       await cycle("schedule");
     } catch (e) { console.warn("[flywheel-auto]", e.message); }
   }, 10 * 60_000).unref();
+  if (process.env.FLYWHEEL_AUTO !== "0") setInterval(() => campaignTick().catch((e) => console.warn("[burn-campaign]", e.message)), 60_000).unref();
 }
 
 /** The bot's /flywheel off|on for linked admin chats. */
 export async function setEnabled(on) {
   if (!store) return null;
+  if (!on) { const c = await store.readJson(CAMP, null); if (c?.active) await finishCampaign(c, "Stopped with /flywheel off."); }
   if (on && !(await keySet())) return { ok: false, why: "No creator key is stored." };
   await store.update(SET, {}, (x) => { x.enabled = !!on; return x; });
   return { ok: true };

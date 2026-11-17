@@ -249,10 +249,45 @@ export async function mount(view) {
       a.runs?.length ? h("ul", { class: "fw-auto-log" }, a.runs.map((x) => h("li", {}, h("b", {}, new Date(x.at).toLocaleString()), " · ", x.reason, " · ",
         x.error ? h("span", { class: "down" }, x.error) : x.note ? h("span", { class: "muted" }, x.note) : h("span", {}, x.steps.map((st2) => h("a", { class: "ulink", href: `https://robinhoodchain.blockscout.com/tx/${st2.hash}`, target: "_blank", rel: "noopener" }, st2.step)).reduce((acc, el, i) => (i ? [...acc, " · ", el] : [el]), []))))) : null);
   }
-  paintAuto();
+  /* ---------- burn campaign: small buybacks over time, each burned in full ---------- */
+  const campBox = h("section", { class: "panel fw-auto fw-camp", hidden: true });
+  autoBox.after(campBox);
+  async function paintCamp() {
+    if (!wallet.session) { campBox.hidden = true; return; }
+    let a, cg; try { [a, cg] = await Promise.all([api.get("flywheel/auto"), api.get("flywheel/auto/campaign")]); } catch { campBox.hidden = true; return; }
+    campBox.hidden = false;
+    const c = cg.campaign;
+    const inp = (k, v, label, step = "1") => { const el = h("input", { class: "input", type: "number", step, value: v }); el.dataset.k = k; return h("label", { class: "field" }, h("span", {}, label), el); };
+    const form = h("div", { class: "fw-auto-g" }, inp("totalUsd", 72, "Total to burn ($)"), inp("minUsd", 1, "Each buy from ($)", "0.5"), inp("maxUsd", 1, "Each buy up to ($)", "0.5"), inp("everyMinutes", 10, "One buy every (minutes)"), inp("hours", 12, "For (hours)"));
+    const val = () => Object.fromEntries([...form.querySelectorAll("input")].map((el) => [el.dataset.k, Number(el.value)]));
+    const need = () => { const v = val(); return `${Math.round(v.hours * 60 / v.everyMinutes)} buys at most · about ${Math.round(v.totalUsd / ((v.minUsd + v.maxUsd) / 2))} buys to reach $${v.totalUsd} · ETH comes from the creator wallet (${fx(st.d.fees.creatorWalletEth)} ETH ≈ $${(st.d.fees.creatorWalletEth * (st.d.price.ethUsd || 0)).toFixed(0)} now)`; };
+    const hint = h("p", { class: "fine fw-auto-ex" }, need());
+    form.addEventListener("input", () => { hint.textContent = need(); });
+    const pct = c ? Math.min(100, (c.spentUsd / c.totalUsd) * 100) : 0;
+    clear(campBox,
+      h("div", { class: "fw-auto-h" }, h("h3", {}, "Burn campaign"), h("span", { class: `dk-v ${c?.active ? "v-passed" : ""}` }, c?.active ? "Running" : "Off")),
+      h("p", { class: "fine", style: { margin: 0 } }, "Small buybacks spread over time, each one burned in full: for example $1 every 10 minutes for 12 hours ($72). Troya Gate runs before every buy. The ETH comes from the creator wallet; the campaign stops at the target, at the end of the window, or with /flywheel off."),
+      c ? h("div", { class: "fw-camp-p" },
+        h("div", { class: "fw-camp-bar" }, h("i", { style: { width: `${pct}%` } })),
+        h("p", { class: "fine", style: { margin: 0 } }, `$${(c.spentUsd || 0).toFixed(2)} of $${c.totalUsd} · ${c.count || 0} buys · ${big(c.burned || 0)} $TROYA burned · ${c.active ? `next buy ${c.nextAt > Date.now() ? `in ${Math.max(1, Math.round((c.nextAt - Date.now()) / 60000))} min` : "now"} · ends ${new Date(c.endsAt).toLocaleString()}` : c.why || "finished"}`),
+        c.error ? h("p", { class: "fine down", style: { margin: 0 } }, c.error) : null) : null,
+      c?.active ? null : form, c?.active ? null : hint,
+      h("div", { class: "fw-row" },
+        c?.active
+          ? h("button", { class: "btn danger", type: "button", onclick: async () => { try { await api.post("flywheel/auto/campaign/stop", {}); toast("Campaign stopped.", "ok"); paintCamp(); } catch (e) { toast(e.message, "error"); } } }, "Stop the campaign")
+          : h("button", { class: "btn primary", type: "button", disabled: !a.keySet, onclick: async () => {
+              const v = val();
+              if (!(await review({ title: "Start the burn campaign?", summary: `$${v.totalUsd} over ${v.hours} hours, $${v.minUsd}–$${v.maxUsd} every ${v.everyMinutes} minutes, each buy burned in full`, rows: [["Paid from", `creator wallet ${short(st.d.creator)}`], ["Every buy", "Troya Gate first, then burn()"], ["Stop", "here, or /flywheel off in Telegram"]], confirmLabel: "Start" }))) return;
+              try { await api.post("flywheel/auto/campaign", v); toast("Campaign started. The first buy runs in a moment.", "ok", 7000); paintCamp(); } catch (e) { toast(e.message, "error", 8000); }
+            } }, a.keySet ? "Start the campaign" : "Store the creator key first")),
+      c?.buys?.length ? h("ul", { class: "fw-auto-log" }, c.buys.slice(0, 12).map((x) => h("li", {}, h("b", {}, new Date(x.at).toLocaleTimeString()), ` · $${x.usd} · ${big(x.burned)} $TROYA burned · `,
+        h("a", { class: "ulink", href: `https://robinhoodchain.blockscout.com/tx/${x.buy}`, target: "_blank", rel: "noopener" }, "buy"), " · ", h("a", { class: "ulink", href: `https://robinhoodchain.blockscout.com/tx/${x.burn}`, target: "_blank", rel: "noopener" }, "burn")))) : null);
+  }
+  paintAuto(); paintCamp();
+  const campTick = setInterval(() => { if (!document.hidden && alive) paintCamp(); }, 60_000);
 
-  const off = onWallet(() => { paint(); paintAuto(); });
+  const off = onWallet(() => { paint(); paintAuto(); paintCamp(); });
   await refresh();
   const t = setInterval(() => { if (!document.hidden && !st.busy) refresh(); }, 60_000);
-  return () => { alive = false; off(); clearInterval(t); };
+  return () => { alive = false; off(); clearInterval(t); clearInterval(campTick); };
 }

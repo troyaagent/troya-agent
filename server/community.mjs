@@ -89,6 +89,12 @@ async function notifyTeam(it) {
     await tgCall("sendMessage", { chat_id: chat, text, parse_mode: "HTML", link_preview_options: { is_disabled: true } });
   }
 }
+/** A message to every admin chat linked for reports (the flywheel uses it after each automatic cycle). */
+export async function notifyAdmins(text) {
+  if (!TG || !store) return;
+  for (const chat of await receivers()) await tgCall("sendMessage", { chat_id: chat, text: String(text).slice(0, 3900), parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+}
+export async function isReportsChat(id) { const d = await store.readJson(TGF, { chats: [] }); return (d.chats || []).some((c) => String(c.id) === String(id)); }
 /** The bot calls this for "/start rep_<code>" in a private chat. */
 export async function bindReportsChat(code, chat, from) {
   if (!store) return { ok: false };

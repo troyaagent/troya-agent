@@ -202,7 +202,49 @@ export async function mount(view) {
     toast(`Liquidity locked${r?.tokenId ? ` as position #${r.tokenId}` : ""}, owned by 0x…dEaD.`, "ok", 7000);
   });
 
-  const off = onWallet(() => paint());
+  /* ---------- automatic mode (admins): the server runs each cycle with the creator key ---------- */
+  const autoBox = h("section", { class: "panel fw-auto", hidden: true });
+  view.querySelector(".fw")?.append(autoBox) || view.append(autoBox);
+  async function paintAuto() {
+    if (!wallet.session) { autoBox.hidden = true; return; }
+    let a; try { a = await api.get("flywheel/auto"); } catch { autoBox.hidden = true; return; }
+    autoBox.hidden = false;
+    const s = a.settings;
+    const num = (k, v, step, label, suffix) => { const el = h("input", { class: "input", type: "number", step, value: v, "aria-label": label }); el.dataset.k = k; return h("label", { class: "field" }, h("span", {}, label, suffix ? h("i", {}, ` ${suffix}`) : null), el); };
+    const fields = h("div", { class: "fw-auto-g" }, num("minEth", s.minEth, "0.001", "Run when at least", "ETH"), num("burnPct", s.burnPct, "1", "Burn share", "% (rest is locked)"), num("maxEth", s.maxEth, "0.01", "At most per cycle", "ETH"), num("everyHours", s.everyHours, "1", "At most every", "hours"));
+    const save = async (extra = {}) => {
+      const body = { ...extra }; for (const el of fields.querySelectorAll("input")) body[el.dataset.k] = Number(el.value);
+      try { await api.post("flywheel/auto/settings", body); toast("Saved", "ok"); paintAuto(); } catch (e) { toast(e.message, "error", 7000); }
+    };
+    const pk = h("input", { class: "input", type: "password", autocomplete: "off", spellcheck: "false", placeholder: "Creator wallet private key (0x…, 64 hex)", "aria-label": "Creator wallet private key" });
+    clear(autoBox,
+      h("div", { class: "fw-auto-h" }, h("h3", {}, "Automatic mode"), h("span", { class: `dk-v ${s.enabled && a.keySet ? "v-passed" : ""}` }, s.enabled && a.keySet ? "On" : "Off")),
+      h("p", { class: "fine", style: { margin: 0 } }, `The server claims the creator fees, buys $TROYA back through Troya Gate, burns the burn share and locks the rest to 0x…dEaD, by itself. It signs only those calls, keeps ${s.reserveEth} ETH for gas and spends at most the limit per cycle. Each cycle is reported to your Telegram chat linked for reports; /flywheel off there stops it.`),
+      a.keySet
+        ? h("div", { class: "fw-auto-key ok" }, h("b", {}, "Creator key stored, encrypted."), h("span", { class: "fine" }, `Signs as ${short(a.creator)}.`), h("button", { class: "btn sm danger", type: "button", onclick: async () => { if (!(await review({ title: "Delete the stored key?", summary: "Automatic mode stops. You can import it again later.", confirmLabel: "Delete key", danger: true }))) return; try { await api.post("flywheel/auto/forget", {}); toast("Key deleted", "ok"); paintAuto(); } catch (e) { toast(e.message, "error"); } } }, "Delete key"))
+        : h("div", { class: "fw-auto-key" },
+            h("div", { class: "alert warn" }, h("b", {}, "Read this first. "), "The server will hold the creator wallet's key (encrypted). Move everything you do not want the flywheel to use out of the creator wallet first, so it holds only the fees. Type the key yourself here; never send it to anyone, Troya included."),
+            h("div", { class: "fw-row" }, pk, h("button", { class: "btn primary", type: "button", onclick: async () => {
+              const v = pk.value.trim(); pk.value = "";
+              if (!v) return toast("Paste the creator wallet's private key.", "");
+              try { const r = await api.post("flywheel/auto/key", { privateKey: v }); toast(`Key stored for ${short(r.address)}.`, "ok", 6000); paintAuto(); } catch (e) { toast(e.message, "error", 8000); }
+            } }, "Store the key"))),
+      fields,
+      h("div", { class: "fw-row" },
+        h("button", { class: "btn primary", type: "button", disabled: !a.keySet, onclick: () => save({ enabled: !(s.enabled && a.keySet) }) }, s.enabled && a.keySet ? "Switch off" : "Switch on"),
+        h("button", { class: "btn", type: "button", onclick: () => save() }, "Save limits"),
+        h("button", { class: "btn", type: "button", disabled: !a.keySet || a.running, onclick: async () => {
+          if (!(await review({ title: "Run a cycle now?", summary: "Claim, buy back through the Gate, burn and lock, with the limits above.", confirmLabel: "Run now" }))) return;
+          toast("Running… this takes a minute or two.", "", 6000);
+          try { const r = await api.post("flywheel/auto/run", {}); toast(r.error ? `Stopped: ${r.error}` : r.note || r.skipped || "Cycle done.", r.error ? "error" : "ok", 9000); } catch (e) { toast(e.message, "error", 8000); }
+          paintAuto(); refresh();
+        } }, a.running ? "Running…" : "Run a cycle now")),
+      a.runs?.length ? h("ul", { class: "fw-auto-log" }, a.runs.map((x) => h("li", {}, h("b", {}, new Date(x.at).toLocaleString()), " · ", x.reason, " · ",
+        x.error ? h("span", { class: "down" }, x.error) : x.note ? h("span", { class: "muted" }, x.note) : h("span", {}, x.steps.map((st2) => h("a", { class: "ulink", href: `https://robinhoodchain.blockscout.com/tx/${st2.hash}`, target: "_blank", rel: "noopener" }, st2.step)).reduce((acc, el, i) => (i ? [...acc, " · ", el] : [el]), []))))) : null);
+  }
+  paintAuto();
+
+  const off = onWallet(() => { paint(); paintAuto(); });
   await refresh();
   const t = setInterval(() => { if (!document.hidden && !st.busy) refresh(); }, 60_000);
   return () => { alive = false; off(); clearInterval(t); };

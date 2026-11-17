@@ -325,7 +325,7 @@ export async function handleBotMessage(m, tg, me) {
   const [, cmdRaw, at, arg = ""] = cm;
   if (at && me?.username && at.toLowerCase() !== me.username.toLowerCase()) return;
   const cmd = cmdRaw.toLowerCase();
-  if (!["start", "help", "links", "ca", "price", "p", "gate", "check", "assay", "rules", "sentry", "badge", "perks", "reports"].includes(cmd)) return;
+  if (!["start", "help", "links", "ca", "price", "p", "gate", "check", "assay", "rules", "sentry", "badge", "perks", "reports", "flywheel"].includes(cmd)) return;
   // one answer per person every 3 s keeps the group readable
   const who = `${chatId}:${m.from?.id}`;
   if (Date.now() - (lastReply.get(who) || 0) < 3000) return;
@@ -338,6 +338,15 @@ export async function handleBotMessage(m, tg, me) {
       await tg("sendMessage", { chat_id: chatId, parse_mode: "HTML", link_preview_options: { is_disabled: true }, text: r.ok
         ? "<b>Reports connected.</b>\nEvery new bug report, idea and suspicious-activity flag from troya.codes/community and Telegram arrives here, screenshots included.\n\n/reports off to pause · /reports on to resume"
         : "That link expired or was already used. Make a new one in the app: Desk → Social → Reports → Get reports in Telegram." });
+      return;
+    }
+    if (cmd === "flywheel" && m.chat.type === "private") {
+      const c = await import("./community.mjs");
+      if (!(await c.isReportsChat(chatId).catch(() => false))) { await tg("sendMessage", { chat_id: chatId, text: "Only an admin chat linked from the app can switch the flywheel." }); return; }
+      const on = /\bon\b/i.test(arg), off = /\boff\b/i.test(arg);
+      if (!on && !off) { await tg("sendMessage", { chat_id: chatId, text: "/flywheel off stops the automatic cycles · /flywheel on starts them again" }); return; }
+      const r = await import("./flywheel-auto.mjs").then((f) => f.setEnabled(on)).catch(() => null);
+      await tg("sendMessage", { chat_id: chatId, text: r?.ok ? (on ? "Automatic flywheel on." : "Automatic flywheel off. No cycle will run until you switch it on again.") : `Could not switch it: ${r?.why || "try again"}` });
       return;
     }
     if (cmd === "reports" && m.chat.type === "private") {

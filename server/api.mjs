@@ -31,6 +31,7 @@ const MODULES = [
   "./xsocial.mjs",     // F20: Sign in with X, Troya answering on X (draft first), one daily X budget
   "./votes.mjs",       // F20: the Troya Holder Pass (soulbound NFT) and pass votes signed with EIP-712
   "./agents.mjs",      // F20: agent factory, named agents built from playbooks, each with a public page
+  "./flywheel-auto.mjs", // F19+: the flywheel run by the server with the creator key (admin opt-in, rails in the module)
   "./community.mjs",   // community inbox: bug reports, ideas and suspicious-activity flags (web + Telegram), admins only
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];

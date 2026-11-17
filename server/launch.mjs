@@ -355,7 +355,8 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   const buyNote = !ib ? "" : ib.executed ? ` Initial buy of ${ib.eth} ETH done.` : ` Initial buy not sent: ${String(ib.reasons?.[0] || "it was refused").slice(0, 70)}.`;
   const imgNote = logo ? "" : " No image was attached, so the coin has none.";
   const feeNote = out.launch.split ? "" : " Creator fee: all yours.";
-  return { launch: out.launch, reply: `$${ask.symbol} is live on Pons${mcNote}.${buyNote}${imgNote}${feeNote} CA ${ca} · Gate: ${SITE().replace(/^https?:\/\//, "")}/agent#/gate/${ca} · Buy: fomo.family/tokens/robinhood/${ca}` };
+  // one link, to the coin's trading page on Troya (chart, Gate, Buy); no other venue in the reply
+  return { launch: out.launch, reply: `$${ask.symbol} is live${mcNote}.${buyNote}${imgNote}${feeNote} CA ${ca} · Trade it on Troya: ${SITE().replace(/^https?:\/\//, "")}/agent#/token/${ca.toLowerCase()}` };
 }
 /** a failed launch, said plainly with where to fix it */
 function guide(why) {

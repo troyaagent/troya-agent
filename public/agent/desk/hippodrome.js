@@ -69,7 +69,12 @@ export async function mount(view, ctx) {
       if (dv.soldPct >= 5) tags.push(tipOn(h("span", { class: "hp-tag dev red" }, "DS"), dv.sold === "all" ? "Dev sold everything" : "Dev sold",
         `The dev sold or moved out ${pc(dv.soldPct)} of what they received${dv.heldPct > 0 ? ` and still holds ${pc(dv.heldPct)} of the supply` : ""}.`, "red"));
     }
-    if (c.keepsAll === true) tags.push(tipOn(h("span", { class: "hp-tag gold" }, "Holder"), "Holder", "The creator holds 1M $TROYA and keeps the whole creator fee.", "gold"));
+    // the dev holds 1M $TROYA: the Troya horse
+    if (c.devHolder) {
+      const amt = c.devTroya >= 1e6 ? `${(c.devTroya / 1e6).toFixed(2).replace(/\.?0+$/, "")}M` : compact(c.devTroya || 0, 0);
+      tags.push(tipOn(h("span", { class: "hp-tag horse ic" }, h("img", { src: "/img/logo-3d-128.png", alt: "" })), "Dev holds $TROYA",
+        `The creator holds ${amt} $TROYA${c.keepsAll ? " and keeps the whole creator fee on this coin" : ""}.`, "blue"));
+    }
     const go = () => { location.hash = `#/token/${c.token.toLowerCase()}`; };
     const stop = (e) => e.stopPropagation();
     return h("article", { class: `hp-card${fresh ? " fresh" : ""}`, tabindex: "0", role: "link", "aria-label": `${c.symbol} ${c.name}`, onclick: go, onkeydown: (e) => { if (e.key === "Enter") go(); } },

@@ -1017,8 +1017,11 @@ body { touch-action: manipulation; }
 .hp-mc small, .hp-vol small { display: block; color: var(--muted); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; }
 .hp-mc b { display: block; font-size: 20px; font-weight: 650; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
 .hp-vol span { font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.hp-foot { grid-area: foot; display: flex; align-items: center; gap: 14px; padding-top: 12px; border-top: 1px solid var(--line, rgba(255,255,255,.07)); }
-.hp-foot > .hp-bar, .hp-foot > .hp-grad { flex: 1; min-width: 0; }
+.hp-foot { grid-area: foot; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding-top: 12px; border-top: 1px solid var(--line, rgba(255,255,255,.07)); }
+/* the curve takes the rest of the row, or a row of its own when the lane is narrow */
+.hp-foot > .hp-bar, .hp-foot > .hp-grad { flex: 1 1 190px; min-width: 0; }
+.hp-foot > .hp-act { margin-left: auto; }
+.hp-bar span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hp-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .hp-tag { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; border: 1px solid var(--line, rgba(255,255,255,.12)); color: var(--fg-2, #c9d6db); }
 .hp-tag { cursor: help; }
@@ -1044,6 +1047,8 @@ body { touch-action: manipulation; }
 .hp-tag.fire { color: #6fd39a; border-color: rgba(111, 211, 154, .45); background: rgba(111, 211, 154, .1); }
 .hp-tag.fire.all { color: #f5c84a; border-color: rgba(245, 200, 74, .5); background: rgba(245, 200, 74, .1); }
 .hp-tag.fire svg { fill: currentColor; }
+.hp-tag.horse { padding: 0 5px; border-color: rgba(142, 223, 245, .5); background: rgba(142, 223, 245, .1); }
+.hp-tag.horse img { width: 15px; height: 15px; object-fit: contain; filter: drop-shadow(0 0 2px rgba(142, 223, 245, .5)); }
 .hp-tag.gold { color: #f2c26b; border-color: rgba(242, 194, 107, .45); }
 .hp-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .hp-sym { font-size: 17px; letter-spacing: .01em; white-space: nowrap; }

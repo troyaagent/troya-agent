@@ -453,7 +453,8 @@ async function bornRecords() {
 async function boardItem(rec, handles) {
   const m = await import("./market.mjs");
   const devs = [...new Set([rec.wallet, rec.owner].filter((a) => isAddress(String(a || ""))).map(lc))];
-  const [d, ds, dev] = await Promise.all([m.getRobinhoodToken(rec.token).catch(() => null), dexOrders(rec.token), devs.length ? devStatus(rec.token, devs, rec.block || null).catch(() => null) : null]);
+  const [d, ds, dev, hold] = await Promise.all([m.getRobinhoodToken(rec.token).catch(() => null), dexOrders(rec.token), devs.length ? devStatus(rec.token, devs, rec.block || null).catch(() => null) : null,
+    rec.source !== "origin" && rec.owner ? holderInfo(rec.owner) : null]);
   const t = d?.token || {}, p = d?.pons || null;
   const graduated = !!p?.graduated || (rec.source === "origin" && !p);
   return {
@@ -464,6 +465,8 @@ async function boardItem(rec, handles) {
     txns24h: t.txns24h ?? null, buys24h: t.buys24h ?? null, sells24h: t.sells24h ?? null, change1h: t.change1h ?? null, change24h: t.change24h ?? null,
     progressPct: graduated ? 100 : p?.progressPct ?? null, graduated, raisedEth: p?.raised ?? null, ponsUrl: p?.ponsUrl || null,
     dexPaid: ds.paid, cto: ds.cto || !!rec.cto, boosts: ds.boosts || 0, dev,
+    // the creator holds 1M $TROYA right now (main wallet + Agent Wallet)
+    devHolder: !!hold?.holder, devTroya: hold ? Math.floor(hold.balance) : null,
   };
 }
 export async function board() {

@@ -6,6 +6,7 @@ import { api, cached } from "/agent/js/api.js";
 import { wallet, onWallet, openConnect, reader, signIn } from "/agent/js/wallet.js";
 import { tokenCell, priceCell, usdCell, perpPrice, fmtApr } from "/agent/js/marketlib.js";
 import { gatePanel } from "./gate.js";
+import { chromeIcon } from "./chrome-icons.js";
 
 const onboard = store("troya.onboard", {});
 const hideSteps = store("troya.home.hideSteps", false);
@@ -21,8 +22,7 @@ export async function mount(view, { go, ask: askDrawer }) {
   const submit = () => { const q = input.value.trim(); if (q) { ask(q); input.value = ""; } else input.focus(); };
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
   const slash = (e) => { if (e.key === "/" && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "")) { e.preventDefault(); input.focus(); } };
-  addEventListener("keydown", slash);
-  stops.push(() => removeEventListener("keydown", slash));
+  void slash;
 
   const head = h("section", { class: "dk-head" },
     h("div", { class: "dk-hello" },
@@ -173,16 +173,68 @@ export async function mount(view, { go, ask: askDrawer }) {
   const gate = gatePanel({ go, ask, compact: true });
   stops.push(gate.stop);
 
+  /* ---------- Desk 2.0 hero: the Troya horse, the promise, live numbers ---------- */
+  const CA = (window.SITE && window.SITE.ca) || "";
+  const compact = (n) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(Math.round(n)));
+  const tiny = (n) => (n >= 1 ? `$${n.toFixed(2)}` : `$${n.toLocaleString("en-US", { maximumSignificantDigits: 3, maximumFractionDigits: 12 })}`);
+  const kpi = (label, v, s) => h("div", { class: "d2-kpi" }, h("div", { class: "l" }, label), v, s);
+  const kEth = h("div", { class: "v" }, "–"), kEthS = h("div", { class: "s" }, "gas under $0.01");
+  const kTro = h("div", { class: "v" }, "–"), kTroS = h("div", { class: "s" }, "on chain, live");
+  const kSen = h("div", { class: "v" }, "–"), kSenS = h("div", { class: "s" }, "Sentry calls");
+  const kBurn = h("div", { class: "v" }, "–"), kBurnS = h("div", { class: "s" }, "of supply");
+  const tagGateB = h("b", {}, "Troya Gate"), tagGateS = h("small", {}, "$TROYA, checking…");
+  const tagFlyB = h("b", {}, "Flywheel"), tagFlyS = h("small", {}, "reading the chain…");
+  const horseCanvas = h("canvas", { class: "d2-horse", "aria-hidden": "true" });
+  const tile = (ic) => h("span", { class: "d2-tile" }, chromeIcon(ic));
+  const hero = h("section", { class: "d2-hero" },
+    h("div", { class: "d2-beams", "aria-hidden": "true" }),
+    h("div", { class: "d2-txt" },
+      h("p", { class: "d2-mic" }, h("i", { class: "live-dot" }), "Live · Robinhood Chain"),
+      h("h1", {}, "Every coin", h("br"), h("em", {}, "opened"), h("span", {}, " at the"), h("br"), h("span", {}, "gate.")),
+      h("p", { class: "d2-lead" }, "Troya reads the chain, simulates every trade from your own address and tells you what it found, before your wallet signs anything."),
+      h("div", { class: "d2-acts" },
+        h("a", { class: "btn primary d2-big", href: "#/gate" }, chromeIcon("gate"), "Gate a coin"),
+        h("button", { class: "btn d2-big", type: "button", onclick: () => (askDrawer ? askDrawer() : go("#/agent")) }, chromeIcon("spark"), "Ask Troya")),
+      h("div", { class: "d2-kpis" }, kpi("ETH", kEth, kEthS), kpi("$TROYA", kTro, kTroS), kpi("Sentry", kSen, kSenS), kpi("Burned", kBurn, kBurnS))),
+    h("div", { class: "d2-stage" },
+      h("div", { class: "d2-floor", "aria-hidden": "true" }), horseCanvas,
+      h("a", { class: "d2-tag t1", href: CA ? `#/gate/${CA}` : "#/gate" }, tile("verify"), h("span", {}, tagGateB, tagGateS)),
+      h("a", { class: "d2-tag t2", href: "#/flywheel" }, tile("flywheel"), h("span", {}, tagFlyB, tagFlyS))));
+  const quick = h("section", { class: "d2-quick" },
+    [["swap", "Swap", "The Gate checks every trade", "#/swap"], ["perps", "Perps", "Crypto, stocks and metals", "#/perps"],
+     ["liquidity", "Earn on liquidity", "Ranges set from volatility", "#/liquidity"], ["spark", "Build an agent", "From your own playbooks", "#/social/agents"]]
+      .map(([ic, t, d, href]) => h("a", { class: "d2-q", href }, tile(ic), h("span", {}, h("b", {}, t), h("small", {}, d)))));
+  let horse = null, alive = true;
+  stops.push(() => { alive = false; try { horse?.dispose(); } catch {} });
+  const startHorse = () => import("./horse.js").then((m) => m.mountHorse(horseCanvas)).then((hr) => { if (!alive) hr?.dispose(); else horse = hr; }).catch(() => hero.classList.add("no-3d"));
+  setTimeout(startHorse, 150);                   // after the page has painted
+  stops.push(every(60000, async () => {
+    try {
+      const f = await api.get("flywheel");
+      if (f.price?.troyaUsd) kTro.textContent = tiny(f.price.troyaUsd);
+      if (f.burned) { kBurn.textContent = compact(f.burned.total); kBurnS.textContent = `${f.burned.pctOfMinted.toFixed(2)}% of supply`; tagFlyB.textContent = `${compact(f.burned.total)} burned`; }
+      const c = f.totals?.cycles || 0; tagFlyS.textContent = `flywheel · ${c} cycle${c === 1 ? "" : "s"}`;
+    } catch { tagFlyS.textContent = "flywheel"; }
+    try { const r = await api.get("record?limit=1"); kSen.textContent = String(r.stats.calls); kSenS.textContent = `calls, ${r.stats.graded} graded in public`; } catch {}
+  }));
+  if (CA) stops.push(every(300000, async () => {
+    try {
+      const b = await api.get(`/api/badge/${CA}`);
+      const n = (b.checks || []).length, pass = (b.checks || []).filter((c) => c.status === "pass").length;
+      if (n) { tagGateB.textContent = `${pass} / ${n} passed`; tagGateS.textContent = `$TROYA · Gate${b.checkedAt ? `, ${ago(b.checkedAt)}` : ""}`; }
+    } catch { tagGateS.textContent = "$TROYA · open the Gate"; }
+  }));
+
   // two columns: the left one is for looking (Gate, brief, markets), the right one for your agent and what it watches
   clear(view, h("div", { class: "dk" },
-    head, steps, stats,
+    hero, quick, steps,
     h("div", { class: "dk-cols" },
       h("div", { class: "dk-col" }, gate.el, brief, hlTable, rhTable),
       h("div", { class: "dk-col" }, agent, sentry, sigs, shortcuts))));
 
   /* ---------- data ---------- */
   stops.push(every(10000, async () => {
-    try { const p = await api.get("price/eth"); statEth.textContent = usd(p.usd); } catch { statEthS.textContent = "price unavailable"; }
+    try { const p = await api.get("price/eth"); statEth.textContent = usd(p.usd); kEth.textContent = usd(p.usd); } catch { statEthS.textContent = "price unavailable"; kEthS.textContent = "price unavailable"; }
   }));
   stops.push(every(30000, async () => {
     try {

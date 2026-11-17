@@ -159,7 +159,7 @@ function chatSend(q) {
       for (const p of routesIn(acc, q)) {
         const gk = G[p] ? p : p.split("/")[0], title = G[gk]?.t || p;
         acts.append(h("a", { class: "g-act", href: `#/${p}` }, chromeIcon("start"), `Open ${title}`));
-        if (G[gk]?.tour?.length) acts.append(h("button", { class: "g-act", type: "button", onclick: () => { close(); location.hash = `#/${p}`; setTimeout(() => { const st = (G[gk].tour || []).filter(([s]) => document.querySelector(s)); if (st.length) startTour(st); }, 1600); } }, chromeIcon("eye"), `Show me how`));
+        if (G[gk]?.tour?.length) acts.append(h("button", { class: "g-act", type: "button", onclick: () => { close(); location.hash = `#/${p}`; setTimeout(() => { const st = (G[gk].tour || []).filter(([s]) => document.querySelector(s)); if (st.length) startTour(st); }, 1600); } }, chromeIcon("sentry"), `Show me how`));
       }
       scroll();
     });
@@ -185,7 +185,7 @@ function render() {
         h("span", { class: "d2-tile" }, chromeIcon("start")), h("span", {}, h("b", {}, "Show me how this page works"), h("small", {}, `${tourSteps.length} steps, right on the screen`))) : null,
       g?.ask?.length ? h("p", { class: "g-mic" }, "Ask Troya") : null,
       g?.ask?.length ? h("div", { class: "g-asks" }, g.ask.map((q) => h("button", { class: "g-ask", type: "button", onclick: () => chatSend(q) }, chromeIcon("spark"), h("span", {}, q)))) : null,
-      g?.next?.length ? h("p", { class: "g-mic" }, "Good next steps") : null,
+      g?.next?.length ? h("p", { class: "g-mic g-nx" }, "Good next steps") : null,
       g?.next?.length ? h("div", { class: "g-next" }, g.next.map(([t, href]) => h("a", { href, onclick: close }, t, h("i", {}, "→")))) : null,
       h("p", { class: "g-safe" }, "Nobody from Troya DMs first or asks for a seed phrase. Found a bug? ", h("a", { href: "/community", target: "_self" }, "troya.codes/community")),
       convBox),

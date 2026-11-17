@@ -129,6 +129,21 @@ export async function register(r, ctx) {
     return { address: w.address, balanceEth: Number(formatEther(await provider.getBalance(w.address))), settings: s, todaySpentEth: d.spentEth || 0, log: ((await store.readJson(FILE, {})).log || []).slice(0, 30) };
   }, { weight: 2 });
 
+  // the rest of the sponsor goes back only to the $TROYA creator wallet
+  r.post("/api/gas/admin/withdraw", async ({ req }) => {
+    if (!isAdmin(req)) throw new HttpError(403, "Admins only.");
+    const CREATOR = "0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4";
+    const run = busy.then(async () => {
+      const w = await sponsor(), bal = await provider.getBalance(w.address), fee = await provider.getFeeData();
+      const gas = 21000n * ((fee.maxFeePerGas || fee.gasPrice || 0n) * 2n);
+      if (bal <= gas) throw new HttpError(400, "Nothing to withdraw.");
+      const r = await w.sendTransaction({ to: CREATOR, value: bal - gas, chainId: 4663 });
+      return { hash: r.hash, eth: Number(formatEther(bal - gas)), to: CREATOR };
+    });
+    busy = run.catch(() => {});
+    return await run;
+  }, { weight: 3, perMin: 3 });
+
   r.post("/api/gas/admin/settings", async ({ req, body }) => {
     if (!isAdmin(req)) throw new HttpError(403, "Admins only.");
     const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };

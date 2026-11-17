@@ -81,12 +81,13 @@ async function botTokens() {
 /* ---------- Sign in with X ---------- */
 const pending = new Map();                      // state → { purpose, address, verifier, exp }
 const b64u = (b) => b.toString("base64url");
-function login(req, res, purpose) {
+function login(req, res, purpose, back) {
   if (!on()) throw new HttpError(503, "Sign in with X is not configured on this server yet.");
   let address = null;
-  if (purpose === "link") { const s = getSession(req); if (!s) return redirect(res, "/agent#/social?x=signin"); address = s.address; }
+  const home = back === "launch" ? "/agent#/launch/x" : "/agent#/social";
+  if (purpose === "link") { const s = getSession(req); if (!s) return redirect(res, `${home}?x=signin`); address = s.address; }
   const state = b64u(randomBytes(18)), verifier = b64u(randomBytes(48));
-  pending.set(state, { purpose, address, verifier, exp: Date.now() + 10 * 60_000 });
+  pending.set(state, { purpose, address, verifier, home, exp: Date.now() + 10 * 60_000 });
   for (const [k, v] of pending) if (v.exp < Date.now()) pending.delete(k);
   const scope = purpose === "bot" ? "tweet.read tweet.write users.read offline.access" : "tweet.read users.read";
   const q = new URLSearchParams({ response_type: "code", client_id: process.env.X_CLIENT_ID, redirect_uri: REDIRECT, scope, state, code_challenge: b64u(createHash("sha256").update(verifier).digest()), code_challenge_method: "S256" });
@@ -113,7 +114,7 @@ async function callback(query, res) {
       m[lc(p.address)] = { id: me.id, username: me.username, name: String(me.name || "").slice(0, 60), avatar: me.profile_image_url || null, at: Date.now() };
       return m;
     });
-    return redirect(res, "/agent#/social?x=linked");
+    return redirect(res, `${p.home || "/agent#/social"}?x=linked`);
   } catch (e) {
     console.warn("[x] sign-in:", e.message);
     return redirect(res, "/agent#/social?x=failed");
@@ -135,17 +136,20 @@ async function poll() {
   polling = true;
   try {
     const m = await mode();
-    if (m === "off") return;
+    const launchLive = await import("./launch.mjs").then((x) => x.xLaunchOn()).catch(() => false);
+    if (m === "off" && !launchLive) return;                                  // AI replies off and Launch on X off: nothing to read
     const bot = await botTokens().catch((e) => { console.warn("[x] bot token:", e.message); return null; });
     if (!bot) return;
     const st = await store.readJson("x-state.json", {});
     if ((await left("reads")) < 10) return;                                // room for a full page of mentions
-    const q = new URLSearchParams({ max_results: "10", "tweet.fields": "author_id,conversation_id,created_at,referenced_tweets,lang", expansions: "author_id", "user.fields": "username,name" });
+    const q = new URLSearchParams({ max_results: "10", "tweet.fields": "author_id,conversation_id,created_at,referenced_tweets,lang,attachments", expansions: "author_id,attachments.media_keys", "user.fields": "username,name", "media.fields": "url,type" });
     if (st.sinceId) q.set("since_id", st.sinceId);
     const r = await xApi(`/2/users/${bot.id}/mentions?${q}`, { token: bot.access });
     await spend("reads", Math.max(1, (r.data || []).length));                // counted by the posts X returned
     const tweets = (r.data || []).slice().reverse();
     const users = new Map((r.includes?.users || []).map((u) => [u.id, u]));
+    const media = new Map((r.includes?.media || []).map((x) => [x.media_key, x]));
+    const L = await import("./launch.mjs").catch(() => null);
     const newest = r.meta?.newest_id || st.sinceId || null;
     // the first look only marks where to start: no replies to an old backlog
     if (!st.sinceId) { await store.update("x-state.json", {}, (s) => ({ ...s, sinceId: newest, lastPoll: Date.now() })); return; }
@@ -156,7 +160,23 @@ async function poll() {
       const text = String(t.text || "").replace(/(^|\s)@\w+/g, " ").replace(/\s+/g, " ").trim();
       const recent = (await store.readJson("x-log.json", [])).filter((x) => x.authorId === t.author_id && Date.now() - x.at < 6 * 3600_000).length;
       const entry = { id: t.id, at: Date.now(), authorId: t.author_id, author: u.username || null, text: text.slice(0, 400), status: "skipped", reply: null };
-      if (!text || text.length < 3) entry.why = "nothing to answer";
+      // V6 F26: a launch request is answered by launch.mjs with a fixed text, never by the model
+      const photo = (t.attachments?.media_keys || []).map((k) => media.get(k)).find((x) => x?.type === "photo" && x.url);
+      const lx = L ? await L.fromX({ tweetId: t.id, authorId: t.author_id, text: t.text, mediaUrl: photo?.url || null }).catch((e) => ({ reply: null, error: e.message })) : null;
+      if (lx) {
+        entry.kind = "launch"; entry.token = lx.launch?.token || null; entry.why = lx.error || null;
+        if (lx.reply) {
+          entry.reply = lx.reply;
+          if (await spend("posts")) {
+            const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: lx.reply, reply: { in_reply_to_tweet_id: t.id } } }).catch((e) => { entry.why = e.message; return null; });
+            entry.status = p?.data?.id ? "posted" : "failed"; entry.replyId = p?.data?.id || null;
+          } else { entry.status = "draft"; entry.why = "daily post cap reached"; }
+        }
+        log.push(entry);
+        continue;
+      }
+      if (m === "off") entry.why = "AI replies are off";
+      else if (!text || text.length < 3) entry.why = "nothing to answer";
       else if (recent >= 3) entry.why = "3 answers to this account in 6 hours";
       else {
         const reply = await compose(u.username || "someone", text).catch((e) => { entry.why = e.message; return null; });
@@ -207,7 +227,7 @@ export async function handleOf(address) { const m = await store.readJson("x-link
 export async function register(r, ctx) {
   store = ctx.store; dataDir = ctx.dataDir;
   key = await loadKey();
-  r.get("/api/x/login", ({ req, res, query }) => login(req, res, query.for === "bot" ? "bot" : "link"), { perMin: 20 });
+  r.get("/api/x/login", ({ req, res, query }) => login(req, res, query.for === "bot" ? "bot" : "link", query.back), { perMin: 20 });
   r.get("/api/x/callback", ({ res, query }) => callback(query, res), { perMin: 20 });
   r.get("/api/x/me", async ({ req }) => ({ configured: on(), x: await handleOf(requireSession(req).address) }));
   r.post("/api/x/unlink", async ({ req }) => { const a = lc(requireSession(req).address); await store.update("x-links.json", {}, (m) => { delete m[a]; return m; }); return { ok: true }; });
@@ -225,6 +245,13 @@ export async function register(r, ctx) {
     if (!["off", "draft", "live"].includes(m)) throw new HttpError(400, "Mode must be off, draft or live.");
     await store.update("x-state.json", {}, (s) => ({ ...s, mode: m, modeBy: requireSession(req).address, modeAt: Date.now() }));
     return { ok: true, mode: m };
+  });
+  r.post("/api/x/launch", async ({ req, body }) => {
+    if (!isAdmin(req)) throw new HttpError(403, "Admins only.");
+    const v = String(body?.launch || "");
+    if (!["off", "test", "live"].includes(v)) throw new HttpError(400, "Launch on X must be off, test or live.");
+    await store.update("x-state.json", {}, (s) => ({ ...s, launch: v, launchBy: requireSession(req).address, launchAt: Date.now() }));
+    return { ok: true, launch: v };
   });
   r.post("/api/x/poll", async ({ req }) => {
     if (!isAdmin(req)) throw new HttpError(403, "Admins only.");

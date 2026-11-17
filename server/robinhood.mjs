@@ -77,7 +77,7 @@ function ordered(chain) {
   if (!ups?.length) throw new HttpError(404, `Unknown chain: ${chain}`);
   return [...ups].sort((a, b) => ((failedAt.get(a) || 0) > Date.now() - 60_000 ? 1 : 0) - ((failedAt.get(b) || 0) > Date.now() - 60_000 ? 1 : 0));
 }
-async function forward(chain, payload, { noRetry = false, timeoutMs = 9000, only } = {}) {
+async function forward(chain, payload, { noRetry = false, timeoutMs = Number(process.env.RPC_TIMEOUT_MS) || 9000, only } = {}) {
   let lastErr;
   for (const url of only ? [only] : ordered(chain)) {
     try { return await post(url, payload, timeoutMs); }
@@ -1097,7 +1097,8 @@ export async function launchMenu(fresh = false) {
 }
 const SITE_URL = () => (process.env.SITE_URL || "").replace(/\/+$/, "");
 /**
- * buildLaunchTx({ creator, name, symbol, logo, description, website, twitter, telegram, creatorTaxBps, configId? })
+ * buildLaunchTx({ creator, name, symbol, logo, description, website, twitter, telegram, creatorTaxBps, configId?, feeRecipient? })
+ * feeRecipient: where creator fees go (default the creator; launches from an Agent Wallet send them to the owner's wallet)
  * → Pons launchToken tx (ETH pair, creator exempt from the launch snipe tax) + an eth_call simulation. Nothing is sent.
  */
 export async function buildLaunchTx(o = {}) {
@@ -1120,7 +1121,7 @@ export async function buildLaunchTx(o = {}) {
   const params = {
     name, symbol, logo, description: clip(o.description, 2048),
     socials: { twitter: clip(o.twitter, 256), telegram: clip(o.telegram, 256), discord: "", website: clip(o.website, 256), farcaster: "" },
-    creatorFeeRecipient: creator, creatorTaxBps: tax, buybackEnabled: false, expectedEconomics: econ[0], salt,
+    creatorFeeRecipient: o.feeRecipient ? addr(o.feeRecipient, "fee recipient") : creator, creatorTaxBps: tax, buybackEnabled: false, expectedEconomics: econ[0], salt,
   };
   // the creator is exempt from the 3-second launch snipe tax, so their own first buy right after launch pays the normal fee
   const data = iface.ponsFactory.encodeFunctionData("launchToken", [params, cfg.id, ZERO, [creator]]);
@@ -1139,6 +1140,7 @@ export async function buildLaunchTx(o = {}) {
 }
 // logo hosting for launches: the image is stored on this server and its https URL goes on chain
 const LOGO_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" };
+export const saveLaunchLogo = (buf, type) => saveLogo(buf, type);
 async function saveLogo(buf, type) {
   const ext = LOGO_TYPES[type];
   if (!ext) throw new HttpError(415, "Upload a PNG, JPEG, GIF or WebP image.");

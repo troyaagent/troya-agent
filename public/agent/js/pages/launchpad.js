@@ -19,6 +19,10 @@ export async function mount(view, ctx) {
     const m = await import("./launch-create.js");
     return m.mount(view, ctx);
   }
+  if (ctx.parts[0] === "x") {
+    const m = await import("./launch-x.js");
+    return m.mount(view, ctx);
+  }
   useCss("home");
   useCss("market");
   const { go } = ctx;
@@ -26,7 +30,7 @@ export async function mount(view, ctx) {
   let reqId = 0;
 
   const head = pageHead("Launchpad", "New coins on Robinhood Chain, whichever launchpad minted them: Pons, Clanker, Bankr, Virtuals and more. Launch your own on Pons in one transaction.", {
-    act: h("a", { class: "btn primary", href: "#/launch/create" }, icon("rocket"), "Create coin"),
+    act: h("span", { style: { display: "inline-flex", gap: "8px", flexWrap: "wrap" } }, h("a", { class: "btn", href: "#/launch/x" }, "Launch from X"), h("a", { class: "btn primary", href: "#/launch/create" }, icon("rocket"), "Create coin")),
   });
   const tabEl = tabs(Object.entries(TABS).map(([value, t]) => ({ value, label: t.label })), state.tab, (v) => { state.tab = v; reset(); });
   const search = h("input", { class: "input search", type: "search", placeholder: "Search symbol, name or address", "aria-label": "Search launches" });

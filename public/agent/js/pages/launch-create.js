@@ -6,7 +6,7 @@ import { wallet, onWallet, openConnect } from "../wallet.js";
 import { api } from "../api.js";
 import { balanceOf, fromRaw, sendTx, waitReceipt, errText, journal } from "../chain.js";
 
-const TAXES = [0, 100, 200, 300, 500, 1000];
+const TAXES = [0, 100, 200, 300, 400]; // V6 rule: creator tax 0–4%
 const TOKEN_LAUNCHED = "0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607"; // TokenLaunched(address,address,address,address,uint256,uint256)
 
 export async function mount(view, ctx) {
@@ -14,15 +14,18 @@ export async function mount(view, ctx) {
   let alive = true;
   const st = {
     name: "", symbol: "", description: "", website: "", twitter: "", telegram: "", logoUrl: "",
-    file: null, preview: null, logo: null, tax: 0, menu: null, menuErr: null, bal: null, busy: false, done: null,
+    file: null, preview: null, logo: null, tax: 0, menu: null, menuErr: null, bal: null, busy: false, done: null, plan: null, planErr: null, rules: null,
   };
 
+  const HEAD_OLD = "Launch on Robinhood Chain through Pons Family: one transaction creates the coin and its bonding curve. It graduates to a Uniswap v4 pool once the curve fills, and you earn 70% of the 1% trading fee plus any creator tax you set.";
+  const HEAD_V6 = "Launch on Robinhood Chain through Pons Family: one transaction creates the coin and its bonding curve. It graduates to a Uniswap v4 pool once the curve fills. Launching through Troya is free: you earn 0.6% of trading volume plus any creator tax you set, Troya takes 0.1%. Hold 1,000,000 $TROYA and you keep the whole 0.7%.";
+  const headP = h("p", {}, HEAD_OLD);
   const form = h("div", { class: "lc-form" });
   const side = h("aside", { class: "lc-side" });
   const wrap = h("div", { class: "lc-grid" }, form, side);
   clear(view,
     h("a", { class: "lc-back link", href: "#/launch" }, "← Launchpad"),
-    h("header", { class: "page-head lc-head" }, h("h1", {}, "Create coin"), h("p", {}, "Launch on Robinhood Chain through Pons Family: one transaction creates the coin and its bonding curve. It graduates to a Uniswap v4 pool once the curve fills, and you earn 70% of the 1% trading fee plus any creator tax you set.")),
+    h("header", { class: "page-head lc-head" }, h("h1", {}, "Create coin"), headP),
     wrap);
 
   /* ---------- inputs ---------- */
@@ -78,7 +81,7 @@ export async function mount(view, ctx) {
 
   function paintTax() {
     const max = st.menu?.maxCreatorTaxBps ?? 1000;
-    clear(taxBox, TAXES.filter((t) => t <= max).map((t) => h("button", { type: "button", class: "chip", "aria-pressed": String(t === st.tax), onclick: () => { st.tax = t; paintTax(); paintSide(); } }, t ? `${t / 100}%` : "None")));
+    clear(taxBox, TAXES.filter((t) => t <= max).map((t) => h("button", { type: "button", class: "chip", "aria-pressed": String(t === st.tax), onclick: () => { st.tax = t; paintTax(); paintSide(); refreshPlan(); } }, t ? `${t / 100}%` : "None")));
     if (st.menuErr) taxBox.after(h("div", { class: "alert error", style: { marginTop: "8px" } }, st.menuErr));
   }
 
@@ -90,7 +93,8 @@ export async function mount(view, ctx) {
       ["Launchpad", "Pons Family (bonding curve)"],
       ["Supply", cfg ? `${num(Number(cfg.supply), 0)} (fixed)` : "1,000,000,000 (fixed)"],
       ["Graduates at", cfg ? `${num(cfg.graduationEth, 2)} ETH raised → Uniswap v4` : "…"],
-      ["Trading fee", "1% · you earn 70% of it"],
+      ["Trading fee", feeText()],
+      ["Troya fee", troyaText()],
       ["Creator tax", st.tax ? `${st.tax / 100}% to you` : "None"],
       ["Launch fee", st.menu ? `${tiny(st.menu.launchFeeEth)} ETH (paid to Pons)` : "…"],
     ];
@@ -107,6 +111,27 @@ export async function mount(view, ctx) {
     if (wallet.address && st.bal && st.bal.raw < need + 2n * 10n ** 14n) balNote.textContent = `Your Robinhood Chain balance is ${tiny(st.bal.amount)} ETH, below the launch fee plus gas.`;
     else balNote.textContent = wallet.address && st.bal ? `Robinhood Chain balance: ${tiny(st.bal.amount)} ETH.` : "";
   }
+
+  // V6 fee rule: the server says who receives the creator fee (the creator, or a Troya fee splitter for 0.1% of volume)
+  function feeText() {
+    const p = st.plan;
+    if (!p) return st.rules?.splitter?.live ? "1% · creators earn 0.6% of volume (0.7% for holders)" : "1% · you earn 70% of it";
+    return p.split ? "1% · you earn 0.6% of volume" : "1% · you earn 0.7% of volume";
+  }
+  function troyaText() {
+    const p = st.plan;
+    if (st.planErr) return st.planErr;
+    if (!wallet.address) return st.rules?.splitter?.live ? "0.1% of volume · 0% for holders of 1M $TROYA" : "None";
+    if (!p) return "…";
+    if (p.holder) return "0% · you hold 1M $TROYA";
+    return p.split ? "0.1% of volume, out of your 0.7%" : "None";
+  }
+  const refreshPlan = debounce(async () => {
+    if (!wallet.address) { st.plan = null; st.planErr = null; if (alive) paintSide(); return; }
+    try { st.plan = await api.post("launch/plan", { creator: wallet.address, creatorTaxBps: st.tax }); st.planErr = null; }
+    catch (e) { st.plan = null; st.planErr = errText(e); }
+    if (alive) { paintSide(); paintBtn(); }
+  }, 250);
 
   function paintBtn() {
     let label = "Review launch", disabled = false;
@@ -139,11 +164,14 @@ export async function mount(view, ctx) {
           st.logo = r.url;
         } else st.logo = st.logoUrl.trim();
       }
-      // 2. build + simulate on the server
+      // 2. the fee plan for this launch (name rules, daily limit, who receives the creator fee), then build + simulate
+      st.busy = "Checking the launch…"; paintBtn();
+      const p = await api.post("launch/plan", { creator: wallet.address, creatorTaxBps: st.tax, name: st.name.trim(), symbol: st.symbol.trim() });
+      st.plan = p;
       st.busy = "Simulating the launch…"; paintBtn();
       const b = await api.post("launch/build", {
         creator: wallet.address, name: st.name.trim(), symbol: st.symbol.trim(), logo: st.logo, description: st.description.trim(),
-        website: st.website.trim(), twitter: st.twitter.trim(), telegram: st.telegram.trim(), creatorTaxBps: st.tax,
+        website: st.website.trim(), twitter: st.twitter.trim(), telegram: st.telegram.trim(), creatorTaxBps: st.tax, feeRecipient: p.recipient,
       });
       const simNote = b.simulation.ok ? "Simulated against Robinhood Chain: the launch succeeds." : `Simulation failed: ${b.simulation.error}`;
       const ok = await review({
@@ -154,9 +182,9 @@ export async function mount(view, ctx) {
           ["Launchpad", `Pons factory ${short(b.to)}`],
           ["Coin address", b.predicted ? h("span", { class: "mono" }, short(b.predicted.token, 6)) : "Shown after launch"],
           ["Curve", `graduates at ${num(b.config.graduationEth, 2)} ETH raised`],
-          ["Trading fee", "1% (you earn 70%)"],
-          ["Creator tax", b.creatorTaxBps ? `${b.creatorTaxBps / 100}%` : "None"],
-          ["Fee recipient", `${short(wallet.address)} (you)`],
+          ["Trading fee", p.split ? "1% (you earn 0.6% of volume, Troya 0.1%)" : "1% (you earn 0.7% of volume)"],
+          ["Creator tax", b.creatorTaxBps ? `${b.creatorTaxBps / 100}%, all to you` : "None"],
+          ["Fee recipient", p.split ? h("span", {}, "Troya fee splitter ", h("span", { class: "mono" }, short(p.recipient)), ` → ${(100 - p.troyaBps / 100).toFixed(2)}% to you`) : `${short(wallet.address)} (you)`],
           ["Launch fee", `${tiny(fromRaw(b.launchFeeWei))} ETH`],
           ["You send", `${tiny(fromRaw(b.value))} ETH + network fee`],
         ],
@@ -175,6 +203,7 @@ export async function mount(view, ctx) {
         const fromLog = rc.logs?.find((l) => l.address?.toLowerCase() === b.to.toLowerCase() && l.topics?.[0] === TOKEN_LAUNCHED)?.topics?.[1];
         const token = fromLog ? "0x" + fromLog.slice(26) : b.predicted?.token;
         journal({ kind: "launch", chain: "robinhood", hash, token, name: st.name.trim(), symbol: st.symbol.trim(), rationale: "Coin created from the Create coin page" });
+        api.post("launch/record", { hash, creator: wallet.address, salt: p.salt || null, troyaBps: p.troyaBps || 0 }).catch(() => {});
         st.done = { hash, token, url: token ? `https://ponsfamily.com/launchpad/${token.toLowerCase()}` : null };
         showDone();
         return;
@@ -211,6 +240,8 @@ export async function mount(view, ctx) {
   paintBtn();
   api.get("launch/menu").then((m) => { st.menu = m; }).catch((e) => { st.menuErr = `Could not read the Pons launch options: ${e.message}`; })
     .finally(() => { if (alive) { paintTax(); paintSide(); paintBtn(); } });
-  const off = onWallet(() => { refreshBal(); paintBtn(); });
+  refreshPlan();
+  api.get("launch/rules").then((r) => { st.rules = r; if (r?.splitter?.live) headP.textContent = HEAD_V6; if (alive) paintSide(); }).catch(() => {});
+  const off = onWallet(() => { refreshBal(); refreshPlan(); paintBtn(); });
   return () => { alive = false; off(); if (st.preview && !st.done) URL.revokeObjectURL(st.preview); };
 }

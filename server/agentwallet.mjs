@@ -177,6 +177,22 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
       const sent = await send(owner, w, { to: q.tx.to, data: q.tx.data, value: BigInt(q.tx.value), gasLimit: (BigInt(q.tx.gasLimit) * 13n) / 10n }, summary);
       result = { ...sent, route: q.tool, usdcEstimate: Number(formatUnits(q.toAmount, q.toDecimals)), usdcMin: Number(formatUnits(q.toAmountMin, q.toDecimals)) };
       usd = 0; // the owner's money moving to the owner's own account never counts against trading caps
+    } else if (kind === "launch") {
+      // V6 · launch a coin on Pons from the Agent Wallet (Launch on X, Launch in Telegram): the wallet pays the Pons fee, the
+      // creator fee goes where launch.mjs plan() says (the owner's own wallet, or a Troya fee splitter), caps and kill switch apply
+      const { buildLaunchTx } = await import("./robinhood.mjs");
+      const w = signer(r, owner, "robinhood");
+      summary = `Launch $${String(params.symbol || "").slice(0, 16)} on Pons`;
+      const tx = await buildLaunchTx({ creator: w.address, feeRecipient: params.feeRecipient || owner, name: params.name, symbol: params.symbol, logo: params.logo || "", description: params.description || "", twitter: params.twitter || "", website: params.website || "", telegram: params.telegram || "", creatorTaxBps: Math.max(0, Math.min(400, Math.round(Number(params.creatorTaxBps) || 0))) });
+      usd = (Number(tx.value) / 1e18) * ep;
+      const pc = await checkAction(owner, { kind: "launch", usd });
+      const cap = await capCheck(owner, r, usd);
+      const reasons = [...pc.reasons, ...cap];
+      if (!tx.enoughBalance) reasons.push(`The Agent Wallet ${w.address} needs at least ${(Number(tx.launchFeeWei) / 1e18 + 0.0001).toFixed(4)} ETH on Robinhood Chain for the Pons fee and gas.`);
+      else if (!tx.simulation.ok) reasons.push(`Pons would refuse this launch: ${tx.simulation.error || "the simulation failed"}.`);
+      if (reasons.length) return await blocked(owner, kind, summary, reasons, null, source, proposalId);
+      const sent = await send(owner, w, { to: tx.to, data: tx.data, value: BigInt(tx.value) }, summary);
+      result = { ...sent, token: tx.predicted?.token || null, curve: tx.predicted?.curve || null, ponsUrl: tx.predicted?.ponsUrl || null, feeRecipient: params.feeRecipient || owner, launchFeeWei: tx.launchFeeWei };
     } else if (kind === "withdraw" || kind === "send") {
       const chain = "robinhood";
       const amount = Number(params.amount);

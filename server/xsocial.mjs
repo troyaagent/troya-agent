@@ -20,8 +20,10 @@ import { getSession, requireSession } from "./auth.mjs";
 const API = "https://api.x.com";
 const REDIRECT = process.env.X_REDIRECT || "https://troya.codes/api/x/callback";
 const BOT_NAME = String(process.env.X_BOT_USERNAME || "Troyaagent").replace(/^@/, ""), BOT = BOT_NAME.toLowerCase();
-const CAPS = { reads: Number(process.env.X_DAILY_READS) || 200, posts: Number(process.env.X_DAILY_POSTS) || 20, search: Number(process.env.X_DAILY_SEARCH) || 30, users: Number(process.env.X_DAILY_USERS) || 100 };
-const POLL_MIN = Math.max(5, Number(process.env.X_POLL_MIN) || 10);
+// mentions are read every minute (owner, 17 Nov 2026: launches from X should answer fast; the X API credit is paid),
+// so the daily read budget covers ~1,440 polls and the post budget covers the launch replies
+const CAPS = { reads: Number(process.env.X_DAILY_READS) || 3000, posts: Number(process.env.X_DAILY_POSTS) || 100, search: Number(process.env.X_DAILY_SEARCH) || 30, users: Number(process.env.X_DAILY_USERS) || 100 };
+const POLL_MIN = Math.max(1, Number(process.env.X_POLL_MIN) || 1);
 const admins = () => String(process.env.X_ADMINS || "").split(",").map((a) => a.trim().toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a));
 const lc = (s) => String(s || "").toLowerCase();
 const on = () => !!(process.env.X_CLIENT_ID && process.env.X_CLIENT_SECRET);

@@ -177,6 +177,16 @@ async function poll() {
     await store.update("x-state.json", {}, (s) => ({ ...s, lastError: String(e.message).slice(0, 200), lastPoll: Date.now() })).catch(() => {});
   } finally { polling = false; }
 }
+/** A reply the team wrote (not composed by the model), posted as @Troyaagent inside the daily X budget and logged. */
+export async function postReply(text, inReplyTo) {
+  const bot = await botTokens();
+  if (!bot?.access) throw new Error("Troya is not connected to X.");
+  if (!(await spend("posts"))) throw new Error("Today's X post cap is reached.");
+  const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: String(text), reply: { in_reply_to_tweet_id: String(inReplyTo) } } });
+  const id = p?.data?.id || null;
+  await store.update("x-log.json", [], (l) => [...l, { id: String(inReplyTo), at: Date.now(), author: "(team reply)", text: "", status: id ? "posted" : "failed", reply: String(text), replyId: id, manual: true }].slice(-300));
+  return id;
+}
 async function compose(name, text) {
   const llm = await import("./llm.mjs");
   if (!llm.llmOn() || !(await llm.underCap())) throw new Error("the AI is off or over its daily cap");

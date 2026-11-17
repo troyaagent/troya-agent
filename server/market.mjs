@@ -51,9 +51,9 @@ export function padOfDex(id = "") {
 const ROUTABLE = (dex) => /^(pons-v2|pons-v2-dex|pons-dot-family|uniswap-v3-robinhood|uniswap-v4-robinhood)$/.test(dex) || (KYBER_ON && !!dex);
 
 /* ---------------- fetch + cache ---------------- */
-async function getJson(url, { timeout = 12000, method = "GET", body } = {}) {
+async function getJson(url, { timeout = 12000, method = "GET", body, headers = {} } = {}) {
   const res = await fetch(url, {
-    method, headers: body ? { ...UA, "content-type": "application/json" } : UA,
+    method, headers: body ? { ...UA, "content-type": "application/json", ...headers } : { ...UA, ...headers },
     body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(timeout),
   });
   const text = await res.text();
@@ -405,10 +405,40 @@ const HOLDERS = new Map();    // address → { count, top10, at }
 const HOLDERS_FILE = process.env.DATA_DIR ? path.join(process.env.DATA_DIR, "holders.json") : null;
 (function loadHolders() { if (!HOLDERS_FILE) return; try { for (const [a, v] of Object.entries(JSON.parse(readFileSync(HOLDERS_FILE, "utf8")) || {})) HOLDERS.set(a, v); } catch {} })();
 let holdersSaveAt = 0;
+// Blockscout PRO API (free plan: 5 requests a second, 100k credits a day ≈ 5,000 calls): holders and the largest wallets.
+// Without a key, GeckoTerminal's token info is the fallback.
+const BS_KEY = process.env.BLOCKSCOUT_API_KEY || "";
+const BS = "https://api.blockscout.com/4663/api/v2";
+let bsLast = 0;
+async function blockscout(path) {
+  const wait = Math.max(0, bsLast + 350 - Date.now()); bsLast = Date.now() + wait;
+  if (wait) await new Promise((r) => setTimeout(r, wait));
+  return getJson(`${BS}${path}`, { timeout: 12000, headers: { authorization: `Bearer ${BS_KEY}` } });
+}
+const LABEL = { "0x000000000000000000000000000000000000dead": "dead address (burned)", "0x0000000000000000000000000000000000000000": "zero address (burned)" };
+export async function topHolders(a) {
+  if (!BS_KEY) return null;
+  return memo(`bs:holders:${a}`, 10 * 60_000, async () => {
+    const [tok, list] = await Promise.all([blockscout(`/tokens/${a}`), blockscout(`/tokens/${a}/holders`)]);
+    const supply = Number(tok?.total_supply || 0), dec = Number(tok?.decimals || 18);
+    const items = (list?.items || []).slice(0, 25).map((x) => {
+      const ad = x.address || {}, h = lc(ad.hash);
+      const tag = ad.metadata?.tags?.find((t) => t.tagType === "name")?.name;
+      return { address: ad.hash, pct: supply ? (Number(x.value) / supply) * 100 : null, balance: Number(x.value) / 10 ** dec, contract: !!ad.is_contract, label: LABEL[h] || ad.name || tag || null };
+    });
+    return { count: tok?.holders_count != null ? Number(tok.holders_count) : null, top10: items.slice(0, 10).reduce((s, x) => s + (x.pct || 0), 0), holders: items };
+  });
+}
 export async function fetchHolders(a, { hi = false } = {}) {
-  const d = await gecko(`tokens/${a}/info`, { hi });
-  const h = d?.data?.attributes?.holders;
-  const v = { count: h?.count != null ? Number(h.count) : null, top10: h?.distribution_percentage?.top_10 != null ? Number(h.distribution_percentage.top_10) : null, at: Date.now() };
+  let v;
+  if (BS_KEY) {
+    const t = await topHolders(a);
+    v = { count: t?.count ?? null, top10: t?.top10 != null ? +t.top10.toFixed(2) : null, at: Date.now() };
+  } else {
+    const d = await gecko(`tokens/${a}/info`, { hi });
+    const h = d?.data?.attributes?.holders;
+    v = { count: h?.count != null ? Number(h.count) : null, top10: h?.distribution_percentage?.top_10 != null ? Number(h.distribution_percentage.top_10) : null, at: Date.now() };
+  }
   HOLDERS.set(a, v);
   const row = board.rows.get(a);
   if (row) { row.holders = v.count; row.top10Pct = v.top10; }
@@ -417,7 +447,7 @@ export async function fetchHolders(a, { hi = false } = {}) {
 }
 let holdersBusy = false;
 async function holdersTick() {
-  if (holdersBusy || gq.hi.length || gq.lo.length > 1) return;          // users and the board first; at most one call every 20 s
+  if (holdersBusy || (!BS_KEY && (gq.hi.length || gq.lo.length > 1))) return;   // GeckoTerminal fallback: users and the board first
   const now = Date.now();
   const next = [...board.rows.values()].filter((t) => { const h = HOLDERS.get(t.address); return !h || now - h.at > 6 * 3600_000; })
     .sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0))[0];
@@ -425,7 +455,7 @@ async function holdersTick() {
   holdersBusy = true;
   try { await fetchHolders(next.address); } catch { HOLDERS.set(next.address, { ...(HOLDERS.get(next.address) || {}), at: now - 5 * 3600_000 }); } finally { holdersBusy = false; }
 }
-setInterval(() => holdersTick().catch(() => {}), 20_000).unref();
+setInterval(() => holdersTick().catch(() => {}), BS_KEY ? 4_000 : 20_000).unref();
 const holdersOf = (a) => HOLDERS.get(a) || null;
 const cleanLink = (u) => { try { const x = new URL(/^https?:/i.test(u) ? u : `https://${u}`); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
 const socialOf = (a) => { const s = SOCIALS.get(a); if (!s) return null; const tw = s.twitter ? (s.twitter.startsWith("http") ? s.twitter : `https://x.com/${String(s.twitter).replace(/^@/, "")}`) : null; const tg = s.telegram ? (s.telegram.startsWith("http") ? s.telegram : `https://t.me/${String(s.telegram).replace(/^@/, "")}`) : null; const o = { x: cleanLink(tw || ""), telegram: cleanLink(tg || ""), website: s.website ? cleanLink(s.website) : null }; return o.x || o.telegram || o.website ? o : null; };
@@ -820,6 +850,13 @@ export async function searchCoins(q, limit = 12) {
 
 export async function register(r) {
   r.get("/api/search/coins", ({ query }) => searchCoins(query.q, query.limit), { weight: 1, perMin: 240 });
+  r.get("/api/market/robinhood/holders", async ({ query }) => {
+    const a = lc(query.address);
+    if (!ADDR_RE.test(a)) throw httpErr(400, "That is not a valid token address.");
+    const t = await topHolders(a).catch((e) => { throw httpErr(502, `Holders are unavailable right now (${e.message}).`); });
+    if (!t) throw httpErr(503, "Holder data is not configured on this server.");
+    return { ...t, source: "Blockscout" };
+  }, { weight: 2, perMin: 60 });
   r.get("/api/market/robinhood", ({ query }) => getRobinhoodTokens(query), { weight: 1 });
   r.get("/api/market/robinhood/token", ({ query }) => getRobinhoodToken(query.address), { weight: 2 });
   r.get("/api/market/robinhood/candles", ({ query }) => getRobinhoodCandles(query.address, query.interval), { weight: 1 });

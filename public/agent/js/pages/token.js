@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { padName, ethAmount, ageText } from "../marketlib.js";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
+const lc = (x) => String(x || "").toLowerCase();
 
 export async function mount(view, { parts, go }) {
   useCss("home");
@@ -111,7 +112,7 @@ export async function mount(view, { parts, go }) {
     h("p", { class: "fine", style: { margin: 0 } }, `Data: ${d.sources.join(" + ")}. This page is information, not a safety check. Ask the agent for a contract health read before trading.`));
 
   // activity / holders tabs (only where a source serves them)
-  const tabList = [{ value: "activity", label: "Activity" }];
+  const tabList = [{ value: "activity", label: "Activity" }, { value: "holders", label: "Holders" }];
   const tabBody = h("div", {}, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Loading recent trades…")));
   const tabsEl = tabs(tabList, "activity", (v) => renderTab(v));
   function renderTab(v) {
@@ -124,16 +125,25 @@ export async function mount(view, { parts, go }) {
           h("td", {}, x.usd != null ? usd(x.usd, { compact: x.usd >= 1e4 }) : "–"), h("td", {}, x.tokens != null ? compact(x.tokens, 2) : "–"),
           h("td", { class: "l mono muted" }, h("a", { class: "link", href: `https://robinhoodchain.blockscout.com/tx/${x.tx}`, target: "_blank", rel: "noopener" }, short(x.trader, 4))))))))),
         h("p", { class: "fine" }, "Most recent trades in the main pool, from GeckoTerminal."));
+    } else if (!d.holders) {
+      clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Loading the largest wallets…")));
+      api.get(`market/robinhood/holders?address=${address}`).then((r) => {
+        const creator = lc(pons?.deployer || "");
+        d.holders = (r.holders || []).map((x) => ({ ...x, isCreator: lc(x.address) === creator }));
+        d.holdersCount = r.count;
+        renderTab("holders");
+      }).catch((e) => clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, e.message))));
     } else {
       const max = Math.max(...d.holders.map((x) => x.pct || 0), 1);
       clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" },
         h("thead", {}, h("tr", {}, h("th", { class: "l" }, "#"), h("th", { class: "l" }, "Holder"), h("th", {}, "Balance"), h("th", {}, "Share"))),
         h("tbody", {}, d.holders.map((x, i) => h("tr", {},
           h("td", { class: "l rank" }, i + 1),
-          h("td", { class: "l mono" }, short(x.address, 5), x.isCreator ? h("span", { class: "pad-tag" }, "creator") : null),
+          h("td", { class: "l mono" }, h("a", { class: "link", href: `https://robinhoodchain.blockscout.com/address/${x.address}`, target: "_blank", rel: "noopener" }, short(x.address, 5)),
+            x.isCreator ? h("span", { class: "pad-tag warn" }, "dev / creator") : null, x.label ? h("span", { class: "pad-tag" }, x.label) : x.contract ? h("span", { class: "pad-tag" }, "contract") : null),
           h("td", {}, x.balance != null ? compact(x.balance, 2) : "–"),
           h("td", {}, x.pct != null ? `${x.pct.toFixed(2)}%` : "–", h("span", { class: "tk-bar", style: { width: `${Math.max(2, ((x.pct || 0) / max) * 60)}px` } })))))))),
-        h("p", { class: "fine" }, "Top holders. Pool and contract addresses can appear in this list."));
+        h("p", { class: "fine" }, `The ${d.holders.length} largest of ${d.holdersCount != null ? d.holdersCount.toLocaleString("en-US") : "all"} holders, from Blockscout. Pools, lockers and the dead address are labelled; they are not people.`));
     }
   }
   api.get(`market/robinhood/trades?address=${address}`).then((r) => {

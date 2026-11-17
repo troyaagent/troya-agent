@@ -221,8 +221,9 @@ async function tgExec(name, a = {}) {
 // LLM markdown → Telegram HTML (escape first, then the little markdown we allow)
 const toTgHtml = (t) => esc(t).replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>").replace(/`([^`\n]+)`/g, "<code>$1</code>").replace(/^\s*[-*]\s+/gm, "• ").replace(/^#+\s*/gm, "").trim();
 
-// Links in a message: an X post from @Troyaagent is official, so the bot reads it (through fxtwitter's public API, which
-// only gets the public post id) instead of warning about it; X accounts that are not Troya's are named as not official.
+// Links in a message: the bot reads any X post a member shares (through fxtwitter's public API, which only gets the public
+// post id). A post by @Troyaagent is marked official, so the bot answers from it instead of warning; anyone else's post
+// is read but marked not official. Other websites are not opened.
 const OFFICIAL_X = ["troyaagent"];
 async function linkNotes(text) {
   const notes = [];
@@ -231,17 +232,21 @@ async function linkNotes(text) {
     const handle = m[1].toLowerCase(), id = m[2];
     if (seen.has(handle + id) || ["i", "home", "search", "intent", "share"].includes(handle)) continue;
     seen.add(handle + id);
-    if (!OFFICIAL_X.includes(handle)) { notes.push(`[Link check by Troya: x.com/${m[1]} is NOT an official Troya account. Troya's only X account is @Troyaagent.]`); continue; }
-    if (!id) { notes.push("[Link check by Troya: that is Troya's official X profile, @Troyaagent.]"); continue; }
-    let body = null;
+    const official = OFFICIAL_X.includes(handle);
+    if (!id) { notes.push(official ? "[Link check by Troya: that is Troya's official X profile, @Troyaagent.]" : `[Link check by Troya: x.com/${m[1]} is NOT an official Troya account. Troya's only X account is @Troyaagent.]`); continue; }
+    // read the post itself, whoever wrote it; the author decides whether it is official
+    let body = null, author = null;
     try {
       const r = await fetch(`https://api.fxtwitter.com/${m[1]}/status/${id}`, { headers: { "user-agent": "troya-agent-bot" }, signal: AbortSignal.timeout(5000) });
       const j = await r.json();
-      if (j?.tweet && String(j.tweet.author?.screen_name || "").toLowerCase() === handle) body = String(j.tweet.text || "").slice(0, 700);
+      if (j?.tweet) { body = String(j.tweet.text || "").slice(0, 700); author = String(j.tweet.author?.screen_name || m[1]); }
     } catch {}
-    notes.push(body != null
-      ? `[Link check by Troya: an OFFICIAL post from @Troyaagent on X. Its text: <untrusted>${body.replace(/[<>]/g, "")}</untrusted>]`
-      : "[Link check by Troya: a post on Troya's official X account, @Troyaagent (its text could not be read right now).]");
+    const isOfficial = author ? OFFICIAL_X.includes(author.toLowerCase()) : official;
+    const clean = (t) => t.replace(/[<>]/g, "");
+    if (body != null) notes.push(isOfficial
+      ? `[Link check by Troya: an OFFICIAL post from @Troyaagent on X. Its text: <untrusted>${clean(body)}</untrusted>]`
+      : `[Link check by Troya: a post by @${clean(author)} on X, NOT an official Troya account (Troya's only X account is @Troyaagent). Its text: <untrusted>${clean(body)}</untrusted>]`);
+    else notes.push(official ? "[Link check by Troya: a post on Troya's official X account, @Troyaagent (its text could not be read right now).]" : `[Link check by Troya: x.com/${m[1]} is NOT an official Troya account; the post could not be read right now.]`);
   }
   if (/t\.me\/troyaagent\b/i.test(text)) notes.push("[Link check by Troya: t.me/troyaagent is the official Troya Telegram group.]");
   if (/\btroya\.codes\b/i.test(text)) notes.push("[Link check by Troya: troya.codes is Troya's official website.]");

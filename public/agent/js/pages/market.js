@@ -3,7 +3,7 @@ import { h, clear, useCss, pageHead, seg, table, sparkline, pctEl, usd, tiny, co
 import { api, cached } from "../api.js";
 import { LAUNCHPADS, padName, tokenCell, priceCell, ethAmount, usdCell, mcapCell, ageText, updatedText, fmtFunding, fmtApr, perpPrice } from "../marketlib.js";
 // phones: price on top, market cap under it (instead of the ETH price), so the board stays three columns wide
-const priceMcCell = (t) => h("div", { class: "pcell" }, h("span", {}, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"), h("span", { class: "sub" }, t.mcapUsd != null ? `MC ${usd(t.mcapUsd, { compact: true })}` : "MC –"));
+const priceMcCell = (t) => h("div", { class: "pcell" }, h("span", {}, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"), h("span", { class: "sub" }, t.mcapUsd > 0 ? `MC ${usd(t.mcapUsd, { compact: true })}` : "MC –"));
 
 const PAGE = 50;
 const NARROW = matchMedia("(max-width: 720px)").matches;

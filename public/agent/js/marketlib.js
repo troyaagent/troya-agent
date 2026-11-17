@@ -37,7 +37,7 @@ export function ethAmount(v) {
   return `${v >= 1000 ? compact(v, 1) : v >= 1 ? v.toFixed(v >= 100 ? 0 : 2) : tiny(v)} ETH`;
 }
 export function mcapCell(t) {
-  return h("div", { class: "pcell" }, h("span", {}, t.mcapUsd != null ? `≈ ${usd(t.mcapUsd, { compact: true })}` : "–"), t.mcapEth != null ? h("span", { class: "sub" }, ethAmount(t.mcapEth)) : null);
+  return h("div", { class: "pcell" }, h("span", {}, t.mcapUsd > 0 ? `≈ ${usd(t.mcapUsd, { compact: true })}` : "–"), t.mcapEth > 0 ? h("span", { class: "sub" }, ethAmount(t.mcapEth)) : null);
 }
 export function usdCell(vUsd, vEth) {
   return h("div", { class: "pcell" }, h("span", {}, vUsd != null ? usd(vUsd, { compact: true }) : "–"), vEth != null ? h("span", { class: "sub" }, ethAmount(vEth)) : null);

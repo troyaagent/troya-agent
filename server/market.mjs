@@ -417,7 +417,7 @@ export async function fetchHolders(a, { hi = false } = {}) {
 }
 let holdersBusy = false;
 async function holdersTick() {
-  if (holdersBusy || gq.hi.length || gq.lo.length || gq.busy) return;
+  if (holdersBusy || gq.hi.length || gq.lo.length > 1) return;          // users and the board first; at most one call every 20 s
   const now = Date.now();
   const next = [...board.rows.values()].filter((t) => { const h = HOLDERS.get(t.address); return !h || now - h.at > 6 * 3600_000; })
     .sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0))[0];

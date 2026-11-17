@@ -1019,6 +1019,7 @@ body { touch-action: manipulation; }
 .hp-venue { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; border: 1px solid var(--line, rgba(255,255,255,.1)); background: rgba(255,255,255,.03); transition: border-color .2s, background .2s, transform .2s; }
 .hp-venue:hover { border-color: rgba(142, 223, 245, .45); background: rgba(142, 223, 245, .08); transform: translateY(-1px); }
 .hp-venue img { width: 15px; height: 15px; object-fit: contain; border-radius: 3px; }
+.hp-venue-txt { font: 800 9.5px/1 var(--sans, inherit); letter-spacing: -.02em; color: #9bf26b; }
 .hp-empty { padding: 28px 14px; text-align: center; color: var(--muted); display: grid; gap: 14px; justify-items: center; }
 .hp-empty p { margin: 0; font-size: 13.5px; }
 .hp-empty-acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }

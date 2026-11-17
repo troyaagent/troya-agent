@@ -21,6 +21,7 @@ const VENUES = [
   ["Fomo", "fomo.png", (c) => `https://fomo.family/tokens/robinhood/${c.token}`],
   ["Pons", "pons.svg", (c) => c.ponsUrl || `https://ponsfamily.com/launchpad/${c.token.toLowerCase()}`],
   ["DexScreener", "dexscreener.png", (c) => `https://dexscreener.com/robinhood/${c.token}`],
+  ["GMGN", null, (c) => `https://gmgn.ai/robinhood/token/${c.token.toLowerCase()}`],
 ];
 
 export async function mount(view, ctx) {
@@ -84,7 +85,7 @@ export async function mount(view, ctx) {
           h("img", { src: "/img/logo-3d-128.png", alt: "", width: 16, height: 16 }), "Buy"),
         h("div", { class: "hp-venues", role: "group", "aria-label": "Trade elsewhere" }, VENUES.map(([name, logo, url]) =>
           h("a", { class: "hp-venue", href: url(c), target: "_blank", rel: "noopener", title: `Trade on ${name}`, "aria-label": `Trade ${c.symbol} on ${name}`, onclick: (e) => e.stopPropagation() },
-            h("img", { src: `/img/logos/${logo}`, alt: "", width: 16, height: 16 }))))));
+            logo ? h("img", { src: `/img/logos/${logo}`, alt: "", width: 16, height: 16 }) : h("b", { class: "hp-venue-txt" }, name.slice(0, 2)))))));
   }
 
   function paint() {

@@ -216,7 +216,7 @@ export async function register(r, ctx) {
       s.minEth = num(body?.minEth ?? s.minEth, 0.002, 10, s.minEth);
       s.burnPct = num(body?.burnPct ?? s.burnPct, 0, 100, s.burnPct);
       s.flywheelPct = num(body?.flywheelPct ?? s.flywheelPct, 0, 100, s.flywheelPct);
-      s.maxEth = num(body?.maxEth ?? s.maxEth, 0.005, 50, s.maxEth);
+      s.maxEth = num(body?.maxEth ?? s.maxEth, 0.0006, 50, s.maxEth);
       s.everyHours = num(body?.everyHours ?? s.everyHours, 1, 168, s.everyHours);
       out = s; return { ...x, ...s };
     });

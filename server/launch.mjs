@@ -338,7 +338,7 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   if (ask.buyEth > MAX_INITIAL_BUY_ETH) return { reply: `Not launched: the initial buy can be up to ${MAX_INITIAL_BUY_ETH} ETH (you asked for ${ask.buyEth}). To fix: post again with a smaller "buy". Nothing was spent.` };
   // the image is up to the poster (owner's rule, 17 Nov): no image attached → the coin launches without one
   let logo = "";
-  if (mediaUrl) { try { logo = await fetchLogo(mediaUrl); } catch { return { reply: "Not launched: Troya couldn't read the attached image. To fix: attach a PNG or JPEG under 1 MB and post again. Nothing was spent." }; } }
+  if (mediaUrl) { try { logo = await fetchLogo(mediaUrl); } catch { return { reply: "Not launched: Troya couldn't read the attached image. To fix: attach a PNG or JPEG (up to 5 MB, not a GIF) and post again. Nothing was spent." }; } }
   let out;
   try {
     out = await launchWithAgentWallet({ owner, name: ask.name, symbol: ask.symbol, logo, creatorTaxBps: ask.taxBps, twitter: `https://x.com/i/status/${tweetId}`, source: "x", ref: `x:${tweetId}`, buyEth: ask.buyEth });

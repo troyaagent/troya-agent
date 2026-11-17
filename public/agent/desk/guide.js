@@ -114,7 +114,13 @@ function render() {
       h("p", { class: "g-safe" }, "Nobody from Troya DMs first or asks for a seed phrase. Found a bug? ", h("a", { href: "/community", target: "_self" }, "troya.codes/community"))),
     h("div", { class: "g-f" }, input, h("button", { class: "btn primary", type: "button", onclick: send }, "Ask")));
 }
-function open() { render(); document.body.classList.add("g-open"); panel.setAttribute("aria-hidden", "false"); setTimeout(() => panel.querySelector(".g-in")?.focus({ preventScroll: true }), 300); }
+// a page still building when the guide opens gets its walk-through button as soon as its parts are on screen
+function recheck() {
+  if (!document.body.classList.contains("g-open") || panel.querySelector(".g-walk")) return;
+  const k = keyOf(), g = k == null ? null : G[k];
+  if ((g?.tour || []).some(([sel]) => document.querySelector(sel))) { const v = panel.querySelector(".g-in")?.value || ""; render(); const i = panel.querySelector(".g-in"); if (i) i.value = v; }
+}
+function open() { render(); [700, 1600, 3200].forEach((ms) => setTimeout(recheck, ms)); document.body.classList.add("g-open"); panel.setAttribute("aria-hidden", "false"); setTimeout(() => panel.querySelector(".g-in")?.focus({ preventScroll: true }), 300); }
 function close() { document.body.classList.remove("g-open"); panel.setAttribute("aria-hidden", "true"); }
 
 /* ---------- the walk-through: a soft spotlight on each part ---------- */

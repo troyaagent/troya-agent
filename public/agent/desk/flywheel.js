@@ -235,13 +235,13 @@ export async function mount(view) {
       h("div", { class: "fw-auto-h" }, h("h3", {}, "Automatic mode"), h("span", { class: `dk-v ${s.enabled && a.keySet ? "v-passed" : ""}` }, s.enabled && a.keySet ? "On" : "Off")),
       h("p", { class: "fine", style: { margin: 0 } }, `The server claims the creator fees, keeps your share in the creator wallet, buys $TROYA back with the flywheel share through Troya Gate, burns the burn part and locks the rest to 0x…dEaD, by itself. It signs only those calls, keeps ${s.reserveEth} ETH for gas and spends at most the limit per cycle. Each cycle is reported to your Telegram chat linked for reports; /flywheel off there stops it.`),
       a.keySet
-        ? h("div", { class: "fw-auto-key ok" }, h("b", {}, "Creator key stored, encrypted."), h("span", { class: "fine" }, `Signs as ${short(a.creator)}.`), h("button", { class: "btn sm danger", type: "button", onclick: async () => { if (!(await review({ title: "Delete the stored key?", summary: "Automatic mode stops. You can import it again later.", confirmLabel: "Delete key", danger: true }))) return; try { await api.post("flywheel/auto/forget", {}); toast("Key deleted", "ok"); paintAuto(); } catch (e) { toast(e.message, "error"); } } }, "Delete key"))
+        ? h("div", { class: "fw-auto-key ok" }, h("b", {}, "Creator key stored, encrypted."), h("span", { class: "fine" }, `Signs as ${short(a.creator)}.`), h("button", { class: "btn sm danger", type: "button", onclick: async () => { if (!(await review({ title: "Delete the stored key?", summary: "Automatic mode stops. You can import it again later.", confirmLabel: "Delete key", danger: true }))) return; try { await api.post("flywheel/auto/forget", {}); toast("Key deleted", "ok"); paintAuto(); paintCamp(); } catch (e) { toast(e.message, "error"); } } }, "Delete key"))
         : h("div", { class: "fw-auto-key" },
             h("div", { class: "alert warn" }, h("b", {}, "Read this first. "), "The server will hold the creator wallet's key (encrypted). Move everything you do not want the flywheel to use out of the creator wallet first, so it holds only the fees. Type the key yourself here; never send it to anyone, Troya included."),
             h("div", { class: "fw-row" }, pk, h("button", { class: "btn primary", type: "button", onclick: async () => {
               const v = pk.value.trim(); pk.value = "";
               if (!v) return toast("Paste the creator wallet's private key.", "");
-              try { const r = await api.post("flywheel/auto/key", { privateKey: v }); toast(`Key stored for ${short(r.address)}.`, "ok", 6000); paintAuto(); } catch (e) { toast(e.message, "error", 8000); }
+              try { const r = await api.post("flywheel/auto/key", { privateKey: v }); toast(`Key stored for ${short(r.address)}.`, "ok", 6000); paintAuto(); paintCamp(); } catch (e) { toast(e.message, "error", 8000); }
             } }, "Store the key"))),
       fields, exampleEl,
       h("div", { class: "fw-row" },

@@ -89,8 +89,13 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
     const unmeasured = r.checks.filter((c) => c.status === "skip").length, notes = r.checks.filter((c) => c.status === "warn").length;
     // "6 passed · 1 not measured" reads clearer than "6 of 7 passed" next to a Passed verdict
     const tally = [`${passed} passed`, failed ? `${failed} failed` : "", notes ? `${notes} to note` : "", unmeasured ? `${unmeasured} not measured` : ""].filter(Boolean).join(" · ");
+    const total = r.checks.length || 7, frac = Math.max(0, Math.min(1, passed / total)), C = 2 * Math.PI * 50;
+    const ringEl = h("span", { class: `dk-ring v-${r.verdict}`, role: "img", "aria-label": `${passed} of ${total} checks passed` });
+    ringEl.innerHTML = `<svg viewBox="0 0 120 120"><circle class="ra" cx="60" cy="60" r="50"/><circle class="rb" cx="60" cy="60" r="50" style="stroke-dasharray:0 ${C}"/></svg><b>${passed}/${total}</b>`;
+    requestAnimationFrame(() => requestAnimationFrame(() => { const c = ringEl.querySelector(".rb"); if (c) c.style.strokeDasharray = `${frac * C} ${C}`; }));
     clear(out,
       h("div", { class: "dk-gate-h" },
+        ringEl,
         tokenIcon({ symbol: r.symbol, address: a, chain: "robinhood" }, ""),
         h("div", { class: "dk-gate-id" },
           h("b", {}, r.symbol ? `$${r.symbol}` : short(a)), h("span", {}, [r.name, short(a)].filter(Boolean).join(" · "))),

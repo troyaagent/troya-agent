@@ -5,6 +5,7 @@ import { h, $, clear, icon, toast, modal, short, store, chainLogo, tokenIcon } f
 import { wallet, onWallet, openConnect, restore, disconnect, signIn, CHAINS, chainById } from "/agent/js/wallet.js";
 import { api } from "/agent/js/api.js";
 import { chromeIcon } from "./chrome-icons.js";
+import { mountGuide } from "./guide.js";
 
 const SITE = window.SITE || {};
 
@@ -399,6 +400,8 @@ function openAsk(prefill = "") {
 }
 for (const b of document.querySelectorAll("[data-ask]")) b.addEventListener("click", () => openAsk());
 for (const b of document.querySelectorAll(".d-ask-ico")) b.append(si("spark"));
+// Troya Guide on every page: what it is for, a walk-through, questions for the agent (answered in the drawer)
+mountGuide({ askFn: (q) => openDrawer(q) });
 addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openAsk(); }
   else if (e.key === "Escape" && document.body.classList.contains("drawer-open") && !document.querySelector(".modal-bg")) closeDrawer();

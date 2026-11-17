@@ -204,7 +204,47 @@ export async function mount(view, { go, ask: askDrawer }) {
     [["swap", "Swap", "The Gate checks every trade", "#/swap"], ["perps", "Perps", "Crypto, stocks and metals", "#/perps"],
      ["liquidity", "Earn on liquidity", "Ranges set from volatility", "#/liquidity"], ["spark", "Build an agent", "From your own playbooks", "#/social/agents"]]
       .map(([ic, t, d, href]) => h("a", { class: "d2-q", href }, tile(ic), h("span", {}, h("b", {}, t), h("small", {}, d)))));
+  const TF = { "1D": { hl: ["15m", 24], rh: "15m" }, "1W": { hl: ["1h", 168], rh: "1h" }, "1M": { hl: ["4h", 720], rh: "4h" } };
+  const cst = { sym: "ETH", tf: "1W", chart: null, series: null, seq: 0 };
+  const chBox = h("div", { class: "d2-chart-box" }), chPx = h("span", { class: "d2-chart-px" }, "–"), chCh = h("span", { class: "d2-chart-ch" }), chSrc = h("span", { class: "fine muted" });
+  const segOf = (list, cur, on) => h("div", { class: "seg" }, list.map((v) => h("button", { type: "button", "aria-pressed": String(v === cur), onclick: () => on(v) }, v)));
+  const chartHead = h("div", { class: "panel-h d2-chart-top" });
+  const chart = h("section", { class: "panel d2-chart" }, chartHead, h("div", { class: "d2-chart-h" }, chPx, chCh, chSrc), chBox);
+  const paintChartHead = () => clear(chartHead,
+    h("div", { class: "d2-chart-sym" }, tokenIcon(cst.sym === "ETH" ? { symbol: "ETH" } : { symbol: "TROYA", address: CA }, "sm"), segOf(["ETH", ...(CA ? ["$TROYA"] : [])], cst.sym === "ETH" ? "ETH" : "$TROYA", (v) => { cst.sym = v === "ETH" ? "ETH" : "TROYA"; paintChartHead(); loadChart(); })),
+    segOf(Object.keys(TF), cst.tf, (v) => { cst.tf = v; paintChartHead(); loadChart(); }));
+  async function loadChart() {
+    const my = ++cst.seq;
+    try {
+      const t = TF[cst.tf];
+      const d = cst.sym === "ETH" ? await api.get(`market/hl/candles?coin=ETH&interval=${t.hl[0]}&hours=${t.hl[1]}`) : await api.get(`market/robinhood/candles?address=${CA}&interval=${t.rh}`);
+      if (my !== cst.seq || !alive) return;
+      const rows = (d.candles || []).filter((c) => c && c.close > 0).map((c) => ({ time: c.time, value: c.close }));
+      if (rows.length < 2) { cst.series?.setData([]); clear(chCh); chSrc.textContent = "Not enough trades for a chart yet."; return; }
+      const first = rows[0].value, last = rows[rows.length - 1].value, ch = (last / first - 1) * 100;
+      chPx.textContent = cst.sym === "ETH" ? usd(last) : tiny(last);
+      clear(chCh, h("span", { class: ch >= 0 ? "up" : "down" }, `${ch >= 0 ? "+" : ""}${ch.toFixed(2)}%`), ` · ${cst.tf === "1D" ? "24 hours" : cst.tf === "1W" ? "7 days" : "30 days"}`);
+      chSrc.textContent = cst.sym === "ETH" ? "Hyperliquid" : (d.source || "GeckoTerminal");
+      if (!cst.chart) {
+        const LW = await import("lightweight-charts");
+        if (!alive) return;
+        const light = document.documentElement.dataset.theme === "light";
+        cst.chart = LW.createChart(chBox, { autoSize: true, layout: { background: { type: "solid", color: "transparent" }, textColor: light ? "#6e685f" : "#6f7c89", fontFamily: "Instrument Sans, system-ui, sans-serif", fontSize: 11 },
+          grid: { vertLines: { color: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.035)" }, horzLines: { color: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.035)" } },
+          rightPriceScale: { borderVisible: false }, timeScale: { borderVisible: false, timeVisible: true }, handleScroll: false, handleScale: false,
+          crosshair: { vertLine: { color: "rgba(142,223,245,.4)", labelBackgroundColor: "#0f1820" }, horzLine: { color: "rgba(142,223,245,.4)", labelBackgroundColor: "#0f1820" } } });
+        cst.series = cst.chart.addAreaSeries({ lineColor: light ? "#0a7ea3" : "#bff0fd", lineWidth: 2, topColor: light ? "rgba(10,126,163,.22)" : "rgba(142,223,245,.32)", bottomColor: "rgba(142,223,245,0)" });
+      }
+      cst.series.applyOptions({ priceFormat: cst.sym === "ETH" ? { type: "price", precision: 2, minMove: 0.01 } : { type: "price", precision: 10, minMove: 1e-10 } });
+      cst.series.setData(rows);
+      cst.chart.timeScale().fitContent();
+    } catch (e) { if (my === cst.seq) chSrc.textContent = `Chart unavailable (${e.message}).`; }
+  }
+  paintChartHead();
   let horse = null, alive = true;
+  stops.push(() => { try { cst.chart?.remove(); } catch {} });
+  setTimeout(loadChart, 60);
+  stops.push(every(120000, () => loadChart()));
   stops.push(() => { alive = false; try { horse?.dispose(); } catch {} });
   const startHorse = () => import("./horse.js").then((m) => m.mountHorse(horseCanvas)).then((hr) => { if (!alive) hr?.dispose(); else horse = hr; }).catch(() => hero.classList.add("no-3d"));
   setTimeout(startHorse, 150);                   // after the page has painted
@@ -229,7 +269,7 @@ export async function mount(view, { go, ask: askDrawer }) {
   clear(view, h("div", { class: "dk" },
     hero, quick, steps,
     h("div", { class: "dk-cols" },
-      h("div", { class: "dk-col" }, gate.el, brief, hlTable, rhTable),
+      h("div", { class: "dk-col" }, chart, gate.el, brief, hlTable, rhTable),
       h("div", { class: "dk-col" }, agent, sentry, sigs, shortcuts))));
 
   /* ---------- data ---------- */

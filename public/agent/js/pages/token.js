@@ -33,7 +33,8 @@ export async function mount(view, { parts, go }) {
         h("h1", {}, t.name || t.symbol, h("span", { class: "sym" }, `$${t.symbol}`), t.stock ? h("span", { class: "badge-s pad-badge" }, padLogo("stocks", 14), "Tokenized stock") : h("span", { class: "badge-s pad-badge" }, padLogo(t.launchpad, 14), padName(t.launchpad)),
           pons ? h("span", { class: `badge-s ${pons.graduated ? "blue" : ""}` }, pons.graduated ? "Graduated" : `Curve ${pons.progressPct != null ? pons.progressPct.toFixed(1) : "?"}%`) : null,
           !t.tradable ? h("span", { class: "badge-s warn" }, "Not routed by Troya") : null),
-        h("div", { class: "tk-addr" }, h("span", { class: "mono tk2-ca" }, address), h("button", { type: "button", "aria-label": "Copy address", onclick: () => copyText(address, "Address copied") }, icon("copy"))))),
+        h("div", { class: "tk-addr" }, h("span", { class: "mono tk2-ca" }, address), h("button", { type: "button", "aria-label": "Copy address", onclick: () => copyText(address, "Address copied") }, icon("copy"))),
+        socialRow(t))),
     h("div", { class: "tk-px" },
       h("div", { class: "p" }, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : pons?.priceInPair != null ? `${tiny(pons.priceInPair)} ${pons.pair.symbol}` : "No price yet"),
       h("div", { class: "u" }, t.priceEth != null ? `${tiny(t.priceEth)} ETH` : null, pctEl(t.change24h), h("span", { class: "faint" }, "24h"))));
@@ -86,7 +87,7 @@ export async function mount(view, { parts, go }) {
     stat("Liquidity", t.liquidityUsd != null ? usd(t.liquidityUsd, { compact: true }) : null),
     stat("24h volume", t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : null),
     stat("Trades 24h", t.txns24h != null ? `${compact(t.txns24h, 1)}${t.buys24h != null ? ` (${compact(t.buys24h, 1)} buys)` : ""}` : null),
-    stat("Holders", t.holders != null ? compact(t.holders, 1) : null),
+    stat("Holders", t.holders != null ? compact(t.holders, 1).replace(/\.0(?=[KMB]$)/, "") : null),
     stat("Top 10 hold", t.top10Pct != null ? `${Number(t.top10Pct).toFixed(1)}%` : null),
     pons && !pons.graduated ? stat("Curve raised", `${tiny(pons.raised)} / ${tiny(pons.threshold)} ${pons.pair.symbol}`) : stat("1h change", t.change1h != null ? pctEl(t.change1h) : null),
     stat("Age", t.createdAt ? ageText(t.createdAt) : null));
@@ -186,6 +187,19 @@ export async function mount(view, { parts, go }) {
   }
   loadChart();
   return () => { chartStop = true; offClass(); try { chart?.remove(); } catch {} ro?.disconnect(); };
+}
+
+// the coin's own accounts, as buttons (X, Telegram, website, Discord); nothing when the coin lists none
+const SOC_PATH = { x: "M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.12z", telegram: "M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z", website: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm6.93 6h-2.95a15.7 15.7 0 0 0-1.38-3.56A8.03 8.03 0 0 1 18.93 8zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14a8.2 8.2 0 0 1 0-4h3.38a16.5 16.5 0 0 0 0 4zm.81 2h2.95c.32 1.25.78 2.45 1.38 3.56A8 8 0 0 1 5.07 16zM8.02 8H5.07a8 8 0 0 1 4.33-3.56A15.7 15.7 0 0 0 8.02 8zM12 19.96A14.1 14.1 0 0 1 10.09 16h3.82A14.1 14.1 0 0 1 12 19.96zM14.34 14H9.66a14.7 14.7 0 0 1 0-4h4.68a14.7 14.7 0 0 1 0 4zm.26 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95a8.03 8.03 0 0 1-4.33 3.56zM16.36 14a16.5 16.5 0 0 0 0-4h3.38a8.2 8.2 0 0 1 0 4z", discord: "M20.32 4.37A19.8 19.8 0 0 0 15.4 2.8a13.9 13.9 0 0 0-.63 1.3 18.3 18.3 0 0 0-5.5 0 13 13 0 0 0-.64-1.3 19.7 19.7 0 0 0-4.92 1.53C.6 9.05-.24 13.6.18 18.1a19.9 19.9 0 0 0 6.03 3.05c.49-.66.92-1.36 1.29-2.1a12.9 12.9 0 0 1-2.03-.97l.5-.39a14.2 14.2 0 0 0 12.06 0l.5.39c-.65.38-1.33.71-2.04.97.37.74.8 1.44 1.29 2.1a19.8 19.8 0 0 0 6.04-3.05c.5-5.22-.84-9.73-3.5-13.73zM8.02 15.33c-1.18 0-2.16-1.08-2.16-2.42s.95-2.42 2.16-2.42 2.18 1.09 2.16 2.42c0 1.34-.96 2.42-2.16 2.42zm7.97 0c-1.18 0-2.15-1.08-2.15-2.42s.95-2.42 2.15-2.42 2.18 1.09 2.16 2.42c0 1.34-.95 2.42-2.16 2.42z" };
+function socialRow(t) {
+  const items = [["x", "X", t.twitter], ["telegram", "Telegram", t.telegram], ["website", "Website", t.website], ["discord", "Discord", t.discord]].filter(([, , u]) => u);
+  if (!items.length) return h("p", { class: "fine muted tk2-nosoc" }, "This coin lists no X, Telegram or website.");
+  return h("div", { class: "tk2-soc" }, items.map(([k, label, u]) => {
+    const a = h("a", { class: "tk2-soc-a", href: safeUrl(/^https?:/i.test(u) ? u : k === "x" ? `https://x.com/${String(u).replace(/^@/, "")}` : k === "telegram" ? `https://t.me/${String(u).replace(/^@/, "")}` : `https://${u}`), target: "_blank", rel: "noopener nofollow" });
+    a.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${SOC_PATH[k]}"/></svg>`;
+    a.append(label);
+    return a;
+  }));
 }
 
 function safeUrl(u) {

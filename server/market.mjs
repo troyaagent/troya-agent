@@ -16,8 +16,8 @@ const NET = "robinhood";
 
 const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
 const STOCK_SET = new Set(STOCKS.map((s) => String(s.address).toLowerCase()));
-const SORTS = new Set(["volume", "mcap", "change", "liquidity", "newest", "price", "txns"]);
-const SORT_ALIAS = { age: "newest", new: "newest", marketcap: "mcap", cap: "mcap", fdv: "mcap", gainers: "change", vol: "volume", holders: "txns" };
+const SORTS = new Set(["volume", "mcap", "change", "liquidity", "newest", "price", "txns", "holders"]);
+const SORT_ALIAS = { age: "newest", new: "newest", marketcap: "mcap", cap: "mcap", fdv: "mcap", gainers: "change", vol: "volume" };
 export const LAUNCHPADS = {
   pons: "Pons", clanker: "Clanker", bankr: "Bankr", virtuals: "Virtuals", hoodit: "Hoodit", mintclub: "Mint Club", easya: "EasyA", o1: "O1 Launchpad",
   frontier: "Frontier", long: "Long", abyss: "Abyss", goo: "Goo", clank: "Clank.trade", uniswap: "Uniswap", ramses: "Ramses", pancake: "PancakeSwap", sushi: "SushiSwap",
@@ -401,6 +401,32 @@ async function fillSocials() {
     }
   } finally { socialsBusy = false; }
 }
+const HOLDERS = new Map();    // address → { count, top10, at }
+const HOLDERS_FILE = process.env.DATA_DIR ? path.join(process.env.DATA_DIR, "holders.json") : null;
+(function loadHolders() { if (!HOLDERS_FILE) return; try { for (const [a, v] of Object.entries(JSON.parse(readFileSync(HOLDERS_FILE, "utf8")) || {})) HOLDERS.set(a, v); } catch {} })();
+let holdersSaveAt = 0;
+export async function fetchHolders(a, { hi = false } = {}) {
+  const d = await gecko(`tokens/${a}/info`, { hi });
+  const h = d?.data?.attributes?.holders;
+  const v = { count: h?.count != null ? Number(h.count) : null, top10: h?.distribution_percentage?.top_10 != null ? Number(h.distribution_percentage.top_10) : null, at: Date.now() };
+  HOLDERS.set(a, v);
+  const row = board.rows.get(a);
+  if (row) { row.holders = v.count; row.top10Pct = v.top10; }
+  if (HOLDERS_FILE && Date.now() - holdersSaveAt > 60_000) { holdersSaveAt = Date.now(); writeFile(HOLDERS_FILE + ".tmp", JSON.stringify(Object.fromEntries(HOLDERS))).then(() => rename(HOLDERS_FILE + ".tmp", HOLDERS_FILE)).catch(() => {}); }
+  return v;
+}
+let holdersBusy = false;
+async function holdersTick() {
+  if (holdersBusy || gq.hi.length || gq.lo.length || gq.busy) return;
+  const now = Date.now();
+  const next = [...board.rows.values()].filter((t) => { const h = HOLDERS.get(t.address); return !h || now - h.at > 6 * 3600_000; })
+    .sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0))[0];
+  if (!next) return;
+  holdersBusy = true;
+  try { await fetchHolders(next.address); } catch { HOLDERS.set(next.address, { ...(HOLDERS.get(next.address) || {}), at: now - 5 * 3600_000 }); } finally { holdersBusy = false; }
+}
+setInterval(() => holdersTick().catch(() => {}), 20_000).unref();
+const holdersOf = (a) => HOLDERS.get(a) || null;
 const cleanLink = (u) => { try { const x = new URL(/^https?:/i.test(u) ? u : `https://${u}`); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
 const socialOf = (a) => { const s = SOCIALS.get(a); if (!s) return null; const tw = s.twitter ? (s.twitter.startsWith("http") ? s.twitter : `https://x.com/${String(s.twitter).replace(/^@/, "")}`) : null; const tg = s.telegram ? (s.telegram.startsWith("http") ? s.telegram : `https://t.me/${String(s.telegram).replace(/^@/, "")}`) : null; const o = { x: cleanLink(tw || ""), telegram: cleanLink(tg || ""), website: s.website ? cleanLink(s.website) : null }; return o.x || o.telegram || o.website ? o : null; };
 
@@ -449,7 +475,7 @@ function cleanOpts(opts = {}) {
   const tradable = !(opts.tradable === false || opts.tradable === "0" || opts.tradable === 0);
   return { sort, dir, launchpad, q, offset, limit, tradable };
 }
-const SORT_KEY = { volume: "volume24hUsd", mcap: "mcapUsd", change: "change24h", liquidity: "liquidityUsd", newest: "createdAt", price: "priceUsd", txns: "txns24h" };
+const SORT_KEY = { volume: "volume24hUsd", mcap: "mcapUsd", change: "change24h", liquidity: "liquidityUsd", newest: "createdAt", price: "priceUsd", txns: "txns24h", holders: "holders" };
 
 // getRobinhoodTokens({q, launchpad, sort, dir, offset, limit, tradable}) → {tokens,total,counts,updatedAt,stale,ethUsd,source,...}
 export async function getRobinhoodTokens(opts = {}) {
@@ -472,6 +498,7 @@ export async function getRobinhoodTokens(opts = {}) {
   const hidden = o.tradable ? (o.launchpad === "all" ? all.length - routable.length : all.filter((t) => t.launchpad === o.launchpad && !t.tradable).length) : 0;
   const k = SORT_KEY[o.sort];
   const sgn = o.dir === "asc" ? 1 : -1;
+  if (k === "holders") for (const t of rows) t.holders = HOLDERS.get(t.address)?.count ?? null;
   rows = [...rows].sort((a, b) => {
     const x = a[k], y = b[k];
     if (x == null && y == null) return 0;
@@ -480,7 +507,7 @@ export async function getRobinhoodTokens(opts = {}) {
     return (x - y) * sgn;
   });
   return {
-    tokens: rows.slice(o.offset, o.offset + o.limit).map((t) => { const r = { ...clean(t), spark: sparkOf(t), socials: socialOf(t.address) }; if (!(r.mcapUsd > 0) && r.launchpad === "pons" && r.priceUsd > 0 && r.liquidityUsd > 0 && r.priceUsd * 1e9 <= r.liquidityUsd * 400) { r.mcapUsd = r.priceUsd * 1e9; r.mcapEth = ethUsd ? r.mcapUsd / ethUsd : null; } return r; }), total: rows.length, counts, hiddenTotal: hidden,
+    tokens: rows.slice(o.offset, o.offset + o.limit).map((t) => { const r = { ...clean(t), spark: sparkOf(t), socials: socialOf(t.address), holders: holdersOf(t.address)?.count ?? null, top10Pct: holdersOf(t.address)?.top10 ?? null }; if (!(r.mcapUsd > 0) && r.launchpad === "pons" && r.priceUsd > 0 && r.liquidityUsd > 0 && r.priceUsd * 1e9 <= r.liquidityUsd * 400) { r.mcapUsd = r.priceUsd * 1e9; r.mcapEth = ethUsd ? r.mcapUsd / ethUsd : null; } return r; }), total: rows.length, counts, hiddenTotal: hidden,
     volume24hUsd: board.volumeUsd, volume24hEth: ethUsd ? board.volumeUsd / ethUsd : null,
     offset: o.offset, limit: o.limit, sort: o.sort, dir: o.dir, launchpad: o.launchpad,
     updatedAt: board.updatedAt, stale: !!board.error, notice: board.error ? `Last refresh failed (${board.error}); showing the previous board.` : null,
@@ -496,6 +523,7 @@ export async function getRobinhoodToken(address) {
     const ethUsd = await getEthUsd().catch(() => null);
     const [ds, ps, prof] = await Promise.allSettled([dsPairs([a]).then((x) => dsRows(x, ethUsd).get(a) || null), ponsState(a), ponsProfile(a)]);
     let row = board.rows.get(a) ? clean(board.rows.get(a)) : null;
+    if (!HOLDERS.has(a)) await Promise.race([fetchHolders(a, { hi: true }).catch(() => null), new Promise((r) => setTimeout(r, 4000))]);
     const dsr = ds.status === "fulfilled" ? ds.value : null;
     const pons = ps.status === "fulfilled" && ps.value ? ponsPublic(ps.value) : null;
     // a Pons token still on its curve trades on the curve; a stray DEX pair thinner than the curve (e.g. a $0.40 dust
@@ -515,6 +543,7 @@ export async function getRobinhoodToken(address) {
     }
     if (!row && !pons) throw httpErr(404, "This token is not on the Robinhood Chain board yet (no pool on GeckoTerminal or DexScreener, and not a Pons launch).");
     const token = row ? { ...row } : { address: a, name: "", symbol: "", launchpad: "pons", tradable: true, pools: [] };
+    { const hd = HOLDERS.get(a); if (hd?.count != null) { token.holders = hd.count; token.top10Pct = hd.top10; } }
     if (pons) { token.launchpad = "pons"; token.tradable = true; }
     if (curveLive && token.priceUsd == null) {
       // numbers straight from the curve: price from its reserves, liquidity = ETH actually raised on it

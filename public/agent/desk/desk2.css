@@ -792,3 +792,12 @@ body.g-tucked.g-open .g-tab { display: none; }
 @media (max-width: 860px) { .g-orb, .g-tuck, .g-tab, body.g-tucked .g-tab { display: none !important; } }
 html[data-theme="light"] .g-tuck { background: #fff; }
 html[data-theme="light"] .g-tab { background: radial-gradient(circle at 70% 50%, rgba(10, 126, 163, .15), #fff 70%); }
+
+/* token page: the coin's own accounts */
+.tk2-soc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.tk2-soc-a { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 12px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--fg);
+  border: 1px solid var(--line-2); background: var(--glass); transition: border-color .25s, transform .3s var(--soft); }
+.tk2-soc-a:hover { border-color: rgba(142, 223, 245, .5); transform: translateY(-1px); }
+.tk2-soc-a svg { width: 15px; height: 15px; fill: currentColor; }
+.tk2-nosoc { margin: 12px 0 0; }
+html[data-theme="light"] .tk2-soc-a { background: var(--bg-2); }

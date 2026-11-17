@@ -65,6 +65,7 @@ function robinhoodTab(box, go, query) {
       { key: "volume", label: "24h volume", sort: true, render: (t) => usdCell(t.volume24hUsd, t.volume24hEth), hide: NARROW },
       { key: "liquidity", label: "Liquidity", sort: true, render: (t) => usdCell(t.liquidityUsd, null), hide: NARROW },
       { key: "mcap", label: "Mkt cap", sort: true, render: (t) => mcapCell(t), hide: NARROW },
+      { key: "holders", label: "Holders", sort: true, render: (t) => (t.holders != null ? h("div", { class: "pcell" }, h("span", {}, compact(t.holders, 1).replace(/\.0(?=[KMB]$)/, "")), t.top10Pct != null ? h("span", { class: `sub ${t.top10Pct > 60 ? "warnc" : ""}`, title: "Share held by the 10 largest wallets" }, `top 10 ${t.top10Pct.toFixed(0)}%`) : null) : h("span", { class: "muted" }, "–")), hide: NARROW },
       { key: "txns", label: "Trades 24h", sort: true, render: (t) => (t.txns24h != null ? compact(t.txns24h, 1) : "–"), hide: NARROW },
       { key: "newest", label: "Age", sort: true, render: (t) => h("span", { class: "muted" }, ageText(t.createdAt)), hide: NARROW },
     ],

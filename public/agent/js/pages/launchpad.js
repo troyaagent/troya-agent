@@ -1,5 +1,5 @@
 // Launchpad (#/launch): new coins on Robinhood Chain across launchpads. #/launch/create is handled by launch-create.js.
-import { h, clear, useCss, pageHead, tabs, table, pctEl, compact, debounce, icon, padLogo, usd } from "../ui.js";
+import { h, clear, useCss, pageHead, tabs, table, pctEl, compact, debounce, icon, padLogo, usd, tokenIcon, tiny } from "../ui.js";
 import { api } from "../api.js";
 import { LAUNCHPADS, tokenCell, priceCell, usdCell, mcapCell, ageText, updatedText } from "../marketlib.js";
 
@@ -49,7 +49,14 @@ export async function mount(view, ctx) {
     ],
   });
 
-  clear(view, head, h("div", { class: "lp-tabs" }, tabEl), h("div", { class: "mk-filters" }, search, chips), notice, h("div", { class: "panel mk-panel" }, tbl), more, foot);
+  // Desk 2.0: the first four of the current list as cards (newest, hottest or gainers, whichever tab is open)
+  const topBox = h("div", { class: "mk2-top" });
+  const paintTop = (rows) => clear(topBox, rows.slice(0, 4).map((t, i) => h("a", { class: "mk2-card", href: `#/token/${t.address}` },
+    h("div", { class: "mk2-c-h" }, tokenIcon({ ...t, chain: "robinhood" }), h("span", {}, h("b", {}, t.symbol), h("small", {}, t.createdAt ? `${ageText(t.createdAt)} old` : "New")), h("span", { class: "mk2-rank" }, padLogo(t.launchpad, 16))),
+    h("div", { class: "mk2-c-p" }, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"),
+    h("div", { class: "mk2-c-f" }, pctEl(t.change24h), h("span", {}, `vol ${t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : "–"}`), h("span", {}, `liq ${t.liquidityUsd != null ? usd(t.liquidityUsd, { compact: true }) : "–"}`)),
+    h("i", { class: "mk2-bar", style: { "--w": `${Math.min(100, Math.abs(t.change24h || 0))}%` }, "data-dir": (t.change24h || 0) >= 0 ? "up" : "down" }))));
+  clear(view, head, h("div", { class: "lp-tabs" }, tabEl), topBox, h("div", { class: "mk-filters" }, search, chips), notice, h("div", { class: "panel mk-panel" }, tbl), more, foot);
 
   function renderChips(counts) {
     const list = [["all", "All"], ...LAUNCHPADS.filter(([k]) => counts?.[k] || k === state.pad)];
@@ -71,6 +78,7 @@ export async function mount(view, ctx) {
       state.total = d.total;
       state.next = offset + STEP;
       tbl.setRows(state.rows);
+      if (!offset) { if (!state.q) paintTop(state.rows); topBox.hidden = !!state.q; }
       clear(notice, d.notice ? h("div", { class: "alert warn", style: { marginBottom: "10px" } }, d.notice) : null);
       clear(more, state.next < d.total ? h("button", { class: "btn", type: "button", onclick: (e) => { e.target.disabled = true; load(state.next); } }, "Load more") : null);
       clear(foot,

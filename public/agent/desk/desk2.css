@@ -605,3 +605,118 @@ html[data-theme="light"] .g-msg.me { background: rgba(10, 126, 163, .08); border
 body.g-open .g-nudge { display: none; }
 @media (max-width: 860px) { .g-nudge { right: 8px; left: 8px; width: auto; bottom: calc(132px + env(safe-area-inset-bottom)); } }
 html[data-theme="light"] .g-nudge { background: var(--bg-1); border-color: rgba(10, 126, 163, .3); }
+
+/* ---------- Portfolio 2.0 ---------- */
+.pf2-tabs { margin-top: 22px; }
+.pf2-tabs .tabs { gap: 4px; padding: 5px; border-radius: 16px; background: rgba(0, 0, 0, .25); border: 1px solid var(--line); width: max-content; border-bottom: 1px solid var(--line); }
+.pf2-tabs .tabs button, .pf2-tabs .tabs a { height: 36px; padding: 0 16px; border-radius: 11px; }
+.pf2-tabs .tabs [aria-selected="true"] { background: linear-gradient(180deg, rgba(142, 223, 245, .16), rgba(142, 223, 245, .05)); box-shadow: inset 0 0 0 1px rgba(142, 223, 245, .3); }
+.pf2-tabs .tabs [aria-selected="true"]::after { display: none; }
+.pf2-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 24px; align-items: center; margin-top: 16px; padding: 30px 32px; border-radius: 28px; overflow: hidden; isolation: isolate;
+  border: 1px solid var(--line); background: linear-gradient(180deg, rgba(255, 255, 255, .03), rgba(255, 255, 255, .008)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 30px 80px rgba(0, 0, 0, .35); }
+.pf2-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(520px 300px at 82% 30%, rgba(110, 200, 235, .16), transparent 70%), repeating-linear-gradient(180deg, rgba(160, 230, 255, .035) 0 1px, transparent 1px 9px); }
+.pf2-total { margin-top: 14px; font-size: clamp(40px, 5vw, 68px); font-weight: 750; letter-spacing: -0.045em; line-height: 1; font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #ffffff 35%, #bfeffd 80%, #8edff5); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .05em; }
+.pf2-sub { margin: 14px 0 0; max-width: 520px; color: var(--fg-2); font-size: 14.5px; line-height: 1.55; }
+.pf2-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.pf2-chips:empty { display: none; }
+.pf2-chip { display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--glass); font-size: 12.5px; color: var(--fg-2); }
+.pf2-chip.up { color: var(--up); border-color: rgba(142, 223, 245, .4); } .pf2-chip.down { color: var(--down); border-color: rgba(255, 125, 125, .4); }
+.pf2-split { display: flex; align-items: center; gap: 22px; justify-content: center; }
+.pf2-donut { position: relative; width: 170px; height: 170px; flex: none; display: grid; place-items: center; }
+.pf2-donut svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.pf2-donut circle { fill: none; stroke-width: 12; stroke-linecap: butt; filter: drop-shadow(0 0 6px rgba(142, 223, 245, .35)); transition: stroke-dasharray .9s cubic-bezier(.22, .61, .36, 1); }
+.pf2-donut circle.bg { stroke: rgba(255, 255, 255, .07); filter: none; }
+.pf2-donut-c { position: relative; display: grid; place-items: center; line-height: 1; }
+.pf2-donut-c b { font-size: 30px; font-weight: 750; } .pf2-donut-c small { margin-top: 6px; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+.pf2-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; min-width: 0; }
+.pf2-legend li { display: grid; grid-template-columns: 10px auto; column-gap: 10px; align-items: center; }
+.pf2-legend i { width: 10px; height: 10px; border-radius: 3px; grid-row: span 3; align-self: start; margin-top: 4px; }
+.pf2-legend span { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.pf2-legend b { font-size: 18px; font-weight: 650; letter-spacing: -0.02em; }
+.pf2-legend small { font-size: 12px; color: var(--muted); }
+.pf2-toks { margin-top: 16px; }
+.pf2-sec-h { display: flex; align-items: baseline; gap: 12px; margin: 4px 4px 10px; }
+.pf2-sec-h h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.pf2-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.pf2-tok { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; color: var(--fg); background: var(--glass); border: 1px solid var(--line); transition: transform .4s var(--soft), border-color .3s; }
+.pf2-tok:hover { transform: translateY(-2px); border-color: rgba(142, 223, 245, .35); }
+.pf2-tok .tok-ico { width: 38px; height: 38px; }
+.pf2-tok b { display: block; font-size: 14px; } .pf2-tok small { display: block; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pf2-tok i { margin-left: auto; font-style: normal; color: var(--c3); }
+.pf-sec, .pf-brief, .pf-setup, .pf-connect { margin-top: 16px; border-radius: 22px; }
+@media (max-width: 900px) { .pf2-hero { grid-template-columns: 1fr; padding: 24px 22px; } .pf2-split { justify-content: flex-start; } }
+@media (max-width: 480px) { .pf2-donut { width: 130px; height: 130px; } .pf2-split { gap: 14px; } }
+html[data-theme="light"] .pf2-hero { background: var(--bg-1); }
+html[data-theme="light"] .pf2-total { background: linear-gradient(180deg, #151310 45%, #0a5f7b); -webkit-background-clip: text; background-clip: text; }
+
+/* ---------- Market 2.0: the busiest coins as cards ---------- */
+.mk2-top { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 4px 0 16px; }
+.mk2-top:empty { display: none; }
+.mk2-card { position: relative; display: grid; gap: 10px; padding: 16px 16px 18px; border-radius: 22px; overflow: hidden; color: var(--fg); isolation: isolate;
+  border: 1px solid var(--line); background: var(--glass-solid); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05); transition: transform .45s var(--soft), border-color .3s, box-shadow .3s; }
+.mk2-card::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(260px 140px at 90% 0%, rgba(110, 200, 235, .12), transparent 70%); }
+.mk2-card:hover { transform: translateY(-3px); border-color: rgba(142, 223, 245, .35); box-shadow: 0 16px 40px rgba(40, 140, 180, .14); }
+.mk2-c-h { display: flex; align-items: center; gap: 10px; }
+.mk2-c-h .tok-ico { width: 40px; height: 40px; }
+.mk2-c-h b { display: block; font-size: 15px; font-weight: 650; } .mk2-c-h small { display: block; font-size: 12px; color: var(--muted); }
+.mk2-rank { margin-left: auto; font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--c3); }
+.mk2-c-p { font-size: 24px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.mk2-c-f { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; color: var(--muted); }
+.mk2-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: var(--w); background: linear-gradient(90deg, rgba(142, 223, 245, .1), #8edff5); box-shadow: 0 0 10px rgba(142, 223, 245, .6); }
+.mk2-bar[data-dir="down"] { background: linear-gradient(90deg, rgba(255, 125, 138, .1), #ff7d8a); box-shadow: 0 0 10px rgba(255, 125, 138, .5); }
+@media (max-width: 1100px) { .mk2-top { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .mk2-top { grid-template-columns: 1fr 1fr; gap: 8px; } .mk2-card { padding: 12px; } .mk2-c-p { font-size: 18px; } .mk2-c-f span:last-child { display: none; } }
+html[data-theme="light"] .mk2-card { background: var(--bg-1); }
+
+/* ---------- Agent Wallet 2.0: the wallet as a hero card ---------- */
+.ag2-hero { position: relative; padding: 26px 28px !important; border-radius: 26px !important; overflow: hidden; isolation: isolate; }
+.ag2-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(480px 240px at 88% 0%, rgba(110, 200, 235, .16), transparent 70%), repeating-linear-gradient(180deg, rgba(160, 230, 255, .035) 0 1px, transparent 1px 9px); }
+.ag2-hero .ag-aw-h .faint { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--c3); font-weight: 650; }
+.ag2-hero .ag-addr { font-size: 14px; margin-top: 6px; word-break: break-all; }
+.ag2-hero .ag-bal { margin: 18px 0 12px; border: 0; background: transparent; gap: 12px; }
+.ag2-hero .ag-bal .stat { border-radius: 18px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); padding: 16px 18px; }
+.ag2-hero .ag-bal .stat .v { font-size: 22px; font-weight: 700; letter-spacing: -0.03em; }
+.ag-panel { border-radius: 22px !important; }
+.ag-panel h3 { font-size: 15px; font-weight: 650; }
+.ag-grid2, .ag-grid3 { gap: 16px; }
+/* playbooks as cards */
+.ag-pb-list { display: grid; gap: 8px; }
+.ag-pb { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); transition: border-color .3s; }
+.ag-pb:hover { border-color: rgba(142, 223, 245, .3); }
+.ag-pb b { font-weight: 650; }
+.ag-pb .badge-s { text-transform: capitalize; }
+html[data-theme="light"] .ag2-hero::before { background: radial-gradient(480px 240px at 88% 0%, rgba(10, 126, 163, .1), transparent 70%); }
+
+/* ---------- Bridge 2.0: the ticket left, the details right ---------- */
+.br-wrap { grid-template-columns: minmax(0, 480px) minmax(0, 1fr); justify-items: stretch; align-items: start; gap: 16px; margin-top: 18px; }
+.br-wrap > .br-box { grid-row: span 2; width: 100%; position: sticky; top: calc(var(--top) + 16px); }
+.br-wrap > .br-section { width: 100%; border-top: 0; padding: 20px 22px; border-radius: 22px; border: 1px solid var(--line); background: var(--glass-solid); }
+@media (max-width: 1000px) { .br-wrap { grid-template-columns: 1fr; } .br-wrap > .br-box { grid-row: auto; position: static; } }
+
+/* ---------- Stock desk 2.0 ---------- */
+.sd-body { margin-top: 16px; }
+.sd-body .panel { border-radius: 22px; }
+.sd-body .tbl tbody tr { transition: background .25s; }
+.sd-body .tbl tbody tr:hover { background: linear-gradient(90deg, rgba(142, 223, 245, .07), rgba(142, 223, 245, .02)); }
+.sd-body .tbl td { padding-top: 12px; padding-bottom: 12px; }
+.sd-body .tok-ico { width: 32px; height: 32px; }
+
+/* ---------- Launchpad, Leaderboard, Create, Social, Flywheel ---------- */
+.lp-tabs { margin-top: 16px; }
+.lp-tabs .tabs { gap: 4px; padding: 5px; border-radius: 16px; background: rgba(0, 0, 0, .25); border: 1px solid var(--line); width: max-content; max-width: 100%; overflow-x: auto; }
+.lp-tabs .tabs button, .lp-tabs .tabs a { height: 36px; padding: 0 16px; border-radius: 11px; }
+.lp-tabs .tabs [aria-selected="true"] { background: linear-gradient(180deg, rgba(142, 223, 245, .16), rgba(142, 223, 245, .05)); box-shadow: inset 0 0 0 1px rgba(142, 223, 245, .3); }
+.lp-tabs .tabs [aria-selected="true"]::after { display: none; }
+.lc-grid { gap: 16px; margin-top: 16px; }
+.lc-sec { padding: 20px 22px; border: 1px solid var(--line); background: var(--glass-solid); }
+.lc-prev { position: sticky; top: calc(var(--top) + 16px); }
+.lc-form .btn.big { height: 54px; border-radius: 999px; }
+.fw-top { gap: 12px; margin-top: 16px; }
+.fw-tile .v, .fw-tile b { font-variant-numeric: tabular-nums; }
+.fw-tile { padding: 18px 20px; }
+.so-card, .sd-panel { padding: 20px 22px; }
+.st-list { gap: 10px; margin-top: 18px; }
+.st-step { border-radius: 20px; border: 1px solid var(--line); background: var(--glass-solid); }
+.st-step.now { border-color: rgba(142, 223, 245, .45); box-shadow: inset 0 0 0 1px rgba(142, 223, 245, .2), 0 16px 40px rgba(40, 140, 180, .12); }
+.lb-box { padding: 20px 22px; }

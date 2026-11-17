@@ -23,7 +23,7 @@ export async function mount(view, ctx) {
     history.replaceState(null, "", `#/portfolio${v === "overview" ? "" : "/" + v}`);
     render();
   });
-  clear(view, pageHead("Portfolio", "Your balances, positions and alerts on Robinhood Chain and Hyperliquid."), tabsEl, body);
+  clear(view, h("div", { class: "pf2-tabs" }, tabsEl), body);
 
   /* ---------- data ---------- */
   async function loadBalances() {
@@ -103,7 +103,36 @@ export async function mount(view, ctx) {
       tile("Hyperliquid", connected ? (st.errors.hl ? "–" : st.hl ? usd(st.hl.accountValue) : "…") : "–", connected && st.hl ? `Withdrawable ${usd(st.hl.withdrawable)}` : connected ? "" : "Not connected", "Perp account value in USDC."),
       tile("Open PnL", connected && st.hl ? h("span", { class: st.hl.unrealizedPnl > 0 ? "up" : st.hl.unrealizedPnl < 0 ? "down" : "" }, `${st.hl.unrealizedPnl > 0 ? "+" : ""}${usd(st.hl.unrealizedPnl)}`) : "–", connected && st.hl ? `${st.hl.positions.length} open position${st.hl.positions.length === 1 ? "" : "s"}` : "", "Unrealised PnL across Hyperliquid perps."));
 
-    const parts = [tiles];
+    void tiles;
+    // Desk 2.0: one hero with the total, the split and the open PnL, then every token as a card
+    const rhUsd = st.rh != null && st.eth ? st.rh * st.eth : 0, hlUsd = st.hl?.accountValue || 0, total = rhUsd + hlUsd;
+    const C = 2 * Math.PI * 46, slices = [["Robinhood Chain", rhUsd, "#bff0fd"], ["Hyperliquid", hlUsd, "#3c8fa8"]].filter((x) => x[1] > 0);
+    let off = 0;
+    const donut = h("span", { class: "pf2-donut" });
+    donut.innerHTML = `<svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="46" class="bg"/>${slices.map(([, v, c]) => { const len = total ? (v / total) * C : 0; const el = `<circle cx="60" cy="60" r="46" stroke="${c}" style="stroke-dasharray:${len} ${C};stroke-dashoffset:${-off}"/>`; off += len; return el; }).join("")}</svg>`;
+    donut.append(h("span", { class: "pf2-donut-c" }, h("b", {}, connected ? String(slices.length || 0) : "–"), h("small", {}, "places")));
+    const pnl = st.hl?.unrealizedPnl;
+    const hero = h("section", { class: "pf2-hero" },
+      h("div", { class: "pf2-txt" },
+        h("p", { class: "d2-mic" }, h("i", { class: "live-dot" }), connected ? `Portfolio · ${short(wallet.address)}` : "Portfolio"),
+        h("div", { class: "pf2-total" }, connected ? (st.rh == null && !st.hl ? "…" : usd(total)) : "Connect a wallet"),
+        h("p", { class: "pf2-sub" }, connected ? "ETH on Robinhood Chain plus your Hyperliquid account. Tokens are listed below with their amounts." : "Your balances on Robinhood Chain and Hyperliquid, your open positions and your alerts, in one place."),
+        h("div", { class: "pf2-chips" },
+          connected && pnl != null ? h("span", { class: `pf2-chip ${pnl > 0 ? "up" : pnl < 0 ? "down" : ""}` }, `Open PnL ${pnl > 0 ? "+" : ""}${usd(pnl)}`) : null,
+          connected && st.hl ? h("span", { class: "pf2-chip" }, `${st.hl.positions.length} open position${st.hl.positions.length === 1 ? "" : "s"}`) : null,
+          connected && st.toks ? h("span", { class: "pf2-chip" }, `${st.toks.length} token${st.toks.length === 1 ? "" : "s"}`) : null),
+        h("div", { class: "d2-acts" },
+          connected ? h("a", { class: "btn primary d2-big", href: "#/swap" }, icon("swap"), "Swap") : h("button", { class: "btn primary d2-big", type: "button", onclick: () => openConnect() }, icon("wallet"), "Connect wallet"),
+          h("a", { class: "btn d2-big", href: "#/bridge" }, "Bridge"), h("a", { class: "btn d2-big", href: "#/bridge?dir=hl" }, "Fund Hyperliquid"))),
+      h("div", { class: "pf2-split" }, donut,
+        h("ul", { class: "pf2-legend" },
+          h("li", {}, h("i", { style: { background: "#bff0fd" } }), h("span", {}, "Robinhood Chain"), h("b", {}, connected ? (st.rh == null ? "…" : `${num(st.rh, 5)} ETH`) : "–"), h("small", {}, connected && st.eth && st.rh != null ? usd(rhUsd) : "")),
+          h("li", {}, h("i", { style: { background: "#3c8fa8" } }), h("span", {}, "Hyperliquid"), h("b", {}, connected ? (st.hl ? usd(hlUsd) : "…") : "–"), h("small", {}, connected && st.hl ? `withdrawable ${usd(st.hl.withdrawable)}` : "")))));
+    const toks = connected && st.toks?.length ? h("section", { class: "pf2-toks" },
+      h("div", { class: "pf2-sec-h" }, h("h2", {}, "Your tokens"), h("span", { class: "fine muted" }, "Robinhood Chain")),
+      h("div", { class: "pf2-grid" }, st.toks.slice(0, 24).map((x) => h("a", { class: "pf2-tok", href: x.address ? `#/token/${x.address}` : "#/market" },
+        tokenIcon({ symbol: x.symbol, address: x.address, chain: "robinhood" }), h("span", {}, h("b", {}, x.symbol), h("small", {}, num(Number(x.amount), 4))), h("i", {}, "→"))))) : null;
+    const parts = [hero, toks];
     if (connected && wallet.session) parts.push(briefPanel());
     if (!connected) parts.push(h("div", { class: "panel pf-connect" }, "Connect a wallet to see your balances.", h("button", { class: "btn primary", type: "button", onclick: () => openConnect() }, icon("wallet"), "Connect wallet")));
 

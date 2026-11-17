@@ -66,7 +66,14 @@ function robinhoodTab(box, go, query) {
       { key: "newest", label: "Age", sort: true, render: (t) => h("span", { class: "muted" }, ageText(t.createdAt)), hide: NARROW },
     ],
   });
-  clear(box, h("div", { class: "mk-filters" }, search, chips), h("div", { class: "mk-sub" }, untradable), notice, h("div", { class: "panel mk-panel" }, tbl), pager, foot);
+  // Desk 2.0: the four busiest coins as cards above the board
+  const topBox = h("div", { class: "mk2-top" });
+  const paintTop = (rows) => clear(topBox, rows.slice(0, 4).map((t, i) => h("a", { class: "mk2-card", href: `#/token/${t.address}` },
+    h("div", { class: "mk2-c-h" }, tokenIcon({ ...t, chain: "robinhood" }), h("span", {}, h("b", {}, t.symbol), h("small", {}, i === 0 ? "Busiest today" : t.launchpad ? padName(t.launchpad) : "Robinhood Chain")), h("span", { class: "mk2-rank" }, `#${i + 1}`)),
+    h("div", { class: "mk2-c-p" }, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"),
+    h("div", { class: "mk2-c-f" }, pctEl(t.change24h), h("span", {}, `vol ${t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : "–"}`), h("span", {}, `liq ${t.liquidityUsd != null ? usd(t.liquidityUsd, { compact: true }) : "–"}`)),
+    h("i", { class: "mk2-bar", style: { "--w": `${Math.min(100, Math.abs(t.change24h || 0))}%` }, "data-dir": (t.change24h || 0) >= 0 ? "up" : "down" }))));
+  clear(box, topBox, h("div", { class: "mk-filters" }, search, chips), h("div", { class: "mk-sub" }, untradable), notice, h("div", { class: "panel mk-panel" }, tbl), pager, foot);
 
   function renderChips(counts) {
     const list = [["all", "All"], ...LAUNCHPADS.filter(([k]) => counts?.[k] || k === state.launchpad)];
@@ -92,6 +99,8 @@ function robinhoodTab(box, go, query) {
         d.total = Math.max(d.total || 0, rows.length);
       }
       tbl.setRows(rows);
+      if (!state.q && state.offset === 0 && state.launchpad === "all") { const busy = [...rows].filter((t) => t.priceUsd != null).sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0)); if (busy.length) paintTop(busy); }
+      topBox.hidden = !!state.q;
       const hiddenTotal = d.hiddenTotal;
       untradable.textContent = state.showAll ? "Hide coins Troya cannot route" : `Show coins Troya cannot route yet${hiddenTotal ? ` (${compact(hiddenTotal, 0)})` : ""}`;
       untradable.onclick = () => { state.showAll = !state.showAll; load(); };

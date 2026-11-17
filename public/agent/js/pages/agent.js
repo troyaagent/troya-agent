@@ -321,7 +321,7 @@ function mountWallet(box) {
     } }, "Max");
     const wChain = h("select", { class: "select" }, h("option", { value: "robinhood" }, "Robinhood Chain"));
     clear(main,
-      h("div", { class: "panel ag-panel" },
+      h("div", { class: "panel ag-panel ag2-hero" },
         h("div", { class: "ag-aw-h" },
           h("div", {}, h("div", { class: "faint" }, "Agent Wallet"), h("div", { class: "ag-addr mono" }, aw.address, h("button", { class: "icon-btn", type: "button", "aria-label": "Copy address", onclick: () => copyText(aw.address, "Address copied") }, icon("copy")))),
           h("div", { class: "row" }, h("span", { class: `badge-s ${aw.enabled ? "blue" : ""}` }, aw.enabled ? "On" : "Off"), toggle)),

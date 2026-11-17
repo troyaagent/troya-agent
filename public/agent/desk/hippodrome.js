@@ -7,7 +7,7 @@ import { h, clear, useCss, pageHead, short, ago, tokenIcon, setBorn, compact, us
 import { api } from "/agent/js/api.js";
 
 const LANES = [
-  { key: "new", title: "New", tone: "new", hint: "Born through Troya, early on the curve", empty: "No coins yet. Launch the first one." },
+  { key: "new", title: "New", tone: "new", hint: "Born through Troya, early on the curve", empty: "No coins yet." },
   { key: "almost", title: "Almost bonded", tone: "almost", hint: "Curve at least 50% full", empty: "Nothing close to bonding yet." },
   { key: "migrated", title: "Migrated", tone: "migrated", hint: "Graduated to its own Uniswap v4 pool", empty: "No coin has graduated yet." },
 ];
@@ -117,7 +117,7 @@ export async function mount(view, ctx) {
     clear(lanes, LANES.map((l) => h("section", { class: `panel hp-lane ${l.tone}${st.lane === l.key ? " on" : ""}`, "aria-label": l.title },
       h("header", {}, h("i", { class: "hp-dot" }), h("b", {}, l.title), h("span", { class: "hp-count" }, String(d[l.key].length)), h("small", {}, l.hint)),
       h("div", { class: "hp-list" }, d[l.key].length ? d[l.key].map((c) => card(c, l.key))
-        : h("div", { class: "hp-empty" }, h("p", {}, l.empty), l.key === "new" ? h("div", { class: "hp-empty-acts" }, h("a", { class: "btn primary", href: "#/create" }, "Create coin")) : null)))));
+        : h("div", { class: "hp-empty" }, h("p", {}, l.empty))))));
   }
 
   paint();

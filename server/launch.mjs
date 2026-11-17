@@ -429,7 +429,11 @@ export async function creatorFees(owner) {
 
 /** a failed launch, said plainly with where to fix it */
 export function guide(why) {
-  const w = String(why).replace(/\.$/, "").slice(0, 140);
+  // long addresses shortened so the fix always fits in the reply
+  const w = String(why).replace(/\.$/, "").replace(/0x[0-9a-fA-F]{40}/g, (a) => `${a.slice(0, 6)}…${a.slice(-4)}`).slice(0, 140);
+  // not enough ETH: say how much, where to send it and how to get ETH onto Robinhood Chain (owner, 18 Nov: guide everyone)
+  if (/needs at least|not enough|insufficient|balance|top up|for the pons fee/i.test(w))
+    return `Not launched: ${w.replace(/^The Agent Wallet/i, "your Agent Wallet").replace(/ on Robinhood Chain for the Pons fee and gas/i, " for the Pons fee")}. To fix: send it about 0.001 ETH on Robinhood Chain, then post again (bridge ETH in: ${SITE().replace(/^https?:\/\//, "")}/agent#/bridge). Nothing was spent.`.slice(0, 275);
   const fix = /launches through Troya today|try again tomorrow/i.test(w) ? "try again tomorrow (UTC)"
     : /cap|limit/i.test(w) ? "raise your Agent Wallet caps or post a smaller buy"
     : /kill switch|paused/i.test(w) ? "launches are paused right now, try again later"

@@ -88,6 +88,9 @@ const RULES = [
   [2, DM_ASK],
   [2, PRIVATE_CHAT],
   [3, PARTNERSHIP],
+  // a "private holders group" you join by messaging the poster, and "early positioning: reach out to me" (18 Nov)
+  [3, /\b(?:holders?|vip|private|alpha|insiders?|whales?)\s+(?:group|chat|channel)\b[^\n]{0,240}?\b(?:send|message|dm|pm|text|inbox|contact)\s+me\b|\b(?:send|message|dm|pm|text|contact)\s+me\b[^\n]{0,120}?\b(?:get you added|add you|added to (?:the|our) group|invite you)\b/i],
+  [3, /\b(?:reach out|dm|message|pm|text|contact|write)\s+(?:to\s+)?me\b[^\n]{0,80}?\b(?:early|positioning|whitelist|allocation|presale|private sale|initiative)\b|\b(?:early\s+positioning|whitelist|allocation|presale|private sale)\b[^\n]{0,160}?\b(?:reach out|dm|message|pm|contact|write)\s+(?:to\s+)?me\b/i],
   // raid and engagement services ("team of 50+ organic raiders", "we help projects gain visibility and engagement")
   [3, /\b(?:raiders?|raid(?:ing)?\s+(?:team|squad|group|service))\b[^\n]{0,90}\b(?:visibility|engagement|exposure|growth|projects?)\b|\bwe\s+help\s+(?:your\s+)?projects?\s+(?:gain|get|grow|reach|boost)\b|\b(?:organic|real)\s+(?:blue\s?tick|verified)\s+(?:raiders?|accounts|engagement)\b/i],
   [2, HOLDINGS_BAIT],

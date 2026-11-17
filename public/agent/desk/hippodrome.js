@@ -16,6 +16,12 @@ const TG_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 4.2 
 const WEB_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>';
 const svg = (s, cls) => { const e = h("span", { class: cls, "aria-hidden": "true" }); e.innerHTML = s; return e; };
 const SOURCE = { x: ["X", X_ICON], tg: ["Telegram", TG_ICON], web: ["Web", WEB_ICON] };
+// besides Troya (Buy, through the Gate), each coin opens on the venues people already trade on
+const VENUES = [
+  ["Fomo", "fomo.png", (c) => `https://fomo.family/tokens/robinhood/${c.token}`],
+  ["Pons", "pons.svg", (c) => c.ponsUrl || `https://ponsfamily.com/launchpad/${c.token.toLowerCase()}`],
+  ["DexScreener", "dexscreener.png", (c) => `https://dexscreener.com/robinhood/${c.token}`],
+];
 
 export async function mount(view, ctx) {
   useCss("perps");
@@ -74,8 +80,11 @@ export async function mount(view, ctx) {
         lane === "migrated" ? h("div", { class: "hp-grad" }, h("span", {}, "Graduated"), h("small", {}, c.liquidityUsd != null ? `Pool ${usd(c.liquidityUsd, { compact: true })}` : "Uniswap v4"))
           : h("div", { class: "hp-bar", title: `${pct.toFixed(1)}% of the curve filled` }, h("i", { style: { width: `${pct}%` } }), h("span", {}, `${pct.toFixed(pct < 10 ? 1 : 0)}% bonded`, c.raisedEth != null ? ` · ${c.raisedEth.toFixed(c.raisedEth < 1 ? 3 : 2)} ETH` : ""))),
       h("div", { class: "hp-act" },
-        h("a", { class: "btn hp-buy", href: `#/swap?in=eth&out=${c.token}`, onclick: (e) => e.stopPropagation(), title: "Buy through Troya Gate" }, "Buy"),
-        h("a", { class: "hp-gate", href: `#/gate/${c.token}`, onclick: (e) => e.stopPropagation() }, "Gate")));
+        h("a", { class: "btn hp-buy", href: `#/swap?in=eth&out=${c.token}`, onclick: (e) => e.stopPropagation(), title: "Buy on Troya, through the Gate" },
+          h("img", { src: "/img/logo-3d-128.png", alt: "", width: 16, height: 16 }), "Buy"),
+        h("div", { class: "hp-venues", role: "group", "aria-label": "Trade elsewhere" }, VENUES.map(([name, logo, url]) =>
+          h("a", { class: "hp-venue", href: url(c), target: "_blank", rel: "noopener", title: `Trade on ${name}`, "aria-label": `Trade ${c.symbol} on ${name}`, onclick: (e) => e.stopPropagation() },
+            h("img", { src: `/img/logos/${logo}`, alt: "", width: 16, height: 16 }))))));
   }
 
   function paint() {

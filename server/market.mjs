@@ -289,7 +289,8 @@ function fold(map, pr, ethUsd) {
   }
   t.volume24hEth = ethUsd ? t.volume24hUsd / ethUsd : null;
   t.liquidityEth = ethUsd && t.liquidityUsd != null ? t.liquidityUsd / ethUsd : null;
-  if (!(t.mcapUsd > 0) && t.launchpad === "pons" && t.priceUsd > 0) t.mcapUsd = t.priceUsd * 1e9;   // Pons: 1B minted once
+  // Pons: 1B minted once; only when it fits the pool (a broken dust-pool price would give an absurd number)
+  if (!(t.mcapUsd > 0) && t.launchpad === "pons" && t.priceUsd > 0 && t.liquidityUsd > 0 && t.priceUsd * 1e9 <= t.liquidityUsd * 400) t.mcapUsd = t.priceUsd * 1e9;
   t.mcapEth = ethUsd && t.mcapUsd != null ? t.mcapUsd / ethUsd : null;
   if (t.image) IMAGES.set(t.address, t.image);
 }
@@ -479,7 +480,7 @@ export async function getRobinhoodTokens(opts = {}) {
     return (x - y) * sgn;
   });
   return {
-    tokens: rows.slice(o.offset, o.offset + o.limit).map((t) => { const r = { ...clean(t), spark: sparkOf(t), socials: socialOf(t.address) }; if (!(r.mcapUsd > 0) && r.launchpad === "pons" && r.priceUsd > 0) { r.mcapUsd = r.priceUsd * 1e9; r.mcapEth = ethUsd ? r.mcapUsd / ethUsd : null; } return r; }), total: rows.length, counts, hiddenTotal: hidden,
+    tokens: rows.slice(o.offset, o.offset + o.limit).map((t) => { const r = { ...clean(t), spark: sparkOf(t), socials: socialOf(t.address) }; if (!(r.mcapUsd > 0) && r.launchpad === "pons" && r.priceUsd > 0 && r.liquidityUsd > 0 && r.priceUsd * 1e9 <= r.liquidityUsd * 400) { r.mcapUsd = r.priceUsd * 1e9; r.mcapEth = ethUsd ? r.mcapUsd / ethUsd : null; } return r; }), total: rows.length, counts, hiddenTotal: hidden,
     volume24hUsd: board.volumeUsd, volume24hEth: ethUsd ? board.volumeUsd / ethUsd : null,
     offset: o.offset, limit: o.limit, sort: o.sort, dir: o.dir, launchpad: o.launchpad,
     updatedAt: board.updatedAt, stale: !!board.error, notice: board.error ? `Last refresh failed (${board.error}); showing the previous board.` : null,

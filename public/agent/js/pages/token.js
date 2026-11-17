@@ -33,13 +33,14 @@ export async function mount(view, { parts, go }) {
         h("h1", {}, t.name || t.symbol, h("span", { class: "sym" }, `$${t.symbol}`), t.stock ? h("span", { class: "badge-s pad-badge" }, padLogo("stocks", 14), "Tokenized stock") : h("span", { class: "badge-s pad-badge" }, padLogo(t.launchpad, 14), padName(t.launchpad)),
           pons ? h("span", { class: `badge-s ${pons.graduated ? "blue" : ""}` }, pons.graduated ? "Graduated" : `Curve ${pons.progressPct != null ? pons.progressPct.toFixed(1) : "?"}%`) : null,
           !t.tradable ? h("span", { class: "badge-s warn" }, "Not routed by Troya") : null),
-        h("div", { class: "tk-addr" }, short(address, 6), h("button", { type: "button", "aria-label": "Copy address", onclick: () => copyText(address, "Address copied") }, icon("copy"))))),
+        h("div", { class: "tk-addr" }, h("span", { class: "mono tk2-ca" }, address), h("button", { type: "button", "aria-label": "Copy address", onclick: () => copyText(address, "Address copied") }, icon("copy"))))),
     h("div", { class: "tk-px" },
       h("div", { class: "p" }, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : pons?.priceInPair != null ? `${tiny(pons.priceInPair)} ${pons.pair.symbol}` : "No price yet"),
       h("div", { class: "u" }, t.priceEth != null ? `${tiny(t.priceEth)} ETH` : null, pctEl(t.change24h), h("span", { class: "faint" }, "24h"))));
 
   const actions = h("div", { class: "tk-act" },
-    h("a", { class: "btn primary", href: `#/swap?out=${address}` }, icon("swap"), "Swap"),
+    h("a", { class: "btn primary", href: `#/swap?out=${address}` }, icon("swap"), "Buy with Troya Swap"),
+    h("a", { class: "btn", href: `#/gate/${address}` }, icon("shield"), "Run the Gate"),
     h("a", { class: "btn", href: `#/agent?q=${encodeURIComponent(`Give me a read on ${t.symbol} (${address}) on Robinhood Chain: liquidity, contract risk and recent flow.`)}` }, icon("spark"), "Ask about it"),
     h("button", { class: "btn ghost", type: "button", onclick: () => copyText(address, "Address copied") }, icon("copy"), "Copy address"));
 
@@ -49,6 +50,28 @@ export async function mount(view, { parts, go }) {
   const ivSeg = seg(["15m", "1h", "4h", "1d"], interval, (v) => { interval = v; loadChart(); });
   const chartSrc = h("span", { class: "fine" });
   const chartPanel = h("section", { class: "panel" }, h("div", { class: "tk-chart-bar" }, ivSeg, chartSrc), chartBox);
+
+  const C = 2 * Math.PI * 50;
+  const gRing = h("span", { class: "dk-ring tk2-ring" });
+  gRing.innerHTML = `<svg viewBox="0 0 120 120"><circle class="ra" cx="60" cy="60" r="50"/><circle class="rb" cx="60" cy="60" r="50" style="stroke-dasharray:0 ${C}"/></svg><b>…</b>`;
+  const gVerdict = h("span", { class: "dk-v" }, "Checking"), gNote = h("p", { class: "fine", style: { margin: "6px 0 0" } }, "A simulated buy and a test sell from a fresh address, the same checks Swap runs.");
+  const gList = h("ul", { class: "tk2-checks" });
+  const gateCard = h("section", { class: "panel tk2-gate" },
+    h("div", { class: "panel-h" }, h("h2", {}, "Troya Gate"), h("a", { class: "link fine", href: `#/gate/${address}` }, "Full result")),
+    h("div", { class: "tk2-gate-b" }, gRing, h("div", {}, gVerdict, gNote)), gList,
+    h("a", { class: "btn primary tk2-buy", href: `#/swap?out=${address}` }, icon("swap"), `Buy $${t.symbol} with Troya Swap`));
+  api.get(`/api/badge/${address}`).then((r) => {
+    const checks = r.checks || [];
+    if (!checks.length) { gVerdict.textContent = "Not tested yet"; return; }
+    const pass = checks.filter((c) => c.status === "pass").length;
+    gRing.className = `dk-ring tk2-ring v-${r.verdict}`;
+    gRing.querySelector("b").textContent = `${pass}/${checks.length}`;
+    requestAnimationFrame(() => requestAnimationFrame(() => { gRing.querySelector(".rb").style.strokeDasharray = `${(pass / checks.length) * C} ${C}`; }));
+    gVerdict.className = `dk-v v-${r.verdict}`;
+    gVerdict.textContent = { passed: "Passed", caution: "Caution", failed: "Failed", untested: "Not tested yet" }[r.verdict] || r.verdict;
+    if (r.checkedAt) gNote.textContent = `Checked ${ago(r.checkedAt)} ago. A snapshot, never a safe stamp.`;
+    clear(gList, checks.map((c) => h("li", { class: `c-${c.status}` }, h("span", { class: "dk-ck" }, c.status === "pass" ? icon("check") : c.status === "fail" ? icon("close") : h("b", {}, c.status === "warn" ? "!" : "–")), h("span", {}, c.label))));
+  }).catch(() => { gVerdict.textContent = "Gate unavailable"; });
 
   const stat = (k, v) => h("div", {}, h("div", { class: "k" }, k), h("div", { class: "v" }, v ?? "–"));
   const stats = h("section", { class: "panel tk-stats" },
@@ -113,7 +136,9 @@ export async function mount(view, { parts, go }) {
   }).catch(() => { if (!chartStop) clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Recent trades are unavailable right now."))); });
 
   clear(view, back, head, actions,
-    h("div", { class: "tk-grid" }, h("div", {}, chartPanel, tabsEl ? h("div", { class: "tk-tabs" }, tabsEl, tabBody) : null), h("div", { class: "tk-side" }, stats, info)));
+    h("div", { class: "tk-grid" }, h("div", {}, chartPanel, tabsEl ? h("div", { class: "tk-tabs" }, tabsEl, tabBody) : null), h("div", { class: "tk-side" }, gateCard, stats, info)));
+  view.classList.add("tk2");
+  const offClass = () => view.classList.remove("tk2");
 
   async function loadChart() {
     clear(chartBox, h("div", { class: "tk-chart-msg" }, h("div", { class: "sk", style: { height: "300px", width: "100%" } })));
@@ -153,7 +178,7 @@ export async function mount(view, { parts, go }) {
     }
   }
   loadChart();
-  return () => { chartStop = true; try { chart?.remove(); } catch {} ro?.disconnect(); };
+  return () => { chartStop = true; offClass(); try { chart?.remove(); } catch {} ro?.disconnect(); };
 }
 
 function safeUrl(u) {

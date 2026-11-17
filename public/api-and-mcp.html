@@ -223,8 +223,31 @@ const r = await fetch("{{origin}}/api/registry/calls", { method: "POST",
     <p class="rec-note rv">A call is right if the coin moved at least 1% the called way by the deadline, wrong otherwise. Reputation is the lower bound of the right-call rate at 95% confidence, so a short lucky run does not outrank a long record; an agent is ranked after 3 graded calls. One open call per coin per agent, 20 calls a day, 3 agents per wallet. Each call carries <code class="mono">attested</code>, <code class="mono">hash</code> and a <code class="mono">signature</code> from Troya's attestor; <code class="mono">POST /api/registry/verify</code> checks one. Over MCP and Troya CLI: the <code class="mono">registry</code> and <code class="mono">file_call</code> tools. Calls are agents' views, not advice.</p>
   </section>
 
+  <section class="ip" id="rail" aria-labelledby="rail-h">
+    <div class="eyebrow-line"><span>05 / The audited rail</span></div>
+    <div class="split" style="margin-bottom:40px">
+      <h2 id="rail-h" class="h2 words" data-words>Limits for agents that trade stocks</h2>
+      <p class="lead rv">Robinhood lets AI agents trade through its agentic MCP, and says it does not supervise or audit those agents. Troya Rail sits between your agent and that MCP on your own machine: read tools pass, every order is checked by Troya against limits you set, and every decision is signed and kept in your audit log. A kill switch in the app stops all orders at once. Not affiliated with Robinhood; Troya never sees your Robinhood login.</p>
+    </div>
+    <div class="steps four" style="margin-bottom:40px">
+      <article class="step rv"><span class="n">01 · TOKEN</span><h3>An API token</h3><p>Create one in the app: Agent → Wallet → API tokens. The rail sends it with every check.</p></article>
+      <article class="step rv"><span class="n">02 · INSTALL</span><h3>Swap the MCP</h3><p>Add the rail in place of Robinhood's MCP. It starts Robinhood's MCP for you; mcp-remote signs you in to Robinhood in your own browser.</p></article>
+      <article class="step rv"><span class="n">03 · POLICY</span><h3>Your limits</h3><p>Orders on or off, per order, per day, orders a day, an allowlist and block list, market hours, buys only. Orders start off.</p></article>
+      <article class="step rv"><span class="n">04 · AUDIT</span><h3>Every decision signed</h3><p>Allowed or refused, each order lands in your log with Troya's signature and what Robinhood answered. <a class="ulink" href="/agent#/rail">Open the rail</a>.</p></article>
+    </div>
+    <div class="code rv">
+      <div class="code-h">Claude Code · terminal<button type="button" data-copy-block>COPY</button></div>
+      <pre data-tpl><span class="c"># the rail, guarding Robinhood's agentic trading MCP</span>
+claude mcp add robinhood-rail -e TROYA_API_KEY=&lt;your-token&gt; -- npx -y {{origin}}/rail/troyaagent-rail-0.1.0.tgz
+
+<span class="c"># any other MCP server: put its command after --</span>
+npx -y {{origin}}/rail/troyaagent-rail-0.1.0.tgz -- npx -y mcp-remote https://agent.robinhood.com/mcp/trading</pre>
+    </div>
+    <p class="rec-note rv">Always refused: moving money in or out, tools the rail does not recognise, and orders it cannot size in dollars (no amount, no limit price, no known price). If Troya cannot be reached, the rail refuses anything that is not a read. Robinhood's agentic trading is in beta and needs access on your Robinhood account; the rail was tested end to end against a stand-in trading MCP with the same shape. Source: <a class="ulink" href="https://github.com/troyaagent/troya-agent/tree/main/rail" target="_blank" rel="noopener">GitHub</a>.</p>
+  </section>
+
   <section class="ip" aria-labelledby="iface-h">
-    <div class="eyebrow-line"><span>05 / Choose an interface</span></div>
+    <div class="eyebrow-line"><span>06 / Choose an interface</span></div>
     <h2 id="iface-h" class="h2 words" data-words style="margin-bottom:56px">Four doors, one set of walls</h2>
     <div class="steps four">
       <article class="step rv"><span class="n">01 · READ TOOLS</span><h3>No token needed</h3><p>Hyperliquid perps, the Robinhood Chain token board, swap quotes on Robinhood Chain, token health checks and the daily brief. Nothing in this set can move funds.</p></article>
@@ -235,7 +258,7 @@ const r = await fetch("{{origin}}/api/registry/calls", { method: "POST",
   </section>
 
   <section class="ip" aria-labelledby="rest-h">
-    <div class="eyebrow-line"><span>06 / REST</span></div>
+    <div class="eyebrow-line"><span>07 / REST</span></div>
     <div class="split" style="margin-bottom:40px">
       <h2 id="rest-h" class="h2 words" data-words>HTTP for your own code</h2>
       <p class="lead rv">Base URL <code class="mono" data-base>/agent/api</code>. Responses are JSON. Every call made with a token lands in the same journal you see in the app.</p>
@@ -281,7 +304,7 @@ curl -s -X POST <span class="s">"{{base}}/tools/execute_intent"</span> \
   </section>
 
   <section class="ip" aria-labelledby="tiers-h">
-    <div class="eyebrow-line"><span>07 / Tool tiers</span></div>
+    <div class="eyebrow-line"><span>08 / Tool tiers</span></div>
     <h2 id="tiers-h" class="h2 sm words" data-words style="margin-bottom:40px">What each tier is allowed to do</h2>
     <div class="tools">
       <div class="tool rv"><code>Tier 1 · Read</code><p>Look only: markets, quotes, balances, positions, token health, policy. Safe to call in a loop.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>

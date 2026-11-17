@@ -1,0 +1,13 @@
+{
+  "name": "@troyaagent/rail",
+  "version": "0.1.0",
+  "description": "Troya Rail: an MCP gateway that puts your own limits, a symbol allowlist and a kill switch between your AI agent and Robinhood's agentic trading MCP. Every order is checked and the decision signed by Troya. Not affiliated with Robinhood.",
+  "type": "module",
+  "bin": { "troya-rail": "index.mjs" },
+  "files": ["index.mjs", "README.md"],
+  "engines": { "node": ">=18" },
+  "keywords": ["mcp", "robinhood", "agentic-trading", "ai-agent", "guardrails", "kill-switch", "troya"],
+  "homepage": "https://troya.codes/api-and-mcp#rail",
+  "repository": { "type": "git", "url": "git+https://github.com/troyaagent/troya-agent.git", "directory": "rail" },
+  "license": "MIT"
+}

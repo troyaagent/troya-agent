@@ -37,6 +37,7 @@ const MODULES = [
   "./gateapi.mjs",     // F23: Gate for every agent, a fresh signed Gate check as an API, paid per check in USDG
   "./portfolio.mjs",   // every token a wallet holds (Blockscout), priced, with PnL from its own trades
   "./registry.mjs",    // F24: agent registry, agents file signed calls on Robinhood Chain coins and earn a public reputation
+  "./rail.mjs",        // F25: the audited rail, limits/allowlist/kill switch for agents trading through Robinhood's agentic MCP
   "./community.mjs",   // community inbox: bug reports, ideas and suspicious-activity flags (web + Telegram), admins only
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];

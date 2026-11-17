@@ -1040,6 +1040,10 @@ body { touch-action: manipulation; }
 .hp-tag.dev.part { color: #f0a347; border-color: rgba(240, 163, 71, .5); background: rgba(240, 163, 71, .1); }
 .hp-tag.dev.red { color: #ff6b6b; border-color: rgba(255, 107, 107, .5); background: rgba(255, 107, 107, .1); }
 .hp-tag.dev.green { color: #6fd39a; border-color: rgba(111, 211, 154, .5); background: rgba(111, 211, 154, .1); }
+/* dev burn flame: green = burned part, yellow = burned everything */
+.hp-tag.fire { color: #6fd39a; border-color: rgba(111, 211, 154, .45); background: rgba(111, 211, 154, .1); }
+.hp-tag.fire.all { color: #f5c84a; border-color: rgba(245, 200, 74, .5); background: rgba(245, 200, 74, .1); }
+.hp-tag.fire svg { fill: currentColor; }
 .hp-tag.gold { color: #f2c26b; border-color: rgba(242, 194, 107, .45); }
 .hp-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .hp-sym { font-size: 17px; letter-spacing: .01em; white-space: nowrap; }

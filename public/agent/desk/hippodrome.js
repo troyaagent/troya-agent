@@ -18,6 +18,7 @@ const svg = (s, cls) => { const e = h("span", { class: cls, "aria-hidden": "true
 const SOURCE = { x: ["X", X_ICON], tg: ["Telegram", TG_ICON], web: ["Web", WEB_ICON] };
 // CTO: a group of people; Dex Paid: a blue verified badge
 const PEOPLE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.25 6.75a3.75 3.75 0 1 1 7.5 0 3.75 3.75 0 0 1-7.5 0zM15.75 9.75a3 3 0 1 1 6 0 3 3 0 0 1-6 0zM2.25 9.75a3 3 0 1 1 6 0 3 3 0 0 1-6 0zM6.31 15.12A6.75 6.75 0 0 1 12 12a6.75 6.75 0 0 1 6.71 7.5.75.75 0 0 1-.37.57A12.7 12.7 0 0 1 12 21.75c-2.3 0-4.47-.61-6.34-1.68a.75.75 0 0 1-.37-.57 6.79 6.79 0 0 1 1.02-4.38zM5.08 14.25a8.29 8.29 0 0 0-1.3 5.14 9.7 9.7 0 0 1-1.77-.44l-.11-.04a.56.56 0 0 1-.38-.49l-.01-.12a3.75 3.75 0 0 1 3.57-4.05zM20.23 19.39a8.29 8.29 0 0 0-1.31-5.14 3.75 3.75 0 0 1 3.57 4.05l-.01.12a.56.56 0 0 1-.37.49l-.12.04c-.56.2-1.15.35-1.76.44z"/></svg>';
+const FIRE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12.96 2.29a.75.75 0 0 0-1.07-.14 9.74 9.74 0 0 0-3.54 6.18 7.55 7.55 0 0 1-1.7-1.72.75.75 0 0 0-1.16-.08A9 9 0 1 0 15.68 4.53a7.46 7.46 0 0 1-2.72-2.24zM15.75 14.25a3.75 3.75 0 1 1-7.31-1.17c.63.46 1.35.81 2.13 1a6 6 0 0 1 1.93-3.55 3.75 3.75 0 0 1 3.25 3.72z"/></svg>';
 const VERIFIED = '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="vb" d="M8.6 3.8A4.5 4.5 0 0 1 12 2.25c1.36 0 2.57.6 3.4 1.55a4.5 4.5 0 0 1 3.5 1.3 4.5 4.5 0 0 1 1.3 3.5A4.5 4.5 0 0 1 21.75 12a4.5 4.5 0 0 1-1.55 3.4 4.5 4.5 0 0 1-1.3 3.5 4.5 4.5 0 0 1-3.5 1.3A4.5 4.5 0 0 1 12 21.75a4.5 4.5 0 0 1-3.4-1.55 4.5 4.5 0 0 1-3.5-1.3 4.5 4.5 0 0 1-1.3-3.5A4.5 4.5 0 0 1 2.25 12c0-1.36.6-2.57 1.55-3.4a4.5 4.5 0 0 1 1.3-3.5 4.5 4.5 0 0 1 3.5-1.3z"/><path class="vc" d="M8.4 12.3l2.4 2.4 4.8-5.2"/></svg>';
 // besides Troya (Buy, through the Gate), each coin opens on the venues people already trade on
 const VENUES = [
@@ -53,24 +54,20 @@ export async function mount(view, ctx) {
     const src = SOURCE[c.source];
     const fresh = c.at && Date.now() - c.at < 3 * 60_000;
     const pct = Math.max(0, Math.min(100, Number(c.progressPct) || 0));
-    // a fixed strip of status tags: lit when true, grey when not, orange when only part of it happened
+    // tags appear only when they are true for this coin
     const tags = [];
     if (c.source === "origin") tags.push(tipOn(h("span", { class: "hp-tag og" }, "OG"), "OG", "The original $TROYA, the coin Troya is built around.", "green"));
-    tags.push(c.cto ? tipOn(h("span", { class: "hp-tag cto ic on" }, svg(PEOPLE, "hp-tag-ic")), "Community takeover", "The community runs this coin.", "yellow")
-      : tipOn(h("span", { class: "hp-tag cto ic" }, svg(PEOPLE, "hp-tag-ic")), "No community takeover", "This coin is still run by the wallet that launched it."));
-    tags.push(c.dexPaid ? tipOn(h("span", { class: "hp-tag paid ic on" }, svg(VERIFIED, "hp-tag-ic")), "Dex Paid", "This coin's DexScreener profile is paid and approved.", "blue")
-      : tipOn(h("span", { class: "hp-tag paid ic" }, svg(VERIFIED, "hp-tag-ic")), "Not Dex Paid", "No paid DexScreener profile for this coin yet."));
+    if (c.cto) tags.push(tipOn(h("span", { class: "hp-tag cto ic on" }, svg(PEOPLE, "hp-tag-ic")), "Community takeover", "The community runs this coin.", "yellow"));
+    if (c.dexPaid) tags.push(tipOn(h("span", { class: "hp-tag paid ic on" }, svg(VERIFIED, "hp-tag-ic")), "Dex Paid", "This coin's DexScreener profile is paid and approved.", "blue"));
     const dv = c.dev, pc = (x) => `${x >= 10 ? x.toFixed(0) : x.toFixed(1)}%`;
-    if (dv) {
-      const held = `The dev still holds ${pc(dv.heldPct)} of the supply.`;
-      tags.push(dv.never ? tipOn(h("span", { class: "hp-tag dev" }, "DS"), "Dev sold: no", "The dev never held this coin.")
-        : dv.sold === "all" ? tipOn(h("span", { class: "hp-tag dev red" }, "DS"), "Dev sold everything", `The dev sold or moved out ${pc(dv.soldPct)} of what they received and holds none.`, "red")
-        : dv.sold === "part" ? tipOn(h("span", { class: "hp-tag dev part" }, "DS"), "Dev sold part", `The dev sold or moved out ${pc(dv.soldPct)} of what they received. ${held}`, "orange")
-        : tipOn(h("span", { class: "hp-tag dev" }, "DS"), "Dev sold: no", `The dev has not sold. ${held}`));
-      tags.push(dv.never ? tipOn(h("span", { class: "hp-tag dev" }, "DB"), "Dev burn: no", "The dev never held this coin.")
-        : dv.burnt === "all" ? tipOn(h("span", { class: "hp-tag dev green" }, "DB"), "Dev burned everything", `The dev burned ${pc(dv.burnedPct)} of what they received and holds none.`, "green")
-        : dv.burnt === "part" ? tipOn(h("span", { class: "hp-tag dev part" }, "DB"), "Dev burned part", `The dev burned ${pc(dv.burnedPct)} of what they received. ${held}`, "orange")
-        : tipOn(h("span", { class: "hp-tag dev" }, "DB"), "Dev burn: no", `The dev has not burned any. ${held}`));
+    if (dv && !dv.never) {
+      // dev burn: a flame, yellow when the dev burned everything, green when part of it
+      if (dv.burnedPct >= 1) tags.push(dv.burnt === "all"
+        ? tipOn(h("span", { class: "hp-tag fire all ic" }, svg(FIRE, "hp-tag-ic")), "Dev burned everything", `The dev burned ${pc(dv.burnedPct)} of what they received and holds none.`, "yellow")
+        : tipOn(h("span", { class: "hp-tag fire ic" }, svg(FIRE, "hp-tag-ic")), "Dev burned part", `The dev burned ${pc(dv.burnedPct)} of what they received and still holds ${pc(dv.heldPct)} of the supply.`, "green"));
+      // dev sell: red, only when the dev really sold a meaningful share
+      if (dv.soldPct >= 5) tags.push(tipOn(h("span", { class: "hp-tag dev red" }, "DS"), dv.sold === "all" ? "Dev sold everything" : "Dev sold",
+        `The dev sold or moved out ${pc(dv.soldPct)} of what they received${dv.heldPct > 0 ? ` and still holds ${pc(dv.heldPct)} of the supply` : ""}.`, "red"));
     }
     if (c.keepsAll === true) tags.push(tipOn(h("span", { class: "hp-tag gold" }, "Holder"), "Holder", "The creator holds 1M $TROYA and keeps the whole creator fee.", "gold"));
     const go = () => { location.hash = `#/token/${c.token.toLowerCase()}`; };

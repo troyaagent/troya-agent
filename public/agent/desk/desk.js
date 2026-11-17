@@ -118,7 +118,7 @@ async function route() {
   if (chat) closeDrawer();
   try { cleanup?.(); } catch {}
   cleanup = null;
-  view.classList.toggle("wide", page === "perps");
+  view.classList.toggle("wide", page === "perps" || page === "hippodrome");
   view.dataset.page = page || "";
   if (!page) { clear(view, h("div", { class: "empty", style: { padding: "120px 0" } }, h("b", {}, "This page does not exist."), h("a", { class: "link", href: "#/" }, "Back to the Desk"))); return; }
   clear(view, h("div", { style: { padding: "60px 0" } }, h("div", { class: "sk", style: { height: "40px", width: "240px" } })));

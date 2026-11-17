@@ -184,7 +184,7 @@ export async function mount(view, { go, ask: askDrawer }) {
   const kBurn = h("div", { class: "v" }, "–"), kBurnS = h("div", { class: "s" }, "of supply");
   const tagGateB = h("b", {}, "Troya Gate"), tagGateS = h("small", {}, "$TROYA, checking…");
   const tagFlyB = h("b", {}, "Flywheel"), tagFlyS = h("small", {}, "reading the chain…");
-  const horseCanvas = h("canvas", { class: "d2-horse", "aria-hidden": "true" });
+  const horseLogo = h("img", { class: "d2-logo", src: "/img/logo-3d-hd.png", alt: "", width: "1024", height: "1024", decoding: "async" });
   const tile = (ic) => h("span", { class: "d2-tile" }, chromeIcon(ic));
   const hero = h("section", { class: "d2-hero" },
     h("div", { class: "d2-beams", "aria-hidden": "true" }),
@@ -197,7 +197,7 @@ export async function mount(view, { go, ask: askDrawer }) {
         h("button", { class: "btn d2-big", type: "button", onclick: () => (askDrawer ? askDrawer() : go("#/agent")) }, chromeIcon("spark"), "Ask Troya")),
       h("div", { class: "d2-kpis" }, kpi("ETH", kEth, kEthS), kpi("$TROYA", kTro, kTroS), kpi("Sentry", kSen, kSenS), kpi("Burned", kBurn, kBurnS))),
     h("div", { class: "d2-stage" },
-      h("div", { class: "d2-floor", "aria-hidden": "true" }), horseCanvas,
+      h("div", { class: "d2-floor", "aria-hidden": "true" }), h("div", { class: "d2-logo-w", "aria-hidden": "true" }, horseLogo),
       h("a", { class: "d2-tag t1", href: CA ? `#/gate/${CA}` : "#/gate" }, tile("verify"), h("span", {}, tagGateB, tagGateS)),
       h("a", { class: "d2-tag t2", href: "#/flywheel" }, tile("flywheel"), h("span", {}, tagFlyB, tagFlyS))));
   const quick = h("section", { class: "d2-quick" },
@@ -246,9 +246,7 @@ export async function mount(view, { go, ask: askDrawer }) {
   stops.push(() => { try { cst.chart?.remove(); } catch {} });
   setTimeout(loadChart, 60);
   stops.push(every(120000, () => loadChart()));
-  stops.push(() => { alive = false; try { horse?.dispose(); } catch {} });
-  const startHorse = () => import("./horse.js").then((m) => m.mountHorse(horseCanvas)).then((hr) => { if (!alive) hr?.dispose(); else horse = hr; }).catch(() => hero.classList.add("no-3d"));
-  setTimeout(startHorse, 150);                   // after the page has painted
+  stops.push(() => { alive = false; void horse; });
   stops.push(every(60000, async () => {
     try {
       const f = await api.get("flywheel");

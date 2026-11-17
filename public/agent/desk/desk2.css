@@ -419,3 +419,11 @@ html[data-theme="light"] .tk2 .tk-head { background: var(--bg-1); box-shadow: 0 
 html[data-theme="light"] .sw2-l .sw-leg { background: var(--bg-2); }
 html[data-theme="light"] .sw2-l .sw-flip { background: var(--bg-2); }
 html[data-theme="light"] .sw2-l .sw-rows { background: var(--bg-2); }
+
+/* the hero's Troya logo: floats slowly over a soft pool of light */
+.d2-logo-w { position: absolute; inset: 4% 4% 10% 4%; display: grid; place-items: center; animation: d2-logo-float 9s ease-in-out infinite; will-change: transform; }
+.d2-logo { width: auto; height: 100%; max-width: 100%; object-fit: contain; filter: drop-shadow(0 24px 40px rgba(0, 0, 0, .55)) drop-shadow(0 0 34px rgba(110, 200, 235, .22)); }
+@keyframes d2-logo-float { 0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); } 50% { transform: translate3d(0, -10px, 0) rotate(-.6deg); } }
+@media (prefers-reduced-motion: reduce) { .d2-logo-w { animation: none; } }
+html[data-theme="light"] .d2-logo { filter: drop-shadow(0 18px 30px rgba(10, 60, 80, .22)); }
+html[data-theme="light"] .d2-floor { background: radial-gradient(50% 50% at 50% 50%, rgba(10, 126, 163, .18), transparent 70%); }

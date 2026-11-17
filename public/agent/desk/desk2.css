@@ -720,3 +720,18 @@ html[data-theme="light"] .ag2-hero::before { background: radial-gradient(480px 2
 .st-step { border-radius: 20px; border: 1px solid var(--line); background: var(--glass-solid); }
 .st-step.now { border-color: rgba(142, 223, 245, .45); box-shadow: inset 0 0 0 1px rgba(142, 223, 245, .2), 0 16px 40px rgba(40, 140, 180, .12); }
 .lb-box { padding: 20px 22px; }
+
+/* ---------- light theme: every glass surface turns light (one token for all of them) ---------- */
+html[data-theme="light"] { --glass-solid: linear-gradient(180deg, #ffffff, #fbfaf7); --glass: linear-gradient(180deg, rgba(20, 30, 40, .025), rgba(20, 30, 40, .01)); }
+html[data-theme="light"] .ag-tabs, html[data-theme="light"] .pf2-tabs .tabs, html[data-theme="light"] .lp-tabs .tabs, html[data-theme="light"] .pp-ivals,
+html[data-theme="light"] .sd-tabs .seg, html[data-theme="light"] .mk-top .seg, html[data-theme="light"] .seg { background: rgba(20, 30, 40, .04); border-color: var(--line); }
+html[data-theme="light"] .pp-head, html[data-theme="light"] .br-wrap > .br-section, html[data-theme="light"] .mk2-card, html[data-theme="light"] .fw-tile, html[data-theme="light"] .st-step, html[data-theme="light"] .lc-sec { background: var(--bg-1); box-shadow: 0 8px 24px rgba(20, 40, 60, .05); }
+html[data-theme="light"] .sp-leg, html[data-theme="light"] .br-leg, html[data-theme="light"] .ag-pb, html[data-theme="light"] .ag2-hero .ag-bal .stat { background: var(--bg-2); }
+html[data-theme="light"] .ag-tabs a[aria-current="page"], html[data-theme="light"] .pf2-tabs .tabs [aria-selected="true"], html[data-theme="light"] .lp-tabs .tabs [aria-selected="true"], html[data-theme="light"] .seg button[aria-pressed="true"], html[data-theme="light"] .pp-ivals button[aria-pressed="true"] {
+  background: #fff; box-shadow: inset 0 0 0 1px rgba(10, 126, 163, .3), 0 2px 8px rgba(20, 40, 60, .08); color: var(--fg); }
+html[data-theme="light"] .sw2-l .sw-flip { box-shadow: 0 6px 16px rgba(20, 40, 60, .12); border-color: rgba(10, 126, 163, .3); }
+html[data-theme="light"] .t-card, html[data-theme="light"] .g-nudge { color: var(--fg); }
+html[data-theme="light"] .ca-chip { background: var(--bg-2); border-color: var(--line-2); color: var(--fg); box-shadow: none; }
+html[data-theme="light"] .ca-chip .addr { color: var(--fg-2); }
+html[data-theme="light"] .ca-chip button { background: var(--bg-3); color: var(--fg); border-color: var(--line-2); }
+html[data-theme="light"] .pp-ticket .gate-box, html[data-theme="light"] .sw-gate, html[data-theme="light"] .gate-box { background: var(--bg-2); color: var(--fg); }

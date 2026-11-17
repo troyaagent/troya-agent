@@ -35,7 +35,7 @@ export async function mount(view) {
         cta: "Create on troya.codes", href: "#/launch/create" }),
       card({ ic: X_ICON, title: "From X", sub: "Post to @Troyaagent and your Agent Wallet launches it.", status: r?.xLaunch ? "Live for holders" : "In its real-money test", tone: r?.xLaunch ? "ok" : "test",
         points: [`For holders of ${min} $TROYA, who keep the whole creator fee.`, "Write \"launch Name $TICKER\", or in your own words; add \"tax 2%\" and \"buy 0.01\".",
-          "Attach the coin's image (PNG or JPEG, up to 5 MB). Without one, the coin launches with no image, for good.", "Troya replies in seconds with the address and market cap, or with what to fix."],
+          "Attach the coin's image: square (1:1) works best, PNG or JPEG up to 5 MB; other shapes get cropped to the middle. Without one, the coin launches with no image, for good.", "Troya replies in seconds with the address and market cap, or with what to fix."],
         cta: "Set up Launch from X", href: "#/launch/x" }),
       card({ ic: TG_ICON, title: "In Telegram", sub: "Launch from a private chat with the Troya bot.", status: "Soon", tone: "soon", off: true,
         points: ["Open to everyone.", "The same steps as X, with a preview and a Confirm button.", "Ships after Launch from X passes its test."],

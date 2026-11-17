@@ -83,7 +83,7 @@ export async function mount(view, ctx) {
           h("div", { class: "lx-tweet" }, h("span", { class: "mono" }, EXAMPLE), h("button", { class: "link", type: "button", onclick: () => copyText(EXAMPLE, "Copied") }, "Copy")),
           h("p", { class: "muted" }, "Attach the coin's image to the post. Add \"tax 2%\" for a creator tax and \"buy 0.01\" for an initial buy."),
           h("ul", { class: "lx-rules" },
-            h("li", {}, "Attach the image (PNG or JPEG, up to 5 MB, X's own limit; GIFs turn into video on X and don't work). Troya does not make one: without an image, the coin launches with none, for good."),
+            h("li", {}, "Attach the image: square (1:1) works best, since every site shows coin logos in a square or circle and crops other shapes to the middle. PNG or JPEG up to 5 MB (X's own limit); GIFs turn into video on X and don't work. Without an image, the coin launches with none, for good."),
             h("li", {}, "Creator tax from 0% to 4%, all of it yours."),
             h("li", {}, "Initial buy: your Agent Wallet buys right after the 3-second Pons snipe tax, through Troya Gate and within its caps. If it cannot pay the launch fee plus the buy, nothing is launched."),
             h("li", {}, "Holders keep the whole creator fee: 0.7% of trading volume plus the tax. Troya takes 0%."),

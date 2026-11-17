@@ -1019,7 +1019,8 @@ body { touch-action: manipulation; }
 .hp-vol span { font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .hp-foot { grid-area: foot; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding-top: 12px; border-top: 1px solid var(--line, rgba(255,255,255,.07)); }
 /* the curve takes the rest of the row, or a row of its own when the lane is narrow */
-.hp-foot > .hp-bar, .hp-foot > .hp-grad { flex: 1 1 190px; min-width: 0; }
+.hp-foot > .hp-bar { flex: 1 1 190px; min-width: 0; }
+.hp-foot > .hp-grad { flex: 1 1 110px; min-width: 0; white-space: nowrap; }
 .hp-foot > .hp-act { margin-left: auto; }
 .hp-bar span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hp-tags { display: flex; flex-wrap: wrap; gap: 5px; }

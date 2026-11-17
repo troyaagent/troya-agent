@@ -34,6 +34,8 @@ async function ownerOf(chatId) {
 }
 
 /* ---------- the image: a Telegram photo (or an image sent as a file) becomes the coin's logo ---------- */
+// Telegram keeps each photo in several sizes; the biggest one that fits the logo store (1 MB) is used, so nobody has to
+// think about file sizes
 let fetchImage = async (tg, fileId) => {
   const f = await tg("getFile", { file_id: fileId });
   const path = f?.result?.file_path;
@@ -47,9 +49,10 @@ export const _setImageFetcher = (fn) => { fetchImage = fn; };
 function imageOf(m) {
   if (Array.isArray(m.photo) && m.photo.length) {
     const sizes = m.photo.slice().sort((a, b) => (a.width || 0) - (b.width || 0));
-    return (sizes.filter((p) => (p.width || 0) <= 1280).pop() || sizes[0]).file_id;
+    const fits = sizes.filter((p) => (p.width || 0) <= 1280 && !(p.file_size > 1_000_000));
+    return (fits.pop() || sizes[0]).file_id;
   }
-  if (m.document && /^image\/(png|jpeg|webp)$/.test(m.document.mime_type || "")) return m.document.file_id;
+  if (m.document && /^image\/(png|jpeg|webp)$/.test(m.document.mime_type || "")) return m.document.file_size > 1_000_000 ? null : m.document.file_id;
   return null;
 }
 async function saveImage(tg, fileId) {
@@ -155,7 +158,7 @@ export async function handleMessage(m, tg, st) {
       if (fresh.taxBps > L.MAX_TAX_BPS) { await say("<b>Not launched:</b> the creator tax can be 4% at most."); return true; }
       if (fresh.buyEth > L.MAX_INITIAL_BUY_ETH) { await say(`<b>Not launched:</b> the initial buy can be up to ${L.MAX_INITIAL_BUY_ETH} ETH.`); return true; }
       const fid = imageOf(m);
-      if (fid) { try { fresh.logo = await saveImage(tg, fid); } catch { await say("Troya couldn't read that image. Send it as a photo (PNG or JPEG, up to 1 MB as a file)."); return true; } }
+      if (fid) { try { fresh.logo = await saveImage(tg, fid); } catch { await say("Troya couldn't read that image. Send it as a photo (PNG or JPEG) rather than as a file."); return true; } }
       sessions.set(chat, fresh);
       if (!fresh.logo) { fresh.step = "image"; await say(`<b>${esc(fresh.name)}</b> $${esc(fresh.symbol)}. Now send the coin's image (square works best), or /skip to launch without one.`); return true; }
       return showPreview(L, tg, fresh, say);
@@ -186,8 +189,8 @@ export async function handleMessage(m, tg, st) {
   if (s.step === "image") {
     if (/^\/skip\b/i.test(text)) { s.logo = ""; s.step = "tax"; await say("No image. Creator tax? It's yours on every buy and sell, fixed for good.", taxKb(chat)); return true; }
     const fid = imageOf(m);
-    if (!fid) { await say("Send the image as a photo, or /skip."); return true; }
-    try { s.logo = await saveImage(tg, fid); } catch { await say("Troya couldn't read that image. Send it as a photo (PNG or JPEG, up to 1 MB as a file), or /skip."); return true; }
+    if (!fid) { await say(m.document ? "Send the image as a photo rather than as a file, or /skip." : "Send the image as a photo, or /skip."); return true; }
+    try { s.logo = await saveImage(tg, fid); } catch { await say("Troya couldn't read that image. Send it as a photo (PNG or JPEG) rather than as a file, or /skip."); return true; }
     s.step = "tax";
     await say("Image saved. Creator tax? It's yours on every buy and sell, fixed for good.", taxKb(chat));
     return true;
@@ -260,7 +263,7 @@ export async function handleCallback(cq, tg) {
         lines.push(`Creator fee: ${out.launch.split ? `0.6% of volume${s.taxBps ? ` plus your ${s.taxBps / 100}% tax` : ""} to you, 0.1% to Troya` : "all yours"}.`, "", `CA: <code>${ca}</code>`);
         await edit(lines.join("\n"), { inline_keyboard: [[{ text: "Trade it on Troya", url: `${SITE}/agent#/token/${lc(ca)}` }],
           ...(process.env.TG_TRADE === "1" ? [[{ text: ib?.executed ? "Sell here" : "Buy or sell here", url: `https://t.me/${BOT}?start=t_${lc(ca)}` }]] : []),
-          [{ text: "Troya Launches", url: `${SITE}/agent#/hippodrome` }]] });
+          [{ text: "Troya Launches", url: `${SITE}/agent#/troya-launches` }]] });
       } catch (e) {
         await edit(`<b>Not launched:</b> ${why(e, 200)}. Nothing was spent.`, guideBtn());
       } finally { busy.delete(chat); }

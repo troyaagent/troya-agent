@@ -41,16 +41,34 @@ export async function mount(view, ctx) {
   drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
   drop.addEventListener("dragleave", () => drop.classList.remove("over"));
   drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); setFile(e.dataTransfer.files?.[0]); });
-  function setFile(f) {
+  // the logo store keeps images up to 1 MB: a bigger one is scaled down here (to 1024 px, then smaller if needed), so
+  // nobody has to think about file sizes. An animated GIF can't be scaled without losing the animation, so it says so.
+  async function shrink(f) {
+    if (f.size <= 1024 * 1024) return f;
+    if (f.type === "image/gif") throw new Error("That GIF is too large to use. Use a PNG or JPEG instead.");
+    const bmp = await createImageBitmap(f);
+    for (const side of [1024, 768, 512]) {
+      const k = Math.min(1, side / Math.max(bmp.width, bmp.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+      const type = f.type === "image/png" ? "image/png" : "image/jpeg";
+      let b = await new Promise((res) => c.toBlob(res, type, 0.9));
+      if (b && b.size > 1024 * 1024 && type === "image/png") b = await new Promise((res) => c.toBlob(res, "image/webp", 0.92));
+      if (b && b.size <= 1024 * 1024) return new File([b], f.name.replace(/\.\w+$/, "") + (b.type === "image/png" ? ".png" : b.type === "image/webp" ? ".webp" : ".jpg"), { type: b.type });
+    }
+    throw new Error("Troya couldn't make that image small enough. Try another one.");
+  }
+  async function setFile(f) {
     if (!f) return;
     if (!/^image\/(png|jpeg|gif|webp)$/.test(f.type)) { toast("Use a PNG, JPEG, GIF or WebP image.", "error"); return; }
-    if (f.size > 1024 * 1024) { toast("The image is over 1 MB.", "error"); return; }
+    try { f = await shrink(f); } catch (e) { toast(e.message, "error"); return; }
     if (st.preview) URL.revokeObjectURL(st.preview);
     st.file = f; st.preview = URL.createObjectURL(f); st.logo = null;
     paintDrop(); paintSide(); paintBtn();
   }
   function paintDrop() {
-    clear(drop, st.preview ? h("img", { src: st.preview, alt: "Coin image preview" }) : h("span", { class: "lc-drop-empty" }, icon("plus"), h("b", {}, "Add an image"), h("small", {}, "PNG, JPEG, GIF or WebP · up to 1 MB · square works best")));
+    clear(drop, st.preview ? h("img", { src: st.preview, alt: "Coin image preview" }) : h("span", { class: "lc-drop-empty" }, icon("plus"), h("b", {}, "Add an image"), h("small", {}, "PNG, JPEG, GIF or WebP · square works best")));
   }
 
   const taxBox = h("div", { class: "chips" });

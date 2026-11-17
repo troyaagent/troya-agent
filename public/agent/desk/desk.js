@@ -60,7 +60,7 @@ export function si(name, cls = "") {
 export const GROUPS = [
   [null, [["Desk", "#/", "desk"]]],
   ["Trade", [["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Perps · Lighter (Robinhood)", "#/lighter", "lighter"], ["Stock desk", "#/stocks", "stocks"], ["Liquidity desk", "#/liquidity", "liquidity"], ["Bridge", "#/bridge", "bridge"]]],
-  ["Discover", [["Gate a coin", "#/gate", "gate"], ["Market", "#/market", "market"], ["Troya Launches", "#/hippodrome", "hippodrome"], ["Create coin", "#/create", "create"], ["All launches", "#/launch", "launch"], ["Leaderboard", "#/leaderboard", "leaderboard"], ["Agent registry", "#/registry", "agent"]]],
+  ["Discover", [["Gate a coin", "#/gate", "gate"], ["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["Create coin", "#/create", "create"], ["All launches", "#/launch", "launch"], ["Leaderboard", "#/leaderboard", "leaderboard"], ["Agent registry", "#/registry", "agent"]]],
   ["Agent", [["Chat", "#/agent", "chat"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Sentry Autopilot", "#/agent/sentry", "sentry"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Audited rail", "#/rail", "sentry"]]],
   ["You", [["Portfolio", "#/portfolio", "portfolio"], ["Inbox", "#/portfolio/inbox", "inbox"], ["History", "#/portfolio/history", "history"], ["Social", "#/social", "social"]]],
   ["Help", [["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Verify", "/verify", "verify"], ["The Record", "/record", "verify"], ["$TROYA flywheel", "#/flywheel", "flywheel"]]],
@@ -69,7 +69,7 @@ const FLAT = GROUPS.flatMap(([g, items]) => items.map(([t, href, ic]) => ({ g, t
 // route table: first path segment → page module (same as /agent) plus the Desk's own Gate page
 const ROUTES = {
   "": "home", market: "market", token: "token", swap: "swap", perps: "perps", launch: "launchpad",
-  bridge: "bridge", agent: "agent", assistant: "agent", portfolio: "portfolio", docs: "docs", start: "start", leaderboard: "leaderboard", gate: "gate", spot: "spot", lighter: "lighter", stocks: "stocks", liquidity: "liquidity", flywheel: "flywheel", social: "social", registry: "registry", rail: "rail", hippodrome: "hippodrome", create: "create",
+  bridge: "bridge", agent: "agent", assistant: "agent", portfolio: "portfolio", docs: "docs", start: "start", leaderboard: "leaderboard", gate: "gate", spot: "spot", lighter: "lighter", stocks: "stocks", liquidity: "liquidity", flywheel: "flywheel", social: "social", registry: "registry", rail: "rail", "troya-launches": "hippodrome", hippodrome: "hippodrome", create: "create",
 };
 const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js" };
 export const prefs = store("troya.prefs", { slippage: 1, density: "comfortable", motion: "system", lang: "auto" });
@@ -104,6 +104,8 @@ async function route() {
   const id = ++routeId;
   const r = parse();
   if (r.raw.split("?")[0].replace(/\/$/, "") === "settings") { history.replaceState(null, "", "#/"); openSettings(); return route(); }
+  // Troya Launches lived at #/hippodrome first; old links (posts, bot replies) land on the new address
+  if (r.name === "hippodrome") { history.replaceState(null, "", "#/troya-launches" + r.raw.slice("hippodrome".length)); return route(); }
   const page = r.name == null ? null : ROUTES[r.name];
   const act = activeItem(r.path);
   for (const a of document.querySelectorAll("[data-nav] a, [data-tabbar] a")) {
@@ -118,7 +120,7 @@ async function route() {
   if (chat) closeDrawer();
   try { cleanup?.(); } catch {}
   cleanup = null;
-  view.classList.toggle("wide", page === "perps" || page === "hippodrome");
+  view.classList.toggle("wide", page === "perps" || page === "hippodrome");   // hippodrome = the Troya Launches module
   view.dataset.page = page || "";
   if (!page) { clear(view, h("div", { class: "empty", style: { padding: "120px 0" } }, h("b", {}, "This page does not exist."), h("a", { class: "link", href: "#/" }, "Back to the Desk"))); return; }
   clear(view, h("div", { style: { padding: "60px 0" } }, h("div", { class: "sk", style: { height: "40px", width: "240px" } })));

@@ -58,3 +58,4 @@
   .bb-btn { padding-right: 10px; }
   .bb-menu { position: fixed; left: 12px; right: 12px; top: 68px; width: auto; transform-origin: top center; }
 }
+.bb-i img { background: #fff1; object-fit: cover; }

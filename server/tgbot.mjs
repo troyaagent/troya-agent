@@ -325,7 +325,7 @@ export async function handleBotMessage(m, tg, me) {
   const [, cmdRaw, at, arg = ""] = cm;
   if (at && me?.username && at.toLowerCase() !== me.username.toLowerCase()) return;
   const cmd = cmdRaw.toLowerCase();
-  if (!["start", "help", "links", "ca", "price", "p", "gate", "check", "assay", "rules", "sentry", "badge", "perks"].includes(cmd)) return;
+  if (!["start", "help", "links", "ca", "price", "p", "gate", "check", "assay", "rules", "sentry", "badge", "perks", "reports"].includes(cmd)) return;
   // one answer per person every 3 s keeps the group readable
   const who = `${chatId}:${m.from?.id}`;
   if (Date.now() - (lastReply.get(who) || 0) < 3000) return;
@@ -333,6 +333,19 @@ export async function handleBotMessage(m, tg, me) {
 
   let text, markup;
   try {
+    if (cmd === "start" && m.chat.type === "private" && /^rep_[0-9a-f]{16}$/.test(arg.trim())) {
+      const r = await import("./community.mjs").then((c) => c.bindReportsChat(arg.trim().slice(4), m.chat, m.from)).catch(() => ({ ok: false }));
+      await tg("sendMessage", { chat_id: chatId, parse_mode: "HTML", text: r.ok
+        ? "<b>Reports connected.</b>\nEvery new bug report, idea and suspicious-activity flag from troya.codes/community and Telegram arrives here, screenshots included.\n\n/reports off to pause · /reports on to resume"
+        : "That link expired or was already used. Make a new one in the app: Desk → Social → Reports → Get reports in Telegram." });
+      return;
+    }
+    if (cmd === "reports" && m.chat.type === "private") {
+      const on = !/\boff\b/i.test(arg);
+      const r = await import("./community.mjs").then((c) => c.setReportsChat(chatId, on)).catch(() => ({ linked: false }));
+      await tg("sendMessage", { chat_id: chatId, text: r.linked ? (on ? "Reports are on: new ones arrive here." : "Reports paused. /reports on to resume.") : "This chat is not linked to the reports inbox." });
+      return;
+    }
     if (cmd === "start" && m.chat.type === "private" && /^report\b/i.test(arg.trim())) {
       await tg("sendMessage", { chat_id: chatId, parse_mode: "HTML", link_preview_options: { is_disabled: true }, text: `<b>Report to the Troya team</b>
 Send one message here:

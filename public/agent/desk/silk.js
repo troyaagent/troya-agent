@@ -37,7 +37,8 @@ export function mountSilk(canvas, scale = 0.5) {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
   const a = gl.getAttribLocation(pr, "a"); gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
   const uR = gl.getUniformLocation(pr, "r"), uT = gl.getUniformLocation(pr, "t"), uM = gl.getUniformLocation(pr, "m");
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // phones and tablets get the light drawn once (no animation loop): same look, no battery drain or heat
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches || matchMedia("(pointer: coarse)").matches || innerWidth < 860;
   let tx = 0.5, ty = 0.5, mx = 0.5, my = 0.5, raf = 0, last = performance.now(), time = 8;
   addEventListener("pointermove", (e) => { tx = e.clientX / innerWidth; ty = e.clientY / innerHeight; }, { passive: true });
   const fit = () => { canvas.width = Math.max(2, Math.round(innerWidth * scale)); canvas.height = Math.max(2, Math.round(innerHeight * scale)); gl.viewport(0, 0, canvas.width, canvas.height); draw(); };

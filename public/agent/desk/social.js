@@ -65,7 +65,7 @@ export async function mount(view, ctx) {
 
   /* ---------- community inbox (admins): web form + Telegram /bug /idea /report ---------- */
   async function loadReports() {
-    try { st.reports = await api.get("community/reports"); st.isAdmin = true; } catch (e) { st.reports = { error: e.message }; }
+    try { st.reports = await api.get("community/reports"); st.isAdmin = true; st.tgChats = (await api.get("community/telegram").catch(() => null))?.chats || null; } catch (e) { st.reports = { error: e.message }; }
     if (alive) paint();
   }
   const KIND_TAG = { bug: "Bug", idea: "Idea", scam: "Suspicious", other: "Other" };
@@ -80,7 +80,12 @@ export async function mount(view, ctx) {
     clear(body,
       h("div", { class: "panel", style: { padding: "16px 18px", display: "flex", flexWrap: "wrap", gap: "10px 18px", alignItems: "center" } },
         seg([{ value: "open", label: `Open (${(d.counts.new || 0) + (d.counts.seen || 0) + (d.counts.working || 0)})` }, { value: "bug", label: "Bugs" }, { value: "idea", label: "Ideas" }, { value: "scam", label: "Suspicious" }, { value: "all", label: "All" }], st.rFilter, (v) => { st.rFilter = v; paint(); }),
-        h("span", { class: "fine muted" }, `From troya.codes/community and Telegram (/bug, /idea, /report). ${d.team ? "Each new report also goes to the team Telegram group." : "Only here: no personal chat gets them."}`)),
+        h("span", { class: "fine muted" }, "From troya.codes/community and Telegram (/bug, /idea, /report)."),
+        h("button", { class: "btn primary sm", type: "button", style: { marginLeft: "auto" }, onclick: async () => {
+          try { const r = await api.post("community/telegram", {}); window.open(r.url, "_blank", "noopener"); toast("Telegram opened: press Start in the bot. The link works once, for 15 minutes.", "ok", 8000); }
+          catch (e) { toast(e.message, "error"); }
+        } }, "Get reports in Telegram"),
+        st.tgChats ? h("span", { class: "fine muted", style: { flexBasis: "100%" } }, st.tgChats.length ? `Sent by the bot to: ${st.tgChats.map((c) => `${c.name || "a chat"}${c.on ? "" : " (paused)"}`).join(", ")}` : "No Telegram chat linked yet.") : null),
       list.length ? list.map((r) => h("div", { class: "panel", style: { padding: "16px 18px", marginTop: "10px", display: "grid", gap: "10px" } },
         h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px 12px", alignItems: "center" } },
           h("span", { class: `badge-s ${r.kind === "scam" ? "warn" : r.kind === "bug" ? "blue" : ""}` }, KIND_TAG[r.kind] || r.kind),

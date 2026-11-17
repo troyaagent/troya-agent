@@ -69,11 +69,49 @@ async function tgCall(method, payload) {
   if (!TG) return null;
   return fetch(`https://api.telegram.org/bot${TG}/${method}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(15000) }).then((r) => r.json()).catch(() => null);
 }
+// who receives new reports by Telegram: chats an admin linked from the Reports tab (one-time code), plus REPORTS_CHAT_ID
+const TGF = "reports-tg.json";
+async function receivers() { const d = await store.readJson(TGF, { chats: [], codes: {} }); return [...new Set([...(d.chats || []).filter((c) => !c.off).map((c) => String(c.id)), ...(process.env.REPORTS_CHAT_ID ? [String(process.env.REPORTS_CHAT_ID)] : [])])]; }
 async function notifyTeam(it) {
-  const chat = process.env.REPORTS_CHAT_ID;
-  if (!chat || !TG) return;
-  const text = `<b>${esc(KINDS[it.kind] || it.kind)}</b> · #${it.id} · ${esc(it.source)}\n${esc(it.message).slice(0, 900)}${it.page ? `\nPage: ${esc(it.page)}` : ""}${it.contact ? `\nContact: ${esc(it.contact)}` : ""}${it.images.length ? `\n${it.images.length} screenshot(s) in the inbox` : ""}\nInbox: troya.codes/agent#/social/reports`;
-  await tgCall("sendMessage", { chat_id: chat, text, parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+  if (!TG) return;
+  const chats = await receivers();
+  if (!chats.length) return;
+  const text = `<b>New report:</b> <b>${esc(KINDS[it.kind] || it.kind)}</b> · #${it.id} · ${esc(it.source)}\n\n${esc(it.message).slice(0, 900)}${it.reported ? `\n\nReported message from ${esc(it.reported.user || it.reported.id)}: ${esc(it.reported.text || "").slice(0, 300)}` : ""}${it.page ? `\nPage: ${esc(it.page)}` : ""}${it.contact ? `\nContact: ${esc(it.contact)}` : ""}${it.wallet ? `\nWallet: <code>${esc(it.wallet)}</code>` : ""}\n\nInbox: troya.codes/agent#/social/reports`;
+  const img = it.images[0] ? await readFile(join(dir, it.images[0])).catch(() => null) : null;
+  for (const chat of chats) {
+    if (img) {
+      const f = new FormData();
+      f.set("chat_id", chat); f.set("caption", text.slice(0, 1020)); f.set("parse_mode", "HTML");
+      f.set("photo", new Blob([img], { type: it.images[0].endsWith(".png") ? "image/png" : it.images[0].endsWith(".webp") ? "image/webp" : "image/jpeg" }), it.images[0]);
+      const r = await fetch(`https://api.telegram.org/bot${TG}/sendPhoto`, { method: "POST", body: f, signal: AbortSignal.timeout(30000) }).then((x) => x.json()).catch(() => null);
+      if (r?.ok) continue;
+    }
+    await tgCall("sendMessage", { chat_id: chat, text, parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+  }
+}
+/** The bot calls this for "/start rep_<code>" in a private chat. */
+export async function bindReportsChat(code, chat, from) {
+  if (!store) return { ok: false };
+  let ok = false;
+  await store.update(TGF, { chats: [], codes: {} }, (d) => {
+    d.codes ||= {}; d.chats ||= [];
+    const c = d.codes[code];
+    if (c && c.exp > Date.now()) {
+      ok = true; delete d.codes[code];
+      d.chats = d.chats.filter((x) => String(x.id) !== String(chat.id));
+      d.chats.push({ id: chat.id, name: from?.username ? `@${from.username}` : String(from?.first_name || "").slice(0, 40), by: c.by, at: Date.now() });
+    }
+    for (const [k, v] of Object.entries(d.codes)) if (v.exp < Date.now()) delete d.codes[k];
+    return d;
+  });
+  return { ok };
+}
+/** "/reports on|off" from a linked chat. */
+export async function setReportsChat(chatId, on) {
+  if (!store) return { linked: false };
+  let linked = false;
+  await store.update(TGF, { chats: [], codes: {} }, (d) => { const c = (d.chats || []).find((x) => String(x.id) === String(chatId)); if (c) { linked = true; c.off = !on; } return d; });
+  return { linked };
 }
 
 /* ---------- Telegram: called by the bot ---------- */
@@ -154,6 +192,22 @@ export async function register(r, ctx) {
     const type = name.endsWith(".png") ? "image/png" : name.endsWith(".webp") ? "image/webp" : "image/jpeg";
     res.writeHead(200, { "content-type": type, "cache-control": "private, max-age=3600", "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'" });
     res.end(buf);
+  }, { weight: 1 });
+
+  // an admin links their own chat with the bot: a one-time code, valid 15 minutes, in a t.me deep link
+  r.post("/api/community/telegram", async ({ req }) => {
+    if (!isAdmin(req)) throw new HttpError(403, "Admins only.");
+    if (!TG) throw new HttpError(503, "The Telegram bot is not configured on this server.");
+    const code = randomBytes(8).toString("hex");
+    await store.update(TGF, { chats: [], codes: {} }, (d) => { d.codes ||= {}; d.codes[code] = { by: getSession(req)?.address || null, exp: Date.now() + 15 * 60_000 }; return d; });
+    const me = await tgCall("getMe", {});
+    const user = me?.result?.username || "TrojanTroya_bot";
+    return { url: `https://t.me/${user}?start=rep_${code}`, expiresIn: 900 };
+  }, { weight: 2, perMin: 10 });
+  r.get("/api/community/telegram", async ({ req }) => {
+    if (!isAdmin(req)) throw new HttpError(403, "Admins only.");
+    const d = await store.readJson(TGF, { chats: [], codes: {} });
+    return { chats: (d.chats || []).map((c) => ({ name: c.name, on: !c.off, at: c.at })) };
   }, { weight: 1 });
 
   r.post("/api/community/reports/:id", async ({ req, params, body }) => {

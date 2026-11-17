@@ -2,7 +2,37 @@
 // questions to ask Troya about it and the sensible next steps. The orb (bottom right) opens it; questions go to the
 // agent drawer, so the answer comes from the live tools, not from this file.
 import { h, clear } from "/agent/js/ui.js";
+import { stream } from "/agent/js/api.js";
+import { wallet } from "/agent/js/wallet.js";
 import { chromeIcon } from "./chrome-icons.js";
+
+/* ---------- the chat inside the guide: ask anything, Troya answers here and points the way ---------- */
+const GUEST_KEY = "troya.guestChat";                 // the same guest memory as the full chat page
+const guestLog = { get() { try { return JSON.parse(localStorage.getItem(GUEST_KEY) || "[]"); } catch { return []; } }, set(v) { try { localStorage.setItem(GUEST_KEY, JSON.stringify(v.slice(-30))); } catch {} } };
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function md(text) {
+  const lines = esc(text).split("\n");
+  let html = "", list = false;
+  const inline = (s) => s.replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/(?:https?:\/\/)?troya\.codes(\/agent)?(#\/[\w\/?=&.-]*|\/[\w\/?=&.#-]*)?/g, (m, ag, path) => {
+      const href = ag && path?.startsWith("#") ? path : `https://troya.codes${ag || ""}${path || ""}`;
+      return `<a href="${href}"${href.startsWith("#") ? "" : ' target="_blank" rel="noopener"'}>${m}</a>`;
+    });
+  for (const raw of lines) {
+    const m = /^\s*[-*] (.*)$/.exec(raw);
+    if (m) { if (!list) { html += "<ul>"; list = true; } html += `<li>${inline(m[1])}</li>`; }
+    else { if (list) { html += "</ul>"; list = false; } if (raw.trim()) html += `<p>${inline(raw)}</p>`; }
+  }
+  if (list) html += "</ul>";
+  return html;
+}
+// pages an answer points to become buttons: open the page, and walk through it when it has a tour
+function routesIn(text) {
+  const out = new Set();
+  for (const m of String(text).matchAll(/troya\.codes\/agent#\/([a-z][\w\/-]*)/g)) out.add(m[1]);
+  for (const m of String(text).matchAll(/(?:^|[\s(])#\/([a-z][\w\/-]*)/g)) out.add(m[1]);
+  return [...out].map((p) => p.replace(/\/$/, "")).filter((p) => G[p] || G[p.split("/")[0]]).slice(0, 3);
+}
 
 // tour steps: [selector, title, text]; a step whose element is not on screen is skipped
 const G = {
@@ -92,15 +122,57 @@ const keyOf = () => {
 
 let panel, orb, ask = null, tourEl = null, steps = [], step = 0;
 
+let conv = null, convBox = null, busy = false, abort = null;
+function chatSend(q) {
+  q = String(q || "").trim();
+  if (!q || busy) return;
+  const k = keyOf(), g = k == null ? null : G[k];
+  busy = true;
+  const me = h("div", { class: "g-msg me" }, h("p", {}, q));
+  const body = h("div", { class: "g-md" });
+  const status = h("div", { class: "g-status" }, h("span", { class: "ag-spin" }), h("span", {}, "Troya is reading the chain…"));
+  const acts = h("div", { class: "g-acts" });
+  const bot = h("div", { class: "g-msg bot" }, h("img", { src: "/img/logo-3d-128.png", alt: "" }), h("div", { class: "g-bub" }, status, body, acts));
+  conv.push(me, bot);
+  convBox.append(me, bot);
+  panel.classList.add("chatting");
+  const scroll = () => { const b = panel.querySelector(".g-b"); if (b) b.scrollTop = b.scrollHeight; };
+  scroll();
+  let acc = "";
+  abort = new AbortController();
+  const guest = !wallet.session;
+  const prior = guest ? guestLog.get().slice(-8) : undefined;
+  const context = g ? `(I am on the ${g.t} page of troya.codes/agent.) ` : "";
+  stream("assistant/stream", { message: context + q, ...(guest ? { history: prior } : {}) }, (type, data) => {
+    if (type === "status") status.lastChild.textContent = data.text;
+    else if (type === "text") { acc += data.delta; body.innerHTML = md(acc); scroll(); }
+    else if (type === "proposal") acts.append(h("a", { class: "g-act", href: "#/agent" }, chromeIcon("chat"), "A ticket is ready: confirm it in Chat"));
+    else if (type === "done") { if (guest && acc) guestLog.set([...guestLog.get(), { role: "user", text: q }, { role: "assistant", text: acc }]); }
+    else if (type === "error") body.innerHTML = md(`**${data.error}**`);
+  }, abort.signal).catch((e) => { if (e.name !== "AbortError") body.innerHTML = md(`**${e.message}**`); })
+    .finally(() => {
+      status.remove(); busy = false;
+      for (const p of routesIn(acc)) {
+        const gk = G[p] ? p : p.split("/")[0], title = G[gk]?.t || p;
+        acts.append(h("a", { class: "g-act", href: `#/${p}` }, chromeIcon("start"), `Open ${title}`));
+        if (G[gk]?.tour?.length) acts.append(h("button", { class: "g-act", type: "button", onclick: () => { close(); location.hash = `#/${p}`; setTimeout(() => { const st = (G[gk].tour || []).filter(([s]) => document.querySelector(s)); if (st.length) startTour(st); }, 1600); } }, chromeIcon("eye"), `Show me how`));
+      }
+      scroll();
+    });
+}
+
 function render() {
   const k = keyOf(), g = k == null ? null : G[k];
   const tourSteps = (g?.tour || []).filter(([sel]) => document.querySelector(sel));
-  const input = h("input", { class: "g-in", placeholder: "Ask Troya anything about this page…", maxlength: "400" });
-  const send = () => { const q = input.value.trim(); if (!q) return input.focus(); close(); ask?.(q); };
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+  const input = h("textarea", { class: "g-in", rows: "1", placeholder: "Ask Troya anything…", maxlength: "500" });
+  const send = () => { const q = input.value.trim(); if (!q) return input.focus(); input.value = ""; chatSend(q); };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+  conv = conv || [];
+  convBox = h("div", { class: "g-conv" }, conv);
   clear(panel,
-    h("div", { class: "g-h" }, h("img", { src: "/img/logo-3d-128.png", alt: "" }), h("div", {}, h("b", {}, "Troya Guide"), h("small", {}, "You ask · Troya checks · you sign")),
-      h("button", { class: "g-x", type: "button", "aria-label": "Close the guide", onclick: close }, chromeIcon("close"))),
+    h("div", { class: "g-h" }, h("img", { src: "/img/logo-3d-128.png", alt: "" }), h("div", {}, h("b", {}, "Ask Troya"), h("small", {}, "Answers from the live chain · points you the way")),
+      conv.length ? h("button", { class: "g-x", type: "button", title: "New conversation", "aria-label": "New conversation", onclick: () => { abort?.abort(); conv = []; panel.classList.remove("chatting"); render(); } }, chromeIcon("create")) : null,
+      h("button", { class: "g-x", type: "button", "aria-label": "Close", onclick: close }, chromeIcon("close"))),
     h("div", { class: "g-b" },
       h("p", { class: "g-mic" }, "This page"),
       h("h3", {}, g?.t || "Troya"),
@@ -108,11 +180,14 @@ function render() {
       tourSteps.length ? h("button", { class: "g-walk", type: "button", onclick: () => { close(); startTour(tourSteps); } },
         h("span", { class: "d2-tile" }, chromeIcon("start")), h("span", {}, h("b", {}, "Show me how this page works"), h("small", {}, `${tourSteps.length} steps, right on the screen`))) : null,
       g?.ask?.length ? h("p", { class: "g-mic" }, "Ask Troya") : null,
-      g?.ask?.length ? h("div", { class: "g-asks" }, g.ask.map((q) => h("button", { class: "g-ask", type: "button", onclick: () => { close(); ask?.(q); } }, chromeIcon("spark"), h("span", {}, q)))) : null,
+      g?.ask?.length ? h("div", { class: "g-asks" }, g.ask.map((q) => h("button", { class: "g-ask", type: "button", onclick: () => chatSend(q) }, chromeIcon("spark"), h("span", {}, q)))) : null,
       g?.next?.length ? h("p", { class: "g-mic" }, "Good next steps") : null,
       g?.next?.length ? h("div", { class: "g-next" }, g.next.map(([t, href]) => h("a", { href, onclick: close }, t, h("i", {}, "→")))) : null,
-      h("p", { class: "g-safe" }, "Nobody from Troya DMs first or asks for a seed phrase. Found a bug? ", h("a", { href: "/community", target: "_self" }, "troya.codes/community"))),
-    h("div", { class: "g-f" }, input, h("button", { class: "btn primary", type: "button", onclick: send }, "Ask")));
+      h("p", { class: "g-safe" }, "Nobody from Troya DMs first or asks for a seed phrase. Found a bug? ", h("a", { href: "/community", target: "_self" }, "troya.codes/community")),
+      convBox),
+    h("div", { class: "g-f" }, input, h("button", { class: "btn primary g-send", type: "button", "aria-label": "Send", onclick: send }, chromeIcon("send") || "Ask"),
+      h("a", { class: "g-full", href: "#/agent", title: "Open the full chat", "aria-label": "Open the full chat", onclick: close }, chromeIcon("expand"))));
+  if (conv.length) { panel.classList.add("chatting"); requestAnimationFrame(() => { const b = panel.querySelector(".g-b"); if (b) b.scrollTop = b.scrollHeight; }); }
 }
 // a page still building when the guide opens gets its walk-through button as soon as its parts are on screen
 function recheck() {
@@ -157,8 +232,8 @@ function show() {
 
 export function mountGuide({ askFn }) {
   ask = askFn;
-  orb = h("button", { class: "g-orb", type: "button", "aria-label": "Troya Guide", title: "Troya Guide", onclick: () => (document.body.classList.contains("g-open") ? close() : open()) },
-    h("span", { class: "g-halo" }), h("img", { src: "/img/logo-3d-128.png", alt: "" }), h("span", { class: "g-orb-t" }, "Guide"));
+  orb = h("button", { class: "g-orb", type: "button", "aria-label": "Ask Troya", title: "Ask Troya: questions, guidance, walk-throughs", onclick: () => (document.body.classList.contains("g-open") ? close() : open()) },
+    h("span", { class: "g-halo" }), h("img", { src: "/img/logo-3d-128.png", alt: "" }), h("span", { class: "g-orb-t" }, "Ask Troya"));
   panel = h("aside", { class: "g-panel", "aria-label": "Troya Guide", "aria-hidden": "true" });
   document.body.append(orb, panel);
   addEventListener("hashchange", () => { endTour(); if (document.body.classList.contains("g-open")) render(); });

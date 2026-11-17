@@ -23,6 +23,7 @@ const H = 3600e3, WIN_PCT = 1, MAX_AGENTS = 3, CALLS_PER_DAY = 20, MIN_RANKED = 
 const lc = (s) => String(s || "").toLowerCase();
 const today = () => new Date().toISOString().slice(0, 10);
 let store = null, busy = false;
+const filing = new Set();                   // agent:coin filings in flight, so a double click files once
 const seen = new Map();
 
 /* ---------- who is asking ---------- */
@@ -75,7 +76,7 @@ function agentStats(calls) {
 }
 const pubAgent = (a, calls) => ({ slug: a.slug, name: a.name, bio: a.bio, url: a.url, owner: getAddress(a.owner), house: !!a.house, createdAt: a.createdAt, ...agentStats(calls) });
 const pubCall = (c) => ({ id: c.id, agent: c.agent, token: c.token, symbol: c.symbol, side: c.side, horizonHours: c.horizonHours, note: c.note, at: c.at, dueAt: c.at + c.horizonHours * H,
-  price: c.price, priceSrc: c.priceSrc, gate: c.gate, status: c.status, priceAfter: c.priceAfter ?? null, move: c.move ?? null, result: c.result ?? null, gradedAt: c.gradedAt ?? null,
+  price: c.price, priceSrc: c.priceSrc, gate: c.gate, status: c.status, voidReason: c.voidReason || null, priceAfter: c.priceAfter ?? null, move: c.move ?? null, result: c.result ?? null, gradedAt: c.gradedAt ?? null,
   attested: c.attested, hash: c.hash, signature: c.signature, attestor: c.attestor });
 
 async function data() { return store.readJson(FILE, { agents: {}, calls: [] }); }
@@ -129,6 +130,13 @@ export async function fileCall(owner, body) {
   const horizonHours = Math.round(Number(body?.horizonHours ?? 24));
   if (!(horizonHours >= 1 && horizonHours <= 168)) throw new HttpError(400, "The horizon is 1 to 168 hours.");
   const note = String(body?.note || "").replace(/[<>]/g, "").trim().slice(0, 280);
+  const lockKey = `${slug}:${lc(token)}`;
+  if (filing.has(lockKey)) throw new HttpError(409, "This call is already being filed. One is enough.");
+  filing.add(lockKey);
+  try { return await fileCallLocked(owner, body, slug, token, side, horizonHours, note); }
+  finally { filing.delete(lockKey); }
+}
+async function fileCallLocked(owner, body, slug, token, side, horizonHours, note) {
   const d0 = await data();
   const ag = d0.agents[slug];
   if (!ag) throw new HttpError(404, "No agent with that name in the registry.");
@@ -143,7 +151,11 @@ export async function fileCall(owner, body) {
   const attested = { v: 1, kind: "registry-call", chainId: 4663, agent: slug, owner: getAddress(owner), token: getAddress(token), side, horizonHours, price: p.usd, at };
   const sig = await import("./gateapi.mjs").then((m) => m.attest(attested, "Troya registry call"));
   const call = { id: `c${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`, agent: slug, token: t, symbol: p.symbol, side, horizonHours, note, at, price: p.usd, priceSrc: p.src, gate, status: "open", attested, ...sig };
-  await store.update(FILE, { agents: {}, calls: [] }, (d) => { d.calls.push(call); d.calls = d.calls.slice(-5000); return d; });
+  await store.update(FILE, { agents: {}, calls: [] }, (d) => {
+    if (d.calls.some((c) => c.agent === slug && c.token === call.token && c.status === "open")) throw new HttpError(409, "This agent already has an open call on that coin. Wait for it to be graded.");
+    if (d.calls.filter((c) => c.agent === slug && new Date(c.at).toISOString().slice(0, 10) === today()).length >= CALLS_PER_DAY) throw new HttpError(429, `An agent files at most ${CALLS_PER_DAY} calls a day.`);
+    d.calls.push(call); d.calls = d.calls.slice(-5000); return d;
+  });
   return pubCall(call);
 }
 
@@ -172,8 +184,22 @@ export async function registryView({ limit = 50 } = {}) {
   };
 }
 
+// calls filed twice in the same instant (a double click before the lock existed) stay on record, voided with the reason
+async function voidDuplicates() {
+  await store.update(FILE, { agents: {}, calls: [] }, (d) => {
+    const seen = new Map();
+    for (const c of d.calls) {
+      const k = `${c.agent}:${c.token}:${c.side}:${c.horizonHours}`, first = seen.get(k);
+      if (first && c.status === "open" && first.status === "open" && Math.abs(c.at - first.at) < 3000) { c.status = "void"; c.voidReason = "Filed twice by a double click; the first copy counts."; c.gradedAt = Date.now(); }
+      else if (!first || c.status === "open") seen.set(k, c);
+    }
+    return d;
+  });
+}
+
 export async function register(r, ctx) {
   store = ctx.store;
+  voidDuplicates().catch((e) => console.warn("[registry] void duplicates", e.message));
   r.get("/api/registry", ({ query }) => registryView({ limit: query.limit }), { weight: 1 });
   r.get("/api/registry/calls", async ({ query }) => ({ calls: (await registryView({ limit: query.limit || 100 })).calls }), { weight: 1 });
   r.get("/api/registry/agents/:slug", async ({ params }) => {

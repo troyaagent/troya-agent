@@ -33,7 +33,7 @@ export async function mount(view) {
   const callRow = (c, { withAgent = true } = {}) => {
     const due = c.dueAt;
     const res = c.status === "graded" ? h("span", { class: `rg-res ${c.result}` }, c.result === "right" ? "Right" : "Wrong", h("small", {}, pct(c.move)))
-      : c.status === "void" ? h("span", { class: "rg-res void" }, "No price") : h("span", { class: "rg-res open" }, "Open", h("small", {}, `${left(due)} left`));
+      : c.status === "void" ? h("span", { class: "rg-res void", title: c.voidReason || "" }, "Void", h("small", {}, c.voidReason ? "duplicate" : "no price")) : h("span", { class: "rg-res open" }, "Open", h("small", {}, `${left(due)} left`));
     const verify = h("button", { class: "rg-sig", type: "button", title: `Signed by ${c.attestor}`, onclick: async () => {
       try { const r = await api.post("/api/registry/verify", { attested: c.attested, signature: c.signature }); toast(r.genuine ? "Genuine: signed by Troya when it was filed" : "This signature does not match", r.genuine ? "ok" : "error", 5000); }
       catch (e) { toast(e.message, "error"); }
@@ -92,11 +92,15 @@ export async function mount(view) {
     const name = h("input", { class: "input", placeholder: "Agent name, e.g. Night Owl", maxlength: "40" });
     const bio = h("input", { class: "input", placeholder: "One line on how it picks (optional)", maxlength: "200" });
     const url = h("input", { class: "input", placeholder: "https://… its page or X (optional)", maxlength: "200" });
+    const regBtn = h("button", { class: "btn", type: "submit" }, "Register");
     const reg = h("form", { class: "rg-form", onsubmit: async (e) => {
       e.preventDefault();
+      if (regBtn.disabled) return;
+      regBtn.disabled = true; regBtn.textContent = "Registering…";
       try { const a = await api.post("/api/registry/agents", { name: name.value, bio: bio.value, url: url.value || undefined }); toast(`${a.name} is in the registry`, "ok"); await refresh(); }
       catch (er) { toast(er.message, "error", 6000); }
-    } }, h("h4", {}, myAgents.length ? "Add another agent" : "Register an agent"), name, bio, url, h("button", { class: "btn", type: "submit" }, "Register"));
+      finally { regBtn.disabled = false; regBtn.textContent = "Register"; }
+    } }, h("h4", {}, myAgents.length ? "Add another agent" : "Register an agent"), name, bio, url, regBtn);
     let file = null;
     if (myAgents.length) {
       const f = st.form;
@@ -107,14 +111,18 @@ export async function mount(view) {
       const note = h("input", { class: "input", placeholder: "Why (optional, up to 280 characters)", maxlength: "280" });
       const sides = seg([{ value: "up", label: "Up" }, { value: "down", label: "Down" }], f.side, (v) => { f.side = v; });
       const hrs = seg(HOURS.map(([v, l]) => ({ value: v, label: l })), f.horizon, (v) => { f.horizon = v; });
+      const fileBtn = h("button", { class: "btn primary", type: "submit" }, "File and sign");
       file = h("form", { class: "rg-form", onsubmit: async (e) => {
         e.preventDefault();
+        if (fileBtn.disabled) return;
         if (!f.token?.address) return toast("Pick a coin first.", "error");
+        fileBtn.disabled = true; fileBtn.textContent = "Filing…";
         try {
           const c = await api.post("/api/registry/calls", { agent: ag.value, token: f.token.address, side: f.side, horizonHours: Number(f.horizon), note: note.value });
           toast(`Filed and signed: $${c.symbol} ${c.side} in ${c.horizonHours} h at $${tiny(c.price)}`, "ok", 6000); f.token = null; await refresh();
         } catch (er) { toast(er.message, "error", 7000); }
-      } }, h("h4", {}, "File a call"), ag, coin, picked, h("div", { class: "rg-segs" }, sides, hrs), note, h("button", { class: "btn primary", type: "submit" }, "File and sign"),
+        finally { fileBtn.disabled = false; fileBtn.textContent = "File and sign"; }
+      } }, h("h4", {}, "File a call"), ag, coin, picked, h("div", { class: "rg-segs" }, sides, hrs), note, fileBtn,
         h("p", { class: "fine muted" }, "One open call per coin per agent, up to 20 a day. Filed calls can't be edited or removed."));
     }
     clear(mine, h("h3", {}, "Your agents"),

@@ -7,7 +7,7 @@
 import { Interface, AbiCoder, parseEther } from "ethers";
 import { h, clear, useCss, toast, tiny, usd, pageHead, seg, review, short } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
-import { wallet, onWallet, openConnect } from "/agent/js/wallet.js";
+import { wallet, onWallet, openConnect, signIn } from "/agent/js/wallet.js";
 import { sendTx, waitReceipt, errText } from "/agent/js/chain.js";
 
 const coder = AbiCoder.defaultAbiCoder();
@@ -206,6 +206,13 @@ export async function mount(view) {
   const autoBox = h("section", { class: "panel fw-auto", hidden: true });
   view.querySelector(".fw")?.append(autoBox) || view.append(autoBox);
   async function paintAuto() {
+    if (wallet.address && !wallet.session) {
+      autoBox.hidden = false;
+      clear(autoBox, h("div", { class: "fw-auto-h" }, h("h3", {}, "Automatic mode and burn campaign")),
+        h("p", { class: "fine", style: { margin: 0 } }, "Admins: sign in with your wallet to manage the automatic flywheel and the burn campaign. Signing is free: it proves the wallet is yours and sends nothing."),
+        h("div", { class: "fw-row" }, h("button", { class: "btn primary", type: "button", onclick: async () => { try { await signIn(); paintAuto(); paintCamp(); } catch (e) { toast(errText(e), "error", 7000); } } }, "Sign in")));
+      return;
+    }
     if (!wallet.session) { autoBox.hidden = true; return; }
     let a; try { a = await api.get("flywheel/auto"); } catch { autoBox.hidden = true; return; }
     autoBox.hidden = false;

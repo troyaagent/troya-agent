@@ -12,6 +12,7 @@ const SPAM = [
   "Hey Dev 👋 Looking to grow your project? I have 30+ TG channels, 10 big X/Twitter accounts & 12 CoinMarketCap communities ready for promotion.",
   "Your dex rocket 🚀 vote is currently at 0 and flames 🔥 is at 0 I can add up the rocket 🚀 to 300 and flames 🔥 to 100",
   "I can take the rocket 🚀vote to 300 and 🔥to 200 not bot not fake users but real people real engagement and more eyes on the project",
+  "Hello I run a team of 50+ organic Bluetick raiders. We help project gain visibility and engagement across X, Telegram, TikTok and instagram. Let me know if your're interested",
   "@admin,Boost your token with @MajorsBoostsBot Increase your token’s DEX exposure and reach more potential traders.",
   "Call the big investors\n ✅ @Crypto_KingCall",
   "Hello mate! 👋\n\nWould you be interested in promoting your project?\n\nI have strong channels, communities, and private groups where I can promote your project",

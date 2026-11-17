@@ -88,6 +88,8 @@ const RULES = [
   [2, DM_ASK],
   [2, PRIVATE_CHAT],
   [3, PARTNERSHIP],
+  // raid and engagement services ("team of 50+ organic raiders", "we help projects gain visibility and engagement")
+  [3, /\b(?:raiders?|raid(?:ing)?\s+(?:team|squad|group|service))\b[^\n]{0,90}\b(?:visibility|engagement|exposure|growth|projects?)\b|\bwe\s+help\s+(?:your\s+)?projects?\s+(?:gain|get|grow|reach|boost)\b|\b(?:organic|real)\s+(?:blue\s?tick|verified)\s+(?:raiders?|accounts|engagement)\b/i],
   [2, HOLDINGS_BAIT],
 ];
 

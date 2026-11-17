@@ -131,9 +131,15 @@ export async function mount(view, { parts, go }) {
       api.get(`market/robinhood/holders?address=${address}`).then((r) => {
         const creator = lc(pons?.deployer || "");
         d.holders = (r.holders || []).map((x) => ({ ...x, isCreator: lc(x.address) === creator }));
-        d.holdersCount = r.count;
+        d.holdersCount = r.count; d.holdersTop10 = r.top10; d.holdersSource = r.source || "Blockscout"; d.holdersNote = r.note || null;
         renderTab("holders");
       }).catch((e) => clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, e.message))));
+    } else if (!d.holders.length) {
+      // the per-wallet list is unavailable (Blockscout paused): the live count and top-10 share, said plainly
+      clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" },
+        h("b", {}, d.holdersCount != null ? `${d.holdersCount.toLocaleString("en-US")} holders` : "Holders"),
+        d.holdersTop10 != null ? h("div", {}, `The 10 largest wallets hold ${Number(d.holdersTop10).toFixed(1)}% of the supply.`) : null,
+        h("div", { class: "fine" }, d.holdersNote || "The list of top wallets is unavailable right now."))));
     } else {
       const max = Math.max(...d.holders.map((x) => x.pct || 0), 1);
       clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" },
@@ -144,7 +150,7 @@ export async function mount(view, { parts, go }) {
             x.isCreator ? h("span", { class: "pad-tag warn" }, "dev / creator") : null, x.label ? h("span", { class: "pad-tag" }, x.label) : x.contract ? h("span", { class: "pad-tag" }, "contract") : null),
           h("td", {}, x.balance != null ? compact(x.balance, 2) : "–"),
           h("td", {}, x.pct != null ? `${x.pct.toFixed(2)}%` : "–", h("span", { class: "tk-bar", style: { width: `${Math.max(2, ((x.pct || 0) / max) * 60)}px` } })))))))),
-        h("p", { class: "fine" }, `The ${d.holders.length} largest of ${d.holdersCount != null ? d.holdersCount.toLocaleString("en-US") : "all"} holders, from Blockscout. Pools, lockers and the dead address are labelled; they are not people.`));
+        h("p", { class: "fine" }, `The ${d.holders.length} largest of ${d.holdersCount != null ? d.holdersCount.toLocaleString("en-US") : "all"} holders, from ${d.holdersSource || "Blockscout"}. Pools, lockers and the dead address are labelled; they are not people.`));
     }
   }
   api.get(`market/robinhood/trades?address=${address}`).then((r) => {

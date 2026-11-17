@@ -409,14 +409,22 @@ let holdersSaveAt = 0;
 // Without a key, GeckoTerminal's token info is the fallback.
 const BS_KEY = process.env.BLOCKSCOUT_API_KEY || "";
 const BS = "https://api.blockscout.com/4663/api/v2";
-let bsLast = 0;
+let bsLast = 0, bsDownUntil = 0;
+// when the Blockscout key runs out of credits (or is rate-limited) every call fails for a while: stop calling it for 30
+// minutes and let the callers fall back (GeckoTerminal for holder counts), instead of failing every page that shows holders
+const bsDown = () => Date.now() < bsDownUntil;
 async function blockscout(path) {
+  if (bsDown()) throw new Error("Blockscout is paused (out of credits)");
   const wait = Math.max(0, bsLast + 350 - Date.now()); bsLast = Date.now() + wait;
   if (wait) await new Promise((r) => setTimeout(r, wait));
-  return getJson(`${BS}${path}`, { timeout: 12000, headers: { authorization: `Bearer ${BS_KEY}` } });
+  try { return await getJson(`${BS}${path}`, { timeout: 12000, headers: { authorization: `Bearer ${BS_KEY}` } }); }
+  catch (e) {
+    if (/credit|quota|rate.?limit|\b(402|429)\b/i.test(String(e.message || e))) { bsDownUntil = Date.now() + 30 * 60_000; console.warn("[blockscout] out of credits: paused 30 min, holder counts come from GeckoTerminal meanwhile"); }
+    throw e;
+  }
 }
 export const blockscoutApi = (p) => blockscout(p);   // shared rate-limited client (portfolio)
-export const hasBlockscout = () => !!BS_KEY;
+export const hasBlockscout = () => !!BS_KEY && !bsDown();
 const LABEL = { "0x000000000000000000000000000000000000dead": "dead address (burned)", "0x0000000000000000000000000000000000000000": "zero address (burned)" };
 export async function topHolders(a) {
   if (!BS_KEY) return null;
@@ -432,24 +440,26 @@ export async function topHolders(a) {
   });
 }
 export async function fetchHolders(a, { hi = false } = {}) {
-  let v;
-  if (BS_KEY) {
-    const t = await topHolders(a);
-    v = { count: t?.count ?? null, top10: t?.top10 != null ? +t.top10.toFixed(2) : null, at: Date.now() };
-  } else {
-    const d = await gecko(`tokens/${a}/info`, { hi });
-    const h = d?.data?.attributes?.holders;
-    v = { count: h?.count != null ? Number(h.count) : null, top10: h?.distribution_percentage?.top_10 != null ? Number(h.distribution_percentage.top_10) : null, at: Date.now() };
+  let v = null;
+  if (BS_KEY && !bsDown()) {
+    const t = await topHolders(a).catch(() => null);
+    if (t) v = { count: t?.count ?? null, top10: t?.top10 != null ? +t.top10.toFixed(2) : null, at: Date.now() };
   }
+  if (!v) v = await geckoHolders(a, { hi });
   HOLDERS.set(a, v);
   const row = board.rows.get(a);
   if (row) { row.holders = v.count; row.top10Pct = v.top10; }
   if (HOLDERS_FILE && Date.now() - holdersSaveAt > 60_000) { holdersSaveAt = Date.now(); writeFile(HOLDERS_FILE + ".tmp", JSON.stringify(Object.fromEntries(HOLDERS))).then(() => rename(HOLDERS_FILE + ".tmp", HOLDERS_FILE)).catch(() => {}); }
   return v;
 }
+async function geckoHolders(a, { hi = false } = {}) {
+  const d = await gecko(`tokens/${a}/info`, { hi });
+  const h = d?.data?.attributes?.holders;
+  return { count: h?.count != null ? Number(h.count) : null, top10: h?.distribution_percentage?.top_10 != null ? Number(h.distribution_percentage.top_10) : null, at: Date.now() };
+}
 let holdersBusy = false;
 async function holdersTick() {
-  if (holdersBusy || (!BS_KEY && (gq.hi.length || gq.lo.length > 1))) return;   // GeckoTerminal fallback: users and the board first
+  if (holdersBusy || ((!BS_KEY || bsDown()) && (gq.hi.length || gq.lo.length > 1))) return;   // GeckoTerminal fallback: users and the board first
   const now = Date.now();
   const next = [...board.rows.values()].filter((t) => { const h = HOLDERS.get(t.address); return !h || now - h.at > 6 * 3600_000; })
     .sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0))[0];
@@ -904,9 +914,12 @@ export async function register(r) {
   r.get("/api/market/robinhood/holders", async ({ query }) => {
     const a = lc(query.address);
     if (!ADDR_RE.test(a)) throw httpErr(400, "That is not a valid token address.");
-    const t = await topHolders(a).catch((e) => { throw httpErr(502, `Holders are unavailable right now (${e.message}).`); });
-    if (!t) throw httpErr(503, "Holder data is not configured on this server.");
-    return { ...t, source: "Blockscout" };
+    const t = BS_KEY && !bsDown() ? await topHolders(a).catch(() => null) : null;
+    if (t) return { ...t, source: "Blockscout" };
+    // Blockscout paused or failing: the count and the top-10 share from GeckoTerminal, without the per-wallet list
+    const g = await geckoHolders(a).catch(() => null);
+    if (!g || g.count == null) throw httpErr(503, "Holder data is unavailable right now. Try again in a few minutes.");
+    return { count: g.count, top10: g.top10, holders: [], source: "GeckoTerminal", note: "The list of top wallets is unavailable right now; the holder count and the top-10 share are live." };
   }, { weight: 2, perMin: 60 });
   r.get("/api/market/robinhood", ({ query }) => getRobinhoodTokens(query), { weight: 1 });
   r.get("/api/market/robinhood/token", ({ query }) => getRobinhoodToken(query.address), { weight: 2 });

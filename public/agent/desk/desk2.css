@@ -806,3 +806,19 @@ html[data-theme="light"] .tk2-soc-a { background: var(--bg-2); }
 .pf2-gas { margin-top: 16px; padding: 20px 22px; border-radius: 22px; display: grid; gap: 10px; }
 .pf2-gas-h { display: flex; align-items: center; gap: 12px; } .pf2-gas-h h2 { margin: 0; font-size: 16px; font-weight: 650; } .pf2-gas-h .dk-v { margin-left: auto; }
 .pf2-gas-admin { display: grid; gap: 10px; margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+
+/* Market categories */
+.mk2-cats { display: flex; gap: 6px; padding: 5px; margin: 2px 0 6px; border-radius: 16px; background: rgba(0, 0, 0, .25); border: 1px solid var(--line); width: max-content; max-width: 100%; overflow-x: auto; }
+.mk2-cats button { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 12px; font: 600 13.5px/1 var(--sans); color: var(--muted); white-space: nowrap; transition: color .25s, background .25s; }
+.mk2-cats button:hover { color: var(--fg); }
+.mk2-cats button[aria-selected="true"] { color: var(--fg); background: linear-gradient(180deg, rgba(142, 223, 245, .18), rgba(142, 223, 245, .06)); box-shadow: inset 0 0 0 1px rgba(142, 223, 245, .32); }
+.mk2-cats .ct { font-size: 11px; font-weight: 600; color: var(--c3); }
+.mk2-catnote { margin: 0 0 12px 4px; }
+@media (max-width: 560px) { .mk2-cats { width: 100%; } .mk2-cats button { flex: 1; justify-content: center; padding: 0 10px; } }
+html[data-theme="light"] .mk2-cats { background: rgba(20, 30, 40, .04); }
+html[data-theme="light"] .mk2-cats button[aria-selected="true"] { background: #fff; box-shadow: inset 0 0 0 1px rgba(10, 126, 163, .3), 0 2px 8px rgba(20, 40, 60, .08); }
+
+.mk2-pick { display: grid; gap: 4px; min-width: 0; }
+.mk2-why { margin: 0 0 0 46px; font-size: 11.5px; line-height: 1.35; color: var(--c3); white-space: normal; }
+@media (max-width: 720px) { .mk2-why { margin-left: 0; font-size: 11px; } }
+html[data-theme="light"] .mk2-why { color: var(--blue); }

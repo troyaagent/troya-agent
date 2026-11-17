@@ -19,6 +19,7 @@ function studioEnv(renderer) {
 async function mount(canvas) {
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let renderer;
+  { const probe = document.createElement("canvas"); if (!(probe.getContext("webgl2") || probe.getContext("webgl"))) return; }   // no WebGL: the still picture stays
   try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" }); } catch { return; }
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;

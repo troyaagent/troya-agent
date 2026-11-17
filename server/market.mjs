@@ -16,7 +16,7 @@ const NET = "robinhood";
 
 const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
 const STOCK_SET = new Set(STOCKS.map((s) => String(s.address).toLowerCase()));
-const SORTS = new Set(["volume", "mcap", "change", "liquidity", "newest", "price", "txns", "holders"]);
+const SORTS = new Set(["volume", "mcap", "change", "liquidity", "newest", "price", "txns", "holders", "picks"]);
 const SORT_ALIAS = { age: "newest", new: "newest", marketcap: "mcap", cap: "mcap", fdv: "mcap", gainers: "change", vol: "volume" };
 export const LAUNCHPADS = {
   pons: "Pons", clanker: "Clanker", bankr: "Bankr", virtuals: "Virtuals", hoodit: "Hoodit", mintclub: "Mint Club", easya: "EasyA", o1: "O1 Launchpad",
@@ -294,7 +294,7 @@ function fold(map, pr, ethUsd) {
   t.mcapEth = ethUsd && t.mcapUsd != null ? t.mcapUsd / ethUsd : null;
   if (t.image) IMAGES.set(t.address, t.image);
 }
-const clean = (t) => { const { _main, ...rest } = t; return rest; };
+const clean = (t) => { const { _main, _pick, ...rest } = t; return rest; };
 // the newest pools on Robinhood Chain across every venue (Sentry uses this to catch launches outside Pons and Uniswap)
 export async function newLaunchPools() {
   const d = await gecko(`new_pools?page=1&include=base_token`);
@@ -457,6 +457,42 @@ async function holdersTick() {
 }
 setInterval(() => holdersTick().catch(() => {}), BS_KEY ? 4_000 : 20_000).unref();
 const holdersOf = (a) => HOLDERS.get(a) || null;
+/* Troya picks: a read of live data, never advice. A coin needs a real pool and real trading, then earns points for
+   buyers outnumbering sellers, holders spread out, volume a pool can carry (not wash trading), listed socials and a day
+   that is not a collapse. Each pick says why, in a few words. */
+const money = (n) => (n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}K` : `$${Math.round(n)}`);
+function pickCoins(rows) {
+  const out = [];
+  for (const t of rows) {
+    const liq = t.liquidityUsd || 0, vol = t.volume24hUsd || 0, tx = t.txns24h || 0, ch = t.change24h;
+    if (liq < 10_000 || tx < 40 || vol < 2_000 || ch == null || ch <= -40) continue;
+    const turn = vol / liq;
+    if (turn > 25) continue;                                   // more volume than the pool could carry: likely wash trading
+    const h = HOLDERS.get(t.address), soc = SOCIALS.get(t.address);
+    if (h?.top10 != null && h.top10 > 80) continue;            // a handful of wallets own it
+    let score = Math.log10(liq) * 2 + Math.min(3, Math.log10(tx));
+    const why = [];
+    const buys = t.buys24h, sells = t.sells24h;
+    if (buys != null && sells != null && buys + sells >= 30) {
+      const share = buys / (buys + sells);
+      score += (share - 0.5) * 6;
+      if (share >= 0.55) why.push(`${Math.round(share * 100)}% of trades are buys`);
+    }
+    if (turn >= 0.3 && turn <= 6) { score += 1.5; }
+    if (h?.count != null) {
+      score += Math.min(3, Math.log10(Math.max(1, h.count)) - 1.5);
+      if (h.top10 != null) score += h.top10 < 45 ? 1.5 : h.top10 > 65 ? -1.5 : 0;
+      if (h.count >= 150) why.push(`${h.count.toLocaleString("en-US")} holders${h.top10 != null && h.top10 < 55 ? `, top 10 hold ${Math.round(h.top10)}%` : ""}`);
+    }
+    if (soc && (soc.twitter || soc.telegram || soc.website)) { score += 1; }
+    if (ch >= 10) { score += Math.min(2, ch / 25); why.push(`up ${Math.round(ch)}% today`); } else if (ch <= -15) score -= 1;
+    why.unshift(`${money(liq)} pool, ${money(vol)} traded`);
+    if (soc && (soc.twitter || soc.telegram) && why.length < 3) why.push("lists its socials");
+    out.push({ t, score });
+    t._pick = { score: +score.toFixed(2), why: why.slice(0, 3) };
+  }
+  return out.sort((a, b) => b.score - a.score).slice(0, 20).map((x) => x.t);
+}
 const cleanLink = (u) => { try { const x = new URL(/^https?:/i.test(u) ? u : `https://${u}`); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
 const socialOf = (a) => { const s = SOCIALS.get(a); if (!s) return null; const tw = s.twitter ? (s.twitter.startsWith("http") ? s.twitter : `https://x.com/${String(s.twitter).replace(/^@/, "")}`) : null; const tg = s.telegram ? (s.telegram.startsWith("http") ? s.telegram : `https://t.me/${String(s.telegram).replace(/^@/, "")}`) : null; const o = { x: cleanLink(tw || ""), telegram: cleanLink(tg || ""), website: s.website ? cleanLink(s.website) : null }; return o.x || o.telegram || o.website ? o : null; };
 
@@ -503,7 +539,8 @@ function cleanOpts(opts = {}) {
   const offset = Math.max(0, Math.min(100000, parseInt(opts.offset, 10) || 0));
   const limit = Math.max(1, Math.min(100, parseInt(opts.limit, 10) || 50));
   const tradable = !(opts.tradable === false || opts.tradable === "0" || opts.tradable === 0);
-  return { sort, dir, launchpad, q, offset, limit, tradable };
+  const cat = ["picks", "trending", "new", "bonding"].includes(String(opts.cat || "")) ? String(opts.cat) : "all";
+  return { sort, dir, launchpad, q, offset, limit, tradable, cat };
 }
 const SORT_KEY = { volume: "volume24hUsd", mcap: "mcapUsd", change: "change24h", liquidity: "liquidityUsd", newest: "createdAt", price: "priceUsd", txns: "txns24h", holders: "holders" };
 
@@ -525,11 +562,22 @@ export async function getRobinhoodTokens(opts = {}) {
   const counts = { all: base.length };
   for (const t of base) counts[t.launchpad] = (counts[t.launchpad] || 0) + 1;
   let rows = o.launchpad === "all" ? base : base.filter((t) => t.launchpad === o.launchpad);
+  // categories: Trending (real trading today), New (born in the last 72 hours, off a bonding curve: graduated or
+  // launched straight into a pool), Bonding (still on a Pons curve)
+  const onCurve = (t) => t.poolDex === "pons-v2";
+  const isNew = (t) => t.createdAt && Date.now() - t.createdAt < 72 * 3600_000 && !onCurve(t);
+  const isTrend = (t) => (t.volume24hUsd || 0) >= 1000 && (t.txns24h || 0) >= 20;
+  const picked = pickCoins(rows);
+  const catCounts = { all: rows.length, picks: picked.length, trending: rows.filter(isTrend).length, new: rows.filter(isNew).length, bonding: rows.filter(onCurve).length };
+  if (o.cat === "picks") rows = picked;
+  else if (o.cat === "trending") rows = rows.filter(isTrend);
+  else if (o.cat === "new") rows = rows.filter(isNew);
+  else if (o.cat === "bonding") rows = rows.filter(onCurve);
   const hidden = o.tradable ? (o.launchpad === "all" ? all.length - routable.length : all.filter((t) => t.launchpad === o.launchpad && !t.tradable).length) : 0;
   const k = SORT_KEY[o.sort];
   const sgn = o.dir === "asc" ? 1 : -1;
   if (k === "holders") for (const t of rows) t.holders = HOLDERS.get(t.address)?.count ?? null;
-  rows = [...rows].sort((a, b) => {
+  if (o.sort !== "picks") rows = [...rows].sort((a, b) => {
     const x = a[k], y = b[k];
     if (x == null && y == null) return 0;
     if (x == null) return 1;
@@ -537,7 +585,8 @@ export async function getRobinhoodTokens(opts = {}) {
     return (x - y) * sgn;
   });
   return {
-    tokens: rows.slice(o.offset, o.offset + o.limit).map((t) => { const r = { ...clean(t), spark: sparkOf(t), socials: socialOf(t.address), holders: holdersOf(t.address)?.count ?? null, top10Pct: holdersOf(t.address)?.top10 ?? null }; if (!(r.mcapUsd > 0) && r.launchpad === "pons" && r.priceUsd > 0 && r.liquidityUsd > 0 && r.priceUsd * 1e9 <= r.liquidityUsd * 400) { r.mcapUsd = r.priceUsd * 1e9; r.mcapEth = ethUsd ? r.mcapUsd / ethUsd : null; } return r; }), total: rows.length, counts, hiddenTotal: hidden,
+    catCounts, cat: o.cat,
+    tokens: rows.slice(o.offset, o.offset + o.limit).map((t) => { const r = { ...clean(t), pick: t._pick || undefined, spark: sparkOf(t), socials: socialOf(t.address), holders: holdersOf(t.address)?.count ?? null, top10Pct: holdersOf(t.address)?.top10 ?? null }; if (!(r.mcapUsd > 0) && r.launchpad === "pons" && r.priceUsd > 0 && r.liquidityUsd > 0 && r.priceUsd * 1e9 <= r.liquidityUsd * 400) { r.mcapUsd = r.priceUsd * 1e9; r.mcapEth = ethUsd ? r.mcapUsd / ethUsd : null; } return r; }), total: rows.length, counts, hiddenTotal: hidden,
     volume24hUsd: board.volumeUsd, volume24hEth: ethUsd ? board.volumeUsd / ethUsd : null,
     offset: o.offset, limit: o.limit, sort: o.sort, dir: o.dir, launchpad: o.launchpad,
     updatedAt: board.updatedAt, stale: !!board.error, notice: board.error ? `Last refresh failed (${board.error}); showing the previous board.` : null,

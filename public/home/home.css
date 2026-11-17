@@ -466,3 +466,26 @@ em { padding-right: .12em; margin-right: -.08em; }
 
 /* very small phones: the long LP id and counts stay inside their half of the facts row */
 @media (max-width: 360px) { .fact b { font-size: 24px; overflow-wrap: anywhere; } }
+
+/* hero: Free gas for holders, a soft shimmer; the rules open in a dialog */
+.gas-pill { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 4; display: inline-flex; align-items: center; gap: 10px; height: 42px; padding: 0 18px 0 14px; border-radius: 999px; overflow: hidden;
+  color: var(--fg); font: 600 13px/1 var(--sans); letter-spacing: .02em; background: color-mix(in srgb, var(--bg) 70%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0, 0, 0, .35), 0 0 24px color-mix(in srgb, var(--accent) 22%, transparent); cursor: pointer; animation: gas-bob 4.5s ease-in-out infinite; }
+.gas-pill svg { width: 17px; height: 17px; fill: var(--accent); }
+.gas-pill i { font-style: normal; font-weight: 500; font-size: 11.5px; color: var(--accent); padding-left: 10px; border-left: 1px solid var(--line); }
+.gas-pill::after { content: ""; position: absolute; inset: -40% -60%; pointer-events: none; background: radial-gradient(40% 60% at 50% 50%, rgba(255, 255, 255, .28), rgba(255, 255, 255, 0) 70%); transform: translateX(-70%); animation: gas-sheen 6s ease-in-out infinite; }
+.gas-pill:hover { border-color: var(--accent); }
+@keyframes gas-bob { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -4px); } }
+@keyframes gas-sheen { 0%, 55% { transform: translateX(-70%); opacity: 0; } 70% { opacity: 1; } 100% { transform: translateX(70%); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .gas-pill, .gas-pill::after { animation: none; } }
+@media (max-width: 640px) { .gas-pill { bottom: 78px; height: 38px; font-size: 12px; } .gas-pill i { display: none; } }
+.gas-dlg { width: min(560px, calc(100vw - 32px)); padding: 28px 28px 24px; border-radius: 24px; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--bg) 96%, #000); color: var(--fg); box-shadow: 0 30px 90px rgba(0, 0, 0, .6); }
+.gas-dlg::backdrop { background: rgba(0, 0, 0, .6); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.gas-x-f { position: absolute; top: 14px; right: 14px; margin: 0; }
+.gas-x { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); font-size: 18px; line-height: 1; color: var(--fg); }
+.gas-mic { display: flex; align-items: center; gap: 8px; margin: 0; font: 600 11px/1 var(--sans); letter-spacing: .22em; text-transform: uppercase; color: var(--accent); }
+.gas-mic svg { width: 15px; height: 15px; fill: var(--accent); }
+.gas-dlg h2 { margin: 12px 0 14px; font: 700 34px/1 var(--sans); letter-spacing: -0.03em; text-transform: uppercase; }
+.gas-rules { margin: 0; padding: 0 0 0 18px; display: grid; gap: 9px; font-size: 14.5px; line-height: 1.5; color: color-mix(in srgb, var(--fg) 84%, transparent); }
+.gas-rules b { color: var(--fg); }
+.gas-acts { display: flex; align-items: center; gap: 18px; margin-top: 20px; }

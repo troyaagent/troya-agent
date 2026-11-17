@@ -43,7 +43,16 @@ export async function mount(view, { go, query }) {
 
 /* ---------------- Robinhood Chain ---------------- */
 function robinhoodTab(box, go, query) {
-  const state = { q: query.q || "", launchpad: query.pad || "all", sort: "volume", dir: "desc", offset: 0, showAll: false };
+  const state = { q: query.q || "", launchpad: query.pad || "all", sort: (!query.cat || query.cat === "picks") ? "picks" : "volume", dir: "desc", offset: 0, showAll: false, cat: ["picks", "trending", "new", "bonding", "all"].includes(query.cat) ? query.cat : "picks" };
+  const CATS = [["picks", "Troya picks", "Picked by Troya from live data: a real pool, real buyers, holders spread out, volume the pool can carry and listed socials. A read of the data, not advice. Run the Gate before you buy."], ["trending", "Trending", "Real trading today: $1K+ volume and 20+ trades in 24 hours"], ["new", "New", "Born in the last 72 hours, off a bonding curve: just graduated, or launched straight into a pool"], ["bonding", "Bonding", "Still on a Pons bonding curve, before graduation"], ["all", "All", "Every coin Troya can route"]];
+  const catBar = h("div", { class: "mk2-cats", role: "tablist" });
+  const catNote = h("p", { class: "fine muted mk2-catnote" });
+  const paintCats = (counts) => {
+    clear(catBar, CATS.map(([k, label, tip]) => h("button", { type: "button", role: "tab", "aria-selected": String(state.cat === k), title: tip, onclick: () => { if (state.cat === k) return; state.cat = k; state.offset = 0; if (k === "new") { state.sort = "newest"; state.dir = "desc"; } else if (k === "picks") { state.sort = "picks"; } else if (state.sort === "newest" || state.sort === "picks") { state.sort = "volume"; } load(); } },
+      label, counts?.[k] != null ? h("span", { class: "ct" }, String(counts[k])) : null)));
+    catNote.textContent = (CATS.find(([k]) => k === state.cat) || [])[2] || "";
+  };
+  paintCats();
   let reqId = 0;
   const search = h("input", { class: "input search", type: "search", placeholder: "Search symbol, name or address", value: state.q, "aria-label": "Search tokens" });
   const chips = h("div", { class: "chips" });
@@ -58,7 +67,7 @@ function robinhoodTab(box, go, query) {
     emptyText: "No token matches.",
     cols: [
       { key: "rank", label: "#", render: (t, i) => h("span", { class: "rank" }, state.offset + i + 1), cls: "rank", hide: NARROW },
-      { key: "token", label: "Token", align: "l", render: (t) => tokenCell(t, { flagUntradable: true }) },
+      { key: "token", label: "Token", align: "l", render: (t) => (state.cat === "picks" && t.pick?.why?.length ? h("div", { class: "mk2-pick" }, tokenCell(t, { flagUntradable: true }), h("p", { class: "mk2-why" }, t.pick.why.join(" · "))) : tokenCell(t, { flagUntradable: true })) },
       { key: "price", label: NARROW ? "Price · MC" : "Price", sort: true, render: (t) => (NARROW ? priceMcCell(t) : priceCell(t.priceEth, t.priceUsd)) },
       { key: "chart", label: NARROW ? "24h" : "24h chart", render: (t) => (NARROW ? h("div", { class: "mk-spark-c" }, sparkline(t.spark, { w: 56, h: 22 }), pctEl(t.change24h)) : sparkline(t.spark, { w: 96, h: 30 })), cls: "mk-spark" },
       { key: "change", label: "24h", sort: true, render: (t) => pctEl(t.change24h), hide: NARROW },
@@ -77,7 +86,7 @@ function robinhoodTab(box, go, query) {
     h("div", { class: "mk2-c-p" }, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"),
     h("div", { class: "mk2-c-f" }, pctEl(t.change24h), h("span", {}, `vol ${t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : "–"}`), h("span", {}, `liq ${t.liquidityUsd != null ? usd(t.liquidityUsd, { compact: true }) : "–"}`)),
     h("i", { class: "mk2-bar", style: { "--w": `${Math.min(100, Math.abs(t.change24h || 0))}%` }, "data-dir": (t.change24h || 0) >= 0 ? "up" : "down" }))));
-  clear(box, topBox, h("div", { class: "mk-filters" }, search, chips), h("div", { class: "mk-sub" }, untradable), notice, h("div", { class: "panel mk-panel" }, tbl), pager, foot);
+  clear(box, topBox, catBar, catNote, h("div", { class: "mk-filters" }, search, chips), notice, h("div", { class: "panel mk-panel" }, tbl), pager, h("div", { class: "mk-sub" }, untradable), foot);
 
   function renderChips(counts) {
     const list = [["all", "All"], ...LAUNCHPADS.filter(([k]) => counts?.[k] || k === state.launchpad)];
@@ -87,13 +96,14 @@ function robinhoodTab(box, go, query) {
   async function load() {
     const id = ++reqId;
     tbl.setLoading(10);
-    const qs = new URLSearchParams({ q: state.q, launchpad: state.launchpad, sort: state.sort, dir: state.dir, offset: String(state.offset), limit: String(PAGE), tradable: state.showAll ? "0" : "1" });
+    const qs = new URLSearchParams({ q: state.q, launchpad: state.launchpad, sort: state.sort, dir: state.dir, offset: String(state.offset), limit: String(PAGE), tradable: state.showAll ? "0" : "1", cat: state.q ? "all" : state.cat });
     try {
       // a name or ticker also asks the full-chain search, so a coin outside the board still shows up (real coin first)
       const named = state.q && !/0x[0-9a-fA-F]{40}/.test(state.q) && state.offset === 0 && state.launchpad === "all";
       const [d, s] = await Promise.all([api.get(`market/robinhood?${qs}`), named ? api.get(`search/coins?${new URLSearchParams({ q: state.q, limit: "20" })}`).catch(() => null) : null]);
       if (id !== reqId) return;
       renderChips(d.counts);
+      paintCats(d.catCounts);
       let rows = d.tokens || [];
       if (s?.coins?.length) {
         const by = new Map(rows.map((t) => [String(t.address).toLowerCase(), t]));

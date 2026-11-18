@@ -12,7 +12,7 @@
     $("[data-alive-stats]").innerHTML = [
       tile("Last change to the code", last ? ago(last.at) : "–", last ? "in the public repository" : "the repository could not be read just now"),
       tile("Changes this week", d.code?.thisWeek != null ? `${d.code.thisWeek}${d.code.capped ? "+" : ""}` : "–", "commits in the last 7 days"),
-      tile("Roadmap", esc(d.roadmap?.now || "V6 Hermes live"), `next: ${esc(d.roadmap?.next || "V7 Athena")}, ${esc(d.roadmap?.named || "V7 to V14")} named`),
+      tile("Roadmap", esc(d.roadmap?.now || "V6 Hermes shipped"), `next: ${esc(d.roadmap?.next || "V7 Athena")}, ${esc(d.roadmap?.named || "V7 to V14")} named`),
       tile("Coins born through Troya", d.launches ? big(d.launches.born) : "–", "launched from X, Telegram or troya.codes"),
       tile("$TROYA burned", d.burn ? big(d.burn.total) : "–", d.burn ? `${d.burn.pctOfMinted.toFixed(2)}% of all minted, ${d.burn.burns} burns on chain` : "read from the chain"),
       tile("Last Sentry post", d.sentry?.at ? ago(d.sentry.at) : "–", d.sentry?.symbol ? `$${esc(d.sentry.symbol)}, graded on The Record` : "graded on The Record"),

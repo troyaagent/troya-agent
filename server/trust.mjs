@@ -35,7 +35,7 @@ async function build() {
     launches: launches ? { born: launches.length } : null,
     burn: fly?.burned ? { total: fly.burned.total, pctOfMinted: fly.burned.pctOfMinted, burns: (fly.burned.burns || []).length } : null,
     sentry: posted ? { symbol: posted.symbol || null, at: posted.at || null } : null,
-    roadmap: { now: "V6 Hermes live", next: "V7 Athena", named: "V7 to V14", url: "/roadmap" },
+    roadmap: { now: "V6 Hermes shipped", next: "V7 Athena", named: "V7 to V14", url: "/roadmap" },
     updatedAt: Date.now(),
   };
 }

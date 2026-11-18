@@ -45,7 +45,7 @@ export const fold = (x) => String(x || "").normalize("NFKC")
   .replace(/(?<=[a-z])I(?=[a-z])/g, "l")
   .replace(/(?<=[A-Za-z])0(?=[A-Za-z])/g, "o");
 const nameOf = (u) => fold([u?.first_name, u?.last_name].filter(Boolean).join(" "));
-const fakeName = (u) => IMPOSTOR_NAME.test(nameOf(u));
+const fakeName = (u) => IMPOSTOR_NAME.test(nameOf(u)) || ADMIN_COSTUME.test(nameOf(u));
 // "urgent announcement for all holders, important information regarding your holdings": the bait half of a DM scam
 const HOLDINGS_BAIT = /\b[il1]mportant\s+[il1]nformat[il1]on\s+(?:regarding|about|on|for)\s+(?:your|ur)\b|\burgent\s+ann[o0]uncement\b|\bregarding\s+(?:your|ur)\s+(?:h[o0][il1]dings|wallets?|tokens|funds|bags)\b/i;
 // a member named as the project or its bot ("Troya Agent", "Tr0ya Ag3nt", "Troya | Agent", "Troya Support"): Troya never posts
@@ -56,9 +56,14 @@ const squeeze = (x) => fold(x).toLowerCase().replace(/0/g, "o").replace(/1/g, "i
 // comes (18 Nov: "DEV" joined and asked every holder to DM). A real name with a title in it ("Dev Patel") is not touched.
 const TITLES = new Set(["dev", "devs", "developer", "owner", "admin", "administrator", "moderator", "mod", "mods", "support", "team", "official",
   "ceo", "cto", "cmo", "founder", "cofounder", "helpdesk", "customersupport", "devteam", "teamsupport", "supportteam", "teamdev", "admins", "officialsupport", "adminteam"]);
+// a display name dressed as an admin's warning ("TIME IS PRECIOUS [ NEVER DM FIRST ]", "Admins will never DM you"): the
+// classic fake-admin costume, banned at join like a bare title
+const ADMIN_COSTUME = /never\s*(?:dm|pm|message|msg|text)\s*(?:you\s*)?f[a-z]{2,4}t\b|(?:admins?|mods?|team)\s*(?:will\s*)?never\s*(?:dm|pm|message)|\bdm\s*(?:me\s*)?for\s*(?:help|support)\b/i;
 export function titleOnlyName(u) {
   if (!u || u.is_bot) return false;
-  const n = squeeze([u.first_name, u.last_name].filter(Boolean).join(" "));
+  const raw = fold([u.first_name, u.last_name].filter(Boolean).join(" "));
+  if (ADMIN_COSTUME.test(raw)) return true;
+  const n = squeeze(raw);
   return !!n && TITLES.has(n);
 }
 export function posesAsProject(u) {

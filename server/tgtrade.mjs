@@ -149,7 +149,7 @@ async function card(chat, owner, token) {
     feeEth = c ? Number(c.yoursEth) || 0 : 0;
     lines.push(`Creator fees waiting for you: <b>${feeEth > 0 ? fnum(feeEth) : "0"} ETH</b>${feeEth > 0 ? " (claim them on the Creator desk with your own wallet)" : " (0.7% of every trade's volume, claimable on the Creator desk)"}`);
   }
-  if (canBuy && (!eth || Number(eth.amount) < Number(BUYS[0]) * 1.05)) lines.push("Top up first: /wallet shows your Agent Wallet address.");
+  if (canBuy && (!eth || Number(eth.amount) < Number(BUYS[0]) * 1.05)) lines.push(`Top up first: your Agent Wallet ${short(aw.address)} needs a little ETH on Robinhood Chain. /wallet shows its address, or finish setup in one page: ${SITE}/agent#/start?for=trade-tg`);
   lines.push(canBuy ? `Pick an amount, then confirm. Slippage ${slipFor(chat, "buy")}%. The Gate runs again before it sends.` : "Buying is locked while a check fails.");
   const rows = [];
   const base = { chat, owner, token, sym, mine: !!mine };

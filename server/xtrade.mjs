@@ -91,8 +91,13 @@ export async function fromX({ tweetId, authorId, text }) {
   if (mode === "off") return notYet;
   const owner = await linkedOwner(authorId);
   if (mode === "test" && !(owner && admins().includes(lc(owner)))) return notYet;
-  if (!owner) return { reply: notTraded("this X account isn't linked to a Troya wallet", `link it and switch Trade from X on, then post again: ${DESK()}`) };
-  if (!(await tradeOn(owner))) return { reply: notTraded("Trade from X is switched off for your wallet", `switch it on, then post again: ${DESK()}`) };
+  const ob = await import("./onboard.mjs"); ob.init(store);
+  if (!owner) return { reply: `Not traded yet. ${ob.gapsLine(["connect your wallet and link this X account", "switch Trade from X on", "add a little ETH to your Agent Wallet"], "trade-x")}. Then post again. Nothing was spent.` };
+  {
+    const gaps = await ob.gapsFor(owner, "trade-x", { needEth: ask.side === "buy" && Number(ask.eth) >= MIN_BUY_ETH && Number(ask.eth) <= MAX_BUY_ETH ? Number(ask.eth) + 0.0002 : 0.0002 }).catch(() => []);
+    if (gaps.length) return { reply: `Not traded yet. ${ob.gapsLine(gaps, "trade-x")}. Then post again. Nothing was spent.` };
+  }
+  if (!(await tradeOn(owner))) return { reply: `Not traded yet. ${ob.gapsLine(["switch Trade from X on"], "trade-x")}. Then post again. Nothing was spent.` };
   if (mode === "holders") {
     const hd = await isHolder(owner);
     if (hd === null) return { reply: notTraded("Troya couldn't read your $TROYA balance just now", "post again in a minute") };

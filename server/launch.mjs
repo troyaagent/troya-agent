@@ -475,8 +475,16 @@ export async function fromX({ tweetId, authorId, text, mediaUrl, mediaKinds = []
   if (xm === "off") return notYet;
   const owner = await linkedOwner(authorId);
   if (xm === "test" && !(owner && admins().includes(lc(owner)))) return notYet;
-  if (!owner) return { reply: `Not launched: this X account isn't linked to a Troya wallet. To fix: link it and switch Launch from X on, then post again: ${DESK()}` };
-  if (!(await prefsOf(owner)).x) return { reply: `Not launched: Launch from X is switched off for your wallet. To fix: switch it on, then post again: ${DESK()}` };
+  const ob = await import("./onboard.mjs"); ob.init(store);
+  if (!owner) return { reply: `Not launched yet. ${ob.gapsLine(["connect your wallet and link this X account", "switch Launch from X on", "add 0.0006 ETH to your Agent Wallet"], "launch-x")}. Then post again. Nothing was spent.` };
+  {
+    // everything still missing, at once, before anything is spent (fee + the asked buy + a little gas)
+    const menu = await launchMenu().catch(() => ({ launchFeeEth: 0.0005 }));
+    const gaps = await ob.gapsFor(owner, "launch-x", { needEth: Number(menu.launchFeeEth || 0.0005) + (Number(ask.buyEth) > 0 && Number(ask.buyEth) <= MAX_INITIAL_BUY_ETH ? Number(ask.buyEth) : 0) + 0.0001 }).catch(() => []);
+    if (gaps.length) return { reply: `Not launched yet. ${ob.gapsLine(gaps, "launch-x")}. Then post again. Nothing was spent.` };
+  }
+  // the switch is checked here too, so a failed status read never skips it
+  if (!(await prefsOf(owner)).x) return { reply: `Not launched yet. ${ob.gapsLine(["switch Launch from X on"], "launch-x")}. Then post again. Nothing was spent.` };
   // everyone may launch from X (owner, 18 Nov); without 1M $TROYA once a day, with Troya's 0.1% through a fee splitter
   let h;
   try { h = await holderInfo(owner); } catch { return { reply: "Not launched: Troya couldn't read your $TROYA balance just now, so it can't tell which creator fee applies. To fix: post again in a minute. Nothing was spent." }; }

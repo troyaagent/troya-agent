@@ -78,7 +78,7 @@ const WALLET_FIRST = `<b>You need an Agent Wallet to launch here.</b>
 Your Agent Wallet pays the Pons launch fee (0.0005 ETH today) and your initial buy; Troya pays the gas. Create it in the app (Agent → Wallet) and send it a little ETH on Robinhood Chain.
 
 Then send /launch again.`;
-const appBtn = (path) => ({ inline_keyboard: [[{ text: "Open Troya", url: SITE + path }]] });
+const appBtn = (path) => ({ inline_keyboard: [[{ text: /#\/start/.test(path) ? "Finish setup" : "Open Troya", url: SITE + path }]] });
 const guideBtn = () => ({ inline_keyboard: [[{ text: "Read the guide", url: `${SITE}/launch-on-x` }]] });
 
 async function agentBalance(address) {
@@ -146,9 +146,18 @@ export async function handleMessage(m, tg, st) {
       await say("<b>Launching in Telegram isn't open yet.</b> It goes live after its real-money test. Anyone can launch from X or on troya.codes today.", { inline_keyboard: [[{ text: "Create coin", url: `${SITE}/agent#/create` }]] });
       return true;
     }
-    if (!owner) { await say(LINK_FIRST, appBtn("/agent")); return true; }
+    if (!owner) { await say(LINK_FIRST, appBtn("/agent#/start?for=launch-tg")); return true; }
+    // every step still missing, at once, with the one page that does them all (18 Nov)
+    {
+      const ob = await import("./onboard.mjs"); ob.init(store);
+      const gaps = await ob.gapsFor(owner, "launch-tg", { needEth: 0.0006 }).catch(() => []);
+      if (gaps.length) {
+        await say(`<b>Almost ready to launch here.</b> ${gaps.length} step${gaps.length > 1 ? "s" : ""} left, all on one page:\n\n${gaps.map((g, i) => `${i + 1}. ${esc(g.charAt(0).toUpperCase() + g.slice(1))}`).join("\n")}\n\nThe Agent Wallet pays the Pons launch fee (0.0005 ETH today) and any initial buy; Troya pays the gas. Then send /launch again.`, appBtn("/agent#/start?for=launch-tg"));
+        return true;
+      }
+    }
     const aw = await import("./agentwallet.mjs").then((x) => x.getAgentWallet(owner));
-    if (!aw?.exists) { await say(WALLET_FIRST, appBtn("/agent#/agent/wallet")); return true; }
+    if (!aw?.exists) { await say(WALLET_FIRST, appBtn("/agent#/start?for=launch-tg")); return true; }
     if (busy.has(chat)) { await say("A launch from this chat is still going through. Wait for its message, then send /launch again."); return true; }
     // the daily limit before any typing (the name check comes once there is a name)
     try { await L.plan({ owner, creatorTaxBps: 0, source: "tg" }); }

@@ -86,7 +86,7 @@ const b64u = (b) => b.toString("base64url");
 function login(req, res, purpose, back) {
   if (!on()) throw new HttpError(503, "Sign in with X is not configured on this server yet.");
   let address = null;
-  const home = back === "launch" ? "/agent#/launch/x" : back === "create" ? "/agent#/launch/create" : "/agent#/social";
+  const home = back === "launch" ? "/agent#/launch/x" : back === "create" ? "/agent#/launch/create" : back === "start" ? "/agent#/start" : "/agent#/social";
   if (purpose === "link") { const s = getSession(req); if (!s) return redirect(res, `${home}?x=signin`); address = s.address; }
   const state = b64u(randomBytes(18)), verifier = b64u(randomBytes(48));
   pending.set(state, { purpose, address, verifier, home, exp: Date.now() + 10 * 60_000 });
@@ -119,6 +119,8 @@ async function callback(query, res) {
       m[lc(p.address)] = { id: me.id, username: me.username, name: String(me.name || "").slice(0, 60), avatar: me.profile_image_url || null, at: Date.now() };
       return m;
     });
+    // linked from the Launch from X page or from #/start: switch Launch from X on as well, one step fewer (18 Nov)
+    if (/launch\/x|#\/start/.test(home)) await store.update("launch-prefs.json", {}, (m) => { const k = lc(p.address); m[k] = { ...(m[k] || {}), x: true, at: Date.now() }; return m; }).catch(() => {});
     return redirect(res, `${home}?x=linked`);
   } catch (e) {
     console.warn("[x] sign-in:", e.message);

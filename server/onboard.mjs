@@ -28,16 +28,58 @@ export async function onboarding(address) {
     if (Array.isArray(agents)) approved = agents.some((x) => String(x.address).toLowerCase() === aw.address.toLowerCase());
   }
   const traded = (journal || []).some((j) => /swap|perp|bridge|hl_fund|agent-wallet\.(swap|perp|hl_fund|close)/i.test(j.kind || "") && !/blocked|failed|dry-run/i.test(j.status || ""));
+  const [xl, prefs] = await Promise.all([
+    store.readJson("x-links.json", {}).then((m) => m[a] || null).catch(() => null),
+    store.readJson("launch-prefs.json", {}).then((m) => m[a] || {}).catch(() => ({})),
+  ]);
   const steps = [
     { key: "signin", done: true },
     { key: "agentWallet", done: !!aw?.exists, address: aw?.address || null },
-    { key: "funded", done: isFinite(awEth) && awEth >= 0.001, eth: isFinite(awEth) ? awEth : null },
+    { key: "agentWalletOn", done: !!aw?.exists && aw.enabled !== false },
+    { key: "funded", done: isFinite(awEth) && awEth >= 0.0006, eth: isFinite(awEth) ? awEth : null },
     { key: "telegram", done: !!links[a] },
     { key: "hlFunded", done: (st?.accountValue || 0) >= 1, value: st?.accountValue ?? null },
     { key: "hlApproved", done: approved === true },
     { key: "firstTrade", done: traded },
+    { key: "xLinked", done: !!xl, username: xl?.username || null },
+    { key: "launchX", done: !!prefs.x },
+    { key: "tradeX", done: !!prefs.trade },
   ];
   return { steps, done: steps.filter((s) => s.done).length, total: steps.length };
+}
+
+/* ---------- every missing step at once (18 Nov: a new user posted "launch Elon Mars $MARS" five times, each reply naming
+   only the next blocker). Each feature lists what it needs; the bots answer with all of it and one link to #/start. ---------- */
+const NEEDS = {
+  "launch-x": ["agentWallet", "agentWalletOn", "funded", "launchX"],
+  "trade-x": ["agentWallet", "agentWalletOn", "funded", "tradeX"],
+  "launch-tg": ["agentWallet", "agentWalletOn", "funded"],
+  "trade-tg": ["agentWallet", "agentWalletOn", "funded"],
+};
+const SITE = () => String(process.env.SITE_URL || "https://troya.codes").replace(/\/$/, "");
+export const startLink = (purpose) => `${SITE().replace(/^https?:\/\//, "")}/agent#/start?for=${purpose}`;
+/** The steps still missing for a feature, in order, as short instructions. needEth: what the Agent Wallet must hold. */
+export async function gapsFor(address, purpose, { needEth = 0.0006 } = {}) {
+  const o = await onboarding(address);
+  const st = Object.fromEntries(o.steps.map((s) => [s.key, s]));
+  const out = [];
+  for (const k of NEEDS[purpose] || []) {
+    if (k === "agentWallet" && !st.agentWallet.done) out.push("create your Agent Wallet");
+    else if (k === "agentWalletOn" && st.agentWallet.done && !st.agentWalletOn.done) out.push("switch your Agent Wallet on");
+    else if (k === "funded") {
+      const eth = st.funded.eth ?? 0;
+      const fmt = (x) => x.toFixed(4).replace(/\.?0+$/, "");
+      if (!st.agentWallet.done) out.push(`add ${fmt(needEth)} ETH to it on Robinhood Chain`);
+      else if (eth < needEth) out.push(eth > 0.00001 ? `add ${fmt(needEth - eth)} ETH more to your Agent Wallet ${short(st.agentWallet.address)} (it holds ${fmt(eth)}, needs ${fmt(needEth)})` : `add ${fmt(needEth)} ETH to your Agent Wallet ${short(st.agentWallet.address)} on Robinhood Chain`);
+    }
+    else if (k === "launchX" && !st.launchX.done) out.push("switch Launch from X on");
+    else if (k === "tradeX" && !st.tradeX.done) out.push("switch Trade from X on");
+  }
+  return out;
+}
+/** One line for a reply: every step left, numbered, and the one page that does them all. */
+export function gapsLine(steps, purpose) {
+  return `${steps.length} step${steps.length > 1 ? "s" : ""} left, all on one page: ${startLink(purpose)} · ${steps.map((s, i) => `${i + 1}) ${s}`).join(" ")}`;
 }
 
 /* ---------- leaderboard ---------- */

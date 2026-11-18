@@ -40,6 +40,8 @@ const { ADDR } = await import(ROOT + "server/robinhood.mjs");
 let n = 0;
 const ok = (name) => { n++; console.log("ok -", name); };
 // every failed launch says why and what to do, and keeps to one cashtag (X refuses posts with more)
+// a setup reply names every step still missing and the one page that does them all (18 Nov)
+const setupOk = (reply) => { assert.match(reply, /^Not launched yet\. \d steps? left, all on one page: \S+start\?for=launch-x/); assert.ok((reply.match(/\$[A-Za-z][A-Za-z0-9]*/g) || []).length <= 1, reply); };
 const fixOk = (reply) => { assert.match(reply, /^Not launched: .+To fix: /); assert.ok((reply.match(/\$[A-Za-z][A-Za-z0-9]*/g) || []).length <= 1, reply); };
 
 /* ---------- the factory, deployed on the fork from the tested build ---------- */
@@ -90,14 +92,14 @@ ok("while Launch on X is off, the post gets a not-open-yet reply and nothing lau
 await store.writeJson("x-state.json", { launch: "live" });
 
 r = await L.fromX({ tweetId: "2", authorId: "999", text: "@Troyaagent launch Fork Horse $FHORSE", mediaUrl: IMG });
-assert.match(r.reply, /isn't linked to a Troya wallet/i); fixOk(r.reply); ok("an unlinked X account is told to link first");
+assert.match(r.reply, /link this X account/i); setupOk(r.reply); ok("an unlinked X account gets every setup step at once, with the one setup page");
 r = await L.fromX({ tweetId: "4", authorId: "111", text: `@Troyaagent launch ${"Long Name ".repeat(6)}$LONGN`, mediaUrl: IMG });
 assert.match(r.reply, /48 characters/i); fixOk(r.reply); ok("a name over 48 characters is refused before anything launches");
 r = await L.fromX({ tweetId: "6", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE tax 9%", mediaUrl: IMG });
 assert.match(r.reply, /4% at most/i); fixOk(r.reply); ok("a 9% creator tax is refused");
 await store.writeJson("launch-prefs.json", { [H.toLowerCase()]: { x: false } });
 r = await L.fromX({ tweetId: "7", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE", mediaUrl: IMG });
-assert.match(r.reply, /switched off/i); fixOk(r.reply); ok("with Launch from X switched off, nothing launches");
+assert.match(r.reply, /switch Launch from X on/i); setupOk(r.reply); ok("with Launch from X switched off, nothing launches and the reply says how to switch it on");
 await store.writeJson("launch-prefs.json", { [H.toLowerCase()]: { x: true } });
 // "test" mode: only admin wallets launch from X (the real-money test)
 await store.writeJson("x-state.json", { launch: "test" });
@@ -159,7 +161,7 @@ ok(`a post without an image launches a coin with no image ($BARE ${r.launch.toke
 const tooBig = await L.fromX({ tweetId: "9a", authorId: "111", text: "@Troyaagent launch Big Horse $BIGH buy 5", mediaUrl: IMG });
 assert.match(tooBig.reply, /up to 1 ETH/); fixOk(tooBig.reply); ok("an initial buy above 1 ETH is refused before anything launches");
 const poor = await L.fromX({ tweetId: "9b", authorId: "111", text: "@Troyaagent launch Poor Horse $POOR buy 0.9", mediaUrl: IMG });
-assert.match(poor.reply, /Not launched: the Agent Wallet holds/); fixOk(poor.reply); ok("not enough ETH for fee + buy: nothing launches");
+assert.match(poor.reply, /ETH more to your Agent Wallet .*needs 0\.9006/); setupOk(poor.reply); ok("not enough ETH for fee + buy: nothing launches, and the reply says how much more the Agent Wallet needs");
 r = await L.fromX({ tweetId: "9", authorId: "111", text: "@Troyaagent launch Buy Horse $BUYH buy 0.01", mediaUrl: IMG });
 assert.ok(r.launch?.token, r.reply);
 console.log("   reply:", r.reply);
@@ -289,7 +291,7 @@ ok(`F28 Creator desk, split coin: it said ${pc.yoursEth.toFixed(8)} ETH was wait
   assert.match(x.reply, /isn't open yet/);
   await store.update("x-state.json", {}, (st) => ({ ...st, trade: "test" }));
   x = await X.fromX({ tweetId: "t2", authorId: "111", text: `@Troyaagent buy 0.002 ${CA}` });
-  assert.match(x.reply, /Trade from X is switched off/); tradeFix(x.reply);
+  assert.match(x.reply, /^Not traded yet\. \d steps? left, all on one page: \S+start\?for=trade-x .*switch Trade from X on/); assert.ok((x.reply.match(/\$[A-Za-z][A-Za-z0-9]*/g) || []).length <= 1, x.reply);
   ok("Trade on X: off says not open yet; with the switch off for the wallet, nothing trades");
   await store.update("launch-prefs.json", {}, (m) => ({ ...m, [H.toLowerCase()]: { ...(m[H.toLowerCase()] || {}), trade: true } }));
   const bal = async () => BigInt(erc.decodeFunctionResult("balanceOf", await provider.call({ to: CA, data: erc.encodeFunctionData("balanceOf", [awH.address]) }))[0]);

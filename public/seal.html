@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | Seal</title>
+<meta name="description" content="Every decision Troya makes gets a receipt signed twice, ECDSA and post-quantum ML-DSA, chained by hash and anchored on Robinhood Chain every day. Plus the properties of Troya's own contracts, proven for every input.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | Seal">
+<meta property="og:description" content="Signed, chained receipts for every Troya decision, and contract properties proven for every input.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/seal">
+<meta property="og:url" content="https://troya.codes/seal">
+<meta property="og:image" content="https://troya.codes/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
+<meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<meta name="theme-color" content="#0d0c0b">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<link rel="preload" href="/home/fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/home/pages.css">
+<link rel="stylesheet" href="/css/buybar.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+</head>
+<body class="site pn">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="pn-nav" data-pn-nav>
+  <a class="pn-logo" href="/" aria-label="Troya Agent home"><span>Troya</span><b>Agent</b><small>MMXXVI</small></a>
+  <div class="pn-r">
+    <nav class="bb-soc" aria-label="Troya elsewhere"><a class="bb-com" href="/roadmap">Roadmap</a><a class="bb-com" href="/community">Community</a><a href="https://x.com/Troyaagent" target="_blank" rel="noopener" aria-label="Troya on X" title="X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.12z"/></svg></a><a href="https://t.me/troyaagent" target="_blank" rel="noopener" aria-label="Troya on Telegram" title="Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg></a><a href="https://github.com/troyaagent/troya-agent" target="_blank" rel="noopener" aria-label="Troya on GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg></a></nav>
+    <div class="bb-buy" data-bb><button class="bb-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="bb-menu" data-bb-btn><img src="/img/logo-3d-128.png" alt="" width="24" height="24">Buy<span class="bb-t">$TROYA</span><svg class="bb-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button><div class="bb-menu" id="bb-menu" hidden data-bb-menu><a class="bb-i bb-main" href="/agent/#/swap?out=0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="/agent/#/swap?out={ca}"><img src="/img/logo-3d-128.png" alt="" width="36" height="36"><span><b>Troya Swap</b><small>Our own desk. The Gate checks $TROYA first, then Troya routes the best price on Robinhood Chain.</small></span><em>Best</em></a><a class="bb-i" href="https://ponsfamily.com/launchpad/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://ponsfamily.com/launchpad/{ca}" target="_blank" rel="noopener"><img src="/img/logos/pons.svg" alt="" width="36" height="36"><span><b>Pons</b><small>The launchpad where $TROYA started</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><a class="bb-i" href="https://fomo.family/tokens/robinhood/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://fomo.family/tokens/robinhood/{ca}" target="_blank" rel="noopener"><img src="/img/logos/fomo.png" alt="" width="36" height="36"><span><b>Fomo</b><small>The social trading app, on web and phone</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><a class="bb-i" href="https://dexscreener.com/robinhood/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://dexscreener.com/robinhood/{ca}" target="_blank" rel="noopener"><img src="/img/logos/dexscreener.png" alt="" width="36" height="36"><span><b>DexScreener</b><small>Live chart, pools and trades</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><button class="bb-ca" type="button" data-bb-ca><span>CA</span><code data-bb-ca-full>0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074</code><b>Copy</b></button></div></div>
+    <a class="pn-pill" href="/agent">Open app</a>
+    <button class="pn-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="pn-menu" data-pn-burger><i></i><i></i></button>
+  </div>
+</header>
+<nav class="pn-menu" id="pn-menu" aria-label="Site" data-pn-menu></nav>
+
+<main id="main">
+  <section class="page-hero" aria-labelledby="ph">
+    <canvas class="rain" data-rain aria-hidden="true"></canvas>
+    <span class="eyebrow"><i class="dot"></i>V7 · F35 Seal</span>
+    <h1 id="ph" class="words" data-words>Receipts, not promises</h1>
+    <p class="lead rv">Every decision Troya makes gets a receipt: each Gate check, each paid check over x402 or Virtuals, each call on The Record, and soon each Council verdict, Aegis exit and Arena trade. A receipt is signed twice, by the Troya attestor (ECDSA) and with a post-quantum ML-DSA-65 key, and chained to the one before it. Once a day the chain is anchored on Robinhood Chain, so a closed day cannot be rewritten, by Troya or anyone else.</p>
+  </section>
+
+  <section class="ip" aria-labelledby="live-h">
+    <div class="eyebrow-line"><span>01 / The chain, live</span></div>
+    <div class="split" style="margin-bottom:40px">
+      <h2 id="live-h" class="h2 words" data-words>Every decision, sealed</h2>
+      <p class="lead rv">Read straight from <a class="link" href="/api/seal" target="_blank" rel="noopener">/api/seal</a>. Each receipt opens as JSON with its own check: the hash, both signatures and the link to the receipt before it.</p>
+    </div>
+    <div class="steps four" data-seal-stats>
+      <article class="step rv"><span class="n">RECEIPTS</span><h3 data-seal-seq>…</h3><p>sealed since 19 Nov 2026</p></article>
+      <article class="step rv"><span class="n">TODAY</span><h3 data-seal-today>…</h3><p>receipts in the last UTC day</p></article>
+      <article class="step rv"><span class="n">HEAD</span><h3 class="mono" data-seal-head style="font-size:18px;word-break:break-all;text-transform:none;letter-spacing:0">…</h3><p>one hash that commits the whole history</p></article>
+      <article class="step rv"><span class="n">LAST ANCHOR</span><h3 data-seal-anchor>…</h3><p>the day's last hash, written on Robinhood Chain</p></article>
+    </div>
+    <div class="code rv" style="margin-top:32px">
+      <div class="code-h">Latest receipts</div>
+      <pre data-seal-list>Loading…</pre>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="proven-h">
+    <div class="eyebrow-line"><span>02 / Proven contracts</span></div>
+    <div class="split" style="margin-bottom:40px">
+      <h2 id="proven-h" class="h2 words" data-words>11 properties, proven for every input</h2>
+      <p class="lead rv">Troya's two contracts on Robinhood Chain, <a class="link" href="https://robinhoodchain.blockscout.com/address/0x266323d6ce63E4dfE62cC87bD14cA6C97BB2F525" target="_blank" rel="noopener">TroyaFeeSplitterFactory 0x2663…F525</a> and <a class="link" href="https://robinhoodchain.blockscout.com/address/0x439EBc38c756f4F729c1474ED8DE337cFe3Aa77E" target="_blank" rel="noopener">TroyaPass 0x439E…a77E</a>, were checked with Halmos, a16z's symbolic prover. A fuzz test tries random values; Halmos proves each property for all of them. Run it yourself: <code>uvx --python 3.12 halmos --match-path 'test/halmos/*'</code> in the repo's contracts folder. These are proofs of the listed properties, not a claim that the code has no other bugs.</p>
+    </div>
+    <div class="steps">
+      <article class="step rv"><span class="n">01 · TroyaFeeSplitter</span><h3>Every split adds up</h3><p>For any amount and any allowed share, the treasury gets exactly amount × share ÷ 10,000, the creator gets the rest, and nothing stays behind.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaFeeSplitter.halmos.t.sol" target="_blank" rel="noopener">check_splitAddsUpExactly</a></p></article>
+      <article class="step rv"><span class="n">02 · TroyaFeeSplitter</span><h3>Troya's share is capped at 20%</h3><p>No splitter can ever be created with a share above 2,000 basis points.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaFeeSplitter.halmos.t.sol" target="_blank" rel="noopener">check_shareCappedAt20Percent</a></p></article>
+      <article class="step rv"><span class="n">03 · TroyaFeeSplitter</span><h3>Set once, never changed</h3><p>Nobody, Troya included, can re-initialize a splitter to a new creator or share.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaFeeSplitter.halmos.t.sol" target="_blank" rel="noopener">check_cannotReinitialize</a></p></article>
+      <article class="step rv"><span class="n">04 · TroyaFeeSplitter</span><h3>The owner cannot touch the creator's part</h3><p>Changing where Troya's share goes never changes the creator, the share, or what the creator receives.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaFeeSplitter.halmos.t.sol" target="_blank" rel="noopener">check_ownerCannotTouchCreatorsPart</a></p></article>
+      <article class="step rv"><span class="n">05 · TroyaFeeSplitter</span><h3>Only the owner moves Troya's share</h3><p>Any other caller trying to change the treasury fails, and nothing changes.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaFeeSplitter.halmos.t.sol" target="_blank" rel="noopener">check_onlyOwnerSetsTreasury</a></p></article>
+      <article class="step rv"><span class="n">06 · TroyaFeeSplitter</span><h3>Money kept for a creator stays theirs</h3><p>If a creator cannot receive ETH, the amount is kept for them. Only they can withdraw it, and it is never split again.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaFeeSplitter.halmos.t.sol" target="_blank" rel="noopener">check_owedOnlyToItsOwner</a></p></article>
+      <article class="step rv"><span class="n">07 · TroyaPass</span><h3>Only holders can mint</h3><p>A pass mints only for a wallet holding at least 1,000,000 $TROYA, and always to that wallet.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaPass.halmos.t.sol" target="_blank" rel="noopener">check_mintNeedsTheMinimum</a></p></article>
+      <article class="step rv"><span class="n">08 · TroyaPass</span><h3>One pass per wallet</h3><p>A second mint always fails, whatever the balance.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaPass.halmos.t.sol" target="_blank" rel="noopener">check_onePassPerWallet</a></p></article>
+      <article class="step rv"><span class="n">09 · TroyaPass</span><h3>Soulbound</h3><p>No transfer path moves a pass: not by its holder, not by anyone else, to any address.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaPass.halmos.t.sol" target="_blank" rel="noopener">check_cannotBeTransferred</a></p></article>
+      <article class="step rv"><span class="n">10 · TroyaPass</span><h3>No approvals</h3><p>approve and setApprovalForAll always fail, so nobody can ever be allowed to move a pass.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaPass.halmos.t.sol" target="_blank" rel="noopener">check_noApprovals</a></p></article>
+      <article class="step rv"><span class="n">11 · TroyaPass</span><h3>Only the holder burns</h3><p>Anyone else's burn changes nothing; the holder's burn removes the pass.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaPass.halmos.t.sol" target="_blank" rel="noopener">check_onlyHolderBurns</a></p></article>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="pq-h">
+    <div class="eyebrow-line"><span>03 / Quantum-Ready</span></div>
+    <div class="split" style="margin-bottom:40px">
+      <h2 id="pq-h" class="h2 words" data-words>Signed for the next era too</h2>
+      <p class="lead rv">ECDSA keys like every Ethereum wallet's are expected to be breakable by a large enough quantum computer one day. Each receipt therefore also carries an ML-DSA-65 signature (NIST FIPS 204), a post-quantum scheme, so the record stays checkable either way. Quantum-Ready, not quantum-proof: Robinhood Chain itself, like every EVM chain, still runs on ECDSA.</p>
+    </div>
+    <div class="code rv">
+      <div class="code-h">ML-DSA-65 public key (SPKI, base64)<button type="button" data-copy-block>COPY</button></div>
+      <pre data-seal-pq style="white-space:pre-wrap;word-break:break-all">Loading…</pre>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="check-h">
+    <div class="eyebrow-line"><span>04 / Check a receipt</span></div>
+    <div class="split" style="margin-bottom:24px">
+      <h2 id="check-h" class="h2 words" data-words>Paste one, get the verdict</h2>
+      <p class="lead rv">Paste a receipt's JSON. Troya recomputes the hash, checks the ECDSA signature against the attestor, checks the ML-DSA signature against the key above, and looks up the receipt it points to.</p>
+    </div>
+    <textarea data-seal-in rows="7" style="width:100%;font:13px/1.5 var(--mono,monospace);background:transparent;color:inherit;border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:14px" placeholder='{"v":1,"seq":1,"at":...,"hash":"0x...","sig":{...}}'></textarea>
+    <p style="margin-top:12px"><button class="pn-pill" type="button" data-seal-go>Check it</button> <span data-seal-out style="margin-left:12px"></span></p>
+  </section>
+</main>
+</main>
+
+<footer class="pn-foot" data-pn-foot></footer>
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module">
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+try {
+  const s = await (await fetch("/api/seal")).json();
+  $("[data-seal-seq]").textContent = (s.seq || 0).toLocaleString("en-US");
+  $("[data-seal-today]").textContent = (s.today || 0).toLocaleString("en-US");
+  $("[data-seal-head]").textContent = s.head ? s.head.slice(0, 18) + "…" : "none yet";
+  const a = s.lastAnchor;
+  $("[data-seal-anchor]").innerHTML = a ? `<a class="link" href="https://robinhoodchain.blockscout.com/tx/${esc(a.tx)}" target="_blank" rel="noopener">${esc(a.day)}</a>` : "first one after 00:00 UTC";
+  $("[data-seal-pq]").textContent = s.keys?.mldsa?.spkiBase64 || "";
+  const r = await (await fetch("/api/seal/receipts?limit=12")).json();
+  $("[data-seal-list]").innerHTML = (r.receipts || []).map((x) => `#${x.seq}  ${new Date(x.at).toISOString().slice(11, 19)}  ${esc(x.kind.padEnd(13))} ${esc(String(x.subject).slice(0, 14))}…  ${esc(x.ref || "")}\n      <a class="link" href="/api/seal/r/${esc(x.hash)}" target="_blank" rel="noopener">${esc(x.hash)}</a>`).join("\n") || "No receipts yet today.";
+} catch { $("[data-seal-list]").textContent = "Could not load the seal right now."; }
+$("[data-seal-go]").addEventListener("click", async () => {
+  const out = $("[data-seal-out]");
+  let rec; try { rec = JSON.parse($("[data-seal-in]").value); } catch { out.textContent = "That is not valid JSON."; return; }
+  out.textContent = "Checking…";
+  try {
+    const j = await (await fetch("/api/seal/verify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ receipt: rec.receipt || rec }) })).json();
+    const c = j.check || {};
+    out.textContent = `${c.valid ? "Valid." : "Not valid."} hash ${c.hash ? "✓" : "✗"} · ECDSA ${c.ecdsa ? "✓" : "✗"} · ML-DSA ${c.mldsa ? "✓" : "✗"} · linked ${c.linked === false ? "✗" : "✓"}`;
+  } catch { out.textContent = "The check could not run right now."; }
+});
+</script>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/home/pages.js"></script>
+<script src="/js/buybar.js" defer></script>
+<script src="/home/rain.js" defer></script>
+</body>
+</html>

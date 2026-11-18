@@ -64,7 +64,7 @@ export const GROUPS = [
   ["Discover", [["Gate a coin", "#/gate", "gate"], ["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["Create coin", "#/create", "create"], ["Creator desk", "#/creator", "creator"], ["All launches", "#/launch", "launch"], ["Leaderboard", "#/leaderboard", "leaderboard"], ["Agent registry", "#/registry", "agent"]]],
   ["Agent", [["Chat", "#/agent", "chat"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Sentry Autopilot", "#/agent/sentry", "sentry"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Audited rail", "#/rail", "rail"]]],
   ["You", [["Portfolio", "#/portfolio", "portfolio"], ["Inbox", "#/portfolio/inbox", "inbox"], ["History", "#/portfolio/history", "history"], ["Social", "#/social", "social"]]],
-  ["Help", [["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Verify", "/verify", "verify"], ["The Record", "/record", "record"], ["$TROYA flywheel", "#/flywheel", "flywheel"]]],
+  ["Help", [["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Is it safe?", "/safety", "verify"], ["Verify", "/verify", "verify"], ["The Record", "/record", "record"], ["$TROYA flywheel", "#/flywheel", "flywheel"]]],
 ];
 const FLAT = GROUPS.flatMap(([g, items]) => items.map(([t, href, ic]) => ({ g, t, href, ic })));
 // route table: first path segment → page module (same as /agent) plus the Desk's own Gate page

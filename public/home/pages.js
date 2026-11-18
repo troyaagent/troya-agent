@@ -14,9 +14,9 @@ const SMALL = [
   ["Market", "/agent#/market"], ["Swap", "/agent#/swap"], ["Perps", "/agent#/perps"], ["Bridge", "/agent#/bridge"],
   ["Troya Launches", "/agent#/troya-launches"], ["Create coin", "/agent#/create"], ["Creator desk", "/agent#/creator"], ["Assistant", "/agent#/agent"], ["Docs", "/agent#/docs"],
   ["Roadmap", PAGE("roadmap")], ["Launch on X guide", PAGE("launch-on-x")],
-  ["Market Analysis", PAGE("market-analysis")], ["API and MCP", PAGE("api-and-mcp")], ["Risk Controls", PAGE("risk-controls")], ["Verify", PAGE("verify")], ["The Record", PAGE("record")], ["Flywheel", PAGE("flywheel")], ["Community", PAGE("community")], ["Gate badge", PAGE("badge")], ["Insights", PAGE("insights")],
+  ["Market Analysis", PAGE("market-analysis")], ["API and MCP", PAGE("api-and-mcp")], ["Risk Controls", PAGE("risk-controls")], ["Safety", PAGE("safety")], ["Verify", PAGE("verify")], ["The Record", PAGE("record")], ["Flywheel", PAGE("flywheel")], ["Community", PAGE("community")], ["Gate badge", PAGE("badge")], ["Insights", PAGE("insights")],
 ];
-const PAGES = [["Roadmap", "roadmap"], ["Launch on X", "launch-on-x"], ["Capabilities", "capabilities"], ["Plans", "plans"], ["Gate badge", "badge"], ["API and MCP", "api-and-mcp"], ["Market analysis", "market-analysis"], ["Insights", "insights"], ["Philosophy", "philosophy"], ["Risk controls", "risk-controls"]];
+const PAGES = [["Roadmap", "roadmap"], ["Launch on X", "launch-on-x"], ["Capabilities", "capabilities"], ["Plans", "plans"], ["Gate badge", "badge"], ["API and MCP", "api-and-mcp"], ["Market analysis", "market-analysis"], ["Insights", "insights"], ["Philosophy", "philosophy"], ["Risk controls", "risk-controls"], ["Safety", "safety"]];
 const ok = (re, u) => (re.test(u || "") ? u : "");
 const X = ok(/^https:\/\/(x|twitter)\.com\//, SITE.x), TG = ok(/^https:\/\/t\.me\//, SITE.telegram), GH = ok(/^https:\/\/github\.com\//, SITE.github);
 const ext = (href, label) => (href ? `<a href="${esc(href)}" target="_blank" rel="noopener">${label}</a>` : "");

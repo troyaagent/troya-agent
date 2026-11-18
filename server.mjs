@@ -39,6 +39,7 @@ const ROUTES = {
   "/roadmap": "/roadmap.html",
   "/launch-on-x": "/launch-on-x.html",
   "/badge": "/badge.html",
+  "/safety": "/safety.html",
   "/agent": "/agent/index.html",
 };
 

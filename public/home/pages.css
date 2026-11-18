@@ -411,3 +411,10 @@ body.site.pn { overflow-x: clip; }
   .rec-calls td:last-child, .rec-calls th:last-child, .rec-orc td:last-child, .rec-orc th:last-child { padding-right: 0; }
   .rec-wrap:has(.rec-calls), .rec-wrap:has(.rec-orc) { -webkit-mask-image: none; mask-image: none; }
 }
+
+/* Safety page (/safety): the latest public commits */
+.alive-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.alive-list li { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; font: 400 14.5px/1.5 var(--sans); }
+.alive-list li a { min-width: 0; overflow-wrap: anywhere; }
+.alive-list li span { flex: none; color: var(--muted); font: 500 12px/1 var(--mono); }
+@media (max-width: 640px) { .alive-list li { flex-direction: column; gap: 4px; } }

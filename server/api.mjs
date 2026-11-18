@@ -40,6 +40,7 @@ const MODULES = [
   "./rail.mjs",        // F25: the audited rail, limits/allowlist/kill switch for agents trading through Robinhood's agentic MCP
   "./launch.mjs",      // V6 Hermes: launching through Troya (X, Telegram, web), the fee rule and the TroyaFeeSplitter
   "./xtrade.mjs",      // V6 F29: Trade on X (buy/sell by posting to @Troyaagent, from the Agent Wallet)
+  "./trust.mjs",       // Safety page: live proof Troya is still being built (public commits, launches, burns, Sentry)
   "./community.mjs",   // community inbox: bug reports, ideas and suspicious-activity flags (web + Telegram), admins only
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];

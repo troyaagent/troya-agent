@@ -526,6 +526,8 @@ async function bornRecords() {
   for (const x of [ORIGIN, ...l.slice().reverse()]) { const k = lc(x.token); if (!x.token || seen.has(k) || teamTest(x)) continue; seen.add(k); out.push(x); }
   return out;
 }
+/** addresses of every coin born through Troya ($TROYA first): the Market board always carries them */
+export async function bornTokens() { return (await bornRecords()).map((x) => lc(x.token)); }
 async function boardItem(rec, handles) {
   const m = await import("./market.mjs");
   const devs = [...new Set([rec.wallet, rec.owner].filter((a) => isAddress(String(a || ""))).map(lc))];

@@ -341,6 +341,18 @@ async function refreshBoard() {
       } catch (e) { board.error = e.message; if (e.status === 429) await new Promise((r) => setTimeout(r, 30_000)); }
     }
     if (!ok) throw new Error(board.error || "GeckoTerminal did not answer");
+    // $TROYA and the coins born through Troya are always on the board, even when their pools are too small for
+    // GeckoTerminal's top lists ($TROYA itself was missing from Market)
+    try {
+      const pins = await import("./launch.mjs").then((m) => m.bornTokens()).catch(() => []);
+      for (const a of pins.slice(0, 20)) {
+        if (map.has(a)) continue;
+        const d = await gecko(`tokens/${a}/pools?page=1&include=base_token`).catch(() => null);
+        if (!d?.data?.length) continue;
+        const inc = new Map((d.included || []).map((x) => [x.id, x]));
+        for (const p of d.data) { const pr = poolRow(p, inc); if (pr.base === a) fold(map, pr, ethUsd); }
+      }
+    } catch {}
     publish(map, { full: ok >= PAGES.length * 0.75 });
     try { noteV4(v4seen); } catch {}
     board.error = null;

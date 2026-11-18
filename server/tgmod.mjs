@@ -112,6 +112,9 @@ const RULES = [
   // raid and engagement services ("team of 50+ organic raiders", "we help projects gain visibility and engagement")
   [3, /\b(?:raiders?|raid(?:ing)?\s+(?:team|squad|group|service))\b[^\n]{0,90}\b(?:visibility|engagement|exposure|growth|projects?)\b|\bwe\s+help\s+(?:your\s+)?projects?\s+(?:gain|get|grow|reach|boost)\b|\b(?:organic|real)\s+(?:blue\s?tick|verified)\s+(?:raiders?|accounts|engagement)\b/i],
   [2, HOLDINGS_BAIT],
+  // words spelled out letter by letter to slip past filters ("it's a f a r m", "r u g", "s c a m"): nobody does that by
+  // accident (18 Nov: a new account posted it twice after being asked to show its proof in public)
+  [3, /(?:^|[^a-z])(?:f[\s.*_-]+a[\s.*_-]+r[\s.*_-]+m|r[\s.*_-]+u[\s.*_-]+g|s[\s.*_-]+c[\s.*_-]+a[\s.*_-]+m|h[\s.*_-]+o[\s.*_-]+n[\s.*_-]+e[\s.*_-]+y)(?:[^a-z]|$)/i],
 ];
 
 // how promotional a text reads: rule weights plus other people's @handles and other coins' tickers when they come with it

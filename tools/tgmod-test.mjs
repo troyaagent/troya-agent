@@ -48,6 +48,8 @@ const LEGIT = [
 
 console.log("A · scoring today's messages");
 ok(mod.score("$PEPE next 100x, troya too 🚀") >= 3 && mod.score("troya 100x join t.me/pumpcalls") >= 3, "gains talk with another coin or a link still scores 3+");
+ok(mod.score("it's a f a r m , don't risk out . i got proofs") >= 3 && mod.score("total r u g incoming") >= 3 && mod.score("s.c.a.m dev") >= 3, "words spelled out letter by letter to dodge the filter score 3+");
+ok(mod.score("is this a farm or real holders?") < 2 && mod.score("a rug pull would show on The Record") < 3 && mod.score("I farm a lot of coins") < 2, "the same words written normally by members are left alone");
 const missed = SPAM.filter((t) => mod.score(t) < 3);
 ok(!missed.length, `all ${SPAM.length} spam messages score 3+`, missed.map((t) => `[${mod.score(t)}] ${t.slice(0, 40)}`).join(" | "));
 const hit = LEGIT.filter((t) => mod.score(t) >= 2);

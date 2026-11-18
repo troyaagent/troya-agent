@@ -62,10 +62,12 @@ export async function mount(view, ctx) {
   const kpis = h("div", { class: "hp-kpis" });
   const lanes = h("div", { class: "hp-lanes" });
   const tabs = h("div", { class: "hp-tabs", role: "tablist" });
+  // a slim header row so the three lanes and Create coin lead the page (owner, 18 Nov)
   clear(view, h("div", { class: "dk hp" },
-    pageHead("Troya Launches", "Every coin born through Troya, from its first block on the Pons curve to its own Uniswap pool. Launched from X, Telegram or troya.codes.",
-      { act: h("a", { class: "btn primary hp-create", href: "#/create" }, icon("plus"), "Create coin") }),
-    kpis, tabs, lanes));
+    h("header", { class: "hp-top" },
+      h("div", { class: "hp-top-l" }, h("h1", {}, "Troya Launches"), kpis),
+      h("a", { class: "btn primary hp-create", href: "#/create" }, icon("plus"), "Create coin")),
+    tabs, lanes));
 
   async function refresh() {
     // an empty answer (the board still building after a restart) keeps what is on screen and says it is loading
@@ -165,9 +167,9 @@ export async function mount(view, ctx) {
     const all = [...d.new, ...d.almost, ...d.migrated];
     const vol = all.reduce((a, x) => a + (x.volume24hUsd || 0), 0);
     clear(kpis,
-      h("div", { class: "hp-kpi" }, h("small", {}, "Born through Troya"), h("b", {}, String(d.counts.born))),
-      h("div", { class: "hp-kpi" }, h("small", {}, "Graduated"), h("b", {}, String(d.counts.graduated))),
-      h("div", { class: "hp-kpi" }, h("small", {}, "Volume 24h"), h("b", {}, usd(vol, { compact: true }))));
+      h("span", { class: "hp-kpi" }, h("b", {}, String(d.counts.born)), " born"),
+      h("span", { class: "hp-kpi" }, h("b", {}, String(d.counts.graduated)), " graduated"),
+      h("span", { class: "hp-kpi" }, h("b", {}, usd(vol, { compact: true })), " vol 24h"));
     // phones show one lane at a time: until the visitor picks one, open the first lane that has coins in it
     if (!st.chosen && !d[st.lane]?.length) { const first = LANES.find((l) => d[l.key]?.length); if (first) st.lane = first.key; }
     clear(tabs, LANES.map((l) => h("button", { class: `hp-tab ${l.tone}`, type: "button", role: "tab", "aria-selected": String(st.lane === l.key), onclick: () => { st.lane = l.key; st.chosen = true; paint(); } },

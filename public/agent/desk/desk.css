@@ -72,7 +72,7 @@ body.desk { display: block; min-height: 100vh; background: var(--bg); }
 .d-main.wide { max-width: none; padding: 0 16px 40px; }
 /* Perps keeps the full width but the same 32px gutter and room under the ticket as the other Trade pages */
 .d-main.wide[data-page="perps"] { padding: 0 32px 104px; }
-.d-foot { max-width: 1320px; padding-left: 32px; padding-right: 190px; }
+.d-foot { max-width: 1320px; padding-left: 32px; padding-right: 190px; margin-top: 56px; }
 
 /* the agent drawer */
 .d-drawer { position: fixed; z-index: 90; right: 0; top: 0; bottom: 0; width: var(--drawer); display: flex; flex-direction: column; background: #0a0a0a; border-left: 1px solid var(--line-2);

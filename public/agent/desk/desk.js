@@ -283,14 +283,7 @@ setInterval(() => { if (!document.hidden) pollInbox(); }, 30000);
 onWallet(() => pollInbox());
 
 /* ---------- footer ---------- */
-const caChip = h("div", { class: "ca-chip" }, h("b", {}, "CA"), h("span", { class: "sep" }, ":"),
-  h("span", { class: "addr" }, SITE.ca || "Gates still shut"),
-  h("button", { type: "button", onclick: async () => {
-    if (!SITE.ca) return toast("The contract address is not live yet.");
-    try { await navigator.clipboard.writeText(SITE.ca); toast("Contract address copied", "ok"); } catch { toast("Copy failed. Select the address and copy it manually.", "error"); }
-  } }, "COPY"));
 clear($("[data-foot]"),
-  caChip,
   h("span", {}, "Non-custodial by default · You sign every transaction · Not financial advice"),
   h("nav", { "aria-label": "Footer" },
     h("a", { href: "/" }, "Troya Agent"),

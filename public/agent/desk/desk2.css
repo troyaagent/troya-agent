@@ -1102,11 +1102,15 @@ body { touch-action: manipulation; }
 .hp-opt-ic svg[fill="none"] { fill: none; }
 .hp-soon { font-size: 10px !important; letter-spacing: .08em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line-2, rgba(255,255,255,.14)); color: var(--muted); margin: 0 !important; }
 .hp .page-head .act { position: absolute; right: 30px; top: 50%; bottom: auto; transform: translateY(-50%); }
-/* three info boxes sit exactly above the three lanes */
-.hp-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 4px 0 14px; }
-.hp-kpi { padding: 14px 18px; border-radius: 16px; border: 1px solid var(--line, rgba(255,255,255,.08)); background: var(--bg-1, rgba(255,255,255,.02)); display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.hp-kpi small { color: var(--muted); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; }
-.hp-kpi b { font-size: 24px; font-weight: 650; letter-spacing: -.01em; }
+/* the slim header row: small title, three small number chips, Create coin on the right */
+.hp-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 22px 0 16px; }
+.hp-top-l { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; min-width: 0; }
+.hp-top h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; background: linear-gradient(180deg, #ffffff 30%, #bfeffd 75%, #8edff5); -webkit-background-clip: text; background-clip: text; color: transparent; }
+html[data-theme="light"] .hp-top h1 { background: linear-gradient(180deg, #151310 40%, #0a5f7b); -webkit-background-clip: text; background-clip: text; }
+.hp-kpis { display: flex; flex-wrap: wrap; gap: 6px; }
+.hp-kpi { display: inline-flex; align-items: baseline; gap: 4px; height: 26px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--line, rgba(255,255,255,.08)); background: var(--bg-1, rgba(255,255,255,.02)); color: var(--muted); font-size: 12px; line-height: 24px; white-space: nowrap; }
+.hp-kpi b { color: var(--fg); font-size: 12.5px; font-weight: 650; }
+.hp-top .hp-create { flex: none; }
 .hp-tabs { display: none; }
 .hp-lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; padding-bottom: 28px; }
 /* each lane runs to the bottom of the screen and scrolls on its own as coins pile up */
@@ -1141,7 +1145,7 @@ body { touch-action: manipulation; }
 .hp-bar span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hp-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .hp-tag { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; border: 1px solid var(--line, rgba(255,255,255,.12)); color: var(--fg-2, #c9d6db); }
-.hp-tag { cursor: help; }
+.hp-tag { cursor: default; }   /* the popup explains it; no question-mark cursor (owner, 18 Nov) */
 .hp-tag.og { color: #0b1a12; background: #6fd39a; border-color: #6fd39a; }
 .hp-tag.ic { padding: 0 6px; }
 .hp-tag-ic { display: grid; place-items: center; }
@@ -1220,10 +1224,10 @@ html[data-theme="light"] .hp-horse-ic { background: #3d9fd6; }
   .hp-create-wrap { margin: 0 0 14px; }
   .hp-menu { left: 0; right: auto; width: min(320px, calc(100vw - 32px)); }
   .hp .page-head .act { position: static; transform: none; margin-top: 14px; }
-  .hp-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .hp-kpi { flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 12px; }
-  .hp-kpi small { font-size: 10px; letter-spacing: .04em; }
-  .hp-kpi b { font-size: 18px; }
+  .hp-top { align-items: flex-start; margin-top: 16px; }
+  .hp-top h1 { font-size: 19px; }
+  .hp-kpi { height: 24px; padding: 0 9px; font-size: 11px; line-height: 22px; }
+  .hp-kpi b { font-size: 11.5px; }
   .hp-card { grid-template-columns: 64px minmax(0, 1fr); grid-template-areas: "ava body" "side side" "foot foot"; }
   .hp-card .tok-ico.xl { width: 64px; height: 64px; }
   .hp-side { grid-auto-flow: column; justify-content: start; justify-items: start; text-align: left; gap: 18px; }

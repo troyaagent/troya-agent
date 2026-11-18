@@ -87,7 +87,7 @@ body.app { min-height: 100vh; display: flex; flex-direction: column; }
 .panel-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px 6px; }
 .panel-h h2, .panel-h h3 { margin: 0; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
 .panel-b { padding: 8px 16px 16px; }
-.info { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line-3); color: var(--muted); font-size: 9px; display: inline-grid; place-items: center; cursor: help; font-style: normal; }
+.info { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line-3); color: var(--muted); font-size: 9px; display: inline-grid; place-items: center; cursor: default; font-style: normal; }
 
 /* tabs (underline) + segmented control */
 .tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--line); margin-bottom: 18px; overflow-x: auto; scrollbar-width: none; }

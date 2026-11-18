@@ -473,8 +473,12 @@ async function geckoHolders(a, { hi = false } = {}) {
   return { count: h?.count != null ? Number(h.count) : null, top10: h?.distribution_percentage?.top_10 != null ? Number(h.distribution_percentage.top_10) : null, at: Date.now() };
 }
 let holdersBusy = false;
+let geckoHoldersAt = 0;
 async function holdersTick() {
-  if (holdersBusy || ((!BS_KEY || bsDown()) && (gq.hi.length || gq.lo.length > 1))) return;   // GeckoTerminal fallback: users and the board first
+  // GeckoTerminal fallback: users and the board first, but never starved (with Blockscout paused the column went all "–")
+  const fallback = !BS_KEY || bsDown();
+  if (holdersBusy || (fallback && (gq.hi.length || gq.lo.length > 1) && Date.now() - geckoHoldersAt < 30_000)) return;
+  if (fallback) geckoHoldersAt = Date.now();
   const now = Date.now();
   const next = [...board.rows.values()].filter((t) => { const h = HOLDERS.get(t.address); return !h || now - h.at > 6 * 3600_000; })
     .sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0))[0];

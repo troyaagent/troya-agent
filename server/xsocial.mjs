@@ -343,6 +343,34 @@ export async function uploadImage(buf, type = "image/jpeg") {
   if (!r.ok || !(j?.data?.id || j?.media_id_string)) throw new Error(`X media upload answered ${r.status}: ${j?.detail || j?.title || j?.errors?.[0]?.message || "error"}`);
   return String(j.data?.id || j.media_id_string);
 }
+/** A video for a team post: X API v2 chunked upload (initialize → append in 4 MB parts → finalize → wait for processing). */
+export async function uploadVideo(buf, type = "video/mp4") {
+  const bot = await botTokens();
+  if (!bot?.access) throw new Error("Troya is not connected to X.");
+  const auth = { authorization: `Bearer ${bot.access}` };
+  const j = async (r, what) => { const x = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`X ${what} answered ${r.status}: ${x?.detail || x?.title || x?.errors?.[0]?.message || "error"}`); return x; };
+  const init = await j(await fetch(API + "/2/media/upload/initialize", { method: "POST", headers: { ...auth, "content-type": "application/json" },
+    body: JSON.stringify({ media_type: type, total_bytes: buf.length, media_category: "tweet_video" }) }), "upload initialize");
+  const id = String(init?.data?.id || init?.id || "");
+  if (!id) throw new Error("X gave no media id for the video.");
+  const PART = 4 * 1024 * 1024;
+  for (let i = 0, seg = 0; i < buf.length; i += PART, seg++) {
+    const fd = new FormData();
+    fd.append("media", new Blob([buf.subarray(i, i + PART)], { type: "application/octet-stream" }), "part.bin");
+    fd.append("segment_index", String(seg));
+    const r = await fetch(API + `/2/media/upload/${id}/append`, { method: "POST", headers: auth, body: fd, signal: AbortSignal.timeout(120_000) });
+    if (!r.ok) await j(r, `upload append ${seg}`);
+  }
+  let fin = await j(await fetch(API + `/2/media/upload/${id}/finalize`, { method: "POST", headers: auth }), "upload finalize");
+  let info = fin?.data?.processing_info;
+  for (let k = 0; info && info.state !== "succeeded" && k < 60; k++) {
+    if (info.state === "failed") throw new Error(`X could not process the video: ${info.error?.message || "failed"}`);
+    await new Promise((res) => setTimeout(res, Math.max(2, Number(info.check_after_secs) || 3) * 1000));
+    const st = await j(await fetch(API + `/2/media/upload?command=STATUS&media_id=${id}`, { headers: auth }), "upload status");
+    info = st?.data?.processing_info;
+  }
+  return id;
+}
 export async function postTweet(text, { mediaIds = [], replyTo = null } = {}) {
   const bot = await botTokens();
   if (!bot?.access) throw new Error("Troya is not connected to X.");

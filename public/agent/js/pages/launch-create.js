@@ -50,6 +50,11 @@ const PC_CSS = `.lc-pc { display: grid; gap: 14px; min-width: 0; }
 .lc-pc-score span { color: var(--muted); font-size: 13px; }
 .lc-pc-res.good .lc-pc-score b { color: var(--up); } .lc-pc-res.mid .lc-pc-score b { color: var(--warn); } .lc-pc-res.low .lc-pc-score b { color: var(--down); }
 .lc-pc-verdict { font-weight: 700; letter-spacing: .08em; font-size: 13px; }
+.lc-pc-vrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lc-pc-own { font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line-3); color: var(--fg-2); }
+.lc-pc-own.ok { color: var(--up); border-color: color-mix(in srgb, var(--up) 45%, transparent); }
+.lc-pc-own.part { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.lc-pc-own.no { color: var(--down); border-color: color-mix(in srgb, var(--down) 45%, transparent); }
 .lc-pc-secs { display: grid; gap: 6px; }
 .lc-pc-sec { border-top: 1px solid var(--line); padding-top: 6px; }
 .lc-pc-sec summary { display: grid; grid-template-columns: 1fr auto 90px; gap: 10px; align-items: center; cursor: pointer; list-style: none; font-size: 13.5px; }
@@ -136,7 +141,7 @@ export async function mount(view, ctx) {
   const pcBox = h("div", { class: "lc-pc" });
   const pcSec = h("section", { class: "lc-sec" },
     h("h2", {}, "Project check ", h("span", { class: "muted" }, "(optional)")),
-    h("p", { class: "note", style: { marginTop: 0 } }, "Troya reads your website, the code it runs and your X account (plus GitHub and Telegram if you have them) and scores the project the way an outside reviewer would. It also checks that the website and X are yours: until they are proven, the score stays at 40 or below, so a copied project gets nothing. Only you see the result."),
+    h("p", { class: "note", style: { marginTop: 0 } }, "Troya reads your website, the code it runs and your X account (plus GitHub and Telegram if you have them) and scores the project the way an outside reviewer would. It also checks that the website and X are really yours and shows it beside the score. Only you see the result."),
     h("label", { class: "field" }, h("span", {}, "GitHub ", h("span", { class: "muted" }, "(optional)")), inp("github", { maxlength: 256, placeholder: "https://github.com/…" })),
     pcBox);
   const xOf = (v) => (/(?:x|twitter)\.com\/@?([A-Za-z0-9_]{1,15})/i.exec(v || "") || /^@?([A-Za-z0-9_]{1,15})$/.exec(String(v || "").trim()) || [])[1] || "";
@@ -161,8 +166,8 @@ export async function mount(view, ctx) {
       h("div", { class: "lc-pc-top" },
         h("div", { class: "lc-pc-score" }, h("b", {}, String(v.score)), h("span", {}, "/100")),
         h("div", {},
-          h("div", { class: "lc-pc-verdict" }, v.verdict),
-          v.cap ? h("p", { class: "fine", style: { margin: "2px 0 0" } }, `${v.cap.why}, so the score is capped at ${v.cap.limit}. The project itself reads ${v.raw}.`) : null,
+          h("div", { class: "lc-pc-vrow" }, h("span", { class: "lc-pc-verdict" }, v.verdict), v.owner ? h("span", { class: `lc-pc-own ${v.owner.verified ? "ok" : v.owner.proven ? "part" : "no"}` }, v.owner.verified ? "Owner verified" : v.owner.proven ? "Owner partly verified" : "Owner not verified") : null),
+          v.owner && !v.owner.verified ? h("p", { class: "fine", style: { margin: "4px 0 0" } }, `${v.owner.text}. Prove them in the steps above, then check again.`) : null,
           v.summary ? h("p", { class: "fine", style: { margin: "4px 0 0" } }, v.summary) : null)),
       h("div", { class: "lc-pc-secs" }, v.sections.map((s) => h("details", { class: "lc-pc-sec" },
         h("summary", {}, h("span", {}, s.title), h("span", { class: "mono" }, `${s.points}/${s.max}`), h("i", { class: "lc-pc-bar" }, h("i", { style: { width: `${Math.round((s.points / s.max) * 100)}%` } }))),

@@ -6,11 +6,11 @@
 //              <meta name="troya-verify" content="0x…"> on its home page: only the site's owner can put it there
 //   · GitHub   troya.txt with the wallet address in the repo root (optional)
 //   · Telegram the wallet address in the group or channel description (optional)
-// Website and X are required; GitHub and Telegram only add points. Ownership sets the ceiling: nothing proven caps the
-// score at 40, one of website/X proven caps it at 65, both lift the cap. A copied project gets nothing from the copy.
+// Website and X are required; GitHub and Telegram only add points.
+// Ownership is shown beside the score (verified, partly, not verified); the score itself always reads out of 100.
 //
 //   POST /api/launch/project-check  { name, symbol, description, website, twitter, telegram, github }
-//        the signed-in wallet is the creator being verified; without a session the score is capped at 40
+//        the signed-in wallet is the creator being verified; without a session the owner shows as not verified
 //
 // Safety: only http(s) on ports 80/443, private and reserved addresses refused at every redirect, 1.5 MB per page,
 // at most 6 same-site scripts, 10 s per request; results cached 3 minutes; the website's text reaches the model
@@ -260,7 +260,7 @@ export function scoreOf({ site, live, x, gh, tg, claims, own, input }) {
   const c = sec("code", "Code the site runs", 25);
   if (site.ok) {
     add(c, site.codeBytes >= 150_000 || site.scripts >= 3, 4, site.codeBytes ? `${Math.round(site.codeBytes / 1024)} KB of its own code` : "No code of its own loaded");
-    add(c, site.wallet, 5, site.wallet ? "Connects a wallet (wagmi, viem, ethers or WalletConnect in the code)" : "No wallet connection in the code");
+    add(c, site.wallet, 5, site.wallet ? "Visitors can connect their wallet: a Connect button in the code (wagmi, viem, ethers or WalletConnect)" : "No Connect wallet button for visitors in the code");
     add(c, site.endpoints.length >= 1, site.endpoints.length >= 2 ? 6 : 3, site.endpoints.length ? `Talks to ${site.endpoints.length} backend or API endpoint${site.endpoints.length > 1 ? "s" : ""}` : "No backend or API calls found");
     add(c, live.length > 0, 4, live.length ? `${live.length} contract address${live.length > 1 ? "es" : ""} in the code exist on Robinhood Chain` : site.contracts.length ? "Contract addresses in the code have no code on Robinhood Chain" : "No contract addresses in the code");
     const clean6 = Math.max(0, 6 - 3 * site.fake.length);
@@ -305,13 +305,13 @@ export function scoreOf({ site, live, x, gh, tg, claims, own, input }) {
     bonus += t; extra.push({ ok: true, text: `Telegram ${tg.title}${tg.members != null ? `, ${tg.members.toLocaleString("en-US")} members` : ""}${tg.verified ? ", the description proves it" : ""} (+${t})` });
   } else if (tg && !tg.auto) extra.push({ ok: false, text: "Telegram could not be read" });
 
-  const raw = Math.min(100, sections.reduce((a, s) => a + Math.min(s.max, s.points), 0) + bonus);
+  const score = Math.min(100, sections.reduce((a, s) => a + Math.min(s.max, s.points), 0) + bonus);
+  // ownership is shown beside the score (owner, 18 Nov: the score itself always reads out of 100, never capped)
   const proven = (own.x.verified ? 1 : 0) + (own.website.verified ? 1 : 0);
-  const cap = proven === 2 ? null : proven === 1 ? { limit: 65, why: `Only ${own.x.verified ? "the X account" : "the website"} is proven to be yours` } : { limit: 40, why: "Neither the website nor the X account is proven to be yours yet" };
-  const score = cap ? Math.min(raw, cap.limit) : raw;
-  // nothing proven reads as UNCLEAR whatever the raw score: the project may be good, but not shown to be this creator's
-  const verdict = proven === 0 ? (score >= 25 ? "UNCLEAR" : "LIKELY LARP") : VERDICTS.find(([m]) => score >= m)[1];
-  return { score, raw, verdict, cap, sections: sections.map((s) => ({ ...s, points: Math.min(s.max, s.points) })), extra, bonus };
+  const owner = { proven, of: 2, verified: proven === 2, text: proven === 2 ? "Owner verified: the website and the X account are proven to be this creator's" : proven === 1 ? `Owner partly verified: only ${own.x.verified ? "the X account" : "the website"} is proven to be this creator's` : "Owner not verified: nothing yet proves the website or the X account belong to this creator" };
+  const verdict = VERDICTS.find(([m]) => score >= m)[1];
+  const raw = score, cap = null;
+  return { score, raw, verdict, cap, owner, sections: sections.map((s) => ({ ...s, points: Math.min(s.max, s.points) })), extra, bonus };
 }
 
 async function check(input, creator) {

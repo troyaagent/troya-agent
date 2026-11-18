@@ -57,7 +57,7 @@ export async function mount(view) {
           "Without 1,000,000 $TROYA: you keep 0.6% of volume and all of your creator tax; Troya takes 0.1% through a fee-split contract nobody can change. Up to 3 launches a day per wallet, at most 1 of them from X (days in UTC).",
           "With 1,000,000 $TROYA or more (your wallet plus its Agent Wallet): 100% of the creator fee goes straight to your wallet, and there is no daily limit.",
           "Creator tax: 0% to 4%, all of it yours.",
-          "Names and tickers that copy ETH, BTC, USDG, stock tokens, big coins or Troya itself are refused.",
+          "Any name and ticker: the ticker is letters and numbers (16 at most), the name up to 48 characters. Both are written into the coin for good.",
         ]),
         h("h3", {}, "After the launch"),
         P(L("#/creator", "Creator desk"), " shows every coin you launched through Troya with the creator fees waiting for each, and claims them in one click, signed by your own wallet. An initial buy from X sits in your Agent Wallet; sell it from ", L("#/launch/x", "Launch from X"), " (Your launches)."),

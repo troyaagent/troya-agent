@@ -130,7 +130,7 @@ export async function mount(view, ctx) {
         h("div", { class: "hp-meta" },
           src ? h("span", { class: "hp-src", title: `Launched from ${src[0]}` }, svg(src[1], "hp-src-ic")) : null,
           c.at ? h("span", {}, ago(c.at)) : null,
-          c.creatorX ? h("span", {}, `@${c.creatorX}`) : c.creator ? h("span", { class: "mono" }, short(c.creator)) : null),
+          c.creator ? h("span", { class: "mono" }, short(c.creator)) : null),
         h("div", { class: "hp-stats" },
           stat("Holders", c.holders != null ? compact(c.holders, 0) : "–"), stat("Txns", c.txns24h != null ? compact(c.txns24h, 0) : "–"),
           stat("Tax", `${taxOf(c.creatorTaxBps)}%`, taxTip(c.creatorTaxBps)), c.initialBuyEth ? stat("Dev buy", `${c.initialBuyEth} ETH`) : null)),

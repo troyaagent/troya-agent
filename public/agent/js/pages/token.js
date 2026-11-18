@@ -109,7 +109,7 @@ export async function mount(view, { parts, go }) {
   const info = h("section", { class: "panel tk-info" },
     t.description ? h("p", { style: { margin: 0 } }, t.description) : null,
     h("div", { class: "rows", style: { margin: 0 } },
-      launch?.creator ? h("div", {}, h("span", {}, "Creator"), h("span", {}, launch.creatorX ? h("a", { class: "link", href: `https://x.com/${launch.creatorX}`, target: "_blank", rel: "noopener nofollow" }, `@${launch.creatorX}`) : null, launch.creatorX ? " · " : null, h("span", { class: "mono" }, short(launch.creator, 4)))) : null,
+      launch?.creator ? h("div", {}, h("span", {}, "Creator"), h("span", { class: "mono" }, short(launch.creator, 4))) : null,
       pons && (!launch?.creator || lc(launch.creator) !== lc(pons.deployer)) ? h("div", {}, h("span", {}, launch?.creator ? "Deployed by" : "Creator"), h("span", { class: "mono" }, short(pons.deployer, 5))) : null,
       pons ? h("div", {}, h("span", {}, "Tax"), h("span", {}, `${Number((1 + (pons.fees.creatorTaxBps || 0) / 100).toFixed(2))}% per trade: 1% Pons fee (0.7% creator, 0.3% Pons)${pons.fees.creatorTaxBps ? ` + ${Number((pons.fees.creatorTaxBps / 100).toFixed(2))}% creator tax` : ""}`)) : null,
       pons ? h("div", {}, h("span", {}, "Curve pair"), h("span", {}, pons.pair.symbol)) : null,

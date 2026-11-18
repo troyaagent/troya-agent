@@ -13,8 +13,7 @@ t("please launch", () => assert.equal(parseLaunch("@Troyaagent please launch Dog
 t("a greeting first", () => { assert.deepEqual(parseLaunch("Hey @Troyaagent launch claus $claus https://t.co/x"), { name: "claus", symbol: "claus", taxBps: 0, buyEth: 0 }); assert.equal(parseLaunch("gm, please launch Moon $MOON").symbol, "MOON"); });
 t("a sentence that only mentions launching is not a launch", () => { assert.equal(parseLaunch("@Troyaagent hey when launch?"), null); assert.equal(parseLaunch("did you launch yet"), null); });
 t("the ticker keeps the case it was written in", () => { assert.equal(parseLaunch("@Troyaagent launch Tiny $tiny").symbol, "tiny"); assert.equal(parseLaunch("@Troyaagent launch X Test $XtestTROYA buy 0.001").symbol, "XtestTROYA"); });
-t("a copy of a major is refused whatever the case", () => assert.ok(nameProblem("Something", "eth")));
-t("the Troya team may use reserved words, others may not", () => { assert.ok(nameProblem("Troya Test", "XtestTROYA")); assert.equal(nameProblem("Troya Test", "XtestTROYA", { team: true }), null); assert.ok(nameProblem("Troya Test", "ETH", { team: true })); });
+t("names and tickers are free (owner, 18 Nov): Troya, ETH, Tesla all pass", () => { for (const [nm, tk] of [["Troya Test", "XtestTROYA"], ["Something", "eth"], ["Tesla", "TSLA"], ["Robin Hood", "HOOD"]]) assert.equal(nameProblem(nm, tk), null, `${nm} ${tk}`); });
 t("not a launch", () => { assert.equal(parseLaunch("@Troyaagent when launch?"), null); assert.equal(parseLaunch("@Troyaagent gm"), null); });
 t("launch without ticker", () => assert.deepEqual(parseLaunch("@Troyaagent launch Wooden Horse"), { name: "Wooden Horse", symbol: "", taxBps: 0, buyEth: 0 }));
 t("initial buy", () => assert.deepEqual(parseLaunch("@Troyaagent launch Wooden Horse $HORSE buy 0.01"), { name: "Wooden Horse", symbol: "HORSE", taxBps: 0, buyEth: 0.01 }));
@@ -23,9 +22,7 @@ t("dev buy .2", () => assert.equal(parseLaunch("@Troyaagent launch Wooden Horse 
 t("buy as a word in the name is not a buy", () => assert.deepEqual(parseLaunch("@Troyaagent launch Buy The Dip $BTD"), { name: "Buy The Dip", symbol: "BTD", taxBps: 0, buyEth: 0 }));
 t("emojis and symbols dropped from the name", () => assert.equal(parseLaunch("@Troyaagent launch Horse 🐴!! $HRS").name, "Horse"));
 
-t("names that copy majors are refused", () => { for (const s of ["ETH", "BTC", "USDG", "TROYA", "HOOD"]) assert.ok(nameProblem("Something", s), s); });
-t("reserved words are refused", () => { assert.ok(nameProblem("Troya Classic", "TRC")); assert.ok(nameProblem("Official Coin", "OFC")); assert.ok(nameProblem("Robinhood Cat", "RHC")); });
-t("name that is a major is refused", () => assert.ok(nameProblem("Ethereum? no: ETH", "XYZ") === null && nameProblem("e t h", "XYZ")));
+t("a name over 48 characters is refused", () => assert.ok(nameProblem("x".repeat(49), "LONG")));
 t("bad ticker characters", () => assert.ok(nameProblem("Horse", "HO-RSE")));
 t("missing name or ticker", () => { assert.ok(nameProblem("", "HORSE")); assert.ok(nameProblem("Horse", "")); });
 t("a fine coin passes", () => assert.equal(nameProblem("Wooden Horse", "HORSE"), null));
@@ -55,14 +52,7 @@ t("The Horse keeps its The; 'a coin called' is dropped; Coin Master stays whole"
   assert.equal(parseLaunch("@Troyaagent launch a coin called Moon Cat $MCAT").name, "Moon Cat");
   assert.equal(parseLaunch("@Troyaagent launch Coin Master $CMST").name, "Coin Master");
 });
-t("company names of stock tokens are refused", () => {
-  for (const [nm, tk] of [["Tesla", "TSL"], ["NVIDIA", "NVDAX"], ["Apple", "AAPLX"], ["Tesla Token", "TTT"], ["NVDA", "NVX"]]) assert.ok(nameProblem(nm, tk), `${nm} ${tk}`);
-});
-t("big coins by name are refused", () => {
-  for (const [nm, tk] of [["Ethereum", "ETHER"], ["Bitcoin", "BITCOIN"], ["Tether USD", "USDTT"], ["Wrapped Bitcoin", "WBTCX"], ["Solana Coin", "SOLX"]]) assert.ok(nameProblem(nm, tk), `${nm} ${tk}`);
-});
-t("Robin Hood and TroyaCat are reserved", () => { assert.ok(nameProblem("Robin Hood", "RHOOD")); assert.ok(nameProblem("TroyaCat", "TCAT")); assert.equal(nameProblem("Wooden Horse", "HORSE"), null); assert.equal(nameProblem("Moon Cat", "MCAT"), null); });
-t("the name is checked on its own (Telegram's name step)", () => { assert.ok(coinNameProblem("Troya Cat")); assert.ok(coinNameProblem("ETH")); assert.equal(coinNameProblem("Wooden Horse"), null); });
+t("the name is checked on its own (Telegram's name step)", () => { assert.ok(coinNameProblem("")); assert.ok(coinNameProblem("y".repeat(49))); assert.equal(coinNameProblem("Troya Cat"), null); });
 t("guide cuts at a word and reads on in lower case", () => {
   const g = guide("The Agent Wallet caps refuse this launch because the per trade limit of the wallet is lower than the amount that the launch needs to send to the Pons factory right now");
   assert.ok(!/\b\w+…\w/.test(g)); assert.ok(g.startsWith("Not launched: the Agent Wallet") || g.startsWith("Not launched: your Agent Wallet"), g); assert.ok(g.length <= 275);

@@ -99,7 +99,7 @@ export async function mount(view, ctx) {
             h("li", {}, `Holders: no daily limit. Without 1M $TROYA: ${p?.limits?.perDayX ?? 1} launch from X a day (${p?.limits?.perDay ?? 3} a day across X, Telegram and troya.codes).`),
             h("li", {}, "Troya sees your post within seconds and replies with the coin's address and market cap, or with what to fix if it could not launch."),
             h("li", {}, "Your own words work too, in English: \"please create a token called Moon Cat, ticker MCAT, 2% tax, buy 0.01 ETH\". If Troya is unsure, it shows you the format instead of guessing."),
-            h("li", {}, "Tickers and names that copy ETH, BTC, USDG, stock tokens, big coins or Troya are refused.")))),
+            h("li", {}, "Any name and ticker you like: the ticker is letters and numbers (16 at most), the name up to 48 characters.")))),
       mineCard(),
       p?.admin ? adminCard() : null);
   }

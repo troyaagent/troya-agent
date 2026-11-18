@@ -6,8 +6,7 @@
 //     fee through a TroyaFeeSplitter (the dev keeps 0.6% and 100% of any creator tax). Holders of 1M $TROYA pay 0%: the
 //     creator fee goes straight to their own wallet.
 //   · Creator tax 0–4%. Without 1M $TROYA: 3 launches a day per wallet, at most 1 of them from X; holders: no daily limit.
-//     Names and tickers that copy ETH, BTC, USDG,
-//     stock tokens, big coins or Troya itself are refused.
+//     Names, tickers and logos are free, as on every other launchpad (owner, 18 Nov): only what Pons can write is checked.
 //   · Optional initial buy ("buy 0.01"): the Agent Wallet buys its own coin right after the 3-second Pons snipe tax, as a
 //     normal Agent Wallet swap (Troya Gate, the wallet's caps). Not enough ETH for launch fee + buy → nothing is launched.
 // Routes:
@@ -28,7 +27,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { Interface, AbiCoder, getAddress, isAddress } from "ethers";
-import { rpc, ADDR, STOCKS, tokenMeta, launchMenu } from "./robinhood.mjs";
+import { rpc, ADDR, tokenMeta, launchMenu } from "./robinhood.mjs";
 import { HttpError } from "./api.mjs";
 import { getSession, requireSession } from "./auth.mjs";
 
@@ -71,46 +70,20 @@ async function buildInfo() {
 export async function splitterFactory() { return (await store.readJson("fee-splitter.json", {})).factory || null; }
 
 /* ---------- names ---------- */
-const MAJORS = ["ETH", "WETH", "BTC", "WBTC", "CBBTC", "USDG", "USDC", "USDT", "DAI", "SOL", "HYPE", "BNB", "XRP", "DOGE", "PEPE", "SHIB", "ARB", "OP", "LINK", "UNI", "TAO", "HOOD", "TROYA"];
-const RESERVED_WORDS = /\b(troya|official|admin|team|support|robinhood)\b/i;
-// big coins by name as well as by ticker ("Ethereum", "Tether USD", "Wrapped Bitcoin")
-const MAJOR_NAMES = new Set(["ETHEREUM", "ETHER", "BITCOIN", "TETHER", "TETHERUSD", "USDCOIN", "SOLANA", "HYPERLIQUID", "BINANCE", "BINANCECOIN",
-  "RIPPLE", "DOGECOIN", "SHIBAINU", "ARBITRUM", "OPTIMISM", "CHAINLINK", "UNISWAP", "BITTENSOR", "GLOBALDOLLAR", "WRAPPEDETHER", "WRAPPEDETH",
-  "WRAPPEDBITCOIN", "WRAPPEDBTC", "COINBASEWRAPPEDBTC", "DAI", "PEPE"]);
-// a company's name without "Inc.", "Corporation", "Class A" and the like: "NVIDIA Corporation" → NVIDIA, "Alphabet Inc. Class A" → ALPHABET
-const COMPANY_TAIL = /\b(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|holdings?|group|class [a-c]|sa|nv|ag|se|ordinary shares?|common stock|adrs?|ads|etf|trust|fund|the)\b/g;
-const bare = (s) => String(s || "").toLowerCase().replace(/&/g, " ").replace(/[^a-z0-9 ]+/g, " ").replace(COMPANY_TAIL, " ").replace(/[^a-z0-9]/g, "").toUpperCase();
-const flatName = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-// stock companies whose name is an everyday word stay free as coin names ("Snap", "Zoom", "Strategy"); brands do not
-const PLAIN_WORDS = new Set(["STRATEGY", "CARNIVAL", "CELSIUS", "COHERENT", "CORNING", "SNAP", "ZOOM", "ORACLE", "AXON", "OUSTER"]);
-// a ticker written as the name counts only for the best-known ones ("NVDA"); BULL, SNOW or SHOP are ordinary coin names
-const BIG_TICKERS = new Set(["TSLA", "NVDA", "AAPL", "GOOGL", "GOOG", "AMZN", "MSFT", "AVGO", "PLTR", "MSTR", "NFLX", "SPCX"]);
-const RESERVED_MSG = "Names with Troya, official, admin, team, support or Robinhood in them are reserved.";
+// Names and tickers are free, as on every other launchpad (owner, 18 Nov 2026: "Troya" too, any logo): only what Pons
+// can write on chain is checked. Buyers are protected elsewhere: the Gate and the Market flag copies of big coins.
 /** the name's own rules, on their own: Telegram asks for the name before the ticker and checks it right away */
-export function coinNameProblem(name, { team = false } = {}) {
+export function coinNameProblem(name) {
   const n = String(name || "").trim();
   if (!n) return "The coin needs a name.";
   if (n.length > 48) return "The name is limited to 48 characters.";
-  // "TroyaCat" and "Robin Hood" are reserved too, not only the words on their own
-  const N = flatName(n);
-  if (!team && (RESERVED_WORDS.test(n) || /TROYA|ROBINHOOD/.test(N))) return RESERVED_MSG;
-  const coinName = N.replace(/(?:MEME)?(?:TOKEN|COIN)$/, "") || N;
-  if (MAJORS.includes(N) || MAJORS.includes(coinName) || MAJOR_NAMES.has(N) || MAJOR_NAMES.has(coinName)) return "That name copies an existing coin. Pick another.";
-  // the name of a tokenized stock's company ("Tesla", "NVIDIA", "Apple") or its ticker spelled as the name ("NVDA")
-  const B = bare(n);
-  const stock = STOCKS.find((x) => { const c = bare(x.name); return (c.length >= 4 && !PLAIN_WORDS.has(c) && (c === B || c === coinName)) || (BIG_TICKERS.has(N) && String(x.symbol).toUpperCase() === N); });
-  if (stock) return `That name copies the ${stock.name} stock token ($${String(stock.symbol).toUpperCase()}), so Troya will not launch it. Pick another name.`;
   return null;
 }
-export function nameProblem(name, symbol, { team = false } = {}) {
+export function nameProblem(name, symbol) {
   const n = String(name || "").trim(), s = String(symbol || "").trim().replace(/^\$/, "");
   if (!n || !s) return "The coin needs a name and a $TICKER.";
   if (!/^[A-Za-z0-9]{1,16}$/.test(s)) return "The ticker can only use letters and numbers, 16 at most.";
-  if (n.length > 48) return "The name is limited to 48 characters.";
-  const S = s.toUpperCase();
-  if (MAJORS.includes(S) || STOCKS.some((x) => String(x.symbol).toUpperCase() === S)) return `$${S} is taken by an existing coin or stock token, so Troya will not launch a copy. Pick another ticker.`;
-  if (!team && (RESERVED_WORDS.test(s) || /TROYA|ROBINHOOD/.test(S))) return RESERVED_MSG;
-  return coinNameProblem(n, { team });
+  return coinNameProblem(n);
 }
 
 /* ---------- limits and the record ---------- */
@@ -254,7 +227,10 @@ function settleLater(hash, r, tries = 8) {
     if (!got && tries > 1) settleLater(hash, r, tries - 1);
   }, 60_000).unref?.();
 }
+// LAUNCH_DEBUG=1 logs how long each step of an Agent Wallet launch took (send, receipt, initial buy)
+const lap = (t0, step) => { if (process.env.LAUNCH_DEBUG) console.log(`[launch] ${step} at ${((Date.now() - t0) / 1000).toFixed(1)} s`); };
 async function launchPlanned(p, { owner, name, symbol, logo, creatorTaxBps = 0, description = "", twitter = "", source, ref = null, buyEth = 0 }) {
+  const t0 = Date.now();
   const aw = await import("./agentwallet.mjs");
   const w = await aw.getAgentWallet(owner);
   if (!w?.exists) return { ok: false, why: "no-agent-wallet" };
@@ -267,6 +243,7 @@ async function launchPlanned(p, { owner, name, symbol, logo, creatorTaxBps = 0, 
     const need = menu.launchFeeEth + buyEth + 0.0002;
     if (bal < need) return { ok: false, why: "funds", reasons: [`the Agent Wallet holds ${bal.toFixed(5)} ETH; the launch fee plus a ${buyEth} ETH buy needs about ${need.toFixed(5)} ETH`] };
   }
+  lap(t0, "checks done, sending");
   const out = await aw.executeForUser(owner, {
     kind: "launch", source,
     rationale: `Launch requested on ${source}${ref ? ` (${ref})` : ""}`,
@@ -279,6 +256,7 @@ async function launchPlanned(p, { owner, name, symbol, logo, creatorTaxBps = 0, 
   const read = () => launchedIn(hash).catch((e) => { console.warn("[launch] reading the launch receipt:", String(e.message || e).slice(0, 200)); return null; });
   let got = await read();
   for (let i = 0; !got && i < 6; i++) { await sleep(5000); got = await read(); }
+  lap(t0, `receipt ${got ? (got.failed ? "reverted" : "read") : "not found"}`);
   if (got?.failed) return { ok: false, why: "reverted", hash, plan: p };
   const token = got?.token || null;
   const r = { token, curve: got?.curve || null, logo: logo || null, name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim(), owner: p.owner, wallet: w.address, source, recipient: p.recipient, split: p.split, troyaBps: p.troyaBps,
@@ -288,6 +266,7 @@ async function launchPlanned(p, { owner, name, symbol, logo, creatorTaxBps = 0, 
   if (token && buyEth > 0) {
     // recorded first: the Agent Wallet may set aside the empty-curve check only for a coin it launched through Troya
     r.initialBuy = await initialBuy({ owner, token, buyEth, source, launchedAt: Date.now() });
+    lap(t0, `initial buy ${r.initialBuy.executed ? "done" : "not sent"}`);
     await store.update("launches.json", [], (l) => { const x = l.find((y) => lc(y.token) === lc(token)); if (x) x.initialBuy = r.initialBuy; return l; });
   }
   return { ok: !!token, launch: r, why: token ? null : "no-token" };
@@ -678,7 +657,7 @@ async function boardItem(rec, handles) {
   const graduated = !!p?.graduated || (rec.source === "origin" && !p);
   return {
     token: getAddress(rec.token), name: t.name || rec.name || "", symbol: t.symbol || rec.symbol || "", image: t.image || t.logoUri || rec.logo || null,
-    source: rec.source, at: rec.at || t.createdAt || null, creator: rec.owner ? getAddress(rec.owner) : null, creatorX: handles[lc(rec.owner)]?.username || null,
+    source: rec.source, at: rec.at || t.createdAt || null, creator: rec.owner ? getAddress(rec.owner) : null, 
     keepsAll: rec.source === "origin" ? null : !rec.split, creatorTaxBps: rec.creatorTaxBps ?? p?.fees?.creatorTaxBps ?? null, initialBuyEth: rec.initialBuy?.executed ? rec.initialBuy.eth : null,
     priceUsd: t.priceUsd ?? null, mcapUsd: t.mcapUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, holders: t.holders ?? null,
     txns24h: t.txns24h ?? null, buys24h: t.buys24h ?? null, sells24h: t.sells24h ?? null, change1h: t.change1h ?? null, change24h: t.change24h ?? null,

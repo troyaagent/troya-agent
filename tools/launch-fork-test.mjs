@@ -88,8 +88,8 @@ await store.writeJson("x-state.json", { launch: "live" });
 
 r = await L.fromX({ tweetId: "2", authorId: "999", text: "@Troyaagent launch Fork Horse $FHORSE", mediaUrl: IMG });
 assert.match(r.reply, /isn't linked to a Troya wallet/i); fixOk(r.reply); ok("an unlinked X account is told to link first");
-r = await L.fromX({ tweetId: "4", authorId: "111", text: "@Troyaagent launch Fake Ether $ETH", mediaUrl: IMG });
-assert.match(r.reply, /taken by an existing coin/i); fixOk(r.reply); ok("$ETH is refused");
+r = await L.fromX({ tweetId: "4", authorId: "111", text: `@Troyaagent launch ${"Long Name ".repeat(6)}$LONGN`, mediaUrl: IMG });
+assert.match(r.reply, /48 characters/i); fixOk(r.reply); ok("a name over 48 characters is refused before anything launches");
 r = await L.fromX({ tweetId: "6", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE tax 9%", mediaUrl: IMG });
 assert.match(r.reply, /4% at most/i); fixOk(r.reply); ok("a 9% creator tax is refused");
 await store.writeJson("launch-prefs.json", { [H.toLowerCase()]: { x: false } });
@@ -287,11 +287,7 @@ await tx4.wait();
 await assert.rejects(L.recordWeb({ hash: tx4.hash, owner: W4.address }), /skips Troya's fee splitter/);
 ok("a non-holder's launch that skips the splitter (made elsewhere) is not added to Troya Launches");
 // a copy of a stock token's company is refused even when launched straight on Pons and brought in
-const b5 = await buildLaunchTx({ creator: W4.address, name: "Tesla", symbol: "TSLQ", logo: "https://troya.codes/img/logo-3d-hd.png", creatorTaxBps: 0, feeRecipient: W4.address });
-const tx5 = await W4.sendTransaction({ to: b5.to, data: b5.data, value: BigInt(b5.value), nonce: 1 });
-await tx5.wait();
-await assert.rejects(L.recordWeb({ hash: tx5.hash, owner: W4.address }), /copies the Tesla stock token/);
-ok("a web record of a coin named after a stock's company is refused");
+
 
 /* ---------- F27 · Launch in Telegram: the bot's wizard, a photo, the preview and Confirm (non-holder N) ---------- */
 {
@@ -322,8 +318,8 @@ ok("a web record of a coin named after a stock's company is refused");
   assert.match(last().text, /What's its name/);
   await T.handleMessage(msg("Telegram Horse"), tg, store);
   assert.match(last().text, /Now the ticker/);
-  await T.handleMessage(msg("ETH"), tg, store);
-  assert.match(last().text, /taken by an existing coin/); ok("Telegram wizard: $ETH is refused, the step stays open");
+  await T.handleMessage(msg("BAD-TICKER!"), tg, store);
+  assert.match(last().text, /letters and numbers/); ok("Telegram wizard: a ticker with symbols is refused, the step stays open");
   await T.handleMessage(msg("$TGH"), tg, store);
   assert.match(last().text, /send the coin's image/);
   await T.handleMessage({ ...msg(""), photo: [{ file_id: "small", width: 90 }, { file_id: "big", width: 800 }] }, tg, store);
@@ -338,7 +334,8 @@ ok("a web record of a coin named after a stock's company is refused");
   ok("Telegram: someone else's chat cannot press the Confirm button");
   await press(conf);
   let done = null;
-  for (let i = 0; i < 120 && !done; i++) { await new Promise((res) => setTimeout(res, 1000)); done = sent.slice().reverse().find((c) => c.method === "editMessageText" && /is live|Not launched|still confirming/.test(c.body.text)); }
+  // the fork reads chain state through a public RPC, so a launch plus its buy can take minutes here (seconds on the real chain)
+  for (let i = 0; i < 300 && !done; i++) { await new Promise((res) => setTimeout(res, 1000)); done = sent.slice().reverse().find((c) => c.method === "editMessageText" && /is live|Not launched|still confirming/.test(c.body.text)); }
   assert.ok(done, "the launch finished: " + JSON.stringify(sent.slice(-4).map((c) => [c.method, String(c.body?.text || "").slice(0, 160)])));
   console.log("   telegram:", done.body.text.replace(/\n+/g, " / "));
   assert.match(done.body.text, /\$TGH is live/); assert.match(done.body.text, /Initial buy of 0\.005 ETH done/);

@@ -46,6 +46,7 @@ const G = {
   expand: `<path d="M14 3h7v7h-2.4V7.1l-4.4 4.4-1.7-1.7 4.4-4.4H14zM10 21H3v-7h2.4v2.9l4.4-4.4 1.7 1.7-4.4 4.4H10z"/>`,
 };
 export const has = (k) => k in G;
+const SOLID = new Set(["gear"]);
 
 let injected = false;
 export function injectDefs() {
@@ -70,6 +71,7 @@ export function chromeIcon(k, cls = "") {
   el.setAttribute("viewBox", "0 0 24 24");
   el.setAttribute("aria-hidden", "true");
   el.setAttribute("class", `ci${cls ? " " + cls : ""}`);
-  el.innerHTML = `<g fill="url(#tc)" mask="url(#ts)">${G[k]}</g>`;
+  // the scanlines are left off a few small glyphs so the shape reads at a glance (Settings must look like a plain cog)
+  el.innerHTML = `<g fill="url(#tc)"${SOLID.has(k) ? "" : ' mask="url(#ts)"'}>${G[k]}</g>`;
   return el;
 }

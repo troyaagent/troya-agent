@@ -26,9 +26,10 @@ export async function mount(view, ctx) {
   const box = h("div", { class: "br-box" });
   const addSec = h("section", { class: "br-section" });
   const listSec = h("section", { class: "br-section" });
-  clear(view,
+  // the same frame as the other Trade desks, so the header sits at the same height on every page
+  clear(view, h("div", { class: "dk br" },
     pageHead("Bridge", "Move ETH onto Robinhood Chain from Arbitrum, Base or Ethereum, take it back out, or fund your Hyperliquid account with USDC for perps. Routes come from LI.FI and usually land in minutes."),
-    h("div", { class: "br-wrap" }, box, addSec, listSec));
+    h("div", { class: "br-wrap" }, box, addSec, listSec)));
 
   const amountInput = h("input", { class: "br-amt", inputmode: "decimal", placeholder: "0", autocomplete: "off", "aria-label": "Amount", value: st.amount });
   amountInput.addEventListener("input", () => {
@@ -47,8 +48,12 @@ export async function mount(view, ctx) {
   const statusBox = h("div", { class: "br-status" });
 
   function render() {
-    const dirSeg = seg([{ value: "in", label: h("span", { class: "seg-ico" }, chainLogo("robinhood", 14), "Into Robinhood Chain") }, { value: "out", label: "Out of Robinhood Chain" }, { value: "hl", label: h("span", { class: "seg-ico" }, chainLogo("hyperliquid", 14), "To Hyperliquid") }], st.dir,
+    // every direction wears a mark; phones get the short label so the three fit one row
+    const lbl = (mark, long, shortTxt) => h("span", { class: "seg-ico br-dir" }, mark, h("span", { class: "br-dl" }, long), h("span", { class: "br-ds" }, shortTxt));
+    const outMark = h("span", { class: "br-out-ico" }, icon("ext"));
+    const dirSeg = seg([{ value: "in", label: lbl(chainLogo("robinhood", 14), "Into Robinhood Chain", "Into Robinhood") }, { value: "out", label: lbl(outMark, "Out of Robinhood Chain", "Out") }, { value: "hl", label: lbl(chainLogo("hyperliquid", 14), "To Hyperliquid", "To Hyperliquid") }], st.dir,
       (v) => { st.dir = v; st.lq = null; render(); refreshBal(); requote(); });
+    dirSeg.classList.add("br-dirs");
     const otherSeg = seg(OTHER.map((c) => ({ value: c.id, label: h("span", { class: "seg-ico" }, chainLogo(c.key, 14), c.name) })), st.other.id,
       (v) => { st.other = OTHER.find((c) => c.id === v); st.lq = null; render(); refreshBal(); requote(); });
     const s = src(), d = dst();
@@ -187,12 +192,12 @@ export async function mount(view, ctx) {
   function renderAdd() {
     const c = CHAINS.robinhood;
     clear(addSec,
-      h("div", { class: "br-head" }, h("h2", {}, "Add Robinhood Chain to your wallet"), infoTip("Lets your wallet show Robinhood Chain balances and sign its transactions.")),
+      h("div", { class: "br-head" }, h("h2", {}, "Add Robinhood Chain to your wallet"), infoTip("Lets your wallet show Robinhood Chain balances and sign its transactions.", "Add the network")),
       h("div", { class: "rows br-netrows" },
         h("div", {}, h("span", {}, "Network name"), h("span", {}, c.name)),
         h("div", {}, h("span", {}, "Chain ID"), h("span", {}, String(c.id))),
         h("div", {}, h("span", {}, "Currency"), h("span", {}, c.currency)),
-        h("div", {}, h("span", {}, "RPC"), h("span", { class: "mono br-rpc" }, c.rpc, " ", h("button", { class: "icon-btn", type: "button", "aria-label": "Copy RPC", onclick: () => copyText(c.rpc, "RPC copied") }, icon("copy")))),
+        h("div", {}, h("span", {}, "RPC"), h("span", { class: "mono br-rpc" }, h("span", { class: "br-rpc-v", title: c.rpc }, c.rpc), h("button", { class: "icon-btn", type: "button", "aria-label": "Copy RPC", onclick: () => copyText(c.rpc, "RPC copied") }, icon("copy")))),
         h("div", {}, h("span", {}, "Explorer"), h("span", {}, h("a", { class: "link", href: c.explorer, target: "_blank", rel: "noopener" }, "robinhoodchain.blockscout.com")))),
       h("button", { class: "btn", type: "button", onclick: async () => { try { await addChain("robinhood"); toast("Robinhood Chain added to your wallet", "ok"); } catch (e) { toast(errText(e), "error"); } } }, icon("plus"), "Add Robinhood Chain to your wallet"));
   }

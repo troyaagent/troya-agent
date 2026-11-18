@@ -54,7 +54,7 @@ body.desk { display: block; min-height: 100vh; background: var(--bg); }
 .d-scrim { position: fixed; inset: 0; z-index: 79; background: rgba(0, 0, 0, .6); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
 
 .d-shell { container: shell / inline-size; margin-left: var(--side); min-height: 100vh; display: flex; flex-direction: column; transition: margin-right .3s var(--ease); }
-.d-top { position: sticky; top: 0; z-index: 60; height: var(--top); display: grid; grid-template-columns: minmax(120px, 1fr) minmax(240px, 500px) auto; align-items: center; gap: 16px; padding: 0 24px; border-bottom: 1px solid var(--line); }
+.d-top { position: sticky; top: 0; z-index: 60; height: var(--top); display: grid; grid-template-columns: minmax(180px, 1fr) minmax(240px, 500px) auto; align-items: center; gap: 16px; padding: 0 24px; border-bottom: 1px solid var(--line); }
 .d-top::before { content: ""; position: absolute; inset: 0; z-index: -1; background: rgba(8, 8, 8, .84); backdrop-filter: blur(14px) saturate(1.1); -webkit-backdrop-filter: blur(14px) saturate(1.1); }
 .d-burger { display: none !important; }
 .d-burger svg { width: 18px; height: 18px; }
@@ -70,6 +70,8 @@ body.desk { display: block; min-height: 100vh; background: var(--bg); }
 .d-connect:hover { background: #fff; border-color: #fff; }
 .d-main { flex: 1; width: 100%; max-width: 1320px; margin: 0 auto; padding: 0 32px 104px; }
 .d-main.wide { max-width: none; padding: 0 16px 40px; }
+/* Perps keeps the full width but the same 32px gutter and room under the ticket as the other Trade pages */
+.d-main.wide[data-page="perps"] { padding: 0 32px 104px; }
 .d-foot { max-width: 1320px; padding-left: 32px; padding-right: 190px; }
 
 /* the agent drawer */
@@ -275,7 +277,7 @@ body.drawer-open .d-fab, body.on-chat .d-fab { opacity: 0; pointer-events: none;
   .d-search { width: 38px; padding: 0; justify-content: center; }
   .d-search-t, .d-search kbd { display: none; }
   .d-right .chain-chip { display: none; }
-  .d-main { padding: 0 16px 96px; }
+  .d-main, .d-main.wide[data-page="perps"] { padding: 0 16px 96px; }
   .d-foot { padding: 18px 16px 110px; }
   .d-fab { display: none; }
   .d-drawer { width: 100%; }
@@ -382,7 +384,7 @@ html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color:
 .sp-row-n b, .sp-row-p b { font-weight: 500; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sp-row-n small { font-size: 11.5px; color: var(--muted); }
 .sp-row-p { text-align: right; justify-items: end; font-size: 12px; }
-.sp-card { padding: 18px; display: grid; gap: 14px; max-width: 560px; }
+.sp-card { padding: 18px; display: grid; gap: 14px; min-width: 0; }
 .sp-head { display: flex; align-items: center; gap: 12px; }
 .sp-head > div { display: grid; gap: 2px; margin-right: auto; }
 .sp-head b { font-size: 18px; font-weight: 600; }
@@ -426,8 +428,10 @@ html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color:
 .lt-pos { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 13px; }
 .lt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .lt-head b { font-size: 15px; }
-.lt-book { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font: 400 12px/1.6 var(--mono); font-variant-numeric: tabular-nums; }
-.lt-book > div > div { display: flex; justify-content: space-between; }
+.lt-book { display: grid; gap: 4px; padding: 10px 8px 6px; border: 1px solid var(--line); border-radius: 14px; background: rgba(0, 0, 0, .16); }
+.lt-book-t { display: flex; justify-content: space-between; align-items: baseline; padding: 0 6px 4px; font-size: 12.5px; font-weight: 500; }
+.lt-book-t .muted { font-size: 11.5px; font-weight: 400; }
+.lt-book .pp-lv { cursor: default; }
 .lt-legal { margin-top: 14px; max-width: 900px; }
 
 
@@ -444,7 +448,7 @@ html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color:
 .sd-name small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sd-pend { color: var(--warn); }
 .sd-legs { display: flex; flex-wrap: wrap; gap: 6px; }
-@media (max-width: 720px) { .sd-row { grid-template-columns: 1fr auto; } .sd-row > span:nth-child(3), .sd-row > span:nth-child(4) { display: none; } }
+@media (max-width: 720px) { .sd-row { grid-template-columns: minmax(0, 1fr) auto auto; } .sd-row > span:nth-child(3), .sd-row > span:nth-child(4) { display: none; } }
 
 /* gate lists on the Desk's own pages (Lighter, Stock desk) */
 .dk .sw-gate { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
@@ -458,8 +462,12 @@ html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color:
 .sd-mk { flex-wrap: wrap; }
 
 /* ---------- F18 · Liquidity desk ---------- */
-.lq-row { grid-template-columns: minmax(0, 1fr) auto; }
-.lq-card { max-width: 660px; }
+.lq-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+.lq-pair { display: inline-flex; align-items: center; flex: none; }
+.lq-pair > * + * { margin-left: -7px; }
+.lq-row .lq-pair .tok-ico { width: 24px; height: 24px; }
+.lq-pair .tok-ico, .lq-pair .tok-wrap { box-shadow: 0 0 0 2px var(--bg-1, #0a0f12); border-radius: 50%; }
+.lq-head .lq-pair .tok-ico { width: 26px; height: 26px; }
 .lq-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 .lq-head b { font-size: 17px; font-weight: 600; }
 .lq-head .ulink { margin-left: auto; }

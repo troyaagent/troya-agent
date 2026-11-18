@@ -43,6 +43,7 @@ svg.ci { display: block; width: 18px; height: 18px; flex: none; filter: drop-sha
 .d-group h5 { margin: 0 0 6px; padding: 0 10px; font-size: 10px; font-weight: 600; letter-spacing: .2em; color: var(--faint); }
 .d-nav a { height: 36px; gap: 12px; padding: 0 8px; border-radius: 11px; font-size: 13px; color: var(--muted); transition: color .3s var(--soft), background .3s var(--soft); }
 .d-nav a svg.ci { width: 19px; height: 19px; opacity: .78; filter: none; transition: opacity .3s, filter .3s, transform .4s var(--soft); }
+.d-nav a > svg:not(.ci) { width: 19px; height: 19px; padding: 1.5px; box-sizing: border-box; }   /* a stroke fallback icon takes the same 19px slot, so its label lines up */
 .d-nav a:hover { color: var(--fg); background: rgba(255, 255, 255, .035); }
 .d-nav a:hover svg.ci { opacity: 1; transform: translateX(1px); }
 .d-nav a[aria-current="page"] { color: var(--fg); background: linear-gradient(180deg, rgba(142, 223, 245, .14), rgba(142, 223, 245, .045)); box-shadow: inset 0 0 0 1px rgba(142, 223, 245, .28), 0 8px 24px rgba(60, 160, 200, .12); }
@@ -416,7 +417,51 @@ html[data-theme="light"] .tk2 .tk-head { background: var(--bg-1); box-shadow: 0 
   .sw2-l .sw-amt { font-size: 34px; }
 }
 @media (prefers-reduced-motion: reduce) { .sw2-line { animation: none; } }
+/* the quote: one line that shrinks to fit (swap.js fitOut), an ellipsis only as the last resort */
+.sw2-l .sw-amt.out { display: block; line-height: 44px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sw2-l .sw-amt.out .sw-sk { vertical-align: middle; }
+/* the right column never grows past the screen: the route and the Gate details shrink and wrap instead */
+.sw2-r { grid-template-columns: minmax(0, 1fr); }
+.sw2-route { min-width: 0; overflow: hidden; }
+.sw2-path { min-width: 0; }
+.sw2-node { flex: 0 1 auto; min-width: 0; }
+.sw2-node small { max-width: 100%; overflow-wrap: anywhere; line-height: 1.35; }
+.sw2-node small b { font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+.sw2-checks li { grid-template-columns: 22px minmax(110px, max-content) minmax(0, 1fr); align-items: start; }
+.sw2-checks .dk-ck { margin-top: -1px; }
+.sw2-checks .d { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.4; text-wrap: pretty; }
+.sw2-chart-box { position: relative; }
+.sw2-chart-sk { height: 100%; border-radius: 14px; }
+.sw2-chart-msg { height: 100%; display: grid; place-content: center; justify-items: center; gap: 12px; text-align: center; }
+.sw2-chart-msg .btn svg { width: 14px; height: 14px; }
+.sw-note .link { white-space: nowrap; }
+.tp-extra .sw-pad { display: inline-flex; align-items: center; gap: 5px; }
+.tp-extra .sw-pad .pad-logo { flex: none; border-radius: 50%; }
+@media (max-width: 560px) {
+  /* phone: the amount above the symbol, short links, smaller marks so a three-hop route fits 312px */
+  .sw2-path { gap: 4px; }
+  .sw2-node { flex: 1 1 0; }
+  .sw2-node.v { flex: none; }
+  .sw2-node small b { white-space: nowrap; }
+  .sw2-node small { display: grid; font-size: 11.5px; }
+  .sw2-node .tok-ico, .sw2-pool { width: 34px; height: 34px; }
+  .sw2-line { flex: 0 1 14px; min-width: 6px; margin-top: 17px; }
+  .sw2-node.v small { display: none; }
+  /* a route through a middle token: three amounts share the row, so a long one may break */
+  .sw2-path:has(> :nth-child(9)) .sw2-node small b { font-size: 10.5px; white-space: normal; overflow-wrap: anywhere; }
+  .sw2-checks li { grid-template-columns: 22px minmax(0, 1fr); row-gap: 2px; }
+  .sw2-checks .d { grid-column: 2; justify-self: start; text-align: left; }
+  /* the Gate header: title and verdict on one row, the age under them */
+  .sw2-gh { flex-wrap: wrap; row-gap: 4px; }
+  .sw2-gh .sw2-mic { white-space: nowrap; }
+  .sw2-gh [data-gate-age] { order: 3; flex-basis: 100%; }
+  .sw2-gh .dk-v { white-space: nowrap; }
+  /* the four quick amounts share one row */
+  .sw2-l .sw-quick { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+  .sw2-l .sw-quick .chip { padding: 0 6px; font-size: 12px; justify-content: center; min-width: 0; white-space: nowrap; }
+}
 html[data-theme="light"] .sw2-l .sw-leg { background: var(--bg-2); }
+html[data-theme="light"] .lt-book { background: var(--bg-2); }
 html[data-theme="light"] .sw2-l .sw-flip { background: var(--bg-2); }
 html[data-theme="light"] .sw2-l .sw-rows { background: var(--bg-2); }
 
@@ -464,15 +509,16 @@ html[data-theme="light"] .page-head::after { background: radial-gradient(520px 2
 .pp-lv.ask i { background: linear-gradient(270deg, rgba(255, 125, 138, .22), rgba(255, 125, 138, .04)); }
 .pp-pos { border-radius: 22px; }
 .pp-ticket { top: calc(var(--top) + 16px); padding: 18px; gap: 14px; border-radius: 24px; }
-.pp-ticket .seg.long { padding: 5px; border-radius: 16px; }
-.pp-ticket .seg.long button { height: 44px; border-radius: 12px; font-size: 15px; font-weight: 650; }
-.pp-ticket .seg.long button[data-v="long"][aria-pressed="true"] { background: var(--chrome); color: #04131a; box-shadow: var(--chrome-shadow); }
-.pp-ticket .seg.long button[data-v="short"][aria-pressed="true"] { background: linear-gradient(180deg, #ffd3d8, #ff8f9c 55%, #e0566a); color: #2a0509; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 8px 24px rgba(255, 110, 130, .25); }
+.pp-ticket .seg.long, .lt-card .seg.long { padding: 5px; border-radius: 16px; }
+.pp-ticket .seg.long button, .lt-card .seg.long button { height: 44px; border-radius: 12px; font-size: 15px; font-weight: 650; }
+.lt-card .seg.long { display: flex; width: 100%; } .lt-card .seg.long button { flex: 1; min-width: 0; }
+.pp-ticket .seg.long button[data-v="long"][aria-pressed="true"], .lt-card .seg.long button[data-v="long"][aria-pressed="true"] { background: var(--chrome); color: #04131a; box-shadow: var(--chrome-shadow); }
+.pp-ticket .seg.long button[data-v="short"][aria-pressed="true"], .lt-card .seg.long button[data-v="short"][aria-pressed="true"] { background: linear-gradient(180deg, #ffd3d8, #ff8f9c 55%, #e0566a); color: #2a0509; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 8px 24px rgba(255, 110, 130, .25); }
 .pp-size .input { height: 52px; font-size: 24px; font-weight: 650; border-radius: 14px; }
 .pp-pcts button { height: 32px; border-radius: 999px; background: var(--glass); }
 .pp-range { accent-color: #8edff5; }
-.pp-ticket .btn.big { height: 54px; border-radius: 999px; font-size: 15.5px; }
-.pp-ticket .btn.big.danger { border: 0; color: #2a0509; font-weight: 650; background: linear-gradient(180deg, #ffd3d8, #ff8f9c 55%, #e0566a); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 10px 28px rgba(255, 110, 130, .28); }
+.pp-ticket .btn.big, .lt-card .btn.big, .sp-card .btn.big { height: 54px; border-radius: 999px; font-size: 15.5px; }
+.pp-ticket .btn.big.danger, .lt-card .btn.big.danger { border: 0; color: #2a0509; font-weight: 650; background: linear-gradient(180deg, #ffd3d8, #ff8f9c 55%, #e0566a); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 10px 28px rgba(255, 110, 130, .28); }
 .pp-ticket .btn.big.danger:hover { transform: translateY(-1px); }
 .pp-ticket .gate-box, .sw-gate { border-radius: 16px; border: 1px solid var(--line); background: rgba(0, 0, 0, .2); }
 @media (max-width: 1100px) { .pp-grid { grid-template-columns: 1fr; } .pp-ticket { position: static; } }
@@ -692,7 +738,26 @@ html[data-theme="light"] .ag2-hero::before { background: radial-gradient(480px 2
 .br-wrap { grid-template-columns: minmax(0, 480px) minmax(0, 1fr); justify-items: stretch; align-items: start; gap: 16px; margin-top: 18px; }
 .br-wrap > .br-box { grid-row: span 2; width: 100%; position: sticky; top: calc(var(--top) + 16px); }
 .br-wrap > .br-section { width: 100%; border-top: 0; padding: 20px 22px; border-radius: 22px; border: 1px solid var(--line); background: var(--glass-solid); }
-@media (max-width: 1000px) { .br-wrap { grid-template-columns: 1fr; } .br-wrap > .br-box { grid-row: auto; position: static; } }
+@media (max-width: 1000px) { .br-wrap { grid-template-columns: minmax(0, 1fr); } .br-wrap > .br-box { grid-row: auto; position: static; } }
+.dk > .br-wrap { margin-top: 0; }
+/* direction tabs: a mark on each, the short label only on phones */
+.br-dirs button { display: inline-flex; align-items: center; justify-content: center; }
+.br-dir { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.br-dir .br-ds { display: none; }
+.br-out-ico { width: 14px; height: 14px; flex: none; display: grid; place-items: center; border-radius: 50%; background: rgba(142, 223, 245, .16); color: var(--c3, #8edff5); }
+.br-out-ico svg { width: 10px; height: 10px; stroke-width: 2.2; }
+/* the RPC stays on one line (never broken inside the domain), cut with an ellipsis next to Copy */
+.br-netrows > div > span:last-child { min-width: 0; }
+.br-rpc { min-width: 0; max-width: 100%; }
+.br-rpc-v { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.br-rpc .icon-btn { flex: none; }
+@media (max-width: 520px) {
+  .br-ctrls .seg.br-dirs { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, .7fr) minmax(0, 1.25fr); width: 100%; flex-wrap: nowrap; }
+  .br-ctrls .seg.br-dirs button { min-width: 0; padding: 0 6px; }
+  .br-dir .br-dl { display: none; }
+  .br-dir .br-ds { display: inline; overflow: hidden; text-overflow: ellipsis; }
+  .br-dir { gap: 5px; font-size: 12.5px; max-width: 100%; }
+}
 
 /* ---------- Stock desk 2.0 ---------- */
 .sd-body { margin-top: 16px; }
@@ -701,6 +766,38 @@ html[data-theme="light"] .ag2-hero::before { background: radial-gradient(480px 2
 .sd-body .tbl tbody tr:hover { background: linear-gradient(90deg, rgba(142, 223, 245, .07), rgba(142, 223, 245, .02)); }
 .sd-body .tbl td { padding-top: 12px; padding-bottom: 12px; }
 .sd-body .tok-ico { width: 32px; height: 32px; }
+.sd-body .sd-name .tok-ico, .sd-body .sd-name .tok-wrap { width: 26px; height: 26px; flex: none; }
+.sd-ph { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.sd-count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sd-none { margin: 10px 2px; }
+.sd-date { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.sd-st { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; color: var(--warn); background: var(--warn-bg); }
+.sd-st.done { color: var(--muted); background: rgba(255, 255, 255, .05); }
+/* basket legs: one pill per stock, logo, ticker, price */
+.sd-legs { display: flex; flex-wrap: wrap; gap: 8px; }
+.sd-legs .chip-s { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 13px 0 5px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--glass); font-size: 13px; font-variant-numeric: tabular-nums; }
+.sd-legs .chip-s .tok-ico, .sd-legs .chip-s .tok-wrap { width: 26px; height: 26px; }
+.sd-legs .chip-s b { font-weight: 600; }
+.sd-legs .chip-s small { color: var(--muted); font-size: 12px; }
+/* an empty panel that asks for the wallet: icon, one line, a normal-size button */
+.sd-empty { display: grid; justify-items: center; gap: 10px; padding: 22px 12px 18px; text-align: center; }
+.sd-empty p { margin: 0; max-width: 440px; color: var(--fg-2); font-size: 13.5px; line-height: 1.5; }
+.sd-empty .btn { justify-self: center; min-width: 180px; }
+.sd-empty-ico { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; border: 1px solid rgba(142, 223, 245, .3); background: radial-gradient(circle at 50% 25%, rgba(142, 223, 245, .2), rgba(142, 223, 245, .03) 70%); color: var(--c3, #8edff5); }
+.sd-empty-ico svg { width: 20px; height: 20px; }
+/* the Morpho market picker */
+.sd-mk-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.sd-mk { height: auto; gap: 4px; padding: 5px; }
+.sd-mk button { height: 34px; }
+.sd-mk-o { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sd-mk-o .tok-ico, .sd-mk-o .tok-wrap { width: 18px; height: 18px; }
+.sd-mk-o small { color: var(--muted); }
+.sd-more { justify-self: start; }
+@media (max-width: 560px) {
+  /* phone: the four desk tabs share the width inside the 16px gutter */
+  .sd-tabs .seg { display: grid; grid-template-columns: repeat(4, auto); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .sd-tabs .seg button { padding: 0 10px; white-space: nowrap; font-size: 12.5px; }
+}
 
 /* ---------- Launchpad, Leaderboard, Create, Social, Flywheel ---------- */
 .lp-tabs { margin-top: 16px; }
@@ -792,6 +889,13 @@ body.g-tucked.g-open .g-tab { display: none; }
 @media (max-width: 860px) { .g-orb, .g-tuck, .g-tab, body.g-tucked .g-tab { display: none !important; } }
 html[data-theme="light"] .g-tuck { background: #fff; }
 html[data-theme="light"] .g-tab { background: radial-gradient(circle at 70% 50%, rgba(10, 126, 163, .15), #fff 70%); }
+/* Trade pages keep tickets, buttons and price axes up to the right edge: there the button shrinks to its round mark in
+   the corner, so it never sits on a ticket's main button or a row's Buy/Trade button */
+body:has(#view:is([data-page="swap"], [data-page="perps"], [data-page="spot"], [data-page="lighter"], [data-page="stocks"], [data-page="liquidity"], [data-page="bridge"])) .g-orb { right: 10px; bottom: 10px; width: 46px; height: 46px; padding: 0; justify-content: center; }
+body:has(#view:is([data-page="swap"], [data-page="perps"], [data-page="spot"], [data-page="lighter"], [data-page="stocks"], [data-page="liquidity"], [data-page="bridge"])) .g-orb img { width: 38px; height: 38px; }
+body:has(#view:is([data-page="swap"], [data-page="perps"], [data-page="spot"], [data-page="lighter"], [data-page="stocks"], [data-page="liquidity"], [data-page="bridge"])) .g-orb-t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+body:has(#view:is([data-page="swap"], [data-page="perps"], [data-page="spot"], [data-page="lighter"], [data-page="stocks"], [data-page="liquidity"], [data-page="bridge"])) .g-halo { left: 2px; width: 40px; height: 40px; margin-top: -20px; }
+body:has(#view:is([data-page="swap"], [data-page="perps"], [data-page="spot"], [data-page="lighter"], [data-page="stocks"], [data-page="liquidity"], [data-page="bridge"])) .g-tuck { right: 4px; bottom: 52px; }
 
 /* token page: the coin's own accounts */
 .tk2-soc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
@@ -1189,3 +1293,7 @@ body { touch-action: manipulation; }
 html[data-theme="light"] .cc-status.ok, html[data-theme="light"] .cr-chip.ok { color: #1f7a4a; border-color: rgba(31, 122, 74, .4); }
 html[data-theme="light"] .cc-status.test, html[data-theme="light"] .cr-chip.gold, html[data-theme="light"] .hp-tag.cto.on, html[data-theme="light"] .hp-tag.fire.all { color: #8a5a00; border-color: rgba(138, 90, 0, .4); }
 html[data-theme="light"] .cc-card.off { opacity: .9; }
+.sp-card .gate-box .gh .badge-s { margin-left: auto; }
+/* stock desk panels never grow past the screen: the basket and market pickers wrap instead */
+.sd-panel { grid-template-columns: minmax(0, 1fr); }
+.sd-panel > .seg { max-width: 100%; flex-wrap: wrap; height: auto; justify-self: start; }

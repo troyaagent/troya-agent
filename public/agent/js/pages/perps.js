@@ -1,5 +1,5 @@
 // Perps desk: Hyperliquid chart, order book, order ticket (own-wallet trading key), Troya Gate, positions.
-import { h, clear, icon, pageHead, table, review, toast, modal, num, usd, compact, pct, pctEl, short, useCss, every, debounce, store, coinIcon } from "../ui.js";
+import { h, clear, icon, pageHead, table, review, toast, modal, num, fixed, usd, compact, pct, pctEl, short, useCss, every, debounce, store, coinIcon } from "../ui.js";
 import { api } from "../api.js";
 import { wallet, onWallet, openConnect, ensureChain } from "../wallet.js";
 import { getTradingKey, tradingKeyStatus, approveTradingKey, revokeTradingKey, placeOrder, cancelOrder, sendToDex } from "../hl.js";
@@ -12,7 +12,10 @@ const prefs = store("troya.perps", { interval: "1h", unit: "USD", lev: {} });
 const DEFAULT_LIMITS = { maxLeverage: 20, perTradeUsd: 25000, dailyUsd: null, allowedCoins: null, source: "local defaults" };
 
 const pxDecimals = (p) => (!p ? 2 : p >= 10000 ? 0 : p >= 1000 ? 1 : p >= 100 ? 2 : p >= 1 ? 4 : p >= 0.01 ? 5 : 7);
-const fmtPx = (p) => (p == null || !isFinite(p) ? "–" : num(p, pxDecimals(p)));
+// fixed decimals, so the book, the axis and the header line up digit for digit (383.60 under 383.61)
+// a cap reads as a round number: $25K, $2.5K, $500 (not $25.0K)
+const capUsd = (v) => (v >= 1000 ? `$${+(v / 1000).toFixed(v % 1000 ? 1 : 0)}K` : usd(v));
+const fmtPx = (p) => (p == null || !isFinite(p) ? "–" : fixed(p, pxDecimals(p)));
 
 function readPolicy(p) {
   // /api/policy returns { operator, user, effective: { maxLeverage, perTradeUsd, dailyUsd, allowedPerps, paused, killSwitch }, usedTodayUsd }
@@ -149,22 +152,37 @@ export async function mount(view, ctx) {
   }
 
   /* ---------- chart ---------- */
-  let chart = null, candles = null, volume = null, lastBar = null;
+  let chart = null, candles = null, volume = null, lastBar = null, themeObs = null;
+  // the chart follows the theme: hairline grid and ink text on the light page, the dark set on the dark one
+  const isLight = () => document.documentElement.dataset.theme === "light";
+  const chartLook = (light) => ({
+    layout: { background: { type: "solid", color: "transparent" }, textColor: light ? "#6e685f" : "#748b94", fontFamily: "Instrument Sans, system-ui, sans-serif", fontSize: 11, attributionLogo: false },
+    grid: { vertLines: { color: light ? "rgba(0,0,0,.05)" : "rgba(20,32,38,.6)" }, horzLines: { color: light ? "rgba(0,0,0,.05)" : "rgba(20,32,38,.6)" } },
+    rightPriceScale: { borderColor: light ? "rgba(0,0,0,.08)" : "#142026" },
+    timeScale: { borderColor: light ? "rgba(0,0,0,.08)" : "#142026", timeVisible: true, secondsVisible: false },
+    crosshair: { mode: 0, vertLine: { color: light ? "rgba(0,0,0,.25)" : "#2a3e47", labelBackgroundColor: light ? "#3d3a35" : "#0f181c" }, horzLine: { color: light ? "rgba(0,0,0,.25)" : "#2a3e47", labelBackgroundColor: light ? "#3d3a35" : "#0f181c" } },
+  });
+  const candleLook = (light) => (light ? { upColor: "#0a7ea3", downColor: "#c8303f", wickUpColor: "#0a7ea3", wickDownColor: "#c8303f" } : { upColor: "#8edff5", downColor: "#ff7d8a", wickUpColor: "#8edff5", wickDownColor: "#ff7d8a" });
+  const volColor = (up, light) => (light ? (up ? "rgba(10,126,163,.22)" : "rgba(200,48,63,.2)") : (up ? "rgba(95,211,239,.28)" : "rgba(255,107,125,.28)"));
   async function initChart() {
     let LW;
     try { LW = await import("lightweight-charts"); } catch { clear(chartBox, h("div", { class: "pp-chart-msg" }, "Chart library failed to load.")); return; }
     if (!alive) return;
     clear(chartBox);
-    chart = LW.createChart(chartBox, {
-      autoSize: true,
-      layout: { background: { type: "solid", color: "transparent" }, textColor: "#748b94", fontFamily: "Instrument Sans, system-ui, sans-serif", fontSize: 11, attributionLogo: false },
-      grid: { vertLines: { color: "rgba(20,32,38,.6)" }, horzLines: { color: "rgba(20,32,38,.6)" } },
-      rightPriceScale: { borderColor: "#142026" },
-      timeScale: { borderColor: "#142026", timeVisible: true, secondsVisible: false },
-      crosshair: { mode: 0, vertLine: { color: "#2a3e47", labelBackgroundColor: "#0f181c" }, horzLine: { color: "#2a3e47", labelBackgroundColor: "#0f181c" } },
+    const light = isLight();
+    // the axis and the last-price tag use the same grouped format as the header (64,854 not 64854)
+    chart = LW.createChart(chartBox, { autoSize: true, ...chartLook(light), localization: { priceFormatter: fmtPx } });
+    candles = chart.addCandlestickSeries({ ...candleLook(light), borderVisible: false });
+    // volume sits under the candles without its own tag on the price axis (a red "67.92" there reads like a price)
+    volume = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "", color: "rgba(95,211,239,.25)", lastValueVisible: false, priceLineVisible: false });
+    themeObs = new MutationObserver(() => {
+      if (!chart) return;
+      const l = isLight();
+      chart.applyOptions(chartLook(l));
+      candles.applyOptions(candleLook(l));
+      loadCandles(true);
     });
-    candles = chart.addCandlestickSeries({ upColor: "#8edff5", downColor: "#ff7d8a", borderVisible: false, wickUpColor: "#8edff5", wickDownColor: "#ff7d8a" });
-    volume = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "", color: "rgba(95,211,239,.25)" });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     await loadCandles(true);
   }
@@ -178,7 +196,8 @@ export async function mount(view, ctx) {
       const r = await api.get(`hl/candles?coin=${st.coin}&interval=${st.interval}${from ? `&from=${from}` : ""}`);
       if (!alive || r.coin !== st.coin || r.interval !== st.interval) return;
       const toBar = (c) => ({ time: Math.floor(c.t / 1000), open: c.o, high: c.h, low: c.l, close: c.c });
-      const toVol = (c) => ({ time: Math.floor(c.t / 1000), value: c.v, color: c.c >= c.o ? "rgba(95,211,239,.28)" : "rgba(255,107,125,.28)" });
+      const light = isLight();
+      const toVol = (c) => ({ time: Math.floor(c.t / 1000), value: c.v, color: volColor(c.c >= c.o, light) });
       const p = st.m?.markPx || r.candles.at(-1)?.c;
       const d = pxDecimals(p);
       candles.applyOptions({ priceFormat: { type: "price", precision: d, minMove: 1 / 10 ** d } });
@@ -211,7 +230,7 @@ export async function mount(view, ctx) {
     const N = 10;
     const bids = st.book.bids.slice(0, N), asks = st.book.asks.slice(0, N);
     const max = Math.max(...bids.map((l) => l.sz), ...asks.map((l) => l.sz), 1e-9);
-    const sz = (v) => num(v, v >= 1000 ? 0 : v >= 1 ? 3 : 5);
+    const sz = (v) => fixed(v, Math.min(st.m?.szDecimals ?? 4, 5));   // the market's own size step, so the column lines up
     const row = (l, cls) => h("div", { class: `pp-lv ${cls}`, title: "Use this price", onclick: () => { st.type = "limit"; limitIn.value = l.px; renderTicket(); } },
       h("i", { style: { width: `${(l.sz / max) * 100}%` } }), h("span", { class: "p" }, fmtPx(l.px)), h("span", {}, sz(l.sz)));
     clear(bookBids, bids.map((l) => row(l, "bid")));
@@ -391,7 +410,9 @@ export async function mount(view, ctx) {
       h("div", { class: "gh" }, icon("shield"), "Troya Gate", h("span", { class: `chip-s ${g.state === "wait" ? "" : g.state}` }, g.state === "wait" ? "Waiting" : g.state === "pass" ? "Clear" : g.state === "warn" ? "Check" : "Blocked")),
       g.state === "wait" ? h("div", { class: "muted" }, "Enter a size and the Gate checks it against your limits and the live book.")
         : h("ul", {}, g.items.map((i) => h("li", { class: i.state }, h("span", {}, i.label), h("b", {}, i.value)))),
-      h("div", { class: "fine", style: { marginTop: "6px" } }, `Limits: ${st.limits.source}.`));
+      h("div", { class: "fine", style: { marginTop: "6px" } }, st.limits.source === "your policy"
+        ? `Your limits: ${capUsd(st.limits.perTradeUsd)} per order, up to ${st.limits.maxLeverage}x.`
+        : `Default limits: ${capUsd(st.limits.perTradeUsd)} per order, up to ${st.limits.maxLeverage}x.`));
 
     // main button state machine
     let btn, keyNote = null;
@@ -420,7 +441,7 @@ export async function mount(view, ctx) {
 
     clear(ticket, sideSeg, typeSeg,
       st.type === "limit" ? h("label", { class: "field" }, h("span", {}, "Limit price (USD)"), limitIn) : null,
-      h("div", {}, h("div", { class: "pp-size-h" }, h("span", {}, "Size"), h("span", {}, `${leftToday}max ${usd(st.limits.perTradeUsd, { compact: true })} per order`)),
+      h("div", {}, h("div", { class: "pp-size-h" }, h("span", {}, "Size"), h("span", {}, `${leftToday}max ${capUsd(st.limits.perTradeUsd)} per order`)),
         h("div", { class: "pp-size", style: { marginTop: "6px" } }, sizeIn, unit)),
       pcts,
       h("div", {}, h("div", { class: "pp-lev-h" }, h("span", {}, "Leverage"), h("b", {}, `${st.lev}x`)), levIn, h("div", { class: "pp-lev-f" }, h("span", {}, "1x"), h("span", {}, `${cap}x cap`))),
@@ -533,5 +554,5 @@ export async function mount(view, ctx) {
   stops.push(offWallet);
   stops.push(every(6000, () => { if (wallet.address) loadUser(); }));
 
-  return () => { alive = false; stops.forEach((f) => { try { f(); } catch {} }); try { chart?.remove(); } catch {} };
+  return () => { alive = false; stops.forEach((f) => { try { f(); } catch {} }); themeObs?.disconnect(); try { chart?.remove(); } catch {} };
 }

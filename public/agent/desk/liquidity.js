@@ -5,7 +5,7 @@
 //   My positions   range, in range or not, what it holds, fees to collect; Collect, Remove all, Rebalance (remove, then
 //                  the new range around today's price) and a range watch that writes when the price leaves or nears an edge
 import { Interface, parseUnits } from "ethers";
-import { h, clear, useCss, toast, tiny, usd, pageHead, seg, review, short } from "/agent/js/ui.js";
+import { h, clear, useCss, toast, tiny, usd, pageHead, seg, review, short, tokenIcon, icon } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
 import { coinSuggest } from "/agent/js/coinsearch.js";
 import { wallet, onWallet, openConnect } from "/agent/js/wallet.js";
@@ -34,6 +34,12 @@ const fx = (n) => (n == null || !isFinite(n) ? "–" : tiny(n));
 const dl = () => BigInt(Math.floor(Date.now() / 1000) + 1200);
 const toRaw = (x, d) => { const n = Number(x); return n > 0 && isFinite(n) ? parseUnits(n.toFixed(Math.min(d, 18)), d) : 0n; };
 const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
+// the pair's two logos, base first (ETH / USDG, NVDA / USDG), overlapping like a wallet shows a pool
+const pairIcons = (p, size = "sm") => {
+  const [b, q] = p.invert ? [p.token1, p.token0] : [p.token0, p.token1];
+  const t = (x) => tokenIcon({ symbol: isEth(x) ? "ETH" : x.label || x.symbol, address: isEth(x) ? "" : x.address }, size);
+  return h("span", { class: "lq-pair", "aria-hidden": "true" }, t(b), t(q));
+};
 
 /* ---------- v3 math (floats for display and pairing; the contract does the exact math) ---------- */
 const sqrtTick = (t) => Math.pow(1.0001, t / 2);
@@ -178,6 +184,7 @@ export async function mount(view, ctx) {
   function paintList() {
     const rows = st.pools.filter((p) => !st.q || p.name.toLowerCase().includes(st.q));
     clear(list, rows.map((p) => h("button", { class: `sp-row lq-row ${st.pool === p.address ? "on" : ""}`, type: "button", onclick: () => pick(p.address) },
+      p.token0 && p.token1 ? pairIcons(p) : h("span", {}),
       h("span", { class: "sp-row-n" }, h("b", {}, p.name), h("small", {}, `${p.feePct}% · TVL ${usd(p.tvlUsd, { compact: true })}`)),
       h("span", { class: "sp-row-p" }, h("b", {}, p.feeAprPct != null ? `${p.feeAprPct.toFixed(0)}% APR` : "–"), h("small", {}, `vol ${usd(p.volume24hUsd, { compact: true })}`)))),
       rows.length ? null : h("p", { class: "muted", style: { padding: "12px" } }, st.err || (st.pools.length ? "No pool matches." : "Loading pools…")));
@@ -256,7 +263,7 @@ export async function mount(view, ctx) {
     if (st.sugErr) return clear(card, h("div", { class: "alert error" }, st.sugErr));
     if (!s) {
       const q = st.pools.find((x) => x.address === st.pool);
-      return clear(card, q ? h("div", { class: "lq-head" }, h("b", {}, q.name), h("span", { class: "chip" }, `${q.feePct}%`), h("span", {}, `${fx(q.display)} ${q.quote} per ${q.base}`)) : null,
+      return clear(card, q ? h("div", { class: "lq-head" }, q.token0 && q.token1 ? pairIcons(q) : null, h("b", {}, q.name), h("span", { class: "chip" }, `${q.feePct}%`), h("span", {}, `${fx(q.display)} ${q.quote} per ${q.base}`)) : null,
         q ? h("div", { class: "lq-stats" }, h("span", {}, "TVL ", h("b", {}, usd(q.tvlUsd, { compact: true }))), h("span", {}, "24h volume ", h("b", {}, usd(q.volume24hUsd, { compact: true }))), h("span", {}, "Pool fee APR ", h("b", {}, q.feeAprPct != null ? `${q.feeAprPct.toFixed(1)}%` : "–"))) : null,
         h("p", { class: "muted", style: { margin: 0 } }, "Measuring this pool's volatility from its hourly candles…"),
         h("div", { class: "sk", style: { height: "300px" } }));
@@ -280,7 +287,7 @@ export async function mount(view, ctx) {
         ins[i], ins[i].disabled ? h("span", { class: "fine" }, `Not used: the price is ${i === 0 ? "above" : "below"} this range, so it holds only ${tok(1 - i).label}.`) : null);
     };
     clear(card,
-      h("div", { class: "lq-head" }, h("b", {}, `${p.name}`), h("span", { class: "chip" }, `${p.feePct}%`), h("span", {}, `${fx(p.display)} ${p.quote} per ${p.base}`), h("a", { class: "ulink fine", href: p.chart, target: "_blank", rel: "noopener" }, "Chart")),
+      h("div", { class: "lq-head" }, p.token0 && p.token1 ? pairIcons(p) : null, h("b", {}, `${p.name}`), h("span", { class: "chip" }, `${p.feePct}%`), h("span", {}, `${fx(p.display)} ${p.quote} per ${p.base}`), h("a", { class: "ulink fine", href: p.chart, target: "_blank", rel: "noopener" }, "Chart")),
       h("div", { class: "lq-stats" },
         h("span", {}, "TVL ", h("b", {}, usd(p.tvlUsd, { compact: true }))), h("span", {}, "24h volume ", h("b", {}, usd(p.volume24hUsd, { compact: true }))),
         h("span", {}, "Pool fee APR ", h("b", {}, p.feeAprPct != null ? `${p.feeAprPct.toFixed(1)}%` : "–")), h("span", {}, "Volatility ", h("b", {}, `${s.volatility.annualPct.toFixed(0)}%/yr`))),
@@ -431,15 +438,19 @@ export async function mount(view, ctx) {
 
   /* ---------- my positions ---------- */
   function positions() {
-    if (!wallet.address) return clear(body, h("div", { class: "panel sd-panel" }, h("p", {}, "Connect your wallet to see your Uniswap v3 positions on Robinhood Chain."), h("button", { class: "btn primary", type: "button", onclick: openConnect }, "Connect wallet")));
+    if (!wallet.address) return clear(body, h("div", { class: "panel sd-panel" }, h("div", { class: "sd-empty" }, h("span", { class: "sd-empty-ico" }, icon("wallet")),
+      h("p", {}, "Connect your wallet to see your Uniswap v3 positions on Robinhood Chain: range, fees to collect and a rebalance button."),
+      h("button", { class: "btn primary", type: "button", onclick: openConnect }, "Connect wallet"))));
     if (st.posErr) return clear(body, h("div", { class: "alert error" }, st.posErr));
     if (!st.positions) return clear(body, h("div", { class: "sk", style: { height: "260px" } }));
-    if (!st.positions.length) return clear(body, h("div", { class: "panel sd-panel" }, h("p", {}, "No Uniswap v3 positions in this wallet yet."), h("button", { class: "btn primary", type: "button", onclick: () => { st.tab = "new"; paint(); } }, "Open a position")));
+    if (!st.positions.length) return clear(body, h("div", { class: "panel sd-panel" }, h("div", { class: "sd-empty" }, h("span", { class: "sd-empty-ico" }, icon("pool")),
+      h("p", {}, "No Uniswap v3 positions in this wallet yet."),
+      h("button", { class: "btn primary", type: "button", onclick: () => { st.tab = "new"; history.replaceState(null, "", `#/liquidity${st.pool ? `/${st.pool}` : ""}`); paint(); } }, "Open a position"))));
     clear(body, h("div", { class: "lq-pos" }, st.positions.map((x) => {
       const room = Math.min(x.roomDownPct ?? 1e9, x.roomUpPct ?? 1e9);
       const [cls, label] = x.closed ? ["muted", "Closed"] : !x.inRange ? ["down", "Out of range"] : room <= 5 ? ["warn", "Near the edge"] : ["up", "In range"];
       return h("div", { class: "panel lq-p" },
-        h("div", { class: "lq-p-h" }, h("b", {}, x.name), h("span", { class: "chip" }, `${x.feePct}%`), h("span", { class: "fine" }, `#${x.tokenId}`), h("span", { class: `lq-badge ${cls}` }, label)),
+        h("div", { class: "lq-p-h" }, x.token0 && x.token1 ? pairIcons(x) : null, h("b", {}, x.name), h("span", { class: "chip" }, `${x.feePct}%`), h("span", { class: "fine" }, `#${x.tokenId}`), h("span", { class: `lq-badge ${cls}` }, label)),
         x.closed ? null : rangeBar(x.displayLower, x.displayUpper, x.price),
         h("div", { class: "lq-range-l" }, h("span", {}, `Min ${fx(x.displayLower)}`), h("span", {}, `Now ${fx(x.price)}`), h("span", {}, `Max ${fx(x.displayUpper)}`)),
         h("div", { class: "lq-p-rows" },

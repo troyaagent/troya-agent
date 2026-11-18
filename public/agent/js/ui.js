@@ -62,6 +62,12 @@ export function tiny(v, sig = 4) {
   if (zeros < 4) return sign + "0." + m[1] + digits;
   return sign + "0.0" + String(zeros).split("").map((c) => SUB[+c]).join("") + digits;
 }
+/** A number with exactly `d` decimals: order books and price columns line up digit for digit. */
+export function fixed(v, d = 2) { if (v == null || !isFinite(v)) return "–"; return nf(d, d).format(v); }
+/** A USD price (no "$"): 2 decimals from 1 up (64,856.10 · 509.01 · 8.40), small prices in the tiny style. */
+export function price(v) { if (v == null || !isFinite(v)) return "–"; return Math.abs(v) >= 1 ? fixed(v, 2) : tiny(v); }
+/** A token amount: at least 2 decimals from 1 up (1,169,401.20 · 12.5000 → 12.50), small amounts in the tiny style. */
+export function amount(v) { if (v == null || !isFinite(v)) return "–"; const a = Math.abs(v); return a >= 1 ? nf(a >= 1000 ? 2 : 4, 2).format(v) : tiny(v); }
 export function hype(v, d) { if (v == null || !isFinite(v)) return "–"; return (Math.abs(v) < 1 ? tiny(v) : compact(v, d ?? 2)) + " HYPE"; }
 export function eth(v, d) { if (v == null || !isFinite(v)) return "–"; return (Math.abs(v) < 1 ? tiny(v) : compact(v, d ?? 3)) + " ETH"; }
 export function pct(v, d = 2) { if (v == null || !isFinite(v)) return "–"; const a = Math.abs(v); return (v > 0 ? "+" : "") + (a >= 1000 ? compact(v, 1) : v.toFixed(a >= 100 ? 0 : d)) + "%"; }
@@ -131,7 +137,7 @@ const L = "/img/logos/";
 // official marks for networks, launchpads, venues and wallets (self-hosted in /img/logos)
 export const LOGOS = {
   chain: { robinhood: "robinhood.png", hyperliquid: "hyperliquid.svg", arbitrum: "arbitrum-disc.svg", base: "base.png", ethereum: "eth-color.svg", solana: "sol.svg" },
-  pad: { clanker: "clanker.png", bankr: "bankr.png", virtuals: "virtuals.png", mintclub: "mintclub.png", uniswap: "uniswap.webp", ramses: "ramses.png", pancake: "pancake.png", sushi: "sushi.png", stocks: "robinhood.png" },
+  pad: { clanker: "clanker.png", bankr: "bankr.png", virtuals: "virtuals.png", mintclub: "mintclub.png", uniswap: "uniswap.webp", ramses: "ramses.png", pancake: "pancake.png", sushi: "sushi.png", stocks: "robinhood.png", pons: "pons.svg" },
   venue: { uniswap: "uniswap.webp", lifi: "lifi.webp", relay: "relay.webp", hyperliquid: "hyperliquid.svg", wrap: "eth-color.svg" },
   wallet: { metamask: "metamask.webp", rabby: "rabby.webp", okx: "okx.webp", coinbase: "coinbase.webp" },
   symbol: { HYPE: "hyperliquid.svg", USDC: "usdc.svg", ETH: "eth-color.svg", WETH: "eth-color.svg", USDG: "usdg.png", SOL: "sol.svg" },
@@ -199,9 +205,11 @@ export function walletLogo(name, icon, size = 26) {
 // sources: brand logo for ETH/WETH/USDG → Troya icon cache (GeckoTerminal, DexScreener, Pons on-chain logo) → listing image → monogram
 // coins born through Troya (and $TROYA itself) wear the chrome horse in the corner of their logo, everywhere in the app
 const BORN = new Set(), GOLD = new Set();   // GOLD: born through Troya and graduated to its own pool
+try { const k = JSON.parse(localStorage.getItem("troya.born") || "{}"); for (const a of k.b || []) BORN.add(a); for (const a of k.g || []) GOLD.add(a); } catch {}
 export function setBorn(list, graduated = []) {
   for (const a of list || []) if (ADDR.test(String(a))) BORN.add(String(a).toLowerCase());
   for (const a of graduated || []) if (ADDR.test(String(a))) { BORN.add(String(a).toLowerCase()); GOLD.add(String(a).toLowerCase()); }
+  try { localStorage.setItem("troya.born", JSON.stringify({ b: [...BORN].slice(-400), g: [...GOLD].slice(-200) })); } catch {}
 }
 export const isBorn = (a) => BORN.has(String(a || "").toLowerCase());
 // hovering (or tapping) the horse badge opens a small card: born through Troya, and how to launch your own.
@@ -239,7 +247,7 @@ function showTip(el, title, text, tone) {
     document.body.append(tipBox);
   }
   clearTimeout(tipHide);
-  clear(tipBox, h("b", {}, title), h("span", {}, text));
+  clear(tipBox, title ? h("b", {}, title) : null, h("span", {}, text));
   tipBox.className = `tip-pop${tone ? " " + tone : ""}`;
   tipBox.hidden = false;
   const r = el.getBoundingClientRect(), w = tipBox.offsetWidth, hh = tipBox.offsetHeight;
@@ -252,7 +260,7 @@ function showTip(el, title, text, tone) {
 export function tipOn(el, title, text, tone = "") {
   el.dataset.tip = "1";
   el.tabIndex = 0;
-  el.setAttribute("aria-label", `${title}: ${text}`);
+  el.setAttribute("aria-label", title ? `${title}: ${text}` : text);
   el.addEventListener("mouseenter", () => showTip(el, title, text, tone));
   el.addEventListener("focus", () => showTip(el, title, text, tone));
   const hide = () => { clearTimeout(tipHide); tipHide = setTimeout(() => { if (tipBox) tipBox.hidden = true; }, 120); };
@@ -272,10 +280,10 @@ export function tokenIcon(t, size = "") {
   const net = String(t?.chain || "robinhood").toLowerCase();
   const other = net === "base" || net === "arbitrum" || net === "solana";
   const proxied = net === "solana" ? (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr) ? `/api/icon/token/${addr}?chain=solana` : null)
-    : ADDR.test(addr) ? `/api/icon/token/${addr.toLowerCase()}?${other ? `chain=${net}&` : ""}v=3` : null;   // v=3: all 203 stock logos replaced (18 Nov)
+    : ADDR.test(addr) ? `/api/icon/token/${addr.toLowerCase()}?${other ? `chain=${net}&` : ""}v=4` : null;   // v=4: stock logos as round-safe tiles (18 Nov)
   const box = logoBox(`tok-ico ${size}`, mono(t?.symbol), [
     brand,
-    !native && LOGOS.symbol[sym] && (sym === "WETH" || sym === "USDG") ? L + LOGOS.symbol[sym] : null,
+    !native && ({ "0x0bd7d308f8e1639fab988df18a8011f41eacad73": L + LOGOS.symbol.WETH, "0x5fc5360d0400a0fd4f2af552add042d716f1d168": L + LOGOS.symbol.USDG })[addr.toLowerCase()] || null,
     proxied, direct,
     !ADDR.test(addr) && LOGOS.symbol[sym] ? L + LOGOS.symbol[sym] : null,
   ]);
@@ -303,7 +311,7 @@ export function coinIcon(coin, size = "") {
   // brand logos first for the coins whose Hyperliquid glyph is dark on our dark tiles (ETH, UETH, SOL, HYPE …)
   const base = c.replace(/^[a-z0-9]+:/, "").replace(/_spot$/, "").replace(/^U(?=(ETH|SOL)$)/, "").replace(/^W(?=ETH$)/, "");
   const brand = LOGOS.symbol[base] && base !== "USDG" ? L + LOGOS.symbol[base] : null;
-  return logoBox(`tok-ico perp ${size}`, mono(c).slice(0, 1), [brand, c ? `/api/icon/coin/${encodeURIComponent(c)}?v=2` : null]);
+  return logoBox(`tok-ico perp ${size}`, mono(c).slice(0, 1), [brand, c ? `/api/icon/coin/${encodeURIComponent(c)}?v=3` : null]);
 }
 
 /* ---------- sparkline ---------- */
@@ -353,7 +361,8 @@ export function tabs(options, value, onChange) {
   box.set = (v) => { value = v; render(); };
   return box;
 }
-export function infoTip(text) { return h("i", { class: "info", title: text, "aria-label": text, tabindex: "0" }, "i"); }
+// the small "i": a styled tip on hover, focus and tap (a native title never shows on phones)
+export function infoTip(text, title = "") { return tipOn(h("i", { class: "info", role: "button" }, "i"), title, text); }
 export function skeletonRows(n = 6, cols = 6) {
   return Array.from({ length: n }, () => h("tr", {}, Array.from({ length: cols }, (_, i) => h("td", { class: i < 2 ? "l" : "" }, h("div", { class: "sk", style: { height: "14px", width: i === 1 ? "140px" : "60px", marginLeft: i < 2 ? "0" : "auto" } })))));
 }
@@ -393,8 +402,13 @@ export function toast(text, kind = "", ms = 3200) {
 export async function copyText(text, label = "Copied") {
   try { await navigator.clipboard.writeText(text); toast(label, "ok"); } catch { toast("Copy failed", "error"); }
 }
+// every open dialog, so a route change can close them: a picker left open would act on a page that is gone
+const openModals = new Set();
+export function closeModals() { for (const m of [...openModals]) m.close(); }
+addEventListener("hashchange", () => closeModals());
 export function modal({ title, body, wide = false, onClose } = {}) {
-  const close = () => { bg.remove(); removeEventListener("keydown", key); onClose?.(); };
+  let closed = false;
+  const close = () => { if (closed) return; closed = true; openModals.delete(handle); bg.remove(); removeEventListener("keydown", key); onClose?.(); };
   const key = (e) => { if (e.key === "Escape") close(); };
   const box = h("div", { class: `modal ${wide ? "wide" : ""}`, role: "dialog", "aria-modal": "true", "aria-label": title || "Dialog" },
     title ? h("div", { class: "modal-h" }, h("h2", {}, title), h("button", { class: "icon-btn", type: "button", "aria-label": "Close", onclick: close }, icon("close"))) : null,
@@ -403,7 +417,9 @@ export function modal({ title, body, wide = false, onClose } = {}) {
   document.body.append(bg);
   addEventListener("keydown", key);
   setTimeout(() => box.querySelector("input, button.primary, button")?.focus(), 30);
-  return { close, box, body: box.querySelector(".modal-b") };
+  const handle = { close, box, body: box.querySelector(".modal-b") };
+  openModals.add(handle);
+  return handle;
 }
 // review dialog: rows = [[label, value], …]; resolves true/false
 export function review({ title = "Review", summary, rows = [], warn, confirmLabel = "Confirm", danger = false, extra } = {}) {

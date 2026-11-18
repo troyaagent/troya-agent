@@ -2,7 +2,7 @@
 // account with the same trade-only key the Perps page uses. A Spot Gate reads the live order book before every order:
 // the pair, 24h volume, the spread, and what your size would actually fill at. Orders are IOC with a 1% price cap, so a
 // thin book can never fill you worse than that. USDC can be moved between the perps and spot accounts with one signature.
-import { h, clear, icon, useCss, toast, tiny, num, usd, pctEl, coinIcon, seg, pageHead } from "/agent/js/ui.js";
+import { h, clear, icon, useCss, toast, tiny, num, usd, price, pctEl, coinIcon, seg, pageHead } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
 import { wallet, onWallet, openConnect, ensureChain } from "/agent/js/wallet.js";
 import { tradingKeyStatus, approveTradingKey, placeSpotOrder, transferUsdClass, withdrawUsdc } from "/agent/js/hl.js";
@@ -31,7 +31,7 @@ export async function mount(view, ctx) {
     const rows = st.pairs.filter((p) => !st.q || p.label.toLowerCase().includes(st.q)).slice(0, 60);
     clear(list, rows.map((p) => h("button", { class: `sp-row ${st.pair?.pair === p.pair ? "on" : ""}`, type: "button", onclick: () => pick(p) },
       coinIcon(`${p.base}_spot`, "sm"), h("span", { class: "sp-row-n" }, h("b", {}, p.label), h("small", {}, `Vol ${usd(p.volumeUsd, { compact: true })}`)),
-      h("span", { class: "sp-row-p" }, h("b", {}, `$${tiny(p.mark)}`), pctEl(p.change24h)))),
+      h("span", { class: "sp-row-p" }, h("b", {}, `$${price(p.mark)}`), pctEl(p.change24h)))),
       rows.length ? null : h("p", { class: "muted", style: { padding: "12px" } }, "No pair matches."));
   }
   async function pick(p) {
@@ -75,10 +75,11 @@ export async function mount(view, ctx) {
     out.push({ s: (p.volumeUsd || 0) >= 50000 ? "pass" : (p.volumeUsd || 0) >= 5000 ? "warn" : "fail", l: "24h volume", d: usd(p.volumeUsd || 0, { compact: true }) });
     if (b?.bids?.[0] && b?.asks?.[0]) {
       const spread = (b.asks[0].px - b.bids[0].px) / ((b.asks[0].px + b.bids[0].px) / 2);
-      out.push({ s: spread <= 0.005 ? "pass" : spread <= 0.02 ? "warn" : "fail", l: "Spread", d: `${(spread * 100).toFixed(2)}%` });
+      // a deep pair's spread is a few thousandths of a percent: never round it down to a misleading 0.00%
+      out.push({ s: spread <= 0.005 ? "pass" : spread <= 0.02 ? "warn" : "fail", l: "Spread", d: spread < 0.0001 ? "under 0.01%" : `${(spread * 100).toFixed(spread < 0.001 ? 3 : 2)}%` });
     } else out.push({ s: "fail", l: "Order book", d: "No bids or asks right now" });
     if (est) {
-      out.push({ s: !est.filledAll ? "fail" : est.impact > 0.05 ? "fail" : est.impact > 0.01 ? "warn" : "pass", l: "Your size", d: !est.filledAll ? "The visible book cannot fill this size" : `Fills at about $${tiny(est.avg)} (${(est.impact * 100).toFixed(2)}% from mid)` });
+      out.push({ s: !est.filledAll ? "fail" : est.impact > 0.05 ? "fail" : est.impact > 0.01 ? "warn" : "pass", l: "Your size", d: !est.filledAll ? "The visible book cannot fill this size" : `Fills at about $${price(est.avg)} (${(est.impact * 100).toFixed(2)}% from mid)` });
       // Hyperliquid refuses orders worth less than $10
       const value = st.side === "buy" ? Number(st.amount) : Number(st.amount) * (est.avg || 0);
       if (value < 10) out.push({ s: "fail", l: "Order size", d: `Hyperliquid's minimum order is $10 (this one is about $${tiny(value)})` });
@@ -108,7 +109,7 @@ export async function mount(view, ctx) {
     else btn = h("button", { class: "btn primary big", type: "button", disabled: st.busy || blocked || !(Number(st.amount) > 0) || Number(st.amount) > bal, onclick: order },
       st.busy || (blocked ? "Blocked by the Spot Gate" : Number(st.amount) > bal ? `Not enough ${st.side === "buy" ? "USDC in spot" : p.base}` : `${st.side === "buy" ? "Buy" : "Sell"} ${p.base}`));
     clear(card,
-      h("div", { class: "sp-head" }, coinIcon(`${p.base}_spot`), h("div", {}, h("b", {}, p.label), h("small", {}, `$${tiny(p.mark)} · `, pctEl(p.change24h))),
+      h("div", { class: "sp-head" }, coinIcon(`${p.base}_spot`), h("div", {}, h("b", {}, p.label), h("small", {}, `$${price(p.mark)} · `, pctEl(p.change24h))),
         h("a", { class: "link fine", href: `https://app.hyperliquid.xyz/trade/${encodeURIComponent(p.pair)}`, target: "_blank", rel: "noopener" }, "On Hyperliquid")),
       // the user's Hyperliquid USDC: move between spot and perps, or take it home to the same address on Arbitrum
       wallet.address && st.user && st.user.unified ? h("div", { class: "sp-acct" },
@@ -126,7 +127,12 @@ export async function mount(view, ctx) {
         h("div", {}, h("span", {}, "You receive (est.)"), h("span", {}, `${tiny(est.receive)} ${st.side === "buy" ? p.base : "USDC"}`)),
         h("div", {}, h("span", {}, "Price cap"), h("span", {}, `1% from the price at sending`)),
         h("div", {}, h("span", {}, "Fees"), h("span", {}, "Hyperliquid's spot fee, shown in your fills"))) : null,
-      h("div", { class: "gate-box" }, h("div", { class: "gh" }, icon("shield"), "Spot Gate", h("span", { class: `badge-s ${blocked ? "down" : "blue"}` }, st.book ? (blocked ? "Blocked" : "Passed") : "Reading the book…")),
+      // like the Swap and Perps Gates: a verdict only once there is an amount to check
+      h("div", { class: "gate-box" }, h("div", { class: "gh" }, icon("shield"), "Spot Gate", (() => {
+        const waiting = !(Number(st.amount) > 0);
+        const text = !st.book ? "Reading the book…" : blocked ? "Blocked" : waiting ? "Waiting" : "Passed";
+        return h("span", { class: `badge-s ${!st.book || (waiting && !blocked) ? "" : blocked ? "down" : "blue"}` }, text);
+      })()),
         h("ul", {}, checks.map((c) => h("li", { class: c.s }, h("span", {}, c.l), h("b", {}, c.d))))),
       needUsdc ? h("div", { class: "alert warn" }, `Your USDC is in the perps account (${tiny(perpUsdc())} USDC). Move some to spot first. `,
         h("button", { class: "btn sm", type: "button", onclick: moveUsdc }, "Move USDC to spot")) : null,

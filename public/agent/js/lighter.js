@@ -63,10 +63,18 @@ export async function markets() {
       takerFee: Number(b.taker_fee || 0), makerFee: Number(b.maker_fee || 0) };
   }).sort((a, b) => b.volumeUsd - a.volumeUsd);
 }
+// the order book by price level: Lighter returns single orders, so orders at the same price are summed into one level
 export async function book(marketId, limit = 20) {
   const j = await get(`/api/v1/orderBookOrders?market_id=${marketId}&limit=${limit}`);
-  const side = (xs) => (xs || []).map((o) => ({ px: Number(o.price), sz: Number(o.remaining_base_amount ?? o.initial_base_amount ?? 0) })).filter((o) => o.px > 0 && o.sz > 0);
-  return { bids: side(j.bids), asks: side(j.asks) };
+  const side = (xs, asc) => {
+    const lv = new Map();
+    for (const o of xs || []) {
+      const px = Number(o.price), sz = Number(o.remaining_base_amount ?? o.initial_base_amount ?? 0);
+      if (px > 0 && sz > 0) lv.set(px, (lv.get(px) || 0) + sz);
+    }
+    return [...lv].map(([px, sz]) => ({ px, sz })).sort((a, b) => (asc ? a.px - b.px : b.px - a.px));
+  };
+  return { bids: side(j.bids, false), asks: side(j.asks, true) };
 }
 // the owner's master account index on Lighter RH (null until the first deposit lands)
 export async function accountOf(owner) {

@@ -44,17 +44,29 @@ export async function stockDesk() {
     }
     assets.sort((p, q) => (q.volume24hUsd || 0) - (p.volume24hUsd || 0) || p.symbol.localeCompare(q.symbol));
     const bySym = new Map(assets.map((x) => [x.symbol, x]));
+    // the API's status alone is not enough: an action still "in progress" after its date is being paid, not coming up
+    const today = new Date().toISOString().slice(0, 10);
+    const seen = new Set();
     const actions = (c.corpActions || []).map((x) => {
       const div = x.details?.cashDividend, split = x.details?.forwardSplit || x.details?.reverseSplit || x.details?.split;
       const s = bySym.get(x.tokenSymbol);
+      const d = date(x.processDate), num = (v) => (v == null || v === "" ? null : Number(v));
+      const open = /PROGRESS|PENDING|SCHEDULED/.test(x.status);
       return {
-        symbol: x.tokenSymbol, address: lc((x.deployments || []).find((d) => d.chainId === 4663)?.contractAddress) || s?.address || null,
+        symbol: x.tokenSymbol, address: lc((x.deployments || []).find((dp) => dp.chainId === 4663)?.contractAddress) || s?.address || null,
         type: /DIVIDEND/.test(x.type) ? "dividend" : /REVERSE_SPLIT/.test(x.type) ? "reverse split" : /SPLIT/.test(x.type) ? "split" : String(x.type).replace(/^CORPORATE_ACTION_TYPE_/, "").toLowerCase(),
-        status: /COMPLETED/.test(x.status) ? "done" : /PROGRESS|PENDING|SCHEDULED/.test(x.status) ? "upcoming" : String(x.status).replace(/^CORPORATE_ACTION_STATUS_/, "").toLowerCase(),
-        date: date(x.processDate), dividendPerShare: div?.rate != null ? Number(div.rate) : null,
-        ratio: split ? [split.numerator ?? split.newShares ?? null, split.denominator ?? split.oldShares ?? null] : null,
+        status: /COMPLETED/.test(x.status) ? "done" : open ? (d && d < today ? "paying" : "upcoming") : String(x.status).replace(/^CORPORATE_ACTION_STATUS_/, "").toLowerCase(),
+        date: d, dividendPerShare: div?.rate != null ? Number(div.rate) : null,
+        // splits come as { oldRate: "1", newRate: "3" }: a 3-for-1 split reads [3, 1]
+        ratio: split ? [num(split.newRate ?? split.numerator ?? split.newShares), num(split.oldRate ?? split.denominator ?? split.oldShares)] : null,
         yieldPct: div?.rate != null && s?.priceUsd ? (Number(div.rate) / (s.priceUsd / (s.multiplier || 1))) * 100 : null,   // one payment against the share price
       };
+    }).filter((a) => {
+      // the feed repeats some actions (same stock, date, type and amount): list each once
+      const k = `${a.symbol}|${a.date}|${a.type}|${a.dividendPerShare ?? ""}|${a.ratio?.join(":") ?? ""}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
     }).sort((p, q) => String(q.date).localeCompare(String(p.date)));
     return {
       assets, actions, updatedAt: Date.now(), source: "Robinhood stock token API + DexScreener pools",

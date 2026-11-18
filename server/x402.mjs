@@ -21,6 +21,8 @@ import { send, HttpError } from "./api.mjs";
 const FILE = "x402.json";
 const NETS = {
   "eip155:8453": { name: "Base", chainId: 8453, usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", extra: { name: "USD Coin", version: "2" }, facilitator: "https://api.cdp.coinbase.com/platform/v2/x402", scan: "https://basescan.org/tx/" },
+  "eip155:42161": { name: "Arbitrum", chainId: 42161, usdc: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", extra: { name: "USD Coin", version: "2" }, facilitator: "https://api.cdp.coinbase.com/platform/v2/x402", scan: "https://arbiscan.io/tx/" },
+  "eip155:137": { name: "Polygon", chainId: 137, usdc: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", extra: { name: "USD Coin", version: "2" }, facilitator: "https://api.cdp.coinbase.com/platform/v2/x402", scan: "https://polygonscan.com/tx/" },
   "eip155:84532": { name: "Base Sepolia", chainId: 84532, usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", extra: { name: "USDC", version: "2" }, facilitator: "https://x402.org/facilitator", scan: "https://sepolia.basescan.org/tx/" },
 };
 const lc = (s) => String(s || "").toLowerCase();
@@ -28,13 +30,15 @@ const SITE = () => String(process.env.SITE_URL || "https://troya.codes").replace
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64");
 const unb64 = (s) => JSON.parse(Buffer.from(String(s), "base64").toString("utf8"));
 
+// X402_NETWORKS="eip155:8453,eip155:42161,eip155:137" offers several chains in one 402 (the buyer picks); the first is the default
 function cfg() {
-  const network = NETS[process.env.X402_NETWORK] ? process.env.X402_NETWORK : "eip155:84532";
-  const net = NETS[network];
+  const list = String(process.env.X402_NETWORKS || process.env.X402_NETWORK || "eip155:84532").split(",").map((x) => x.trim()).filter((x) => NETS[x]);
+  const networks = list.length ? [...new Set(list)] : ["eip155:84532"];
+  const network = networks[0], net = NETS[network];
   const price = Math.max(0.001, Number(process.env.X402_PRICE_USD || 0.01));
   return {
     enabled: process.env.X402_ENABLED === "1",
-    network, net, price,
+    network, net, networks, price,
     amount: String(Math.round(price * 1e6)),                       // USDC has 6 decimals
     payTo: getAddress(process.env.X402_PAY_TO || process.env.GATE_PAY_TO || "0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4"),
     facilitator: String(process.env.X402_FACILITATOR_URL || net.facilitator).replace(/\/+$/, ""),
@@ -104,9 +108,9 @@ function required(c, error) {
       tags: ["crypto", "token-safety", "trading", "robinhood-chain", "honeypot-check"],
       iconUrl: `${SITE()}/img/favicon-512.png`,
     },
-    accepts: [{
-      scheme: "exact", network: c.network, amount: c.amount, asset: c.net.usdc, payTo: c.payTo, maxTimeoutSeconds: 120, extra: c.net.extra,
-    }],
+    accepts: c.networks.map((n) => ({
+      scheme: "exact", network: n, amount: c.amount, asset: NETS[n].usdc, payTo: c.payTo, maxTimeoutSeconds: 120, extra: NETS[n].extra,
+    })),
     extensions: {
       bazaar: {
         info: {
@@ -170,6 +174,7 @@ export async function register(r, ctx) {
     return {
       name: "Troya Gate over x402", x402Version: 2, enabled: c.enabled,
       network: c.network, networkName: c.net.name, price: { usd: c.price, amount: c.amount, asset: "USDC", token: c.net.usdc, decimals: 6 },
+      networks: c.networks.map((n) => ({ network: n, name: NETS[n].name, usdc: NETS[n].usdc })),
       payTo: c.payTo, facilitator: new URL(c.facilitator).host, resource: `${SITE()}/api/gate/x402/check?token=0x…`,
       attestor: await gate.attestorAddress(),
       howToPay: "Call the resource, read the PAYMENT-REQUIRED header (base64 JSON), sign the USDC transfer it asks for (EIP-3009, any x402 client does this) and call again with PAYMENT-SIGNATURE. Nothing is charged when the check cannot run.",
@@ -189,13 +194,14 @@ export async function register(r, ctx) {
     // 1) read the payment and hold it to exactly what this endpoint asks for
     let pp;
     try { pp = unb64(sigHeader); } catch { throw new HttpError(400, "PAYMENT-SIGNATURE is not base64 JSON.", { x402Version: 2 }); }
-    const want = required(c).accepts[0];
     const acc = pp?.accepted || {}, auth = pp?.payload?.authorization || {};
+    const want = required(c).accepts.find((a) => a.network === acc.network) || null;
+    const pnet = want ? NETS[want.network] : c.net;           // the chain this payment is on
     const now = Math.floor(Date.now() / 1000);
     const bad =
       pp?.x402Version !== 2 ? "invalid_x402_version"
       : acc.scheme !== "exact" ? "unsupported_scheme"
-      : acc.network !== c.network ? "invalid_network"
+      : !want ? "invalid_network"
       : lc(acc.asset) !== lc(want.asset) || lc(acc.payTo) !== lc(want.payTo) || String(acc.amount) !== want.amount ? "invalid_payment_requirements"
       : !pp?.payload?.signature || !auth.nonce ? "invalid_payload"
       : lc(auth.to) !== lc(c.payTo) ? "invalid_exact_evm_payload_recipient_mismatch"
@@ -204,7 +210,7 @@ export async function register(r, ctx) {
       : Number(auth.validAfter) > now ? "invalid_exact_evm_payload_authorization_valid_after"
       : null;
     if (bad) return ask402(res, c, bad);
-    const nk = `${c.network}:${lc(auth.from)}:${lc(auth.nonce)}`;
+    const nk = `${want.network}:${lc(auth.from)}:${lc(auth.nonce)}`;
     if (!takeNonce(nk)) return ask402(res, c, "this payment was already used");
     const release = () => nonces.delete(nk);           // nothing was settled, so the same signed payment may be sent again
     const body = { x402Version: 2, paymentPayload: pp, paymentRequirements: want };
@@ -224,7 +230,7 @@ export async function register(r, ctx) {
     // 4) settle on Base, then hand the result over
     let s;
     try { s = await facilitator(c, "settle", body); }
-    catch (e) { console.error("[x402] settle:", e.message); s = { success: false, errorReason: "unexpected_settle_error", transaction: "", network: c.network, payer }; }
+    catch (e) { console.error("[x402] settle:", e.message); s = { success: false, errorReason: "unexpected_settle_error", transaction: "", network: want.network, payer }; }
     if (!s?.success) {
       console.error("[x402] settle failed:", s?.errorReason, s?.transaction || "");
       send(res, 402, { x402Version: 2, error: `Payment did not settle: ${s?.errorReason || "unknown"}. The result is withheld and nothing should have moved.` }, { ...EXPOSE, "payment-response": b64(s || {}) });
@@ -233,11 +239,11 @@ export async function register(r, ctx) {
     await store.update(FILE, {}, (d) => {
       d.stats ||= { paid: 0, micro: 0 };
       d.stats.paid++; d.stats.micro += Number(want.amount);
-      d.last = [{ at: Date.now(), network: c.network, payer: lc(s.payer || payer), tx: s.transaction, token: lc(token), verdict: out.attested?.verdict }, ...(d.last || [])].slice(0, 200);
+      d.last = [{ at: Date.now(), network: want.network, payer: lc(s.payer || payer), tx: s.transaction, token: lc(token), verdict: out.attested?.verdict }, ...(d.last || [])].slice(0, 200);
       return d;
     }).catch(() => {});
-    console.log(`[x402] paid check ${token} by ${s.payer || payer} tx ${s.transaction} (${c.net.name})`);
-    send(res, 200, { ...out, paid: { by: "x402", network: c.network, payer: s.payer || payer, transaction: s.transaction, explorer: c.net.scan + s.transaction, amountUsdc: c.price } },
+    console.log(`[x402] paid check ${token} by ${s.payer || payer} tx ${s.transaction} (${pnet.name})`);
+    send(res, 200, { ...out, paid: { by: "x402", network: want.network, payer: s.payer || payer, transaction: s.transaction, explorer: pnet.scan + s.transaction, amountUsdc: c.price } },
       { ...EXPOSE, "payment-response": b64(s) });
   }, { weight: 4, perMin: 60 });
 }

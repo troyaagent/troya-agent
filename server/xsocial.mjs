@@ -86,7 +86,7 @@ const b64u = (b) => b.toString("base64url");
 function login(req, res, purpose, back) {
   if (!on()) throw new HttpError(503, "Sign in with X is not configured on this server yet.");
   let address = null;
-  const home = back === "launch" ? "/agent#/launch/x" : "/agent#/social";
+  const home = back === "launch" ? "/agent#/launch/x" : back === "create" ? "/agent#/launch/create" : "/agent#/social";
   if (purpose === "link") { const s = getSession(req); if (!s) return redirect(res, `${home}?x=signin`); address = s.address; }
   const state = b64u(randomBytes(18)), verifier = b64u(randomBytes(48));
   pending.set(state, { purpose, address, verifier, home, exp: Date.now() + 10 * 60_000 });
@@ -381,6 +381,17 @@ export async function postTweet(text, { mediaIds = [], replyTo = null } = {}) {
   const id = p?.data?.id || p?.id || null;      // X accepted it (xApi throws otherwise), even when no id comes back
   await store.update("x-log.json", [], (l) => [...l, { id: id || "post", at: Date.now(), author: "(team post)", text: "", status: "posted", reply: String(text), replyId: id, manual: true }].slice(-300));
   return id;
+}
+// Project check (projectcheck.mjs): one public profile read, inside the daily "users" budget
+export async function userProfile(username) {
+  const bot = await botTokens();
+  if (!bot?.access || !/^[A-Za-z0-9_]{1,15}$/.test(String(username || "")) || !(await spend("users"))) return null;
+  const p = await xApi(`/2/users/by/username/${username}?user.fields=created_at,public_metrics,description,url,entities,protected`, { token: bot.access });
+  const u = p?.data;
+  if (!u) return null;
+  let bio = String(u.description || "");
+  for (const x of u.entities?.description?.urls || []) if (x.url && x.expanded_url) bio = bio.split(x.url).join(x.expanded_url);
+  return { handle: u.username, name: u.name, bio, followers: u.public_metrics?.followers_count || 0, following: u.public_metrics?.following_count || 0, posts: u.public_metrics?.tweet_count || 0, created: u.created_at || null, website: u.entities?.url?.urls?.[0]?.expanded_url || u.url || null, protected: !!u.protected };
 }
 async function compose(name, text) {
   const llm = await import("./llm.mjs");

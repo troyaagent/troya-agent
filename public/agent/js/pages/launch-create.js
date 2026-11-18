@@ -2,7 +2,7 @@
 // The logo is hosted by this server (or a link the user gives), everything else is written on chain by the Pons factory.
 // The server builds and simulates factory.launchToken; the user's wallet signs and sends it.
 import { h, clear, icon, review, toast, tiny, num, short, useCss, debounce, infoTip, copyText, tokenIcon } from "../ui.js";
-import { wallet, onWallet, openConnect } from "../wallet.js";
+import { wallet, onWallet, openConnect, signIn } from "../wallet.js";
 import { api } from "../api.js";
 import { balanceOf, fromRaw, sendTx, waitReceipt, errText, journal } from "../chain.js";
 
@@ -25,6 +25,40 @@ export async function recordPending() {
   savePending(left);
 }
 const TOKEN_LAUNCHED = "0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607"; // TokenLaunched(address,address,address,address,uint256,uint256)
+const PC_DRAFT = "troya.createDraft", DRAFT_KEYS = ["name", "symbol", "description", "website", "twitter", "telegram", "logoUrl", "github"];
+const PC_ICON = {
+  ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  no: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>',
+  na: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/></svg>',
+};
+const PC_CSS = `.lc-pc { display: grid; gap: 14px; min-width: 0; }
+.lc-pc-steps > li > div, .lc-pc-top > div, .lc-pc-res, .lc-pc-sec li > span, .lc-pc-extra li > span { min-width: 0; overflow-wrap: anywhere; }
+.lc-pc-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.lc-pc-steps > li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start; font-size: 13.5px; line-height: 1.5; }
+.lc-pc-m { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line-3); color: var(--muted); }
+.lc-pc-m svg { width: 12px; height: 12px; }
+.lc-pc-m.ok { color: var(--up); border-color: color-mix(in srgb, var(--up) 45%, transparent); }
+.lc-pc-m.no { color: var(--down); border-color: color-mix(in srgb, var(--down) 45%, transparent); }
+.lc-pc-code { display: flex; align-items: center; gap: 8px; margin-top: 6px; min-width: 0; }
+.lc-pc-code code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 7px 10px; border: 1px solid var(--line-2); border-radius: 8px; font-size: 12px; }
+.lc-pc-act { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+.lc-pc-run { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.lc-pc-res { border: 1px solid var(--line-2); border-radius: 14px; padding: 16px; display: grid; gap: 12px; }
+.lc-pc-top { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; }
+.lc-pc-score { display: flex; align-items: baseline; gap: 2px; }
+.lc-pc-score b { font-size: 44px; line-height: 1; font-weight: 700; letter-spacing: -0.02em; }
+.lc-pc-score span { color: var(--muted); font-size: 13px; }
+.lc-pc-res.good .lc-pc-score b { color: var(--up); } .lc-pc-res.mid .lc-pc-score b { color: var(--warn); } .lc-pc-res.low .lc-pc-score b { color: var(--down); }
+.lc-pc-verdict { font-weight: 700; letter-spacing: .08em; font-size: 13px; }
+.lc-pc-secs { display: grid; gap: 6px; }
+.lc-pc-sec { border-top: 1px solid var(--line); padding-top: 6px; }
+.lc-pc-sec summary { display: grid; grid-template-columns: 1fr auto 90px; gap: 10px; align-items: center; cursor: pointer; list-style: none; font-size: 13.5px; }
+.lc-pc-sec summary::-webkit-details-marker { display: none; }
+.lc-pc-bar { display: block; height: 5px; border-radius: 3px; background: var(--line-2); overflow: hidden; }
+.lc-pc-bar > i { display: block; height: 100%; background: var(--fg-2); }
+.lc-pc-sec ul, .lc-pc-extra { list-style: none; margin: 8px 0 4px; padding: 0; display: grid; gap: 6px; }
+.lc-pc-sec li, .lc-pc-extra li { display: grid; grid-template-columns: 20px 1fr; gap: 8px; font-size: 12.5px; color: var(--fg-2); line-height: 1.45; }
+@media (max-width: 560px) { .lc-pc-sec summary { grid-template-columns: 1fr auto 56px; } .lc-pc-score b { font-size: 36px; } }`;
 
 export async function mount(view, ctx) {
   useCss("launch");
@@ -33,7 +67,10 @@ export async function mount(view, ctx) {
   const st = {
     name: "", symbol: "", description: "", website: "", twitter: "", telegram: "", logoUrl: "",
     file: null, preview: null, logo: null, tax: 0, menu: null, menuErr: null, bal: null, busy: false, done: null, plan: null, planErr: null, rules: null,
+    github: "", pc: null, pcBusy: false, pcErr: null, xMe: null,
   };
+  // the form comes back after Sign in with X (Project check): the text fields were kept in this tab for the round trip
+  try { const d = JSON.parse(sessionStorage.getItem(PC_DRAFT) || "null"); sessionStorage.removeItem(PC_DRAFT); if (d) for (const k of DRAFT_KEYS) if (typeof d[k] === "string") st[k] = d[k]; } catch {}
 
   const HEAD_V6 = "Launch on Robinhood Chain through Pons Family: one transaction creates the coin and its bonding curve. It graduates to a Uniswap v4 pool once the curve fills. Launching through Troya is free: you earn 0.6% of trading volume plus any creator tax you set, Troya takes 0.1%. Hold 1,000,000 $TROYA and you keep the whole 0.7%.";
   const headP = h("p", {}, HEAD_V6);
@@ -94,6 +131,71 @@ export async function mount(view, ctx) {
   const btn = h("button", { class: "btn primary big", type: "button", onclick: () => launch() });
   const status = h("div", { class: "lc-status" });
 
+  /* ---------- Project check (18 Nov): a score for the project behind the coin, and proof the website and X are the creator's ---------- */
+  if (!document.getElementById("lc-pc-css")) document.head.append(h("style", { id: "lc-pc-css" }, PC_CSS));
+  const pcBox = h("div", { class: "lc-pc" });
+  const pcSec = h("section", { class: "lc-sec" },
+    h("h2", {}, "Project check ", h("span", { class: "muted" }, "(optional)")),
+    h("p", { class: "note", style: { marginTop: 0 } }, "Troya reads your website, the code it runs and your X account (plus GitHub and Telegram if you have them) and scores the project the way an outside reviewer would. It also checks that the website and X are yours: until they are proven, the score stays at 40 or below, so a copied project gets nothing. Only you see the result."),
+    h("label", { class: "field" }, h("span", {}, "GitHub ", h("span", { class: "muted" }, "(optional)")), inp("github", { maxlength: 256, placeholder: "https://github.com/…" })),
+    pcBox);
+  const xOf = (v) => (/(?:x|twitter)\.com\/@?([A-Za-z0-9_]{1,15})/i.exec(v || "") || /^@?([A-Za-z0-9_]{1,15})$/.exec(String(v || "").trim()) || [])[1] || "";
+  const mark = (ok) => { const i = h("i", { class: `lc-pc-m ${ok === true ? "ok" : ok === false ? "no" : "na"}` }); i.innerHTML = PC_ICON[ok === true ? "ok" : ok === false ? "no" : "na"]; return i; };
+  function linkX() {
+    try { const d = {}; for (const k of DRAFT_KEYS) d[k] = st[k]; sessionStorage.setItem(PC_DRAFT, JSON.stringify(d)); } catch {}
+    location.href = "/api/x/login?for=link&back=create";
+  }
+  async function loadXMe() {
+    if (!wallet.session) st.xMe = null;
+    else { try { st.xMe = (await api.get("x/me"))?.x?.username || null; } catch { st.xMe = null; } }
+    if (alive) paintPc();
+  }
+  async function runPc() {
+    st.pcBusy = true; st.pcErr = null; paintPc();
+    try { st.pc = await api.post("launch/project-check", { name: st.name, symbol: st.symbol, description: st.description, website: st.website, twitter: st.twitter, telegram: st.telegram, github: st.github }); }
+    catch (e) { st.pcErr = e.message || "The check failed. Try again in a minute."; }
+    finally { st.pcBusy = false; if (alive) paintPc(); }
+  }
+  function pcResult(v) {
+    return h("div", { class: `lc-pc-res ${v.score >= 60 ? "good" : v.score >= 40 ? "mid" : "low"}` },
+      h("div", { class: "lc-pc-top" },
+        h("div", { class: "lc-pc-score" }, h("b", {}, String(v.score)), h("span", {}, "/100")),
+        h("div", {},
+          h("div", { class: "lc-pc-verdict" }, v.verdict),
+          v.cap ? h("p", { class: "fine", style: { margin: "2px 0 0" } }, `${v.cap.why}, so the score is capped at ${v.cap.limit}. The project itself reads ${v.raw}.`) : null,
+          v.summary ? h("p", { class: "fine", style: { margin: "4px 0 0" } }, v.summary) : null)),
+      h("div", { class: "lc-pc-secs" }, v.sections.map((s) => h("details", { class: "lc-pc-sec" },
+        h("summary", {}, h("span", {}, s.title), h("span", { class: "mono" }, `${s.points}/${s.max}`), h("i", { class: "lc-pc-bar" }, h("i", { style: { width: `${Math.round((s.points / s.max) * 100)}%` } }))),
+        h("ul", {}, s.items.map((it) => h("li", {}, mark(it.ok), h("span", {}, it.text))))))),
+      v.extra?.length ? h("ul", { class: "lc-pc-extra" }, v.extra.map((it) => h("li", {}, mark(it.ok), h("span", {}, it.text)))) : null,
+      h("p", { class: "fine", style: { margin: 0 } }, v.note));
+  }
+  function paintPc() {
+    const addr = wallet.address || "";
+    const xh = xOf(st.twitter);
+    const xOk = !!(st.xMe && xh && st.xMe.toLowerCase() === xh.toLowerCase());
+    const meta = `<meta name="troya-verify" content="${addr || "0xYourWallet"}">`;
+    const xAct = xOk ? null : !addr ? h("button", { class: "btn sm", type: "button", onclick: () => openConnect() }, "Connect wallet")
+      : !wallet.session ? h("button", { class: "btn sm", type: "button", onclick: () => signIn().then(loadXMe).catch((e) => toast(errText(e), "error")) }, "Sign in")
+      : h("button", { class: "btn sm", type: "button", onclick: linkX }, st.xMe ? "Sign in with another X account" : "Sign in with X");
+    const steps = h("ol", { class: "lc-pc-steps" },
+      h("li", {}, mark(xOk ? true : null), h("div", {}, h("b", {}, "Prove the X account. "),
+        xOk ? `Signed in as @${st.xMe}: it matches.` : st.xMe ? `You are signed in as @${st.xMe}; sign in with ${xh ? `@${xh}` : "the project's account"} instead.` : `Sign in with ${xh ? `@${xh}` : "the project's X account"}.`,
+        xAct ? h("div", { class: "lc-pc-act" }, xAct) : null)),
+      h("li", {}, mark(st.pc ? st.pc.ownership.website.verified : null), h("div", {}, h("b", {}, "Prove the website. "), "Put your wallet address on the site, as a file ", h("code", {}, "/troya.txt"), " or as this tag inside the home page's ", h("code", {}, "<head>"), ":",
+        h("div", { class: "lc-pc-code" }, h("code", {}, addr || "Connect a wallet to see your address"), addr ? h("button", { class: "btn sm", type: "button", onclick: () => copyText(addr, "Address copied") }, "Copy") : null),
+        h("div", { class: "lc-pc-code" }, h("code", {}, meta), h("button", { class: "btn sm", type: "button", onclick: () => copyText(meta, "Tag copied") }, "Copy")))),
+      h("li", {}, mark(null), h("div", { class: "muted" }, h("b", {}, "Optional. "), "The same address in ", h("code", {}, "troya.txt"), " at the root of your GitHub repo, or in your Telegram group's description, adds a few points.")));
+    const ready = !!(st.website.trim() && xh);
+    clear(pcBox, steps,
+      h("div", { class: "lc-pc-run" },
+        h("button", { class: "btn primary", type: "button", disabled: !ready || st.pcBusy, onclick: runPc }, st.pcBusy ? "Checking the project…" : st.pc ? "Check again" : "Check project"),
+        !ready ? h("span", { class: "fine" }, "Add your website and X above first: both are needed for a score.") : st.pcBusy ? h("span", { class: "fine" }, "Reading the site, its code and X: about 10 seconds.") : null),
+      st.pcErr ? h("div", { class: "alert error" }, st.pcErr) : null,
+      st.pc ? pcResult(st.pc) : null);
+  }
+  form.addEventListener("input", debounce(() => { if (alive) paintPc(); }, 250));
+
   clear(form,
     h("section", { class: "lc-sec" },
       h("h2", {}, "Identity"),
@@ -109,6 +211,7 @@ export async function mount(view, ctx) {
         h("label", { class: "field" }, h("span", {}, "Website"), inp("website", { maxlength: 256, placeholder: "https://" })),
         h("label", { class: "field" }, h("span", {}, "X"), inp("twitter", { maxlength: 256, placeholder: "https://x.com/…" })),
         h("label", { class: "field" }, h("span", {}, "Telegram"), inp("telegram", { maxlength: 256, placeholder: "https://t.me/…" })))),
+    pcSec,
     h("section", { class: "lc-sec" },
       h("h2", {}, "Creator tax ", infoTip("An extra tax on every buy and sell, paid to you, on top of the 1% Pons fee (you already earn 0.6% of volume from that fee, or all 0.7% when you hold 1,000,000 $TROYA). It applies before and after graduation and cannot be changed later. Higher taxes put traders off.")),
       taxBox,
@@ -284,6 +387,7 @@ export async function mount(view, ctx) {
     .finally(() => { if (alive) { paintTax(); paintSide(); paintBtn(); } });
   refreshPlan();
   api.get("launch/rules").then((r) => { st.rules = r; if (r?.splitter?.live) headP.textContent = HEAD_V6; if (alive) paintSide(); }).catch(() => {});
-  const off = onWallet(() => { refreshBal(); refreshPlan(); paintBtn(); });
+  paintPc(); loadXMe();
+  const off = onWallet(() => { refreshBal(); refreshPlan(); paintBtn(); loadXMe(); });
   return () => { alive = false; off(); if (st.preview && !st.done) URL.revokeObjectURL(st.preview); };
 }

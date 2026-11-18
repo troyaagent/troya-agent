@@ -35,6 +35,7 @@ const SPAM = [
   "If you’re serious about catching early plays, make sure you follow him! 🔥\n\nHe shares quality signals, spots interesting plays, and knows his game 💯 🐳🐳",
 ];
 const LEGIT = [
+  "Top noch Team Keep building Community is growing $TROYA next 100x 🚀🚀🚀🚀", "troya is a gem, mooning soon", "$TROYA 50x easy",
   "I shared this in the group yesterday, troya looks good",
   "troya bot communicates well. great tek", "@TrojanTroya_bot what’s the live price for $troya", "We should setup the skeleton bot for raids",
   "holding nicely for past hrs is a green flag", "Ca", "X", "gm", "Gm gm guys",
@@ -46,6 +47,7 @@ const LEGIT = [
 ];
 
 console.log("A · scoring today's messages");
+ok(mod.score("$PEPE next 100x, troya too 🚀") >= 3 && mod.score("troya 100x join t.me/pumpcalls") >= 3, "gains talk with another coin or a link still scores 3+");
 const missed = SPAM.filter((t) => mod.score(t) < 3);
 ok(!missed.length, `all ${SPAM.length} spam messages score 3+`, missed.map((t) => `[${mod.score(t)}] ${t.slice(0, 40)}`).join(" | "));
 const hit = LEGIT.filter((t) => mod.score(t) >= 2);

@@ -112,13 +112,18 @@ const RULES = [
 
 // how promotional a text reads: rule weights plus other people's @handles and other coins' tickers when they come with it
 const SCAM = RULES[4][1];
+// gains talk ("100x", "moon", "gem") about Troya itself is a member cheering, not a call channel (18 Nov: "Community is
+// growing $TROYA next 100x 🚀" was removed); it still counts when another coin, another @handle or a link comes with it
+const GAINS = RULES.find(([, re]) => re.source.startsWith("\\b\\d{2,4}\\s?x\\b"))?.[1];
+const HYPE = RULES.find(([, re]) => re.source.startsWith("\\bprinting\\b"))?.[1];
 export function score(text) {
   const t = fold(text);
   if (!t.trim()) return 0;
-  let s = 0;
-  for (const [w, re] of RULES) if (re.test(t)) s += w;
   const handles = [...t.matchAll(/@([A-Za-z0-9_]{4,32})/g)].map((x) => x[1]).filter((h) => !OWN_HANDLES.test(h));
   const tickers = [...t.matchAll(/\$([A-Za-z][A-Za-z0-9]{1,11})\b/g)].map((x) => x[1]).filter((x) => !MAJORS.test(x));
+  const cheer = /\btroya\b/i.test(t) && !handles.length && !tickers.length && !/https?:\/\/|\bt\.me\/|\bwww\./i.test(t);
+  let s = 0;
+  for (const [w, re] of RULES) if (!(cheer && (re === GAINS || re === HYPE)) && re.test(t)) s += w;
   if (handles.length) s += s >= 1 || /\bcalls?\b|\bdm\b|follow|boost|signal|vip/i.test(t) ? 3 : 0;
   if (tickers.length && s >= 1) s += 1;
   return s;

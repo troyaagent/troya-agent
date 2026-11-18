@@ -7,7 +7,8 @@
 //   · once per coin (data/launch-xpost.json keeps what was posted or skipped and why)
 //   · the team's own test coins are skipped (a "test" name or ticker, or a creator in X_ADMINS / TROYA_ADMINS / the test wallet)
 //   · it waits for the Gate verdict (a few minutes) and skips a coin the Gate fails or warns on
-//   · at most LAUNCH_XPOST_DAY posts a UTC day (default 8), at least LAUNCH_XPOST_GAP_MIN minutes apart (default 20),
+//   · posted a minute or so after launch, once the Gate has a verdict (checked every minute)
+//   · at most LAUNCH_XPOST_DAY posts a UTC day (default 24), at least LAUNCH_XPOST_GAP_MIN minutes apart (default 3),
 //     oldest first, and a coin older than 24 hours is dropped instead of posted late
 //   · every post spends the shared daily X post budget in xsocial.mjs (postTweet), which also keeps one cashtag a post
 //   · LAUNCH_XPOST=0 switches it off; LAUNCH_XPOST_DRY=1 logs the posts without sending them
@@ -16,12 +17,12 @@
 
 const STATE = "launch-xpost.json";
 const TEST_WALLETS = ["0x12a05719851c8375342de65c9105329c81f57054"];   // the team's test wallet (Robinhood Chain)
-const MAX_AGE = 24 * 3600_000, MIN_AGE = 3 * 60_000, GATE_WAIT = 45 * 60_000;
+const MAX_AGE = 24 * 3600_000, MIN_AGE = 60_000, GATE_WAIT = 45 * 60_000;
 const lc = (s) => String(s || "").toLowerCase();
 const admins = () => String(`${process.env.X_ADMINS || ""},${process.env.TROYA_ADMINS || ""}`).split(",").map((a) => lc(a.trim())).filter((a) => /^0x[0-9a-f]{40}$/.test(a));
 const team = () => new Set([...TEST_WALLETS, ...admins()]);
-const gapMs = () => Math.max(5, Number(process.env.LAUNCH_XPOST_GAP_MIN) || 20) * 60_000;
-const perDay = () => Math.max(1, Number(process.env.LAUNCH_XPOST_DAY) || 8);
+const gapMs = () => Math.max(1, Number(process.env.LAUNCH_XPOST_GAP_MIN) || 3) * 60_000;
+const perDay = () => Math.max(1, Number(process.env.LAUNCH_XPOST_DAY) || 24);
 const today = () => new Date().toISOString().slice(0, 10);
 
 let store = null, port = 9270, busy = false;
@@ -128,7 +129,7 @@ export async function register(r, ctx) {
     return { on: process.env.LAUNCH_XPOST !== "0", dry: process.env.LAUNCH_XPOST_DRY === "1", perDay: perDay(), gapMinutes: gapMs() / 60_000, state: await store.readJson(STATE, null) };
   });
   if (process.env.LAUNCH_XPOST !== "0") {
-    setTimeout(() => tick().catch((e) => console.warn("[launch-xpost]", e.message)), 90_000).unref?.();
-    setInterval(() => tick().catch((e) => console.warn("[launch-xpost]", e.message)), 2 * 60_000).unref?.();
+    setTimeout(() => tick().catch((e) => console.warn("[launch-xpost]", e.message)), 30_000).unref?.();
+    setInterval(() => tick().catch((e) => console.warn("[launch-xpost]", e.message)), 60_000).unref?.();
   }
 }

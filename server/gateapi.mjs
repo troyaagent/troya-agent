@@ -170,7 +170,8 @@ async function runCheck(token, { amountEth, from, withAssay }) {
   ]);
   const vd = verdict(g);
   const q = g.quote || {};
-  const flags = a?.status === "done" ? (a.flags || []).filter((f) => f.key !== "partial").map((f) => Object.fromEntries(ASSAY_KEEP.map((k) => [k, f[k]]))) : [];
+  const ring = await import("./ringradar.mjs").then((m) => m.ringFlags(token)).catch(() => []);   // V7 F31, from the radar's cache
+  const flags = [...(a?.status === "done" ? (a.flags || []).filter((f) => f.key !== "partial").map((f) => Object.fromEntries(ASSAY_KEEP.map((k) => [k, f[k]]))) : []), ...ring];
   const red = flags.some((f) => f.level === "red");
   const v = vd.v === "nobuys" ? "untested" : vd.v === "passed" && red ? "caution" : vd.v;
   const attested = {

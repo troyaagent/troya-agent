@@ -205,7 +205,7 @@ export function formatPost(r) {
   if (r.ageMs > 0) lines.push(`Checked ${mins(r.ageMs)} after launch`);
   if (r.buyers) lines.push(`${r.buyers.organic} independent buyers (wallets that buy every new coin not counted)`);
   if (r.alsoTicker) lines.push(`Another coin used this ticker earlier today (${short(r.alsoTicker.token)}): check the address`);
-  if (r.v === "failed" || r.v === "caution") lines.push(`${esc(r.why.label)}: ${esc(String(r.why.detail).slice(0, 140))}`);
+  if (r.v === "failed" || r.v === "caution") lines.push(`${esc(r.why.label)}: ${esc(String(r.why.detail).slice(0, r.why.label === "Ring Radar" ? 220 : 140))}`);
   const bits = [];
   if (ck.sim) bits.push(`Sim ${ck.sim.status === "pass" ? "ok" : ck.sim.status === "fail" ? "failed" : "skipped"}`);
   if (ck.sell) bits.push(`Test sell ${ck.sell.status === "pass" ? (/partial/i.test(ck.sell.detail) ? "ok (partial)" : "ok") : ck.sell.status === "fail" ? "failed" : "skipped"}`);
@@ -213,6 +213,7 @@ export function formatPost(r) {
   if (ck.fee) bits.push(`Fees ${esc(ck.fee.detail)}`);
   if (bits.length) lines.push(bits.join(" · "));
   if (r.pons) lines.push(`Curve ${eth(r.pons.raised)} ${esc(r.pons.pair?.symbol || "ETH")} raised · ${r.pons.progressPct != null ? r.pons.progressPct.toFixed(r.pons.progressPct < 1 ? 2 : 1) : "–"}% to graduation · tax ${Number((1 + (r.pons.fees.creatorTaxBps || 0) / 100).toFixed(2))}% (1% Pons fee${r.pons.fees.creatorTaxBps ? ` + ${Number((r.pons.fees.creatorTaxBps / 100).toFixed(2))}% creator tax` : ", no creator tax"})`);
+  if (r.ring && (r.ring.verdict === "red" || r.ring.verdict === "amber") && r.why?.label !== "Ring Radar") lines.push(`Ring Radar ${r.ring.verdict === "red" ? "red" : "amber"}: ${esc(r.ring.reasons.slice(0, 2).join("; ").slice(0, 220))}`);
   if (r.assay?.length) for (const l of r.assay) lines.push(esc(l));
   lines.push(`<code>${r.token}</code>`);
   return lines.join("\n");
@@ -354,7 +355,7 @@ async function scan(s) {
       const token = "0x" + l.topics[1].slice(26);
       if (s.seen[token]) continue;
       s.seen[token] = Date.now();
-      s.queue.push({ token, due: Date.now() + FIRST_CHECK_S * 1000, tries: 0, seenAt: Date.now(), block: Number(l.blockNumber) });
+      s.queue.push({ token, due: Date.now() + FIRST_CHECK_S * 1000, tries: 0, seenAt: Date.now(), block: Number(l.blockNumber), tx: l.transactionHash });
       bump(s, "seen");
     }
     if (POOLS) await scanPools(s, from, to);
@@ -442,6 +443,11 @@ async function work(s) {
     let r;
     try { r = await checkLaunch(q.token); }
     catch (e) { q.due = now + 60000; q.err = (q.err || 0) + 1; if (q.err >= 3) s.queue = s.queue.filter((x) => x !== q); console.warn("[sentry]", q.token, e.message); continue; }
+    // V7 F31 Ring Radar on every Pons launch: exemptions from the launch call, bundle buys, reused bundlers, decoys
+    if (q.kind !== "pool" && r.pons) {
+      r.ring = await import("./ringradar.mjs").then((m) => m.ringCheck(q.token, q.tx ? { tx: q.tx, block: q.block } : null)).catch(() => null);
+      if (r.ring?.verdict === "red" && r.v === "passed") { r.v = "caution"; r.why = { label: "Ring Radar", detail: r.ring.reasons.slice(0, 2).join("; ") }; }
+    }
     if (q.kind === "pool") {
       if (r.pons) { s.queue = s.queue.filter((x) => x !== q); continue; }                 // a Pons coin: its launch is covered already
       const ck = Object.fromEntries(r.checks.map((c) => [c.key, c]));

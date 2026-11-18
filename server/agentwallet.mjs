@@ -126,8 +126,10 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
       let gateFails = gate.pass ? [] : gate.checks.filter((c) => c.status === "fail");
       // V6 initial buy: this Agent Wallet buying the coin it launched through Troya minutes ago. Its curve is empty by
       // definition, so only the pool-depth check is set aside; every other Gate check still applies.
-      if (params.initialBuy && gateFails.length) {
-        const own = (await store.readJson("launches.json", [])).find((x) => lcs(x.token) === lcs(q.tokenOut.address) && lcs(x.owner) === lcs(owner) && lcs(x.wallet) === lcs(r.address) && Date.now() - x.at < 15 * 60_000);
+      // creatorBuy (the dev panel in Telegram): the same, for the creator's own coin at any time, so a dev can buy it while
+      // nobody else has yet
+      if ((params.initialBuy || params.creatorBuy) && gateFails.length) {
+        const own = (await store.readJson("launches.json", [])).find((x) => lcs(x.token) === lcs(q.tokenOut.address) && lcs(x.owner) === lcs(owner) && lcs(x.wallet) === lcs(r.address) && (params.creatorBuy || Date.now() - x.at < 15 * 60_000));
         if (own) gateFails = gateFails.filter((c) => !/^pool depth$/i.test(String(c.name || "")));
       }
       const reasons = [...pc.reasons, ...cap, ...gateFails.map((c) => `${c.name}: ${c.detail}`), ...(q.executable ? [] : ["No executable swap route on this server."])];

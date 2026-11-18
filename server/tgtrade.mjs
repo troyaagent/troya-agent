@@ -20,9 +20,15 @@ export const ON = process.env.TG_TRADE === "1";
 const SITE = "https://troya.codes";
 const SCAN = "https://robinhoodchain.blockscout.com";
 // Buy buttons in ETH; TG_TRADE_BUYS="0.005,0.01,0.02" overrides (three amounts, each between 0.0005 and 1 ETH)
-const BUYS = ((process.env.TG_TRADE_BUYS || "").split(",").map((x) => x.trim()).filter((x) => /^\d*\.?\d+$/.test(x) && +x >= 0.0005 && +x <= 1).slice(0, 3).length === 3
-  ? process.env.TG_TRADE_BUYS.split(",").map((x) => x.trim()) : ["0.01", "0.02", "0.05"]);
-const SELLS = [25, 50, 100];
+const envBuys = (process.env.TG_TRADE_BUYS || "").split(",").map((x) => x.trim()).filter((x) => /^\d*\.?\d+$/.test(x) && +x >= 0.0005 && +x <= 1).slice(0, 4);
+const BUYS = envBuys.length >= 3 ? envBuys : ["0.001", "0.005", "0.01", "0.05"];
+const SELLS = [25, 50, 75, 100];
+// slippage, picked per chat on the card (1, 3, 5 or 10%); sells used 5% and buys 3% before a pick
+const SLIPS = [1, 3, 5, 10];
+const slip = new Map();               // chat → %
+const slipFor = (chat, act) => slip.get(String(chat)) ?? (act === "sell" ? 5 : 3);
+const GAS_KEEP = 0.0003;              // left in the Agent Wallet by "Max" for gas (Troya refunds gas afterwards)
+let STORE = null;
 const PICK_TTL = 10 * 60_000, CONFIRM_TTL = 60_000;
 const pend = new Map();               // id → { chat, owner, token, act, amt, pct, sym, step, exp }
 const busy = new Set();               // chats with an execution in flight
@@ -89,29 +95,44 @@ async function walletText(owner) {
 }
 
 // the trade card: the Agent Wallet's own Gate on a 0.01 ETH buy, the curve, what you hold, and the buttons
+// a coin this wallet launched through Troya (its creator may buy it while the curve is empty)
+async function launchedBy(owner, token) {
+  if (!STORE) return null;
+  return (await STORE.readJson("launches.json", [])).find((x) => String(x.token).toLowerCase() === token.toLowerCase() && String(x.owner).toLowerCase() === owner.toLowerCase()) || null;
+}
 async function card(chat, owner, token) {
   const aw = await getAgentWallet(owner);
-  const q = await quoteSwap({ tokenIn: "ETH", tokenOut: token, amountIn: Number(BUYS[0]), slippagePct: 3 });
+  const q = await quoteSwap({ tokenIn: "ETH", tokenOut: token, amountIn: Number(BUYS[0]), slippagePct: slipFor(chat, "buy") });
   const [g, ps, bal] = await Promise.all([gateSwap(q), ponsState(token).catch(() => null), getBalances(aw.address, [token]).catch(() => null)]);
   const sym = cleanSymbol(q.tokenOut?.symbol) || "coin", name = cleanName(q.tokenOut?.name);
   const pons = ponsPublic(ps);
   const held = bal?.balances?.find((x) => x.address !== "native" && x.address.toLowerCase() === token.toLowerCase());
   const heldN = held ? Number(held.amount) : 0;
   const eth = bal?.balances?.find((x) => x.address === "native");
-  const fails = g.checks.filter((c) => c.status === "fail");
+  const fails0 = g.checks.filter((c) => c.status === "fail");
+  // the creator's own coin: an empty curve is expected right after launch, so pool depth alone does not lock the buy
+  const mine = await launchedBy(owner, token).catch(() => null);
+  const fails = mine ? fails0.filter((c) => !/^pool depth$/i.test(String(c.name || ""))) : fails0;
+  const canBuy = fails.length === 0 && (g.pass || mine);
   const lines = [`<b>$${esc(sym)}</b>${name && name.toUpperCase() !== sym.toUpperCase() ? ` · ${esc(name)}` : ""}`];
-  lines.push(`Troya Gate: <b>${g.pass ? "Passed" : "Blocked"}</b>${fails[0] ? ` · ${esc(fails[0].name)}` : ""}`);
+  lines.push(`Troya Gate: <b>${g.pass ? "Passed" : canBuy ? "Passed for you" : "Blocked"}</b>${fails[0] ? ` · ${esc(fails[0].name)}` : ""}`);
   for (const c of g.checks.slice(0, 8)) lines.push(`${c.status === "pass" ? "✓" : c.status === "fail" ? "✕" : "!"} ${esc(c.name)}: ${esc(String(c.detail).slice(0, 90))}`);
   if (pons && !pons.graduated) lines.push(`Curve: ${fnum(pons.raised, 3)} ${esc(pons.pair?.symbol || "ETH")} raised · ${pons.progressPct != null ? pons.progressPct.toFixed(2) : "–"}% to graduation`);
   lines.push(`<code>${token}</code>`);
   lines.push(`\nAgent Wallet: ${eth ? fnum(Number(eth.amount)) : "–"} ETH${heldN > 0 ? ` · holds ${fnum(heldN)} $${esc(sym)}` : ""}`);
-  if (g.pass && (!eth || Number(eth.amount) < Number(BUYS[0]) * 1.05)) lines.push("Top up first: /wallet shows your Agent Wallet address.");
-  lines.push(g.pass ? "Pick an amount, then confirm. The Gate runs again before it sends." : "Buying is locked while a check fails.");
+  if (mine) lines.push("<b>Your coin.</b> You launched it through Troya, so its empty curve does not lock your buy; every other Gate check still applies.");
+  if (canBuy && (!eth || Number(eth.amount) < Number(BUYS[0]) * 1.05)) lines.push("Top up first: /wallet shows your Agent Wallet address.");
+  lines.push(canBuy ? `Pick an amount, then confirm. Slippage ${slipFor(chat, "buy")}%. The Gate runs again before it sends.` : "Buying is locked while a check fails.");
   const rows = [];
-  const base = { chat, owner, token, sym };
-  if (g.pass) rows.push(BUYS.map((a) => ({ text: `Buy ${a} ETH`, callback_data: issue({ ...base, act: "buy", amt: a, step: "pick" }, PICK_TTL) })));
-  else rows.push([{ text: "Buy locked · why", callback_data: issue({ ...base, step: "why", why: fails.map((c) => `${c.name}: ${c.detail}`).join("\n").slice(0, 190) || "A check failed." }, PICK_TTL) }]);
-  if (heldN > 0) rows.push(SELLS.map((p) => ({ text: `Sell ${p}%`, callback_data: issue({ ...base, act: "sell", pct: p, raw: held.raw, dec: held.decimals, step: "pick" }, PICK_TTL) })));
+  const base = { chat, owner, token, sym, mine: !!mine };
+  if (canBuy) {
+    rows.push(BUYS.map((a) => ({ text: `Buy ${a}`, callback_data: issue({ ...base, act: "buy", amt: a, step: "pick" }, PICK_TTL) })));
+    if (eth && Number(eth.amount) > GAS_KEEP + 0.0005) rows.push([{ text: `Buy max (${fnum(Number(eth.amount) - GAS_KEEP)} ETH)`, callback_data: issue({ ...base, act: "buy", amt: "max", step: "pick" }, PICK_TTL) }]);
+  } else rows.push([{ text: "Buy locked · why", callback_data: issue({ ...base, step: "why", why: fails.map((c) => `${c.name}: ${c.detail}`).join("\n").slice(0, 190) || "A check failed." }, PICK_TTL) }]);
+  if (heldN > 0) rows.push(SELLS.map((p) => ({ text: p === 100 ? "Sell all" : `Sell ${p}%`, callback_data: issue({ ...base, act: "sell", pct: p, raw: held.raw, dec: held.decimals, step: "pick" }, PICK_TTL) })));
+  // slippage for this chat's next trades
+  const cur = slip.get(String(chat));
+  rows.push(SLIPS.map((s) => ({ text: `${cur === s ? "✓ " : ""}Slip ${s}%`, callback_data: issue({ ...base, step: "slip", slip: s }, PICK_TTL) })));
   rows.push([{ text: "Refresh", callback_data: issue({ ...base, step: "refresh" }, PICK_TTL) }, { text: "Full check in Troya", url: `${SITE}/agent#/swap?in=eth&out=${token}` }]);
   rows.push([{ text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${token}` }, { text: "Chart", url: `${SITE}/agent#/token/${token}` }]);
   return { text: lines.join("\n"), markup: { inline_keyboard: rows } };
@@ -121,6 +142,7 @@ async function card(chat, owner, token) {
 // returns true when the message was a trade message and has been answered
 export async function handleMessage(m, tg, store) {
   if (!ON || !m?.chat) return false;
+  STORE ||= store;
   const text = String(m.text || "").trim();
   const deep = /^\/start\s+t_(0x[0-9a-fA-F]{40})$/.exec(text);
   const cmd = /^\/(trade|wallet)(?:@\w+)?(?:\s+(\S+))?$/i.exec(text);
@@ -164,6 +186,11 @@ export async function handleCallback(cq, tg) {
   const edit = (text, markup) => tg("editMessageText", { chat_id: chat, message_id: mid, text, parse_mode: "HTML", reply_markup: markup, link_preview_options: { is_disabled: true } }).catch(() => {});
 
   if (p.step === "why") { await ans(p.why, true); return true; }
+  if (p.step === "slip") {
+    slip.set(String(p.chat), p.slip); pend.delete(id); await ans(`Slippage ${p.slip}% for your next trades here`);
+    try { const c = await card(p.chat, p.owner, p.token); await edit(c.text, c.markup); } catch {}
+    return true;
+  }
   if (p.step === "refresh" || p.step === "cancel") {
     pend.delete(id); await ans("Checking again…");
     try { const c = await card(p.chat, p.owner, p.token); await edit(c.text, c.markup); } catch (e) { await edit(`Could not check that coin: ${esc(String(e.message).slice(0, 200))}`); }
@@ -171,10 +198,10 @@ export async function handleCallback(cq, tg) {
   }
   if (p.step === "pick") {
     pend.delete(id);
-    const what = p.act === "buy" ? `Buy <b>${p.amt} ETH</b> of $${esc(p.sym)}` : `Sell <b>${p.pct}%</b> of your $${esc(p.sym)}`;
+    const what = p.act === "buy" ? `Buy <b>${p.amt === "max" ? "all your ETH (keeping a little for gas)" : `${p.amt} ETH`}</b> of $${esc(p.sym)}` : `Sell <b>${p.pct === 100 ? "all" : `${p.pct}%`}</b> of your $${esc(p.sym)}`;
     const aw = await getAgentWallet(p.owner);
     await ans();
-    await edit(`${what} with your Agent Wallet ${aw?.address ? short(aw.address) : ""}?\n\nThe Gate, your policy and the Agent Wallet caps are checked again before it sends. This button works for 60 seconds.`,
+    await edit(`${what} with your Agent Wallet ${aw?.address ? short(aw.address) : ""}? Slippage ${slipFor(p.chat, p.act)}%.\n\nThe Gate, your policy and the Agent Wallet caps are checked again before it sends. This button works for 60 seconds.`,
       { inline_keyboard: [[{ text: "Confirm", callback_data: issue({ ...p, step: "confirm" }, CONFIRM_TTL) }, { text: "Cancel", callback_data: issue({ ...p, step: "cancel" }, PICK_TTL) }]] });
     return true;
   }
@@ -182,17 +209,28 @@ export async function handleCallback(cq, tg) {
     if (busy.has(p.chat)) { await ans("Already sending one. Wait for it to finish."); return true; }
     pend.delete(id); busy.add(p.chat);
     await ans("Sending…");
-    await edit(`${p.act === "buy" ? `Buying ${p.amt} ETH of` : `Selling ${p.pct}% of`} $${esc(p.sym)}… the Gate is running again.`);
+    await edit(`${p.act === "buy" ? `Buying ${p.amt === "max" ? "max" : `${p.amt} ETH`} of` : `Selling ${p.pct === 100 ? "all" : `${p.pct}%`} of`} $${esc(p.sym)}… the Gate is running again.`);
     try {
       let params;
-      if (p.act === "buy") params = { tokenIn: "ETH", tokenOut: p.token, amountIn: Number(p.amt), slippagePct: 3 };
+      if (p.act === "buy") {
+        let amt = Number(p.amt);
+        if (p.amt === "max") {
+          // all the ETH the Agent Wallet holds right now, less a little for gas
+          const aw = await getAgentWallet(p.owner);
+          const b = await getBalances(aw.address, []);
+          const e = Number(b.balances.find((x) => x.address === "native")?.amount || 0);
+          amt = Math.floor((e - GAS_KEEP) * 1e6) / 1e6;
+          if (!(amt >= 0.0005)) throw new Error("Not enough ETH in your Agent Wallet for a buy after gas.");
+        }
+        params = { tokenIn: "ETH", tokenOut: p.token, amountIn: amt, slippagePct: slipFor(p.chat, "buy"), ...(p.mine ? { creatorBuy: true } : {}) };
+      }
       else {
         // sell a share of what the Agent Wallet holds right now (not when the card was drawn), truncated so it never rounds above it
         const aw = await getAgentWallet(p.owner);
         const b = await getBalances(aw.address, [p.token]);
         const h = b.balances.find((x) => x.address !== "native" && x.address.toLowerCase() === p.token.toLowerCase());
         if (!h || BigInt(h.raw) === 0n) throw new Error("Your Agent Wallet holds none of this coin right now.");
-        params = { tokenIn: p.token, tokenOut: "ETH", amountIn: Number(trunc(formatUnits((BigInt(h.raw) * BigInt(p.pct)) / 100n, h.decimals))), slippagePct: 5 };
+        params = { tokenIn: p.token, tokenOut: "ETH", amountIn: Number(trunc(formatUnits((BigInt(h.raw) * BigInt(p.pct)) / 100n, h.decimals))), slippagePct: slipFor(p.chat, "sell") };
       }
       if (!(params.amountIn > 0)) throw new Error("Nothing to sell.");
       const r = await executeForUser(p.owner, { kind: "swap", params, rationale: `Telegram: confirmed ${p.act} in private chat`, source: "telegram" });

@@ -267,9 +267,10 @@ async function aiAnswer(m, tg, me) {
   tg("sendChatAction", { chat_id: chatId, action: "typing" }).catch(() => {});
   const name = String(m.from?.first_name || m.from?.username || "someone").slice(0, 32);
   const text = String(m.text || m.caption || "").replace(new RegExp("@" + (me?.username || "\\u0000"), "ig"), "").trim().slice(0, 800);
-  const quoted = m.reply_to_message?.text ? `(replying to: "${String(m.reply_to_message.text).slice(0, 300)}")\n` : "";
+  const repliedText = m.reply_to_message?.text || m.reply_to_message?.caption || "";   // announcements are photos with a caption
+  const quoted = repliedText ? `(replying to: "${String(repliedText).slice(0, 300)}")\n` : "";
   const mem = chatMemory.get(chatId) || [];
-  const links = await linkNotes(`${text} ${m.reply_to_message?.text || ""}`).catch(() => "");
+  const links = await linkNotes(`${text} ${repliedText}`).catch(() => "");
   const reply = await llm.chatWithTools({ system: `${TG_SYSTEM}\nCurrent time: ${new Date().toISOString().slice(0, 16)} UTC.`, history: mem, user: `${name}: ${quoted}${text}${links ? "\n" + links : ""}`, tools: TG_TOOLS, exec: tgExec, maxSteps: 4 });
   if (!reply) return false;
   mem.push({ role: "user", content: `${name}: ${text}`.slice(0, 500) }, { role: "assistant", content: reply.slice(0, 600) });

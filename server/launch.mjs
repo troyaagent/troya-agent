@@ -73,6 +73,31 @@ export async function splitterFactory() { return (await store.readJson("fee-spli
 /* ---------- names ---------- */
 const MAJORS = ["ETH", "WETH", "BTC", "WBTC", "CBBTC", "USDG", "USDC", "USDT", "DAI", "SOL", "HYPE", "BNB", "XRP", "DOGE", "PEPE", "SHIB", "ARB", "OP", "LINK", "UNI", "TAO", "HOOD", "TROYA"];
 const RESERVED_WORDS = /\b(troya|official|admin|team|support|robinhood)\b/i;
+// big coins by name as well as by ticker ("Ethereum", "Tether USD", "Wrapped Bitcoin")
+const MAJOR_NAMES = new Set(["ETHEREUM", "ETHER", "BITCOIN", "TETHER", "TETHERUSD", "USDCOIN", "SOLANA", "HYPERLIQUID", "BINANCE", "BINANCECOIN",
+  "RIPPLE", "DOGECOIN", "SHIBAINU", "ARBITRUM", "OPTIMISM", "CHAINLINK", "UNISWAP", "BITTENSOR", "GLOBALDOLLAR", "WRAPPEDETHER", "WRAPPEDETH",
+  "WRAPPEDBITCOIN", "WRAPPEDBTC", "COINBASEWRAPPEDBTC", "DAI", "PEPE"]);
+// a company's name without "Inc.", "Corporation", "Class A" and the like: "NVIDIA Corporation" → NVIDIA, "Alphabet Inc. Class A" → ALPHABET
+const COMPANY_TAIL = /\b(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|holdings?|group|class [a-c]|sa|nv|ag|se|ordinary shares?|common stock|adrs?|ads|etf|trust|fund|the)\b/g;
+const bare = (s) => String(s || "").toLowerCase().replace(/&/g, " ").replace(/[^a-z0-9 ]+/g, " ").replace(COMPANY_TAIL, " ").replace(/[^a-z0-9]/g, "").toUpperCase();
+const flatName = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+const RESERVED_MSG = "Names with Troya, official, admin, team, support or Robinhood in them are reserved.";
+/** the name's own rules, on their own: Telegram asks for the name before the ticker and checks it right away */
+export function coinNameProblem(name, { team = false } = {}) {
+  const n = String(name || "").trim();
+  if (!n) return "The coin needs a name.";
+  if (n.length > 48) return "The name is limited to 48 characters.";
+  // "TroyaCat" and "Robin Hood" are reserved too, not only the words on their own
+  const N = flatName(n);
+  if (!team && (RESERVED_WORDS.test(n) || /TROYA|ROBINHOOD/.test(N))) return RESERVED_MSG;
+  const coinName = N.replace(/(?:MEME)?(?:TOKEN|COIN)$/, "") || N;
+  if (MAJORS.includes(N) || MAJORS.includes(coinName) || MAJOR_NAMES.has(N) || MAJOR_NAMES.has(coinName)) return "That name copies an existing coin. Pick another.";
+  // the name of a tokenized stock's company ("Tesla", "NVIDIA", "Apple") or its ticker spelled as the name ("NVDA")
+  const B = bare(n);
+  const stock = STOCKS.find((x) => { const c = bare(x.name); return (c.length >= 4 && (c === B || c === coinName)) || (String(x.symbol).length >= 4 && String(x.symbol).toUpperCase() === N); });
+  if (stock) return `That name copies the ${stock.name} stock token ($${String(stock.symbol).toUpperCase()}), so Troya will not launch it. Pick another name.`;
+  return null;
+}
 export function nameProblem(name, symbol, { team = false } = {}) {
   const n = String(name || "").trim(), s = String(symbol || "").trim().replace(/^\$/, "");
   if (!n || !s) return "The coin needs a name and a $TICKER.";
@@ -80,26 +105,31 @@ export function nameProblem(name, symbol, { team = false } = {}) {
   if (n.length > 48) return "The name is limited to 48 characters.";
   const S = s.toUpperCase();
   if (MAJORS.includes(S) || STOCKS.some((x) => String(x.symbol).toUpperCase() === S)) return `$${S} is taken by an existing coin or stock token, so Troya will not launch a copy. Pick another ticker.`;
-  if (!team && (RESERVED_WORDS.test(n) || RESERVED_WORDS.test(s))) return "Names with Troya, official, admin, team, support or Robinhood in them are reserved.";
-  if (MAJORS.some((m) => n.toUpperCase().replace(/[^A-Z0-9]/g, "") === m)) return "That name copies an existing coin. Pick another.";
-  return null;
+  if (!team && (RESERVED_WORDS.test(s) || /TROYA|ROBINHOOD/.test(S))) return RESERVED_MSG;
+  return coinNameProblem(n, { team });
 }
 
 /* ---------- limits and the record ---------- */
 const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
 async function launchesOf(owner) { return (await store.readJson("launches.json", [])).filter((x) => lc(x.owner) === lc(owner)); }
 async function launchesToday(owner) { const d = dayOf(Date.now()); return (await launchesOf(owner)).filter((x) => dayOf(x.at) === d); }
+// a failed $TROYA read must not turn a holder into a non-holder: the fee recipient chosen from it is fixed on chain for good
+export const HOLDER_READ_FAILED = "Couldn't read your $TROYA balance right now, so Troya can't tell which creator fee applies";
 async function holderInfo(owner) {
   try { const h = await import("./holders.mjs"); const v = await h.holderOf(owner); return { holder: v.balance >= HOLDER_MIN, balance: v.balance }; }
-  catch { return { holder: false, balance: 0 }; }
+  catch { throw new HttpError(503, `${HOLDER_READ_FAILED}. Try again in a minute. Nothing was spent.`); }
 }
+// launches sent from the Agent Wallet but not recorded yet (the receipt wait takes up to 90 s): counted against the day's
+// limits so an X post, a Telegram confirm and a second post at the same moment cannot all pass
+const inflight = new Map();   // lower(owner) → [{ source, at }]
+const inflightOf = (owner) => (inflight.get(lc(owner)) || []).filter((x) => Date.now() - x.at < 10 * 60_000);
 
 /**
  * Who receives the creator fee of a coin `creator` launches for `owner`.
  * Holders: the owner's own wallet, 100%. Everyone else: a TroyaFeeSplitter (0.1% of volume to Troya), once the factory is live;
  * until then the owner's own wallet, as before V6.
  */
-export async function plan({ owner, creatorTaxBps = 0, name, symbol, source = "web" }) {
+export async function plan({ owner, creatorTaxBps = 0, name, symbol, source = "web", reserve = false }) {
   if (!isAddress(String(owner || ""))) throw new HttpError(400, "Connect a wallet first.");
   owner = getAddress(owner);
   const tax = Math.round(Number(creatorTaxBps) || 0);
@@ -107,12 +137,19 @@ export async function plan({ owner, creatorTaxBps = 0, name, symbol, source = "w
   if (name != null || symbol != null) { const p = nameProblem(name, symbol, { team: admins().includes(lc(owner)) }); if (p) throw new HttpError(400, p); }
   const h = await holderInfo(owner);
   // holders of 1M $TROYA launch without a daily limit; everyone else gets 3 a day, at most 1 of them from X (owner, 18 Nov)
-  const today = await launchesToday(owner), used = today.length, max = h.holder ? null : LIMITS.perDay;
+  const today = [...(await launchesToday(owner)), ...inflightOf(owner)], used = today.length, max = h.holder ? null : LIMITS.perDay;
+  // no await between this count and the reservation below, so two launches at the same moment see each other
   if (!h.holder) {
     if (used >= LIMITS.perDay) throw new HttpError(429, `That is ${used} launches through Troya today, the most for one wallet without ${HOLDER_MIN.toLocaleString("en-US")} $TROYA (holders have no daily limit). Try again tomorrow (UTC).`);
     if (source === "x" && today.filter((x) => x.source === "x").length >= LIMITS.perDayX) throw new HttpError(429, `Without ${HOLDER_MIN.toLocaleString("en-US")} $TROYA it is ${LIMITS.perDayX} launch from X a day, and today's is used. Try again tomorrow (UTC).`);
   }
-  const base = { owner, holder: h.holder, balance: h.balance, holderMin: HOLDER_MIN, creatorTaxBps: tax, limit: { used, max }, source };
+  let release = () => {};
+  if (reserve) {
+    const k = lc(owner), slot = { source, at: Date.now() };
+    inflight.set(k, [...inflightOf(owner), slot]);
+    release = () => { const l = inflightOf(owner).filter((x) => x !== slot); if (l.length) inflight.set(k, l); else inflight.delete(k); };
+  }
+  const base = { owner, holder: h.holder, balance: h.balance, holderMin: HOLDER_MIN, creatorTaxBps: tax, limit: { used, max }, source, release };
   if (h.holder) return { ...base, recipient: owner, troyaBps: 0, troyaVolumePct: 0, split: false, note: `You hold ${HOLDER_MIN.toLocaleString("en-US")} $TROYA: the whole creator fee goes to your own wallet.` };
   const factory = await splitterFactory();
   if (!factory) return { ...base, recipient: owner, troyaBps: 0, troyaVolumePct: 0, split: false, note: "The creator fee goes to your own wallet." };
@@ -145,6 +182,7 @@ async function addRecord(r) {
   return !dup;
 }
 
+const RECORD_WINDOW_MS = 60 * 60_000;
 /** A web launch (signed in the browser with the creator's own wallet), checked on chain before it is recorded. */
 export async function recordWeb({ hash, owner, salt, troyaBps }) {
   if (!/^0x[0-9a-fA-F]{64}$/.test(String(hash || ""))) throw new HttpError(400, "Bad transaction hash.");
@@ -154,6 +192,13 @@ export async function recordWeb({ hash, owner, salt, troyaBps }) {
   if (!got || got.failed) throw new HttpError(400, "That transaction did not launch a coin on Pons.");
   const from = getAddress(tx.from);
   if (owner && lc(owner) !== lc(from)) throw new HttpError(403, "That launch was signed by another wallet.");
+  // only a launch made on troya.codes a moment ago: not an old coin, and not one launched elsewhere and brought in later
+  const blk = await rpc("robinhood", "eth_getBlockByNumber", ["0x" + got.block.toString(16), false]).catch(() => null);
+  if (blk?.timestamp && Date.now() - Number(BigInt(blk.timestamp)) * 1000 > RECORD_WINDOW_MS) throw new HttpError(400, "Only a coin launched on troya.codes in the last hour can be added to Troya Launches.");
+  if ((await store.readJson("launches.json", [])).some((x) => lc(x.token) === lc(got.token))) return { ok: true, launch: (await store.readJson("launches.json", [])).find((x) => lc(x.token) === lc(got.token)) };
+  const meta = await tokenMeta(got.token).catch(() => null);
+  const np = nameProblem(meta?.name, meta?.symbol, { team: admins().includes(lc(from)) });
+  if (np) throw new HttpError(400, `Not added to Troya Launches: ${np.charAt(0).toLowerCase() + np.slice(1)}`);
   let split = false, bps = 0;
   if (lc(got.recipient) !== lc(from)) {
     const factory = await splitterFactory();
@@ -163,7 +208,10 @@ export async function recordWeb({ hash, owner, salt, troyaBps }) {
     if (lc(p) !== lc(got.recipient)) throw new HttpError(400, "The creator fee of that coin goes neither to its creator nor to a Troya splitter.");
     split = true; bps = b;
   }
-  const meta = await tokenMeta(got.token).catch(() => null);
+  // the creator fee goes to the creator's own wallet only for holders of 1M $TROYA (or before the splitter went live)
+  const h = await holderInfo(from);
+  if (!split && !h.holder && (await splitterFactory())) throw new HttpError(400, "That coin's creator fee skips Troya's fee splitter, so it was not launched through troya.codes.");
+  if (!h.holder && (await launchesToday(from)).length >= LIMITS.perDay) throw new HttpError(429, `That is ${LIMITS.perDay} launches through Troya today, the most for one wallet without ${HOLDER_MIN.toLocaleString("en-US")} $TROYA. Try again tomorrow (UTC).`);
   const r = { token: got.token, curve: got.curve, name: meta?.name || null, symbol: meta?.symbol || null, owner: from, wallet: from, source: "web", recipient: got.recipient, split, troyaBps: bps, salt: split ? salt : null,
     creatorTaxBps: got.creatorTaxBps, tx: hash, at: Date.now() };
   await addRecord(r);
@@ -177,8 +225,20 @@ async function prefsOf(owner) { return (await store.readJson("launch-prefs.json"
  * Launches a coin from `owner`'s Agent Wallet. The Agent Wallet pays the Pons launch fee; the creator fee follows plan().
  * Returns { ok, launch } or { ok: false, why }.
  */
-export async function launchWithAgentWallet({ owner, name, symbol, logo, creatorTaxBps = 0, description = "", twitter = "", source, ref = null, buyEth = 0 }) {
-  const p = await plan({ owner, creatorTaxBps, name, symbol, source });
+export async function launchWithAgentWallet(args) {
+  const p = await plan({ owner: args.owner, creatorTaxBps: args.creatorTaxBps, name: args.name, symbol: args.symbol, source: args.source, reserve: true });
+  try { return await launchPlanned(p, args); } finally { p.release(); }
+}
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+// a launch whose receipt was not in yet: looked at again a few times; recorded if it lands after all
+function settleLater(hash, r, tries = 8) {
+  setTimeout(async () => {
+    const got = await launchedIn(hash).catch(() => null);
+    if (got && !got.failed) { await addRecord({ ...r, token: got.token, curve: got.curve, at: Date.now() }).catch(() => {}); return; }
+    if (!got && tries > 1) settleLater(hash, r, tries - 1);
+  }, 60_000).unref?.();
+}
+async function launchPlanned(p, { owner, name, symbol, logo, creatorTaxBps = 0, description = "", twitter = "", source, ref = null, buyEth = 0 }) {
   const aw = await import("./agentwallet.mjs");
   const w = await aw.getAgentWallet(owner);
   if (!w?.exists) return { ok: false, why: "no-agent-wallet" };
@@ -197,11 +257,17 @@ export async function launchWithAgentWallet({ owner, name, symbol, logo, creator
     params: { name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim(), logo, description, twitter, creatorTaxBps: p.creatorTaxBps, feeRecipient: p.recipient },
   });
   if (!out.executed) return { ok: false, why: out.blocked ? "blocked" : "not-sent", reasons: out.reasons || [], result: out.result || null, plan: p };
-  const got = out.result?.hash ? await launchedIn(out.result.hash).catch(() => null) : null;
-  const token = got?.token || out.result?.token || null;
-  const r = { token, curve: got?.curve || out.result?.curve || null, logo: logo || null, name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim(), owner: p.owner, wallet: w.address, source, recipient: p.recipient, split: p.split, troyaBps: p.troyaBps,
+  const hash = out.result?.hash || null;
+  if (!hash) return { ok: false, why: "not-sent", reasons: [out.result?.note || "the launch was not sent"], plan: p };
+  // the coin is only "live" once its receipt shows the Pons launch: a reverted transaction has no coin at the predicted address
+  let got = await launchedIn(hash).catch(() => null);
+  for (let i = 0; !got && i < 6; i++) { await sleep(5000); got = await launchedIn(hash).catch(() => null); }
+  if (got?.failed) return { ok: false, why: "reverted", hash, plan: p };
+  const token = got?.token || null;
+  const r = { token, curve: got?.curve || null, logo: logo || null, name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim(), owner: p.owner, wallet: w.address, source, recipient: p.recipient, split: p.split, troyaBps: p.troyaBps,
     salt: p.salt || null, creatorTaxBps: p.creatorTaxBps, holder: p.holder, tx: out.result?.hash || null, ref, at: Date.now() };
-  if (token) await addRecord(r);
+  if (!token) { settleLater(hash, r); return { ok: false, why: "pending", hash, launch: r, plan: p }; }
+  await addRecord(r);
   if (token && buyEth > 0) {
     // recorded first: the Agent Wallet may set aside the empty-curve check only for a coin it launched through Troya
     r.initialBuy = await initialBuy({ owner, token, buyEth, source, launchedAt: Date.now() });
@@ -232,17 +298,26 @@ export function parseLaunch(text) {
   const m = t.match(/^(?:(?:hey|hi|hello|gm|yo|ok|okay|ser|sir)[\s,!.:-]+)?(?:please\s+|pls\s+)?launch\b\s*(.*)$/i);
   if (!m) return null;
   let rest = m[1];
+  // the tax and the buy in the ways people write them: "tax 2%", "2% tax", "creator tax of 2%", "buy 0.01",
+  // "0.01 ETH buy", "initial buy of 0.01 ETH", "dev buy: 0.02eth" (the words left behind were becoming part of the name)
   let taxBps = 0;
-  const tm = rest.match(/\b(?:tax|creator\s*tax)\s*:?\s*(\d+(?:\.\d+)?)\s*%?/i);
+  // "2% tax" first (the % says it is the tax); "tax 0.01 ETH buy" is a buy that follows the word tax, not a 0.01% tax
+  const tm = rest.match(/(?:^|\s)(\d+(?:\.\d+)?)\s*(?:%|percent\b|pct\b)\s*(?:creator\s*)?tax\b/i)
+    || rest.match(/\b(?:creator\s*)?tax(?:\s*(?:of|at|=|:))?\s*(\d+(?:\.\d+)?)(?![\d.]|\s*eth\b)\s*(?:%|percent\b|pct\b)?/i);
   if (tm) { taxBps = Math.round(Number(tm[1]) * 100); rest = rest.replace(tm[0], " "); }
   let buyEth = 0;
-  const bm = rest.match(/\b(?:initial\s*buy|dev\s*buy|buy)\s*:?\s*(\d*\.?\d+)\s*(?:eth)?(?=\s|$|[,.;!])/i);
+  const bm = rest.match(/\b(?:(?:initial|dev|first)\s*)?buy(?:\s*(?:of|for|=|:))?\s*(\d*\.?\d+)\s*(?:eth\b)?/i)
+    || rest.match(/(?:^|\s)(\d*\.?\d+)\s*eth\s*(?:(?:initial|dev|first)\s*)?buy\b/i);
   if (bm) { buyEth = Number(bm[1]); rest = rest.replace(bm[0], " "); }
   const sm = rest.match(/\$([A-Za-z0-9]{1,16})\b/);
   const symbol = sm ? sm[1] : "";   // kept as written: $XtestTROYA stays XtestTROYA
   if (sm) rest = rest.replace(sm[0], " ");
-  const name = rest.replace(/[^\p{L}\p{N} .'&-]/gu, " ").replace(/\s+/g, " ").trim().replace(/^(?:a|the|coin|token|called|named)\s+/i, "").trim()
+  let name = rest.replace(/[^\p{L}\p{N} .'&-]/gu, " ").replace(/\s+/g, " ").trim()
     .replace(/(^|\s)[.'&-]+(?=\s|$)/g, " ").replace(/\s+/g, " ").trim();   // a stray full stop or dash is not part of the name
+  // "a coin called Moon Cat" → Moon Cat; "The Horse" keeps its "The" (only "the coin …" loses it); "Coin Master" stays whole
+  name = name.replace(/^(?:(?:a|an|my|new|the)\s+(?:new\s+)?(?:meme\s*)?(?:coin|token|memecoin)\b\s*(?:(?:called|named)\s+)?|(?:(?:meme\s*)?(?:coin|token|memecoin)\s+)?(?:called|named)\s+)/i, "")
+    .replace(/^(?:a|an)\s+(?=\S)/i, "")
+    .replace(/(?:\s+(?:with|and|plus|\+)(?:\s+(?:a|an))?)+\s*$/i, "").trim();   // "… with a" left over from "with a 0.01 ETH buy"
   return { name, symbol, taxBps, buyEth };
 }
 
@@ -254,7 +329,10 @@ export function parseLaunch(text) {
 const plainOf = (text) => String(text || "").replace(/(^|\s)@\w+/g, " ").replace(/https?:\/\/\S+/g, " ").replace(/\s+/g, " ").trim();
 const LOOKS = /\$[A-Za-z][A-Za-z0-9]{0,15}\b|\b(?:launch|deploy|create|make|mint|spin\s*up)\b[^.?!]{0,60}\b(?:coin|token|memecoin|meme\s*coin|ticker)\b|\blaunch\b/i;
 export const looksLikeLaunch = (text) => LOOKS.test(plainOf(text));
-const MESSY_NAME = /\b(?:called|named|ticker|symbol|with|and|token|coin|memecoin)\b/i;
+// words or numbers in a rule-read name that mean the post was not in the fixed format: the model reads it instead
+const MESSY_NAME = /\b(?:called|named|ticker|symbol|with|and|token|coin|memecoin|tax|buy|eth|initial|percent)\b|%|\d*\.\d+/i;
+const STRONG_ASK = /\b(?:launch|deploy|create|make|mint|spin\s*up)\b[^.?!]{0,60}\b(?:coin|token|memecoin|meme\s*coin)\b/i;
+const QUESTION = /\?\s*$|^(?:how|when|what|why|can|could|does|do|is|are|will|where|who|which|should)\b/i;
 const numbersIn = (s) => (s.match(/\d*\.?\d+/g) || []).map(Number);
 const written = (s, n) => numbersIn(s).some((x) => Math.abs(x - n) < 1e-9);
 
@@ -282,7 +360,15 @@ export async function readLaunch(text) {
   if (rule && rule.symbol && rule.name && !MESSY_NAME.test(rule.name)) return { ...rule, via: "rule" };
   if (!rule && !looksLikeLaunch(text)) return null;
   const ai = await readIntent(text).catch(() => null);
-  if (!ai || ai.intent !== "launch") return rule ? (rule.symbol && rule.name ? { ...rule, via: "rule" } : { ...rule, via: "rule" }) : null;
+  if (!ai) {
+    // the model is off or over its cap: nothing written loosely is launched as read; a question is left to the assistant,
+    // a request gets the fixed format back
+    const plain = plainOf(text);
+    if (QUESTION.test(plain)) return null;
+    return rule || STRONG_ASK.test(plain) ? { unclear: true } : null;
+  }
+  // the model read it as a question or as talk about a coin: the assistant answers, nothing is launched
+  if (ai.intent !== "launch") return null;
   const plain = plainOf(text).toLowerCase();
   const symbol = String(ai.symbol || "").replace(/^\$/, "").trim();
   const name = String(ai.name || "").replace(/\s+/g, " ").trim();
@@ -331,7 +417,7 @@ const DESK = () => `${SITE().replace(/^https?:\/\//, "")}/agent#/launch/x`;
  * { launch }. Nothing is launched unless Launch on X is live, the author linked a wallet, switched Launch from X on,
  * is within the day's launches (one from X without 1M $TROYA) and the Agent Wallet can pay the Pons fee.
  */
-export async function fromX({ tweetId, authorId, text, mediaUrl }) {
+export async function fromX({ tweetId, authorId, text, mediaUrl, mediaKinds = [] }) {
   const ask = await readLaunch(text);
   if (!ask) return null;
   const done = (await store.readJson("launches.json", [])).find((x) => x.ref === `x:${tweetId}`);
@@ -344,9 +430,10 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   if (!owner) return { reply: `Not launched: this X account isn't linked to a Troya wallet. To fix: link it and switch Launch from X on, then post again: ${DESK()}` };
   if (!(await prefsOf(owner)).x) return { reply: `Not launched: Launch from X is switched off for your wallet. To fix: switch it on, then post again: ${DESK()}` };
   // everyone may launch from X (owner, 18 Nov); without 1M $TROYA once a day, with Troya's 0.1% through a fee splitter
-  const h = await holderInfo(owner);
+  let h;
+  try { h = await holderInfo(owner); } catch { return { reply: "Not launched: Troya couldn't read your $TROYA balance just now, so it can't tell which creator fee applies. To fix: post again in a minute. Nothing was spent." }; }
   if (!h.holder) {
-    const xToday = (await launchesToday(owner)).filter((x) => x.source === "x").length;
+    const xToday = [...(await launchesToday(owner)), ...inflightOf(owner)].filter((x) => x.source === "x").length;
     if (xToday >= LIMITS.perDayX) return { reply: `Not launched: without 1M $TROYA it's one launch from X a day, and today's is used. To fix: post again tomorrow (UTC), launch on troya.codes, or hold 1M for no limit: ${SITE().replace(/^https?:\/\//, "")}/agent#/create` };
   }
   if (ask.unclear || !ask.symbol || !ask.name) return { reply: "Not launched: Troya couldn't read the coin's name and ticker for sure. To fix: post it like this, image attached: @Troyaagent launch Wooden Horse $HORSE (add \"tax 2%\" for a creator tax, \"buy 0.01\" for an initial buy)" };
@@ -355,7 +442,9 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   if (np) { const why = np.replace(/\s*Pick another[^.]*\.?$/i, "").replace(/\.$/, ""); return { reply: `Not launched: ${/^[$A-Z]{2}/.test(why) ? why : why.charAt(0).toLowerCase() + why.slice(1)}. To fix: post again with another name or ticker. Nothing was spent.` }; }
   if (ask.taxBps > MAX_TAX_BPS) return { reply: `Not launched: the creator tax can be 4% at most (you asked for ${ask.taxBps / 100}%). To fix: post again with "tax 4%" or less. Nothing was spent.` };
   if (ask.buyEth > MAX_INITIAL_BUY_ETH) return { reply: `Not launched: the initial buy can be up to ${MAX_INITIAL_BUY_ETH} ETH (you asked for ${ask.buyEth}). To fix: post again with a smaller "buy". Nothing was spent.` };
-  // the image is up to the poster (owner's rule, 17 Nov): no image attached → the coin launches without one
+  // the image is up to the poster (owner's rule, 17 Nov): no image attached → the coin launches without one. A GIF or a
+  // video is not an image Pons can show, and launching anyway would leave the coin without the picture that was posted
+  if (!mediaUrl && mediaKinds.some((k) => k === "animated_gif" || k === "video")) return { reply: "Not launched: the coin's image must be a still picture, and a GIF or video can't be used. To fix: post again with a PNG or JPEG attached, or with no media to launch without an image. Nothing was spent." };
   let logo = "";
   if (mediaUrl) { try { logo = await fetchLogo(mediaUrl); } catch { return { reply: "Not launched: Troya couldn't read the attached image. To fix: attach a PNG or JPEG (not a GIF) and post again. Nothing was spent." }; } }
   let out;
@@ -365,17 +454,34 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   if (!out.ok) {
     if (out.why === "no-agent-wallet") return { reply: `Not launched: your wallet has no Agent Wallet yet. To fix: create one and add a little ETH on Robinhood Chain, then post again: ${DESK()}` };
     if (out.why === "funds") return { reply: `Not launched: ${out.reasons?.[0] || "not enough ETH in the Agent Wallet"}. To fix: your Agent Wallet is separate from your own wallet; press Add ETH at ${SITE().replace(/^https?:\/\//, "")}/agent#/agent/wallet, then post again. Nothing was spent.` };
+    if (out.why === "reverted") return { reply: `Not launched: the launch transaction failed on Robinhood Chain, so no coin was created (only a little gas was used). To fix: wait a minute and post again; help: ${DESK()}` };
+    if (out.why === "pending") return { reply: `$${ask.symbol} is still confirming on Robinhood Chain. Once it lands it shows on Troya Launches: ${SITE().replace(/^https?:\/\//, "")}/agent#/troya-launches` };
     if (out.why === "no-token") return { reply: `Not launched: the launch transaction did not go through on Robinhood Chain. To fix: wait a minute and post again; check it here: ${DESK()}` };
     return { reply: guide((out.reasons || [])[0] || "the launch could not be sent") };
   }
   const ca = out.launch.token, ib = out.launch.initialBuy;
   const mc = await marketCapUsd(ca).catch(() => null);
   const mcNote = mc ? `, MC ~$${mc >= 1e6 ? (mc / 1e6).toFixed(2) + "M" : mc >= 1e3 ? (mc / 1e3).toFixed(1) + "K" : mc.toFixed(0)}` : "";
-  const buyNote = !ib ? "" : ib.executed ? ` Initial buy of ${ib.eth} ETH done.` : ` Initial buy not sent: ${String(ib.reasons?.[0] || "it was refused").slice(0, 70)}.`;
+  const buyNote = !ib ? "" : ib.executed ? ` Initial buy of ${ib.eth} ETH done.` : ` Initial buy not sent: ${String(ib.reasons?.[0] || "it was refused").replace(/\.$/, "").slice(0, 70)}.`;
   const imgNote = logo ? "" : " No image was attached, so the coin has none.";
   const feeNote = out.launch.split ? " Creator fee: you keep 0.6% of volume, Troya 0.1%." : " Creator fee: all yours.";
   // one link, to the coin's trading page on Troya (chart, Gate, Buy); no other venue in the reply
-  return { launch: out.launch, reply: `$${ask.symbol} is live${mcNote}.${buyNote}${imgNote}${feeNote} CA ${ca} · Trade it on Troya: ${SITE().replace(/^https?:\/\//, "")}/agent#/token/${ca.toLowerCase()}` };
+  const tail = ` CA ${ca} · Trade it on Troya: ${SITE()}/agent#/token/${ca.toLowerCase()}`;
+  const short = `$${ask.symbol} is live.${tail}`;
+  // X's limit is 280 (a link counts as 23): the notes are dropped one by one, image first, then fee, then market cap,
+  // so the CA and the link always go out
+  const notes = [mcNote, buyNote, imgNote, feeNote];
+  const make = () => `$${ask.symbol} is live${notes[0]}.${notes[1]}${notes[2]}${notes[3]}${tail}`;
+  for (const i of [2, 3, 0]) { if (xLength(make()) <= 270) break; notes[i] = ""; }
+  if (xLength(make()) > 270) notes[1] = ib?.executed ? ` Initial buy of ${ib.eth} ETH done.` : " Initial buy not sent.";
+  return { launch: out.launch, reply: xLength(make()) <= 270 ? make() : short, short };
+}
+/** a post's length as X counts it: every link 23, characters outside Latin and general punctuation 2 */
+export function xLength(text) {
+  let n = 0;
+  const s = String(text).replace(/\bhttps?:\/\/\S+|\b[a-z0-9-]+\.(?:codes|com|xyz|fun|me|org|io)\/\S*/gi, () => { n += 23; return ""; });
+  for (const ch of s) { const c = ch.codePointAt(0); n += c <= 4351 || (c >= 8192 && c <= 8205) || (c >= 8208 && c <= 8223) || (c >= 8242 && c <= 8247) ? 1 : 2; }
+  return n;
 }
 /* ---------- F28 · Creator desk ---------- */
 const eth = (w) => Number(w) / 1e18;
@@ -430,8 +536,12 @@ export async function creatorFees(owner) {
 
 /** a failed launch, said plainly with where to fix it */
 export function guide(why) {
-  // long addresses shortened so the fix always fits in the reply
-  const w = String(why).replace(/\.$/, "").replace(/0x[0-9a-fA-F]{40}/g, (a) => `${a.slice(0, 6)}…${a.slice(-4)}`).slice(0, 140);
+  // long addresses shortened so the fix always fits in the reply; a long reason is cut at a word, never mid-word, and the
+  // reason reads on after "Not launched:" in lower case
+  let w = String(why).replace(/\.\s*Nothing was spent\.?$/i, "").replace(/\.$/, "").replace(/0x[0-9a-fA-F]{40}/g, (a) => `${a.slice(0, 6)}…${a.slice(-4)}`);
+  if (w.length > 140) w = w.slice(0, 140).replace(/[\s,;:(]+\S*$/, "") + "…";
+  if (/^[A-Z][a-z]/.test(w) && !/^(?:Pons|Troya|Robinhood|Telegram|Uniswap|Gate)\b/.test(w)) w = w.charAt(0).toLowerCase() + w.slice(1);
+  if (/couldn't read your \$TROYA balance/i.test(w)) return "Not launched: Troya couldn't read your $TROYA balance just now, so it can't tell which creator fee applies. To fix: post again in a minute. Nothing was spent.";
   // not enough ETH: say how much, where to send it and how to get ETH onto Robinhood Chain (owner, 18 Nov: guide everyone)
   if (/needs at least|not enough|insufficient|balance|top up|for the pons fee/i.test(w))
     return `Not launched: ${w.replace(/^The Agent Wallet/i, "your Agent Wallet").replace(/ on Robinhood Chain for the Pons fee and gas/i, " for the Pons fee")} (it is separate from your own wallet). To fix: press Add ETH at ${SITE().replace(/^https?:\/\//, "")}/agent#/agent/wallet, about 0.002 ETH, then post again. Nothing was spent.`.slice(0, 275);
@@ -525,14 +635,22 @@ let boardMemo = null;
 async function bornRecords() {
   const l = await store.readJson("launches.json", []);
   const seen = new Set(), out = [];
-  // the team's own test launches (a ticker with "test", from an admin wallet) stay off the public board and badges;
-  // their creator still sees them in the Creator desk
-  const teamTest = (x) => x !== ORIGIN && /test/i.test(String(x.symbol || "")) && admins().includes(lc(x.owner));
-  for (const x of [ORIGIN, ...l.slice().reverse()]) { const k = lc(x.token); if (!x.token || seen.has(k) || teamTest(x)) continue; seen.add(k); out.push(x); }
+  // the team's own test launches ($XtestTROYA) show on the board too: the owner wants every coin born through Troya visible (18 Nov)
+  for (const x of [ORIGIN, ...l.slice().reverse()]) { const k = lc(x.token); if (!x.token || seen.has(k)) continue; seen.add(k); out.push(x); }
   return out;
 }
 /** addresses of every coin born through Troya ($TROYA first): the Market board always carries them */
 export async function bornTokens() { return (await bornRecords()).map((x) => lc(x.token)); }
+const webLink = (u) => { const s = String(u || "").trim(); if (!s) return null; try { const x = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`); return /^https?:$/.test(x.protocol) && x.hostname.includes(".") ? x.href : null; } catch { return null; } };
+function socialLinks(t) {
+  const tw = String(t?.twitter || "").trim(), tg = String(t?.telegram || "").trim();
+  const o = {
+    x: /^@?[A-Za-z0-9_]{1,15}$/.test(tw) ? `https://x.com/${tw.replace(/^@/, "")}` : webLink(tw),
+    telegram: /^@?[A-Za-z0-9_]{4,32}$/.test(tg) ? `https://t.me/${tg.replace(/^@/, "")}` : webLink(tg),
+    website: webLink(t?.website),
+  };
+  return o.x || o.telegram || o.website ? o : null;
+}
 async function boardItem(rec, handles) {
   const m = await import("./market.mjs");
   const devs = [...new Set([rec.wallet, rec.owner].filter((a) => isAddress(String(a || ""))).map(lc))];
@@ -548,6 +666,8 @@ async function boardItem(rec, handles) {
     txns24h: t.txns24h ?? null, buys24h: t.buys24h ?? null, sells24h: t.sells24h ?? null, change1h: t.change1h ?? null, change24h: t.change24h ?? null,
     progressPct: graduated ? 100 : p?.progressPct ?? null, graduated, raisedEth: p?.raised ?? null, ponsUrl: p?.ponsUrl || null,
     dexPaid: ds.paid, cto: ds.cto || !!rec.cto, boosts: ds.boosts || 0, dev,
+    // the coin's own links (Pons socials(), then DexScreener): shown as X / Telegram / Web icons on its card
+    socials: socialLinks(t),
     // the creator holds 1M $TROYA right now (main wallet + Agent Wallet)
     devHolder: !!hold?.holder, devTroya: hold ? Math.floor(hold.balance) : null,
   };

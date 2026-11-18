@@ -3,7 +3,7 @@
 //   Almost bonded  a curve at least half full
 //   Migrated       graduated to its own Uniswap v4 pool ($TROYA leads it)
 // Numbers come from /api/launch/board (Pons on chain, DexScreener, GeckoTerminal, Blockscout), refreshed every 15 s.
-import { h, clear, useCss, pageHead, short, ago, tokenIcon, setBorn, compact, usd, every, icon, tipOn } from "/agent/js/ui.js";
+import { h, clear, useCss, pageHead, short, ago, tokenIcon, setBorn, compact, usd, every, icon, tipOn, copyText } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
 
 const LANES = [
@@ -30,8 +30,30 @@ const VENUES = [
   ["pump.fun", "pumpfun.png", (c) => `https://pump.fun/coin/${c.token.toLowerCase()}`],
 ];
 
+// a coin's own links and a copy button for its contract address, beside its name
+const COPY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="11" height="11" rx="2.2"/><path d="M15.5 8.5V6.7a2.2 2.2 0 0 0-2.2-2.2H6.7a2.2 2.2 0 0 0-2.2 2.2v6.6a2.2 2.2 0 0 0 2.2 2.2h1.8"/></svg>';
+const CHECK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const safeLink = (u) => { try { const x = new URL(String(u || "")); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
+const EXTRA_CSS = `
+.hp-copy { display: inline-flex; align-items: center; justify-content: center; align-self: center; flex: none; width: 18px; height: 18px; padding: 0; margin-left: -4px; border: 0; border-radius: 5px; background: none; color: var(--muted, #8a979c); cursor: pointer; transition: color .15s, background .15s; }
+.hp-copy svg { width: 13px; height: 13px; display: block; }
+.hp-copy:hover, .hp-copy:focus-visible { color: #fff; background: rgba(142, 223, 245, .12); outline: none; }
+.hp-copy.done { color: #6fd39a; }
+.hp-soc { display: inline-flex; align-items: center; gap: 5px; }
+.hp-soc a { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 999px; border: 1px solid var(--line, rgba(255, 255, 255, .12)); background: rgba(255, 255, 255, .03); color: var(--fg-2, #c9d6db); transition: color .15s, border-color .15s, background .15s; }
+.hp-soc a:hover, .hp-soc a:focus-visible { color: #fff; border-color: rgba(142, 223, 245, .6); background: rgba(142, 223, 245, .12); outline: none; }
+.hp-soc svg { width: 11px; height: 11px; display: block; }
+.hp-soc a:not(.web) svg { fill: currentColor; }
+.hp-soc a.web svg { width: 12px; height: 12px; }
+`;
+function extraCss() {
+  if (document.getElementById("hp-extra-css")) return;
+  const s = document.createElement("style"); s.id = "hp-extra-css"; s.textContent = EXTRA_CSS; document.head.append(s);
+}
+
 export async function mount(view, ctx) {
   useCss("perps");
+  extraCss();
   let alive = true;
   const asked = ctx?.query?.lane && LANES.some((l) => l.key === ctx.query.lane);
   const st = { d: null, err: null, lane: asked ? ctx.query.lane : "new", menu: false, chosen: !!asked };
@@ -78,11 +100,24 @@ export async function mount(view, ctx) {
     }
     const go = () => { location.hash = `#/token/${c.token.toLowerCase()}`; };
     const stop = (e) => e.stopPropagation();
+    // the coin's own X, Telegram and website (an X link to a single post is the launch post)
+    const so = c.socials || {}, xUrl = safeLink(so.x), tgUrl = safeLink(so.telegram), webUrl = safeLink(so.website);
+    const xTitle = xUrl && /\/status\/\d+/.test(xUrl) ? "Launch post on X" : "X";
+    const socLinks = [
+      xUrl ? h("a", { href: xUrl, target: "_blank", rel: "noopener nofollow", title: xTitle, "aria-label": `${c.symbol} on X`, onclick: stop }, svg(X_ICON, "")) : null,
+      tgUrl ? h("a", { href: tgUrl, target: "_blank", rel: "noopener nofollow", title: "Telegram", "aria-label": `${c.symbol} on Telegram`, onclick: stop }, svg(TG_ICON, "")) : null,
+      webUrl ? h("a", { class: "web", href: webUrl, target: "_blank", rel: "noopener nofollow", title: "Website", "aria-label": `${c.symbol} website`, onclick: stop }, svg(WEB_ICON, "")) : null,
+    ].filter(Boolean);
+    const socials = socLinks.length ? h("span", { class: "hp-soc" }, socLinks) : null;
+    const copy = h("button", { class: "hp-copy", type: "button", title: `Copy contract address ${c.token}`, "aria-label": `Copy ${c.symbol} contract address`,
+      onclick: (e) => { e.stopPropagation(); copyText(c.token, `${c.symbol || "Coin"} contract address copied`); copy.classList.add("done"); copy.innerHTML = CHECK_ICON; setTimeout(() => { copy.classList.remove("done"); copy.innerHTML = COPY_ICON; }, 1600); },
+      onkeydown: stop });
+    copy.innerHTML = COPY_ICON;
     return h("article", { class: `hp-card${fresh ? " fresh" : ""}`, tabindex: "0", role: "link", "aria-label": `${c.symbol} ${c.name}`, onclick: go, onkeydown: (e) => { if (e.key === "Enter") go(); } },
       h("div", { class: "hp-ava" }, tokenIcon({ address: c.token, symbol: c.symbol, image: c.image }, "xl")),
       h("div", { class: "hp-body" },
-        h("div", { class: "hp-top" }, h("b", { class: "hp-sym" }, c.symbol || short(c.token)), h("span", { class: "hp-name" }, c.name || "")),
-        tags.length ? h("div", { class: "hp-tags" }, tags) : null,
+        h("div", { class: "hp-top" }, h("b", { class: "hp-sym" }, c.symbol || short(c.token)), h("span", { class: "hp-name" }, c.name || ""), copy),
+        tags.length || socials ? h("div", { class: "hp-tags" }, tags, socials) : null,
         h("div", { class: "hp-meta" },
           src ? h("span", { class: "hp-src", title: `Launched from ${src[0]}` }, svg(src[1], "hp-src-ic")) : null,
           c.at ? h("span", {}, ago(c.at)) : null,

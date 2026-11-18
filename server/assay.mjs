@@ -353,3 +353,5 @@ export async function register(r, ctx) {
     return assay(params.token, { deep: query.deep !== "0" });
   }, { weight: 2 });
 }
+// the Project check reads where a creator wallet got its first ETH (devtrack.mjs)
+export { fundingOf };

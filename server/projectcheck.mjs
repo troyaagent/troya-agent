@@ -242,41 +242,41 @@ Keep each "why" under 15 words. Then a one-sentence summary of what the project 
 
 /* ---------- the score ---------- */
 const VERDICTS = [[75, "REAL"], [60, "LIKELY REAL"], [40, "PARTLY REAL"], [25, "UNCLEAR"], [0, "LIKELY LARP"]];
-export function scoreOf({ site, live, x, gh, tg, claims, own, input }) {
+export function scoreOf({ site, live, x, gh, tg, claims, own, input, dev }) {
   const sections = [];
   const sec = (key, title, max) => { const s = { key, title, max, points: 0, items: [] }; sections.push(s); return s; };
   const add = (s, ok, pts, text) => { if (ok) s.points += pts; s.items.push({ ok: !!ok, text }); };
   const names = [input.name, input.symbol].map((v) => lc(v).trim()).filter((v) => v.length >= 3);
   const mentions = (t) => names.some((n) => lc(t).includes(n));
 
-  const w = sec("website", "Website", 20);
-  add(w, site.ok && site.https, 5, site.ok ? (site.https ? `${site.host} answers over HTTPS` : `${site.host} has no HTTPS`) : `The website did not answer (${site.why})`);
+  const w = sec("website", "Website", 15);
+  add(w, site.ok && site.https, 4, site.ok ? (site.https ? `${site.host} answers over HTTPS` : `${site.host} has no HTTPS`) : `The website did not answer (${site.why})`);
   if (site.ok) {
-    add(w, site.text.length >= 600, 4, site.text.length >= 600 ? "Real content on the page" : "Very little text on the page");
+    add(w, site.text.length >= 600, 3, site.text.length >= 600 ? "Real content on the page" : "Very little text on the page");
     add(w, mentions(`${site.title} ${site.text}`), 3, mentions(`${site.title} ${site.text}`) ? "The site names the project" : "The site never names the project or its ticker");
-    add(w, !site.template, 4, site.template ? "Looks like a template, placeholder or parked page" : "Not a template or parked page");
-    add(w, site.appLinks.length > 0 || site.internalPages >= 3, 4, site.appLinks.length ? `Pages beyond a landing: ${site.appLinks.slice(0, 3).join(", ")}` : site.internalPages >= 3 ? `${site.internalPages} internal pages` : "A single landing page");
+    add(w, !site.template, 3, site.template ? "Looks like a template, placeholder or parked page" : "Not a template or parked page");
+    add(w, site.appLinks.length > 0 || site.internalPages >= 3, 2, site.appLinks.length ? `Pages beyond a landing: ${site.appLinks.slice(0, 3).join(", ")}` : site.internalPages >= 3 ? `${site.internalPages} internal pages` : "A single landing page");
   }
-  const c = sec("code", "Code the site runs", 25);
+  const c = sec("code", "Code the site runs", 20);
   if (site.ok) {
-    add(c, site.codeBytes >= 150_000 || site.scripts >= 3, 4, site.codeBytes ? `${Math.round(site.codeBytes / 1024)} KB of its own code` : "No code of its own loaded");
-    add(c, site.wallet, 5, site.wallet ? "Visitors can connect their wallet: a Connect button in the code (wagmi, viem, ethers or WalletConnect)" : "No Connect wallet button for visitors in the code");
-    add(c, site.endpoints.length >= 1, site.endpoints.length >= 2 ? 6 : 3, site.endpoints.length ? `Talks to ${site.endpoints.length} backend or API endpoint${site.endpoints.length > 1 ? "s" : ""}` : "No backend or API calls found");
-    add(c, live.length > 0, 4, live.length ? `${live.length} contract address${live.length > 1 ? "es" : ""} in the code exist on Robinhood Chain` : site.contracts.length ? "Contract addresses in the code have no code on Robinhood Chain" : "No contract addresses in the code");
-    const clean6 = Math.max(0, 6 - 3 * site.fake.length);
+    add(c, site.codeBytes >= 150_000 || site.scripts >= 3, 3, site.codeBytes ? `${Math.round(site.codeBytes / 1024)} KB of its own code` : "No code of its own loaded");
+    add(c, site.wallet, 4, site.wallet ? "Visitors can connect their wallet: a Connect button in the code (wagmi, viem, ethers or WalletConnect)" : "No Connect wallet button for visitors in the code");
+    add(c, site.endpoints.length >= 1, site.endpoints.length >= 2 ? 5 : 3, site.endpoints.length ? `Talks to ${site.endpoints.length} backend or API endpoint${site.endpoints.length > 1 ? "s" : ""}` : "No backend or API calls found");
+    add(c, live.length > 0, 3, live.length ? `${live.length} contract address${live.length > 1 ? "es" : ""} in the code exist on Robinhood Chain` : site.contracts.length ? "Contract addresses in the code have no code on Robinhood Chain" : "No contract addresses in the code");
+    const clean6 = Math.max(0, 5 - 3 * site.fake.length);
     c.points += clean6; c.items.push({ ok: !site.fake.length, text: site.fake.length ? `Warning: ${site.fake.join("; ")}` : "No signs of made-up numbers or mock data" });
     if (site.builder) c.items.push({ ok: null, text: `Built with ${site.builder}` });
   } else c.items.push({ ok: false, text: "No code could be read" });
 
-  const xs = sec("x", "X account", 25);
+  const xs = sec("x", "X account", 20);
   if (x.ok) {
-    add(xs, true, 5, `@${x.handle} found${x.protected ? " (protected)" : ""}`);
-    add(xs, x.posts >= 5, x.posts >= 20 ? 4 : 2, `${x.posts.toLocaleString("en-US")} posts`);
-    add(xs, x.followers >= 50, x.followers >= 200 ? 4 : 2, `${x.followers.toLocaleString("en-US")} followers`);
-    add(xs, x.ageDays != null && x.ageDays >= 7, x.ageDays >= 30 ? 4 : 2, x.ageDays != null ? `Account is ${x.ageDays} day${x.ageDays === 1 ? "" : "s"} old` : "Account age unknown");
+    add(xs, true, 4, `@${x.handle} found${x.protected ? " (protected)" : ""}`);
+    add(xs, x.posts >= 5, x.posts >= 20 ? 3 : 1, `${x.posts.toLocaleString("en-US")} posts`);
+    add(xs, x.followers >= 50, x.followers >= 200 ? 3 : 1, `${x.followers.toLocaleString("en-US")} followers`);
+    add(xs, x.ageDays != null && x.ageDays >= 7, x.ageDays >= 30 ? 3 : 1, x.ageDays != null ? `Account is ${x.ageDays} day${x.ageDays === 1 ? "" : "s"} old` : "Account age unknown");
     const linksSite = site.ok && x.website && lc(x.website).includes(lc(site.host).replace(/^www\./, ""));
     add(xs, linksSite, 4, linksSite ? "Its profile links to the website" : "Its profile does not link to the website");
-    add(xs, mentions(`${x.name} ${x.bio}`), 4, mentions(`${x.name} ${x.bio}`) ? "Its name or bio names the project" : "Its name and bio don't name the project");
+    add(xs, mentions(`${x.name} ${x.bio}`), 3, mentions(`${x.name} ${x.bio}`) ? "Its name or bio names the project" : "Its name and bio don't name the project");
   } else xs.items.push({ ok: false, text: "The X account could not be read" });
 
   const cl = sec("claims", "Claims on the site", 15);
@@ -287,13 +287,16 @@ export function scoreOf({ site, live, x, gh, tg, claims, own, input }) {
   } else if (claims?.thin) { cl.points = 4; cl.items.push({ ok: false, text: "Too little text on the site to check any claims" }); }
   else { cl.points = claims ? 10 : 8; cl.items.push({ ok: null, text: claims ? "Few concrete claims to check" : "The claims reader is busy; neutral score" }); }
 
-  const co = sec("consistency", "Links agree", 15);
+  const co = sec("consistency", "Links agree", 10);
   const siteLinksX = site.ok && x.ok && site.xLinks.some((h) => lc(h) === lc(x.handle));
-  add(co, siteLinksX, 5, siteLinksX ? "The website links to this X account" : "The website does not link to this X account");
+  add(co, siteLinksX, 4, siteLinksX ? "The website links to this X account" : "The website does not link to this X account");
   const xLinksSite = site.ok && x.ok && x.website && lc(x.website).includes(lc(site.host).replace(/^www\./, ""));
-  add(co, xLinksSite, 5, xLinksSite ? "The X account links back to the website" : "The X account does not link back to the website");
+  add(co, xLinksSite, 3, xLinksSite ? "The X account links back to the website" : "The X account does not link back to the website");
   const sameName = mentions(`${site.title || ""} ${x.name || ""}`);
-  add(co, sameName, 5, sameName ? "Website and X carry the project's name" : "Website title and X name don't match the project");
+  add(co, sameName, 3, sameName ? "Website and X carry the project's name" : "Website title and X name don't match the project");
+
+  const dv = sec("dev", "Dev track record", 20);
+  if (dev) { dv.points = dev.points; dv.items.push(...dev.items); } else { dv.points = 10; dv.items.push({ ok: null, text: "The track record could not be read just now; neutral score" }); }
 
   let bonus = 0; const extra = [];
   if (gh?.ok) {
@@ -322,6 +325,7 @@ async function check(input, creator) {
   // a link the creator typed counts even when it can't be read; one found on the site only adds points when it reads
   const tgTyped = tgName(input.telegram), ghTyped = ghRepo(input.github);
   const tgN = tgTyped || (site.ok && site.tgLinks.find((n) => !/bot$/i.test(n))) || null;
+  const devP = import("./devtrack.mjs").then((m) => m.track(creator, { xHandle: handle })).catch((e) => { console.warn("[projectcheck] track", e.message); return null; });
   const [x, live, gh, tg, claims, siteOwn, linked] = await Promise.all([
     xRead(handle),
     site.ok ? liveContracts(site.contracts) : [],
@@ -339,12 +343,14 @@ async function check(input, creator) {
     github: gh && (gh.ok || !gh.auto) ? { repo: gh.ok ? `${gh.owner}/${gh.repo}` : null, verified: !!gh.verified } : null,
     telegram: tg && (tg.ok || !tg.auto) ? { name: tg.name, verified: !!tg.verified } : null,
   };
-  const s = scoreOf({ site, live, x, gh, tg, claims, own, input });
+  const dev = await devP;
+  const s = scoreOf({ site, live, x, gh, tg, claims, own, input, dev });
   return { ...s, ownership: own, summary: claims?.summary || null, checkedAt: Date.now(), note: "A reading of public signals at check time, not an audit and not advice." };
 }
 
 export async function register(r, ctx) {
   store = ctx.store;
+  await (await import("./devtrack.mjs")).register(r, ctx);   // the track record and POST /api/launch/track-link
   r.post("/api/launch/project-check", async ({ req, body }) => {
     const creator = getSession(req)?.address || null;
     const input = { name: clean(body?.name, 48), symbol: clean(body?.symbol, 16), description: clean(body?.description, 2048), website: clean(body?.website, 256), twitter: clean(body?.twitter, 256), telegram: clean(body?.telegram, 256), github: clean(body?.github, 256) };

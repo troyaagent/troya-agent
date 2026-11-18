@@ -72,7 +72,7 @@ export async function mount(view, ctx) {
   const st = {
     name: "", symbol: "", description: "", website: "", twitter: "", telegram: "", logoUrl: "",
     file: null, preview: null, logo: null, tax: 0, menu: null, menuErr: null, bal: null, busy: false, done: null, plan: null, planErr: null, rules: null,
-    github: "", pc: null, pcBusy: false, pcErr: null, xMe: null,
+    github: "", pc: null, pcBusy: false, pcErr: null, xMe: null, creator: null,
   };
   // the form comes back after Sign in with X (Project check): the text fields were kept in this tab for the round trip
   try { const d = JSON.parse(sessionStorage.getItem(PC_DRAFT) || "null"); sessionStorage.removeItem(PC_DRAFT); if (d) for (const k of DRAFT_KEYS) if (typeof d[k] === "string") st[k] = d[k]; } catch {}
@@ -141,7 +141,7 @@ export async function mount(view, ctx) {
   const pcBox = h("div", { class: "lc-pc" });
   const pcSec = h("section", { class: "lc-sec" },
     h("h2", {}, "Project check ", h("span", { class: "muted" }, "(optional)")),
-    h("p", { class: "note", style: { marginTop: 0 } }, "Troya reads your website, the code it runs and your X account (plus GitHub and Telegram if you have them) and scores the project the way an outside reviewer would. It also checks that the website and X are really yours and shows it beside the score. Only you see the result."),
+    h("p", { class: "note", style: { marginTop: 0 } }, "Troya reads your website, the code it runs, your X account and your wallet's track record on Robinhood Chain (plus GitHub and Telegram if you have them) and scores the project the way an outside reviewer would. It also checks that the website and X are really yours and shows it beside the score. Only you see the result."),
     h("label", { class: "field" }, h("span", {}, "GitHub ", h("span", { class: "muted" }, "(optional)")), inp("github", { maxlength: 256, placeholder: "https://github.com/…" })),
     pcBox);
   const xOf = (v) => (/(?:x|twitter)\.com\/@?([A-Za-z0-9_]{1,15})/i.exec(v || "") || /^@?([A-Za-z0-9_]{1,15})$/.exec(String(v || "").trim()) || [])[1] || "";
@@ -150,7 +150,22 @@ export async function mount(view, ctx) {
     try { const d = {}; for (const k of DRAFT_KEYS) d[k] = st[k]; sessionStorage.setItem(PC_DRAFT, JSON.stringify(d)); } catch {}
     location.href = "/api/x/login?for=link&back=create";
   }
+  // an older wallet signs that it belongs to the signed-in creator (the session cookie stays while the wallet app shows the older account)
+  async function linkOld() {
+    const creator = st.creator || wallet.session?.address;
+    if (!creator) { toast("Sign in with the wallet you will launch from first.", "error", 6000); return; }
+    try {
+      const old = (await wallet.eip.request({ method: "eth_requestAccounts" }))?.[0];
+      if (!old || old.toLowerCase() === creator.toLowerCase()) { toast("In your wallet app, switch to the older wallet, then press Link an older wallet again.", "info", 8000); return; }
+      const message = `I own ${old} and link it to ${creator} for my Troya track record.\nTime: ${new Date().toISOString()}`;
+      const hexMsg = "0x" + [...new TextEncoder().encode(message)].map((x) => x.toString(16).padStart(2, "0")).join("");
+      const signature = await wallet.eip.request({ method: "personal_sign", params: [hexMsg, old] });
+      await api.post("launch/track-link", { message, signature });
+      toast(`Linked ${short(old)}. Switch back to ${short(creator)} in your wallet app, then check again.`, "ok", 9000);
+    } catch (e) { toast(errText(e), "error", 7000); }
+  }
   async function loadXMe() {
+    if (wallet.session?.address) st.creator = wallet.session.address;
     if (!wallet.session) st.xMe = null;
     else { try { st.xMe = (await api.get("x/me"))?.x?.username || null; } catch { st.xMe = null; } }
     if (alive) paintPc();
@@ -190,12 +205,14 @@ export async function mount(view, ctx) {
       h("li", {}, mark(st.pc ? st.pc.ownership.website.verified : null), h("div", {}, h("b", {}, "Prove the website. "), "Put your wallet address on the site, as a file ", h("code", {}, "/troya.txt"), " or as this tag inside the home page's ", h("code", {}, "<head>"), ":",
         h("div", { class: "lc-pc-code" }, h("code", {}, addr || "Connect a wallet to see your address"), addr ? h("button", { class: "btn sm", type: "button", onclick: () => copyText(addr, "Address copied") }, "Copy") : null),
         h("div", { class: "lc-pc-code" }, h("code", {}, meta), h("button", { class: "btn sm", type: "button", onclick: () => copyText(meta, "Tag copied") }, "Copy")))),
-      h("li", {}, mark(null), h("div", { class: "muted" }, h("b", {}, "Optional. "), "The same address in ", h("code", {}, "troya.txt"), " at the root of your GitHub repo, or in your Telegram group's description, adds a few points.")));
+      h("li", {}, mark(null), h("div", { class: "muted" }, h("b", {}, "Optional. "), "The same address in ", h("code", {}, "troya.txt"), " at the root of your GitHub repo, or in your Telegram group's description, adds a few points.")),
+      h("li", {}, mark(null), h("div", { class: "muted" }, h("b", {}, "Bring your track record (optional). "), "Launching from a fresh wallet is fine and is not marked down. If you launched before from an older wallet and want its history to count, switch to it in your wallet app and link it here: the older wallet signs, nothing is sent and no gas is used.",
+        st.creator || wallet.session ? h("div", { class: "lc-pc-act" }, h("button", { class: "btn sm", type: "button", onclick: linkOld }, "Link an older wallet")) : null)));
     const ready = !!(st.website.trim() && xh);
     clear(pcBox, steps,
       h("div", { class: "lc-pc-run" },
         h("button", { class: "btn primary", type: "button", disabled: !ready || st.pcBusy, onclick: runPc }, st.pcBusy ? "Checking the project…" : st.pc ? "Check again" : "Check project"),
-        !ready ? h("span", { class: "fine" }, "Add your website and X above first: both are needed for a score.") : st.pcBusy ? h("span", { class: "fine" }, "Reading the site, its code and X: about 10 seconds.") : null),
+        !ready ? h("span", { class: "fine" }, "Add your website and X above first: both are needed for a score.") : st.pcBusy ? h("span", { class: "fine" }, "Reading the site, its code, X and your wallet's history: up to 30 seconds.") : null),
       st.pcErr ? h("div", { class: "alert error" }, st.pcErr) : null,
       st.pc ? pcResult(st.pc) : null);
   }

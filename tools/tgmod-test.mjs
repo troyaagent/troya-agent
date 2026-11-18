@@ -194,5 +194,9 @@ reset();
 r = await mod.screen(msg(ADMIN, "gm, update coming", { from: { id: ADMIN, first_name: "Troya Agent" } }), tg, me);
 ok(!r && !did("banChatMember").length, "an admin named Troya Agent is never touched");
 
+// 18 Nov: "DEV" joined and asked every holder to DM; a name that is only a team title is banned at join
+for (const n of ["DEV", "Owner", "𝐀𝐝𝐦𝐢𝐧", "Support Team", "Moderator"]) ok(mod.titleOnlyName({ first_name: n }), `"${n}" is only a team title`);
+for (const n of ["Dev Patel", "Owen", "Andi", "Troya fan"]) ok(!mod.titleOnlyName({ first_name: n }), `"${n}" is a real name, left alone`);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -36,7 +36,7 @@ const PRIVATE_CHAT = /\b(?:private|exclusive|secret|inner|vip)\s+(?:holders?|wha
 // "I am co-founder of X, I have a partnership offer, who is the best person to discuss this with?"
 const PARTNERSHIP = /\b(?:partnership|collaboration|collab)\s+(?:offer|proposal|opportunit\w*|deal)\b|\bbest\s+person\s+to\s+(?:discuss|talk|speak|contact|reach)\b|\b(?:discuss|talk\s+about)\s+(?:a\s+|this\s+|the\s+|potential\s+)?(?:partnership|collaboration|collab)\b/i;
 // a member whose name claims a team role (or is the project's own name): nothing on its own, a ban with any promo or DM ask
-export const IMPOSTOR_NAME = /co.?founder|\bfounder\b|\bceo\b|\bcto\b|\bcmo\b|\badmin\b|\bmoderator\b|\bmod\b|\bdev\b|\bdeveloper\b|\bsupport\b|\bofficial\b|\bteam\b|^\s*troya(?:\s+(?:agent|team|support|official|dev|admin))?\s*$/i;
+export const IMPOSTOR_NAME = /co.?founder|\bfounder\b|\bowner\b|\bceo\b|\bcto\b|\bcmo\b|\badmin\b|\bmoderator\b|\bmod\b|\bdev\b|\bdeveloper\b|\bsupport\b|\bofficial\b|\bteam\b|^\s*troya(?:\s+(?:agent|team|support|official|dev|admin))?\s*$/i;
 // letters swapped to slip past filters: "hoIders" (capital I for l), Cyrillic or Greek look-alikes, 𝐟𝐚𝐧𝐜𝐲 letters
 const FOLD_FROM = [..."аеорсухіјѕԁһԛԝкмнтвαβεζηικμνορτυχ"], FOLD_TO = [..."aeopcyxijsdhqwkmhtbabezhikmnoptyx"];
 const FOLD = new Map(FOLD_FROM.map((c, i) => [c, FOLD_TO[i]]));
@@ -52,6 +52,15 @@ const HOLDINGS_BAIT = /\b[il1]mportant\s+[il1]nformat[il1]on\s+(?:regarding|abou
 // as a member, so any message from one is removed and the account banned. Checked on every message, since scammers join under
 // another name and rename later.
 const squeeze = (x) => fold(x).toLowerCase().replace(/0/g, "o").replace(/1/g, "i").replace(/3/g, "e").replace(/[4@]/g, "a").replace(/[5$]/g, "s").replace(/7/g, "t").replace(/[^a-z]/g, "");
+// a name that is nothing but a team title ("DEV", "Owner", "Admin", "𝐒𝐮𝐩𝐩𝐨𝐫𝐭"): banned at join, before the scam message
+// comes (18 Nov: "DEV" joined and asked every holder to DM). A real name with a title in it ("Dev Patel") is not touched.
+const TITLES = new Set(["dev", "devs", "developer", "owner", "admin", "administrator", "moderator", "mod", "mods", "support", "team", "official",
+  "ceo", "cto", "cmo", "founder", "cofounder", "helpdesk", "customersupport", "devteam", "teamsupport", "supportteam", "teamdev", "admins", "officialsupport", "adminteam"]);
+export function titleOnlyName(u) {
+  if (!u || u.is_bot) return false;
+  const n = squeeze([u.first_name, u.last_name].filter(Boolean).join(" "));
+  return !!n && TITLES.has(n);
+}
 export function posesAsProject(u) {
   if (!u || u.is_bot) return false;
   const n = squeeze([u.first_name, u.last_name].filter(Boolean).join(" ")), h = squeeze(u.username);

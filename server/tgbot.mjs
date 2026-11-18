@@ -351,10 +351,11 @@ export async function guardJoin (m, tg, me) {
     if (u.is_bot) { if (!adderAdmin) { await kick(tg, chat, u.id); await tg('deleteMessage', { chat_id: chat, message_id: m.message_id }).catch(() => {}) } continue }
     if (await isAdmin(tg, chat, u.id)) continue
     // joined under the project's or the bot's name: a scammer, banned before the check (tgmod also catches a rename later)
-    if ((await import('./tgmod.mjs')).posesAsProject(u)) {
+    const tm = await import('./tgmod.mjs')
+    if (tm.posesAsProject(u) || tm.titleOnlyName(u)) {
       const r = await tg('banChatMember', { chat_id: chat, user_id: u.id, revoke_messages: true })
       await tg('deleteMessage', { chat_id: chat, message_id: m.message_id }).catch(() => {})
-      console.log(`[mod] ban ${u.id} at join (name poses as Troya) ${r?.ok ? 'ok' : r?.description || 'failed'}`)
+      console.log(`[mod] ban ${u.id} at join (name ${tm.posesAsProject(u) ? 'poses as Troya' : 'is only a team title'}) ${r?.ok ? 'ok' : r?.description || 'failed'}`)
       continue
     }
     await tg('restrictChatMember', { chat_id: chat, user_id: u.id, permissions: LOCK, use_independent_chat_permissions: true })

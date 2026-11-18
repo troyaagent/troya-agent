@@ -542,8 +542,18 @@ async function boardItem(rec, handles) {
     devHolder: !!hold?.holder, devTroya: hold ? Math.floor(hold.balance) : null,
   };
 }
+// stale-while-revalidate: a visitor never waits for the on-chain reads (they took 5-75 s on a busy RPC); only the very first
+// call after a start does, and a background refresh keeps it under ~20 s old
+let boardInflight = null;
 export async function board() {
-  if (boardMemo && Date.now() - boardMemo.at < 15_000) return boardMemo.v;
+  if (boardMemo) {
+    if (Date.now() - boardMemo.at >= 15_000 && !boardInflight) boardInflight = buildBoard().catch(() => null).finally(() => { boardInflight = null; });
+    return boardMemo.v;
+  }
+  if (!boardInflight) boardInflight = buildBoard().finally(() => { boardInflight = null; });
+  return boardInflight;
+}
+async function buildBoard() {
   const recs = (await bornRecords()).slice(0, 90);
   const handles = await store.readJson("x-links.json", {});
   const items = [];
@@ -560,6 +570,9 @@ export async function board() {
 /* ---------- routes ---------- */
 export async function register(r, ctx) {
   store = ctx.store;
+  // keep Troya Launches warm: built once at start, then refreshed every 20 s in the background
+  setTimeout(() => board().catch(() => {}), 8_000).unref?.();
+  setInterval(() => { if (!boardInflight) boardInflight = buildBoard().catch(() => null).finally(() => { boardInflight = null; }); }, 20_000).unref?.();
   r.get("/api/launch/rules", async () => {
     const factory = await splitterFactory();
     return { holderMin: HOLDER_MIN, limits: LIMITS, maxCreatorTaxBps: MAX_TAX_BPS, troyaVolumePct: TROYA_VOLUME_BPS / 100, creatorFeePct: CREATOR_FEE_BPS / 100,

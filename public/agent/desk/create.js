@@ -28,8 +28,8 @@ export async function mount(view) {
   }
 
   function paint(r) {
-    const live = !!r?.splitter?.live, min = (r?.holderMin || 1_000_000).toLocaleString("en-US");
-    const fee = live ? `You earn 0.6% of trading volume, Troya 0.1%. Hold ${min} $TROYA and you keep the whole 0.7%.` : "You earn 70% of the 1% trading fee.";
+    const min = (r?.holderMin || 1_000_000).toLocaleString("en-US");
+    const fee = `You earn 0.6% of trading volume, Troya 0.1%. Hold ${min} $TROYA and you keep the whole 0.7%.`;
     clear(grid,
       card({ ic: WEB_ICON, title: "On troya.codes", sub: "Fill in the form and sign with your own wallet.", status: "Open to everyone", tone: "ok",
         points: ["Free to launch through Troya: you pay the Pons launch fee and gas.", fee, `Creator tax 0–4%, all yours. Up to ${r?.limits?.perDay ?? 3} launches a day; holders of ${min} $TROYA have no limit.`],
@@ -45,7 +45,7 @@ export async function mount(view) {
             "A preview with a Confirm button comes before anything is sent."],
           cta: "Open the Troya bot", href: `https://t.me/${r.tgBot}?start=launch` })
         : card({ ic: TG_ICON, title: "In Telegram", sub: "Launch from a private chat with the Troya bot.", status: "In its real-money test", tone: "test", off: true,
-          points: ["Open to everyone.", "Step by step in the chat, or one photo with a caption, then a preview and a Confirm button.", "Opens after its real-money test."],
+          points: ["Same rules and fees as X and troya.codes once it opens.", "Step by step in the chat, or one photo with a caption, then a preview and a Confirm button.", "Opens after its real-money test."],
           cta: "Opening soon" }));
   }
 

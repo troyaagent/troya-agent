@@ -83,7 +83,8 @@ export async function mount(view, ctx) {
       state.total = d.total;
       state.next = offset + STEP;
       tbl.setRows(state.rows);
-      if (!offset) { if (!state.q) paintTop(state.rows); topBox.hidden = !!state.q; }
+      // the top cards never crown a copycat ticker or a pool with fabricated volume
+      if (!offset) { if (!state.q) paintTop(state.rows.filter((x) => !x.copyOf && !x.washVolume)); topBox.hidden = !!state.q; }
       clear(notice, d.notice ? h("div", { class: "alert warn", style: { marginBottom: "10px" } }, d.notice) : null);
       clear(more, state.next < d.total ? h("button", { class: "btn", type: "button", onclick: (e) => { e.target.disabled = true; load(state.next); } }, "Load more") : null);
       clear(foot,

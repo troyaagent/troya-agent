@@ -113,7 +113,7 @@ function robinhoodTab(box, go, query) {
         d.total = Math.max(d.total || 0, rows.length);
       }
       tbl.setRows(rows);
-      if (!state.q && state.offset === 0 && state.launchpad === "all") { const busy = [...rows].filter((t) => t.priceUsd != null).sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0)); if (busy.length) paintTop(busy); }
+      if (!state.q && state.offset === 0 && state.launchpad === "all") { const busy = [...rows].filter((t) => t.priceUsd != null && !t.copyOf && !t.washVolume).sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0)); if (busy.length) paintTop(busy); }
       topBox.hidden = !!state.q;
       const hiddenTotal = d.hiddenTotal;
       untradable.textContent = state.showAll ? "Hide coins Troya cannot route" : `Show coins Troya cannot route yet${hiddenTotal ? ` (${compact(hiddenTotal, 0)})` : ""}`;

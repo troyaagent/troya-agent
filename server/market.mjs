@@ -269,6 +269,9 @@ function fold(map, pr, ethUsd) {
   if (!pr.base || HUBS.has(pr.base)) return;
   if (!(pr.liquidityUsd >= MIN_POOL_LIQ_USD)) return;
   if (pr.volumeUsd > pr.liquidityUsd * 300) { pr.volumeUsd = 0; pr.washVolume = true; }
+  // fabricated volume: a few trades worth millions each (a copycat pool showed $50M from 20 trades); stock pools excepted
+  const trades = (pr.buys || 0) + (pr.sells || 0);
+  if (!STOCK_SET.has(pr.base) && pr.volumeUsd > 10_000 && (trades === 0 || pr.volumeUsd / trades > 50_000)) { pr.volumeUsd = 0; pr.washVolume = true; }
   let t = map.get(pr.base);
   if (!t) {
     t = { address: pr.base, name: pr.name, symbol: pr.symbol, image: pr.image, pools: [], volume24hUsd: 0, txns24h: 0, buys24h: 0, sells24h: 0, createdAt: pr.createdAt, launchpad: "other", tradable: false, stock: STOCK_SET.has(pr.base) };
@@ -563,6 +566,16 @@ export async function getRobinhoodTokens(opts = {}) {
   if (Date.now() - board.updatedAt > 10 * 60_000) refreshBoard().catch(() => {});
   const ethUsd = await getEthUsd().catch(() => null);
   let all = [...board.rows.values()].filter((t) => !t.stock);
+  // copies: when several coins share a ticker, the one with the most holders (then the oldest) is the original; the others
+  // are marked copyOf and kept out of Trending, Troya picks and "Busiest today"
+  const bySym = new Map();
+  for (const t of all) { const k = String(t.symbol || "").toLowerCase(); if (!k) continue; if (!bySym.has(k)) bySym.set(k, []); bySym.get(k).push(t); }
+  const holdersOf = (t) => HOLDERS.get(t.address)?.count ?? 0;
+  for (const g of bySym.values()) {
+    if (g.length < 2) { g[0].copyOf = null; continue; }
+    const orig = [...g].sort((a, b) => (holdersOf(b) - holdersOf(a)) || ((a.createdAt || Infinity) - (b.createdAt || Infinity)))[0];
+    for (const t of g) t.copyOf = t === orig ? null : orig.address;
+  }
   if (o.q && ADDR_RE.test(o.q) && !board.rows.has(lc(o.q))) {
     const r = await getRobinhoodToken(o.q).catch(() => null);
     if (r?.token) all.push(r.token);
@@ -578,8 +591,8 @@ export async function getRobinhoodTokens(opts = {}) {
   // launched straight into a pool), Bonding (still on a Pons curve)
   const onCurve = (t) => t.poolDex === "pons-v2";
   const isNew = (t) => t.createdAt && Date.now() - t.createdAt < 72 * 3600_000 && !onCurve(t);
-  const isTrend = (t) => (t.volume24hUsd || 0) >= 1000 && (t.txns24h || 0) >= 20;
-  const picked = pickCoins(rows);
+  const isTrend = (t) => !t.copyOf && (t.volume24hUsd || 0) >= 1000 && (t.txns24h || 0) >= 20;
+  const picked = pickCoins(rows.filter((t) => !t.copyOf));
   const catCounts = { all: rows.length, picks: picked.length, trending: rows.filter(isTrend).length, new: rows.filter(isNew).length, bonding: rows.filter(onCurve).length };
   if (o.cat === "picks") rows = picked;
   else if (o.cat === "trending") rows = rows.filter(isTrend);
@@ -740,6 +753,16 @@ export async function getHlMarkets() {
     return { markets: out.filter((m) => !m.delisted), updatedAt: Date.now(), dexes: xyz.status === "fulfilled" ? ["main", "xyz"] : ["main"] };
   });
 }
+// Hyperliquid's circulatingSupply for bridged / wrapped / scaled spot tokens (Unit UBTC, UETH, USOL; ONEAR; kPEPE; XMR1)
+// is the underlying coin's supply, not what exists on Hyperliquid: their market cap reads $1.3T for UBTC. Shown as "–".
+const WRAPPED_SPOT = /^(U(?!SD)[A-Z]{2,}|O[A-Z]{3,}|k[A-Z].*|[A-Z]{2,}\d)$/;
+function spotMcap(base, mark, supply) {
+  if (!(mark > 0 && supply > 0)) return null;
+  const name = String(base?.name || ""), full = String(base?.fullName || "");
+  if (WRAPPED_SPOT.test(name) || /\b(unit|bridged|wrapped|omni|portal)\b/i.test(full)) return null;
+  const v = mark * supply;
+  return v > 50e9 ? null : v;   // a sanity bound: no Hyperliquid spot token is worth that much on its own
+}
 export async function getHlSpot() {
   return memo("hl:spot", 20_000, async () => {
     const [meta, ctxs] = await hl({ type: "spotMetaAndAssetCtxs" });
@@ -750,7 +773,7 @@ export async function getHlSpot() {
       const base = tok.get(u.tokens[0]), quote = tok.get(u.tokens[1]);
       const mark = fnum(c.markPx), prev = fnum(c.prevDayPx), supply = fnum(c.circulatingSupply);
       return { pair: u.name, base: base?.name, quote: quote?.name, label: `${base?.name || "?"}/${quote?.name || "?"}`, mark, change24h: mark && prev ? (mark / prev - 1) * 100 : null,
-        volumeUsd: fnum(c.dayNtlVlm), mcapUsd: mark && supply ? mark * supply : null, evm: base?.evmContract?.address || null, canonical: !!u.isCanonical,
+        volumeUsd: fnum(c.dayNtlVlm), mcapUsd: spotMcap(base, mark, supply), evm: base?.evmContract?.address || null, canonical: !!u.isCanonical,
         index: u.index, asset: 10000 + u.index, szDecimals: base?.szDecimals ?? 2, mid: fnum(c.midPx) ?? mark };
     }).filter((p) => p.mark != null);
     return { pairs, updatedAt: Date.now() };

@@ -17,9 +17,8 @@ export async function mount(view, ctx) {
     file: null, preview: null, logo: null, tax: 0, menu: null, menuErr: null, bal: null, busy: false, done: null, plan: null, planErr: null, rules: null,
   };
 
-  const HEAD_OLD = "Launch on Robinhood Chain through Pons Family: one transaction creates the coin and its bonding curve. It graduates to a Uniswap v4 pool once the curve fills, and you earn 70% of the 1% trading fee plus any creator tax you set.";
   const HEAD_V6 = "Launch on Robinhood Chain through Pons Family: one transaction creates the coin and its bonding curve. It graduates to a Uniswap v4 pool once the curve fills. Launching through Troya is free: you earn 0.6% of trading volume plus any creator tax you set, Troya takes 0.1%. Hold 1,000,000 $TROYA and you keep the whole 0.7%.";
-  const headP = h("p", {}, HEAD_OLD);
+  const headP = h("p", {}, HEAD_V6);
   const form = h("div", { class: "lc-form" });
   const side = h("aside", { class: "lc-side" });
   const wrap = h("div", { class: "lc-grid" }, form, side);
@@ -92,7 +91,7 @@ export async function mount(view, ctx) {
         h("label", { class: "field" }, h("span", {}, "X"), inp("twitter", { maxlength: 256, placeholder: "https://x.com/…" })),
         h("label", { class: "field" }, h("span", {}, "Telegram"), inp("telegram", { maxlength: 256, placeholder: "https://t.me/…" })))),
     h("section", { class: "lc-sec" },
-      h("h2", {}, "Creator tax ", infoTip("An extra tax on every buy and sell, paid to you, on top of the 1% Pons fee (of which you already earn 70%). It applies before and after graduation and cannot be changed later. Higher taxes put traders off.")),
+      h("h2", {}, "Creator tax ", infoTip("An extra tax on every buy and sell, paid to you, on top of the 1% Pons fee (you already earn 0.6% of volume from that fee, or all 0.7% when you hold 1,000,000 $TROYA). It applies before and after graduation and cannot be changed later. Higher taxes put traders off.")),
       taxBox,
       h("p", { class: "note" }, "Launch snipe protection is built into Pons: the first seconds after launch carry a tax that starts at 99% and halves every few blocks. Your own wallet is exempt, so you can buy right after launch from the Swap page at the normal fee.")),
     balNote, btn, status);
@@ -133,7 +132,7 @@ export async function mount(view, ctx) {
   // V6 fee rule: the server says who receives the creator fee (the creator, or a Troya fee splitter for 0.1% of volume)
   function feeText() {
     const p = st.plan;
-    if (!p) return st.rules?.splitter?.live ? "1% · creators earn 0.6% of volume (0.7% for holders)" : "1% · you earn 70% of it";
+    if (!p) return "1% · creators earn 0.6% of volume (0.7% for holders)";
     return p.split ? "1% · you earn 0.6% of volume" : "1% · you earn 0.7% of volume";
   }
   function troyaText() {

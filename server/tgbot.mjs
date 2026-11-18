@@ -460,7 +460,11 @@ export async function handleBotMessage(m, tg, me) {
     return;
   }
 
-  const cm = /^\/([a-z_]+)(?:@([A-Za-z0-9_]+))?(?:\s+([\s\S]*))?$/i.exec(String(m.text || "").trim());
+  // "ca", "CA?", "contract address pls", "what's the ca": the official address at once, never a guess by the model
+  // (18 Nov: "Ca" from a member named "The Remnant" was read as a request for a coin called "The Remnant")
+  const rawText = String(m.text || "").trim();
+  const CA_ASK = /^(?:@\w+\s+)?(?:(?:what(?:'s|\s+is)|wen|where(?:'s|\s+is)|drop|send|give(?:\s+me)?|pls|please)\s+)?(?:the\s+)?(?:ca|c\.a\.?|contract(?:\s+address)?|token\s+address)(?:\s+(?:pls|please|plz|bro|sir|ser|dev|admin|of\s+troya|troya))*\s*[?!.]*$/i;
+  const cm = CA_ASK.test(rawText) ? [rawText, "ca", undefined, ""] : /^\/([a-z_]+)(?:@([A-Za-z0-9_]+))?(?:\s+([\s\S]*))?$/i.exec(rawText);
   if (!cm) {
     if (wantsAnswer(m, me)) await aiAnswer(m, tg, me).catch((e) => console.warn("[telegram ai]", e.message));
     return;

@@ -46,6 +46,10 @@ export const fold = (x) => String(x || "").normalize("NFKC")
   .replace(/(?<=[A-Za-z])0(?=[A-Za-z])/g, "o");
 const nameOf = (u) => fold([u?.first_name, u?.last_name].filter(Boolean).join(" "));
 const fakeName = (u) => IMPOSTOR_NAME.test(nameOf(u)) || ADMIN_COSTUME.test(nameOf(u));
+// a display name that advertises its own bio ("Peter (Read Bio 100x)", "check my bio", "link in bio"): a promo account,
+// whatever it writes (18 Nov: two members reported one)
+const PROMO_NAME = /\b(?:read|check|see|look\s*at|visit)\s*(?:my\s*)?bio\b|\b(?:link|links|calls?|gems?)\s*(?:in|on)\s*(?:my\s*)?bio\b|\bbio\b[^a-z]{0,6}\d{2,4}\s*x\b/i;
+export const promoName = (u) => PROMO_NAME.test(nameOf(u));
 // "urgent announcement for all holders, important information regarding your holdings": the bait half of a DM scam
 const HOLDINGS_BAIT = /\b[il1]mportant\s+[il1]nformat[il1]on\s+(?:regarding|about|on|for)\s+(?:your|ur)\b|\burgent\s+ann[o0]uncement\b|\bregarding\s+(?:your|ur)\s+(?:h[o0][il1]dings|wallets?|tokens|funds|bags)\b/i;
 // a member named as the project or its bot ("Troya Agent", "Tr0ya Ag3nt", "Troya | Agent", "Troya Support"): Troya never posts
@@ -251,6 +255,7 @@ export async function screen(m, tg, me) {
     return true;
   }
   if (isAdm) return false;
+  if (promoName(m.from)) { await offence(tg, chat, m.message_id, m.from, { why: "name advertises its bio" }); return true; }
 
   const v = verdict(m);
   const flagged = (caught.get(`${chat}:${m.from.id}`) || 0) > Date.now();

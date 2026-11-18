@@ -82,9 +82,20 @@ const hl = (body, timeout = 10000) => getJson(HL, { method: "POST", body, timeou
 const gq = { hi: [], lo: [], busy: false, last: 0, lastLo: false };
 // F18 Liquidity desk reads pools and candles through the same queue (paths are under networks/robinhood/)
 export const geckoApi = (pathQs, opts) => gecko(pathQs, opts);
+// the same call already waiting is joined, never queued twice (with Blockscout paused, holder reads for the same coins
+// piled up behind the 10-second background pace and the queue only grew); a user asking for something the background
+// already queued moves it up front. The background queue is capped: its oldest job gives way.
+const LO_CAP = 40;
 function gecko(pathQs, { hi = false } = {}) {
   return new Promise((resolve, reject) => {
-    (hi ? gq.hi : gq.lo).push({ pathQs, resolve, reject, hi, queuedAt: Date.now() });
+    const dup = gq.hi.find((j) => j.pathQs === pathQs) || gq.lo.find((j) => j.pathQs === pathQs);
+    if (dup) {
+      dup.waiters.push({ resolve, reject });
+      if (hi && !dup.hi) { gq.lo.splice(gq.lo.indexOf(dup), 1); dup.hi = true; dup.queuedAt = Date.now(); gq.hi.push(dup); }
+      return;
+    }
+    (hi ? gq.hi : gq.lo).push({ pathQs, waiters: [{ resolve, reject }], hi, queuedAt: Date.now() });
+    while (gq.lo.length > LO_CAP) { const old = gq.lo.shift(); for (const w of old.waiters) w.reject(Object.assign(new Error("GeckoTerminal queue is full; try again shortly"), { status: 503 })); }
     pumpGecko();
   });
 }
@@ -109,7 +120,7 @@ async function pumpGecko() {
       }
       gq.last = Date.now();
       gq.lastLo = !job.hi;
-      try { job.resolve(await getJson(`${GECKO}/networks/${NET}/${job.pathQs}`, { timeout: 15000 })); }
+      try { const v = await getJson(`${GECKO}/networks/${NET}/${job.pathQs}`, { timeout: 15000 }); for (const w of job.waiters) w.resolve(v); }
       catch (e) {
         if (e.status === 429 && (job.tries || 0) < 2) {
           job.tries = (job.tries || 0) + 1;
@@ -117,7 +128,7 @@ async function pumpGecko() {
           (job.hi ? gq.hi : gq.lo).unshift(job);
           continue;
         }
-        job.reject(e);
+        for (const w of job.waiters) w.reject(e);
       }
     }
   } finally { gq.busy = false; }
@@ -682,7 +693,9 @@ export async function getRobinhoodToken(address) {
     const ethUsd = await getEthUsd().catch(() => null);
     const [ds, ps, prof] = await Promise.allSettled([dsPairs([a]).then((x) => dsRows(x, ethUsd).get(a) || null), ponsState(a), ponsProfile(a)]);
     let row = board.rows.get(a) ? clean(board.rows.get(a)) : null;
-    { const hh = HOLDERS.get(a); if (!hh || Date.now() - (hh.at || 0) > 15 * 60_000) await Promise.race([fetchHolders(a, { hi: true }).catch(() => null), new Promise((r) => setTimeout(r, 4000))]); }
+    // with Blockscout paused, holder counts come only from the paced holders loop: a read here for every coin Sentry,
+    // The Record or the board looks at filled GeckoTerminal's queue faster than it drains (18 Nov)
+    { const hh = HOLDERS.get(a); if (BS_KEY && !bsDown() && (!hh || Date.now() - (hh.at || 0) > 15 * 60_000)) await Promise.race([fetchHolders(a, { hi: false }).catch(() => null), new Promise((r) => setTimeout(r, 4000))]); }
     const dsr = ds.status === "fulfilled" ? ds.value : null;
     const pons = ps.status === "fulfilled" && ps.value ? ponsPublic(ps.value) : null;
     // a Pons token still on its curve trades on the curve; a stray DEX pair thinner than the curve (e.g. a $0.40 dust
@@ -750,13 +763,31 @@ export async function getRobinhoodTrades(address) {
         tokens: fnum(buy ? v.to_token_amount : v.from_token_amount), quote: fnum(buy ? v.from_token_amount : v.to_token_amount) };
     });
     const v = { trades, pool, source: "GeckoTerminal", updatedAt: Date.now() };
-    LAST.set(`t:${pool}`, v); if (LAST.size > 400) LAST.delete(LAST.keys().next().value);
+    setLast(`t:${pool}`, v);
     return v;
   });
   if (last) { fresh.catch(() => {}); return last; }
   return fresh;
 }
+// how full the GeckoTerminal queue is (public, numbers only): a chart that loads slowly can be told apart from a slow upstream
+export const geckoQueue = () => ({ hi: gq.hi.length, lo: gq.lo.length, oldestHiS: gq.hi.length ? Math.round((Date.now() - gq.hi[0].queuedAt) / 1000) : 0,
+  oldestLoS: gq.lo.length ? Math.round((Date.now() - gq.lo[0].queuedAt) / 1000) : 0, busy: gq.busy,
+  // what is waiting, by kind of call (addresses left out): tokens/:a/info, pools/:p/ohlcv/..., new_pools ...
+  kinds: [...gq.hi, ...gq.lo].reduce((m, j) => { const k = `${j.hi ? "hi" : "lo"} ${j.pathQs.split("?")[0].replace(/0x[0-9a-fA-F]{40,64}/g, ":a").replace(/\/(minute|hour|day)$/, "")}`; m[k] = (m[k] || 0) + 1; return m; }, {}) });
+
 const LAST = new Map();   // last good trades / candles per pool, served while a refresh is queued
+// kept on disk too, so a chart answers at once after a restart instead of waiting for GeckoTerminal's queue (each deploy
+// emptied it, and a cold chart then waited behind a rate limit shared by every call this server makes)
+const LAST_FILE = process.env.DATA_DIR ? path.join(process.env.DATA_DIR, "gecko-last.json") : null;
+(function loadLast() { if (!LAST_FILE) return; try { for (const [k, v] of Object.entries(JSON.parse(readFileSync(LAST_FILE, "utf8")) || {})) LAST.set(k, v); } catch {} })();
+let lastDirty = false;
+if (LAST_FILE) setInterval(() => {
+  if (!lastDirty) return;
+  lastDirty = false;
+  const keep = Object.fromEntries([...LAST.entries()].slice(-120));   // the most recently refreshed charts and trade lists
+  writeFile(LAST_FILE + ".tmp", JSON.stringify(keep)).then(() => rename(LAST_FILE + ".tmp", LAST_FILE)).catch(() => {});
+}, 60_000).unref?.();
+const setLast = (k, v) => { LAST.delete(k); LAST.set(k, v); lastDirty = true; if (LAST.size > 400) LAST.delete(LAST.keys().next().value); };
 
 // candles for a Robinhood token's main pool, in USD: [{time(sec), open, high, low, close, volume}]
 const GT_TF = { "5m": ["minute", 5], "15m": ["minute", 15], "1h": ["hour", 1], "4h": ["hour", 4], "1d": ["day", 1] };
@@ -775,7 +806,7 @@ export async function getRobinhoodCandles(address, interval = "1h", { bg = false
     const c = (d?.data?.attributes?.ohlcv_list || []).map((x) => ({ time: Number(x[0]), open: fnum(x[1]), high: fnum(x[2]), low: fnum(x[3]), close: fnum(x[4]), volume: fnum(x[5]) }))
       .filter((x) => x.close != null).sort((x, y) => x.time - y.time);
     const v = { candles: c, interval: iv, source: "GeckoTerminal", unit: "USD", pool, updatedAt: Date.now() };
-    if (c.length) { LAST.set(`c:${a}:${iv}`, v); if (LAST.size > 400) LAST.delete(LAST.keys().next().value); }
+    if (c.length) setLast(`c:${a}:${iv}`, v);
     return v;
   });
   if (lastC) { freshC.catch(() => {}); return lastC; }
@@ -1029,6 +1060,7 @@ export async function register(r) {
   }, { weight: 2, perMin: 60 });
   r.get("/api/market/robinhood", ({ query }) => getRobinhoodTokens(query), { weight: 1 });
   r.get("/api/market/robinhood/token", ({ query }) => getRobinhoodToken(query.address), { weight: 2 });
+  r.get("/api/market/queue", () => ({ gecko: geckoQueue(), at: Date.now() }), { perMin: 30 });
   r.get("/api/market/robinhood/candles", ({ query }) => getRobinhoodCandles(query.address, query.interval), { weight: 1 });
   r.get("/api/market/robinhood/trades", ({ query }) => getRobinhoodTrades(query.address), { weight: 1 });
   r.get("/api/market/stocks", () => getStocks(), { weight: 1 });

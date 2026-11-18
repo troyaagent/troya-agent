@@ -58,9 +58,14 @@ export async function register(r, ctx) {
     const c = String(params.coin || "");
     if (!COIN_RE.test(c)) return sendErr(res, 400, "Not a market name");
     // HIP-3 stock perps ("xyz:TSLA") share the stock token's vetted logo
-    // ...and so do plain tickers (Lighter lists stocks as "SPY", "NVDA"); no Hyperliquid perp name clashes with a stock ticker
-    const tk = /^[a-z0-9]+:([A-Z][A-Z0-9.]{0,9})$/.exec(c)?.[1] || (/^[A-Z][A-Z0-9.]{0,9}$/.test(c) ? c : null);
+    const tk = /^[a-z0-9]+:([A-Z][A-Z0-9.]{0,9})$/.exec(c)?.[1];
     if (tk) { const f = await stockFile(tk); if (f) return sendFile(res, f); }
+    // a plain ticker (Lighter lists stocks as "SPY", "NVDA") is a coin first: ZETA is ZetaChain, not Zeta Global.
+    // Only when Hyperliquid has no coin logo for it does the stock logo stand in.
+    if (/^[A-Z][A-Z0-9.]{0,9}$/.test(c) && await stockFile(c)) {
+      const coin = await resolve(`c:${c}`, () => coinSources(c));
+      return sendFile(res, coin || await stockFile(c));
+    }
     const file = await resolve(METAL[c] ? `cm:${c}` : `c:${c}`, () => coinSources(c));   // cm: a fresh key (XAU was cached as missing)
     return file ? sendFile(res, file) : sendErr(res, 404, "No logo for this market");
   }, { weight: 0.2, perMin: 3000 });

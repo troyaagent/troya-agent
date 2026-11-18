@@ -34,6 +34,7 @@ const ROUTES = {
   "/privacy": "/privacy.html",
   "/verify": "/verify.html",
   "/seal": "/seal.html",
+  "/oath": "/oath.html",
   "/record": "/record.html",
   "/flywheel": "/flywheel.html",
   "/community": "/community.html",

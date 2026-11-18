@@ -44,6 +44,7 @@ Or just write it: "long ETH $20 at 3x" gets you a ticket to confirm.
 /assay 0x… · The Assay: dev, holders, bundles, wash trades
 /ring 0x… · Ring Radar: a rigged Pons launch? (exempt wallets, bundles, decoys)
 /council 0x… · three reasons not to buy, then a bull/bear/risk debate on Troya's data
+/oath 0x… · the dev's Oath for a coin: kept or broken
 /price NVDA · live price (a symbol or a 0x address)
 /gas · live gas cost of a swap, approval or send
 /sentry · the latest launches through the Gate
@@ -126,6 +127,14 @@ async function councilCmd(arg) {
   const c = await m.council(a).catch((e) => null);
   if (!c) return "The Council could not sit on this coin right now. Try again in a minute.";
   return `<b>Troya Council</b> · <code>${a}</code>\n${esc(m.councilText(c))}`;
+}
+async function oathCmd(arg) {
+  const a = (String(arg || "").match(/0x[0-9a-fA-F]{40}/) || [])[0];
+  if (!a) return "Usage: /oath 0x… (a Pons coin on Robinhood Chain)";
+  const o = await (await import("./oath.mjs")).oathOf(a).catch(() => null);
+  if (!o) return `<b>Oath</b> · <code>${a}</code>\nNo Oath taken for this coin yet. Devs sign one at troya.codes (V7 F32).`;
+  const p = o.pledge;
+  return `<b>Oath ${o.status === "kept" ? "kept ✅" : "broken ❌"}</b> · <code>${a}</code>\nPledge: dev sells at most ${p.maxSellPctPerDay}% of the supply a day${p.feeLockDays ? `, creator fees locked ${p.feeLockDays} days` : ""}${p.wallets.length ? `, ${p.wallets.length} wallets disclosed` : ""}.${o.breaches.length ? "\n" + o.breaches.slice(-3).map((b) => `• ${b.kind === "sell" ? `sold ${b.soldPct}% on ${b.day} (cap ${b.capPct}%)` : esc(b.note || "fee claim")}: ${String(b.tx).slice(0, 12)}…`).join("\n") : ""}`;
 }
 async function assayCmd(arg) {
   const a = (String(arg || "").match(/0x[0-9a-fA-F]{40}/) || [])[0];
@@ -490,7 +499,7 @@ export async function handleBotMessage(m, tg, me) {
   const [, cmdRaw, at, arg = ""] = cm;
   if (at && me?.username && at.toLowerCase() !== me.username.toLowerCase()) return;
   const cmd = cmdRaw.toLowerCase();
-  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "rules", "sentry", "badge", "perks", "reports", "flywheel"].includes(cmd)) return;
+  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "oath", "rules", "sentry", "badge", "perks", "reports", "flywheel"].includes(cmd)) return;
   // one answer per person every 3 s keeps the group readable
   const who = `${chatId}:${m.from?.id}`;
   if (Date.now() - (lastReply.get(who) || 0) < 3000) return;
@@ -546,6 +555,7 @@ Nobody from Troya DMs first or asks for a seed phrase or private key.` });
     else if (cmd === "assay") { text = await assayCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else if (cmd === "ring") { text = await ringCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else if (cmd === "council") { text = await councilCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
+    else if (cmd === "oath") { text = await oathCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else { text = await gate(arg); if (coinOf(arg) && !/no contract|Usage/i.test(text)) markup = coinKb(coinOf(arg)); }
   } catch (e) { text = `Could not read that right now (${esc(String(e.message || e).slice(0, 80))}). Try again in a moment.`; }
   await tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true }, ...(markup ? { reply_markup: markup } : {}) });

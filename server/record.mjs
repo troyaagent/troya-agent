@@ -3,7 +3,9 @@
 // the pool price after). It is sampled every 5 minutes for a day, keeping the peak and the low, and graded at 1 hour
 // and 24 hours. Calls posted before the ledger existed (or noticed late) are back-filled from GeckoTerminal candles
 // and say so. Nothing here is a forecast or advice: it is what the price did after the call.
-//   GET /api/record → { stats, calls, rules, updatedAt }
+// V6 F30 "Born at the gate": every coin launched through Troya gets a place here too (kind "born", keyed born:<token>),
+// its price at birth recorded and graded the same way, in a list of its own; Sentry's stats count Sentry's calls only.
+//   GET /api/record → { stats, calls, born: { stats, coins }, rules, updatedAt }
 import { getRobinhoodToken, getRobinhoodCandles, getEthUsd } from "./market.mjs";
 
 const FILE = "record.json";
@@ -75,9 +77,21 @@ let mem = null;
 async function state() { mem ||= await store.readJson(FILE, { calls: {} }); return mem; }
 async function save() { if (mem) await store.writeJson(FILE, trim(mem)); }
 function trim(d) {
-  const all = Object.values(d.calls).sort((a, b) => b.at - a.at);
-  if (all.length > KEEP) d.calls = Object.fromEntries(all.slice(0, KEEP).map((c) => [c.token, c]));
+  // entries keep their own keys (a coin can be both a Sentry call and born through Troya)
+  const all = Object.entries(d.calls).sort((a, b) => b[1].at - a[1].at);
+  if (all.length > KEEP) d.calls = Object.fromEntries(all.slice(0, KEEP));
   return d;
+}
+/** V6 F30: a coin born through Troya, recorded from the moment it was launched (older ones from candles). */
+export async function noteBorn({ token, symbol, at = Date.now(), source = null }) {
+  if (!store || !token) return;
+  const d = await state();
+  const k = `born:${lc(token)}`;
+  if (d.calls[k]) return;
+  const c = { token: lc(token), symbol: symbol || null, at, post: null, source, kind: "born", status: "watching", via: Date.now() - at < LIVE_LAG ? "live" : "pending-candles" };
+  d.calls[k] = c;
+  await save();                       // on the ledger at once; the first price follows (a read can take a few seconds)
+  if (c.via === "live") { await sample(c).catch(() => {}); await save(); }
 }
 export async function noteCall({ token, symbol, at = Date.now(), post = null, source = null }) {
   if (!store || !token) return;
@@ -141,7 +155,7 @@ async function backfill() {
 const pct = (a, b) => (num(a) && num(b) ? (b / a - 1) * 100 : null);
 function view(c) {
   return {
-    token: c.token, symbol: c.symbol, at: c.at, post: c.post, source: c.source, status: c.status, via: c.via,
+    token: c.token, symbol: c.symbol, at: c.at, post: c.post, source: c.source, kind: c.kind || "call", status: c.status, via: c.via,
     priceAtCall: c.p0 ?? null, change1h: pct(c.p0, c.p1h), change24h: pct(c.p0, c.p24h), changeNow: c.status === "watching" ? pct(c.p0, c.now) : null,
     peakX: num(c.p0) && num(c.peak) ? c.peak / c.p0 : null, lowPct: pct(c.p0, c.low),
     result: c.status !== "graded" ? null : c.p24h > c.p0 ? "win" : "miss", late: !!c.late,
@@ -150,7 +164,12 @@ function view(c) {
 function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 export async function recordView({ limit = 100 } = {}) {
   const d = await state();
-  const calls = Object.values(d.calls).sort((a, b) => b.at - a.at).map(view);
+  const every = Object.values(d.calls).sort((a, b) => b.at - a.at).map(view);
+  const calls = every.filter((c) => c.kind !== "born"), bornList = every.filter((c) => c.kind === "born");
+  const bGraded = bornList.filter((c) => c.result);
+  const bPeaks = bornList.filter((c) => c.peakX != null && (c.status === "graded" || Date.now() - c.at >= DAY)).map((c) => c.peakX);
+  const born = { coins: bornList.slice(0, 200), stats: { coins: bornList.length, watching: bornList.filter((c) => c.status === "watching").length, graded: bGraded.length,
+    up24h: bGraded.filter((c) => c.result === "win").length, median24h: median(bGraded.map((c) => c.change24h).filter((x) => x != null)), medianPeakX: median(bPeaks) } };
   const graded = calls.filter((c) => c.result);
   const r24 = graded.map((c) => c.change24h).filter((x) => x != null);
   const peaks = calls.filter((c) => c.peakX != null && (c.status === "graded" || Date.now() - c.at >= DAY)).map((c) => c.peakX);
@@ -164,7 +183,7 @@ export async function recordView({ limit = 100 } = {}) {
     worst: graded.length ? graded.reduce((a, b) => (b.change24h < a.change24h ? b : a)) : null,
   };
   return {
-    stats, calls: calls.slice(0, Math.min(500, Math.max(1, Number(limit) || 100))), updatedAt: Date.now(),
+    stats, calls: calls.slice(0, Math.min(500, Math.max(1, Number(limit) || 100))), born, updatedAt: Date.now(),
     rules: "A call is the moment Troya Sentry posts a coin. Its price is recorded then (Pons curve price read on chain while the coin is on the curve, the pool price after), sampled every 5 minutes for a day, and graded 24 hours later: a win if the price is higher than at the call, a miss if not. Peak is the highest price seen in that day. Calls noticed late are filled from GeckoTerminal candles and marked. Past calls do not predict future ones; this is a record, not advice.",
   };
 }

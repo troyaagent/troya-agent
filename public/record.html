@@ -72,8 +72,19 @@
     <p class="rec-note">Prices in USD. Pons curve prices are read on chain while a coin is on its curve, pool prices after. When no live price was read at the moment of the call (calls from before the ledger existed, or noticed late), the price at the call comes from GeckoTerminal candles; rows marked “candles” were filled from candles alone, and rows marked “late” were graded more than 30 minutes after the 24-hour mark. Coins without a venue under the ticker were called on their Pons curve. On a phone the table shows the result columns; the price at the call and the 1 h move are in the <a class="ulink" href="/api/record?limit=500" target="_blank" rel="noopener">JSON</a>. Past calls do not predict future ones. Not financial advice.</p>
   </section>
 
+  <section class="ip" id="born" aria-labelledby="bt-h">
+    <div class="eyebrow-line"><span>02 / Born through Troya</span></div>
+    <div class="split" style="margin-bottom:28px">
+      <h2 id="bt-h" class="h2 words" data-words>Born at the gate</h2>
+      <p class="lead rv">Every coin launched through Troya (from X, Telegram or troya.codes) takes its place here from its first block: the price at birth, then 1 hour and 24 hours later, and its peak. Its Troya Gate verdict is live on <a class="ulink" href="/agent#/troya-launches">Troya Launches</a>. Kept apart from Sentry's calls: a launch is not a call.</p>
+    </div>
+    <div class="rec-stats" data-born-stats></div>
+    <div class="rec-wrap"><table class="rec-tbl rec-calls"><thead><tr><th>Coin</th><th>Born</th><th>Price at birth</th><th>1 h</th><th>24 h</th><th>Peak</th><th>After a day</th></tr></thead><tbody data-born-rows><tr><td colspan="7" class="rec-empty">Loading…</td></tr></tbody></table></div>
+    <p class="rec-note">Same prices and timing as the calls above. Coins launched before this list existed are filled in from GeckoTerminal candles and say so.</p>
+  </section>
+
   <section class="ip" id="chart-oracle" aria-labelledby="or-h">
-    <div class="eyebrow-line"><span>02 / The chart oracle</span></div>
+    <div class="eyebrow-line"><span>03 / The chart oracle</span></div>
     <div class="split" style="margin-bottom:28px">
       <h2 id="or-h" class="h2 words" data-words>Chart notes, graded</h2>
       <p class="lead rv" data-orc-rules>Loading the chart notes…</p>

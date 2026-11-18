@@ -15,6 +15,9 @@ process.env.ROBINHOOD_RPCS = FORK;
 process.env.ROBINHOOD_RPC = FORK;
 process.env.RPC_TIMEOUT_MS = "60000";   // a fork pulls fresh state from the network for every new address
 delete process.env.TROYA_NO_BROADCAST;
+// The Record's own loops stay off here (its price reads would queue behind GeckoTerminal for coins only this fork knows);
+// noteBorn still records and prices each new coin
+process.env.RECORD = "0";
 const DATA = await mkdtemp(join(tmpdir(), "troya-launch-fork-"));
 process.env.DATA_DIR = DATA;
 process.env.SITE_URL = "https://troya.codes";   // uploaded logos get a public https link, as on the server
@@ -30,7 +33,7 @@ const { initStore } = await import(ROOT + "server/store.mjs");
 const store = await initStore(DATA);
 const router = { get() {}, post() {}, put() {}, delete() {} };
 const ctx = { store, dataDir: DATA };
-for (const m of ["robinhood", "policy", "journal", "agentwallet", "holders", "launch"]) { const mod = await import(ROOT + `server/${m}.mjs`); if (mod.register) await mod.register(router, ctx); }
+for (const m of ["robinhood", "policy", "journal", "agentwallet", "holders", "launch", "record"]) { const mod = await import(ROOT + `server/${m}.mjs`); if (mod.register) await mod.register(router, ctx); }
 const L = await import(ROOT + "server/launch.mjs");
 const { ADDR } = await import(ROOT + "server/robinhood.mjs");
 
@@ -128,6 +131,23 @@ ok(`test mode, admin holder launch from X: $FHORSE ${r.launch.token}, deployed b
 const again = await L.fromX({ tweetId: "8", authorId: "111", text: "@Troyaagent launch Fork Horse $FHORSE tax 1%", mediaUrl: IMG });
 assert.equal(again.launch?.token, r.launch.token); assert.equal(again.reply, null);
 ok("the same post read twice does not launch twice");
+/* ---------- V6 F30 · Born at the gate: a place on The Record and a live Gate verdict ---------- */
+{
+  const k = `born:${r.launch.token.toLowerCase()}`;
+  let entry = null;
+  // on the ledger at once, its first price a moment later (the fork reads prices through a public RPC)
+  for (let i = 0; i < 90 && !(entry?.p0 > 0); i++) { await new Promise((res) => setTimeout(res, 1000)); entry = (await store.readJson("record.json", { calls: {} })).calls[k]; }
+  assert.ok(entry, "the new coin is on The Record");
+  assert.equal(entry.kind, "born"); assert.equal(entry.source, "x"); assert.ok(entry.p0 > 0, "price at birth recorded");
+  const RV = await import(ROOT + "server/record.mjs");
+  const view = await RV.recordView({});
+  assert.ok(view.born.coins.some((c) => c.token === r.launch.token.toLowerCase()), "listed under Born through Troya");
+  assert.ok(!view.calls.some((c) => c.token === r.launch.token.toLowerCase()), "not counted as a Sentry call");
+  const g = await L._bornGate(r.launch.token, r.launch.at);
+  // the fork stands still in its first block, so the coin is still inside Pons's snipe tax: "launching", never "failed"
+  assert.ok(g && ["passed", "caution", "untested", "launching"].includes(g.verdict), JSON.stringify(g));
+  ok(`F30: $FHORSE took its place on The Record at birth (price ${entry.p0.toPrecision(3)} USD, kept apart from Sentry's calls); live Gate verdict: ${g.verdict}${g.why ? ` (${g.why})` : ""}`);
+}
 
 // no image attached: the coin launches without one, and the reply says so
 r = await L.fromX({ tweetId: "5", authorId: "111", text: "@Troyaagent launch Bare Horse $BARE", mediaUrl: null });
@@ -149,6 +169,7 @@ const held = BigInt(erc.decodeFunctionResult("balanceOf", await provider.call({ 
 assert.ok(held > 0n, "the Agent Wallet holds the new coin");
 assert.match(r.reply, /Initial buy of 0.01 ETH done/);
 ok(`launch with an initial buy: $BUYH, the Agent Wallet bought ${(Number(held) / 1e18).toLocaleString("en-US")} tokens for 0.01 ETH`);
+const buyhToken = r.launch.token;
 
 /* ---------- Launch on X is open to everyone (owner, 18 Nov): a non-holder once a day, through a splitter; holders without a limit ---------- */
 await store.writeJson("x-state.json", { launch: "live" });
@@ -241,6 +262,49 @@ ok(`F28 Creator desk, split coin: it said ${pc.yoursEth.toFixed(8)} ETH was wait
   assert.ok(near(got, hf.yoursEth), `holder got ${got}, the desk said ${hf.yoursEth}`);
   assert.ok((await L.creatorFees(H)).yoursEth < 1e-12, "nothing left for the holder");
   ok(`F28 Creator desk, holder coins: ${hf.escrow.txs.length} transactions (sweep the curve, claim the escrow) paid H ${got.toFixed(8)} ETH, as the desk said`);
+}
+
+/* ---------- F29 · Trade on X: buy and sell by posting, from the Agent Wallet (holder H, admin, test mode) ---------- */
+{
+  const X = await import(ROOT + "server/xtrade.mjs");
+  await X.register(router, ctx);
+  const CA = buyhToken;
+  const tradeFix = (reply) => { assert.match(reply, /^Not traded: .+To fix: /); assert.ok((reply.match(/\$[A-Za-z][A-Za-z0-9]*/g) || []).length <= 1, reply); };
+  // real buyers first: past the Gate's 0.25 ETH pool-depth floor on the Pons curve
+  const whale = Wallet.createRandom().connect(provider); await fund(whale.address, 2);
+  const bcurve = getAddress((await info(CA)).curve);
+  await (await whale.sendTransaction({ to: bcurve, data: curveI.encodeFunctionData("buy", [parseEther("0.5"), 0, whale.address]), value: parseEther("0.5"), nonce: 0 })).wait();
+  await store.update("x-state.json", {}, (st) => ({ ...st, trade: "off" }));
+  let x = await X.fromX({ tweetId: "t1", authorId: "111", text: `@Troyaagent buy 0.002 ${CA}` });
+  assert.match(x.reply, /isn't open yet/);
+  await store.update("x-state.json", {}, (st) => ({ ...st, trade: "test" }));
+  x = await X.fromX({ tweetId: "t2", authorId: "111", text: `@Troyaagent buy 0.002 ${CA}` });
+  assert.match(x.reply, /Trade from X is switched off/); tradeFix(x.reply);
+  ok("Trade on X: off says not open yet; with the switch off for the wallet, nothing trades");
+  await store.update("launch-prefs.json", {}, (m) => ({ ...m, [H.toLowerCase()]: { ...(m[H.toLowerCase()] || {}), trade: true } }));
+  const bal = async () => BigInt(erc.decodeFunctionResult("balanceOf", await provider.call({ to: CA, data: erc.encodeFunctionData("balanceOf", [awH.address]) }))[0]);
+  const b0 = await bal();
+  x = await X.fromX({ tweetId: "t3", authorId: "111", text: `@Troyaagent buy 0.002 ${CA}` });
+  assert.ok(x.trade?.executed, x.reply);
+  assert.match(x.reply, /^Bought .*\$BUYH for 0\.002 ETH/); assert.ok(xLen(x.reply) <= 280);
+  const b1 = await bal(); assert.ok(b1 > b0, "the Agent Wallet holds more $BUYH");
+  console.log("   reply:", x.reply);
+  assert.equal((await X.fromX({ tweetId: "t3", authorId: "111", text: `@Troyaagent buy 0.002 ${CA}` })).reply, null, "a post read twice trades once");
+  ok(`Trade on X: "buy 0.002 <CA>" bought ${(Number(b1 - b0) / 1e18).toLocaleString("en-US")} $BUYH through the Gate; the same post read twice trades once`);
+  x = await X.fromX({ tweetId: "t4", authorId: "111", text: `@Troyaagent sell 50% ${CA}` });
+  assert.ok(x.trade?.executed, x.reply); assert.match(x.reply, /^Sold 50% of your \$BUYH/);
+  const b2 = await bal();
+  assert.ok(b2 * 2n >= b1 - b1 / 1000n && b2 * 2n <= b1 + b1 / 1000n, `about half left: ${b2} of ${b1}`);
+  console.log("   reply:", x.reply);
+  ok("Trade on X: \"sell 50% <CA>\" sold half of the Agent Wallet's coins; the ETH stays in the Agent Wallet");
+  x = await X.fromX({ tweetId: "t5", authorId: "111", text: `@Troyaagent buy 5 ${CA}` }); assert.match(x.reply, /up to 0\.5 ETH/); tradeFix(x.reply);
+  assert.equal(await X.fromX({ tweetId: "t6", authorId: "111", text: `@Troyaagent should I buy 0.01 ${CA}?` }), null);
+  x = await X.fromX({ tweetId: "t7", authorId: "111", text: "@Troyaagent buy $BUYH" }); assert.match(x.reply, /couldn't read the trade/);
+  ok("Trade on X: a 5 ETH buy is refused, a question is not a trade, an unclear post gets the format");
+  await store.update("x-state.json", {}, (st) => ({ ...st, trade: "holders" }));
+  await store.update("launch-prefs.json", {}, (m) => ({ ...m, [M.toLowerCase()]: { ...(m[M.toLowerCase()] || {}), trade: true } }));
+  x = await X.fromX({ tweetId: "t8", authorId: "333", text: `@Troyaagent buy 0.002 ${CA}` }); assert.match(x.reply, /holders of 1M TROYA first/); tradeFix(x.reply);
+  ok("Trade on X, holders mode: a wallet without 1M $TROYA is told it opens to holders first");
 }
 
 /* ---------- a web launch (the creator's own wallet) recorded after a check on chain ---------- */

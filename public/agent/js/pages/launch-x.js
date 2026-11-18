@@ -100,6 +100,7 @@ export async function mount(view, ctx) {
             h("li", {}, "Troya sees your post within seconds and replies with the coin's address and market cap, or with what to fix if it could not launch."),
             h("li", {}, "Your own words work too, in English: \"please create a token called Moon Cat, ticker MCAT, 2% tax, buy 0.01 ETH\". If Troya is unsure, it shows you the format instead of guessing."),
             h("li", {}, "Any name and ticker you like: the ticker is letters and numbers (16 at most), the name up to 48 characters.")))),
+      tradeCard(),
       mineCard(),
       p?.admin ? adminCard() : null);
   }
@@ -131,6 +132,28 @@ export async function mount(view, ctx) {
       }) }, `Sell ${pct}%`)));
   }
 
+  // V6 F29 · Trade from X: buy or sell by posting, from the Agent Wallet, through Troya Gate
+  function tradeCard() {
+    const p = st.prefs;
+    const mode = p?.xTradeMode || "off";
+    const status = { off: "Opens after its real-money test. You can switch it on now.", test: "In its real-money test: only Troya's own wallets can trade from X right now.",
+      holders: "Open to holders of 1,000,000 $TROYA first.", live: "Open to everyone." }[mode];
+    const BUY = "@Troyaagent buy 0.01 $TICKER", SELL = "@Troyaagent sell 50% $TICKER";
+    const ex = (t) => h("div", { class: "lx-tweet" }, h("span", { class: "mono" }, t), h("button", { class: "link", type: "button", onclick: () => copyText(t, "Copied") }, "Copy"));
+    return h("section", { class: "panel lx-panel" },
+      h("h2", {}, "Trade from X"),
+      h("p", { class: "muted" }, `Post a buy or a sell and your Agent Wallet trades it. ${status}`),
+      ex(BUY), ex(SELL),
+      h("ul", { class: "lx-rules" },
+        h("li", {}, "Also: \"buy 0.01 ETH of 0x…\", \"sell all $TICKER\", \"sell half of 0x…\". The post has to start with buy or sell; a question is never a trade."),
+        h("li", {}, "Every trade runs through Troya Gate and your Agent Wallet caps, like a trade in the app. Buys from 0.0005 to 0.5 ETH a post."),
+        h("li", {}, "When several coins share a ticker, Troya asks for the contract address instead of guessing."),
+        h("li", {}, "The ETH from a sale stays in your Agent Wallet. Troya replies in seconds with what it did, or with what to fix."),
+        h("li", {}, "Uses the same linked X account and Agent Wallet as Launch from X.")),
+      p ? h("button", { class: `btn${p.trade ? "" : " primary"}`, type: "button", disabled: !!st.busy || !wallet.session, onclick: run(p.trade ? "Switching off…" : "Switching on…", () => api.post("launch/prefs", { trade: !p.trade })) },
+        p.trade ? "Switch Trade from X off" : "Switch Trade from X on") : null);
+  }
+
   function adminCard() {
     const f = st.factory, p = st.prefs;
     const card = h("section", { class: "panel lx-panel" }, h("h2", {}, "Admin"));
@@ -139,6 +162,11 @@ export async function mount(view, ctx) {
     card.append(h("div", { class: "lx-coin" }, h("b", {}, "Launch on X"), h("span", { class: "muted" }, label),
       h("span", { style: { display: "inline-flex", gap: "6px" } }, ["off", "test", "live"].map((m) => h("button", { class: `btn${m === mode ? " primary" : ""}`, type: "button", disabled: !!st.busy || m === mode,
         onclick: run("Saving…", () => api.post("x/launch", { launch: m })) }, m[0].toUpperCase() + m.slice(1))))));
+    const xm = p.xTradeMode || "off";
+    const xl = { off: "Off: buy/sell posts get a not-open-yet reply.", test: "Test: only admin wallets can trade from X.", holders: "Holders: wallets with 1M $TROYA can trade from X.", live: "Live: everyone who switched it on can trade from X." }[xm];
+    card.append(h("div", { class: "lx-coin" }, h("b", {}, "Trade on X"), h("span", { class: "muted" }, xl),
+      h("span", { style: { display: "inline-flex", gap: "6px", flexWrap: "wrap" } }, ["off", "test", "holders", "live"].map((m) => h("button", { class: `btn${m === xm ? " primary" : ""}`, type: "button", disabled: !!st.busy || m === xm,
+        onclick: run("Saving…", () => api.post("x/trade", { trade: m })) }, m[0].toUpperCase() + m.slice(1))))));
     const tm = p.tgLaunchMode || "off";
     const tl = { off: "Off: /launch gets a not-open-yet reply.", test: "Test: only admin wallets can launch in Telegram.", live: "Live: everyone with a linked chat and an Agent Wallet can launch." }[tm];
     card.append(h("div", { class: "lx-coin" }, h("b", {}, "Launch in Telegram"), h("span", { class: "muted" }, tl),

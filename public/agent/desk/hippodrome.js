@@ -19,6 +19,8 @@ const SOURCE = { x: ["X", X_ICON], tg: ["Telegram", TG_ICON], web: ["Web", WEB_I
 // CTO: a group of people; Dex Paid: a blue verified badge
 const PEOPLE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.25 6.75a3.75 3.75 0 1 1 7.5 0 3.75 3.75 0 0 1-7.5 0zM15.75 9.75a3 3 0 1 1 6 0 3 3 0 0 1-6 0zM2.25 9.75a3 3 0 1 1 6 0 3 3 0 0 1-6 0zM6.31 15.12A6.75 6.75 0 0 1 12 12a6.75 6.75 0 0 1 6.71 7.5.75.75 0 0 1-.37.57A12.7 12.7 0 0 1 12 21.75c-2.3 0-4.47-.61-6.34-1.68a.75.75 0 0 1-.37-.57 6.79 6.79 0 0 1 1.02-4.38zM5.08 14.25a8.29 8.29 0 0 0-1.3 5.14 9.7 9.7 0 0 1-1.77-.44l-.11-.04a.56.56 0 0 1-.38-.49l-.01-.12a3.75 3.75 0 0 1 3.57-4.05zM20.23 19.39a8.29 8.29 0 0 0-1.31-5.14 3.75 3.75 0 0 1 3.57 4.05l-.01.12a.56.56 0 0 1-.37.49l-.12.04c-.56.2-1.15.35-1.76.44z"/></svg>';
 const FIRE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12.96 2.29a.75.75 0 0 0-1.07-.14 9.74 9.74 0 0 0-3.54 6.18 7.55 7.55 0 0 1-1.7-1.72.75.75 0 0 0-1.16-.08A9 9 0 1 0 15.68 4.53a7.46 7.46 0 0 1-2.72-2.24zM15.75 14.25a3.75 3.75 0 1 1-7.31-1.17c.63.46 1.35.81 2.13 1a6 6 0 0 1 1.93-3.55 3.75 3.75 0 0 1 3.25 3.72z"/></svg>';
+// V6 F30: Troya Gate's shield, coloured by the coin's live verdict
+const SHIELD = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 2l8.2 3.1v6.6c0 5-3.5 9.2-8.2 10.6-4.7-1.4-8.2-5.6-8.2-10.6V5.1zm3.6 6.6l-4.9 4.9-2.3-2.3-1.3 1.3 3.6 3.6 6.2-6.2z"/></svg>';
 const VERIFIED = '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="vb" d="M8.6 3.8A4.5 4.5 0 0 1 12 2.25c1.36 0 2.57.6 3.4 1.55a4.5 4.5 0 0 1 3.5 1.3 4.5 4.5 0 0 1 1.3 3.5A4.5 4.5 0 0 1 21.75 12a4.5 4.5 0 0 1-1.55 3.4 4.5 4.5 0 0 1-1.3 3.5 4.5 4.5 0 0 1-3.5 1.3A4.5 4.5 0 0 1 12 21.75a4.5 4.5 0 0 1-3.4-1.55 4.5 4.5 0 0 1-3.5-1.3 4.5 4.5 0 0 1-1.3-3.5A4.5 4.5 0 0 1 2.25 12c0-1.36.6-2.57 1.55-3.4a4.5 4.5 0 0 1 1.3-3.5 4.5 4.5 0 0 1 3.5-1.3z"/><path class="vc" d="M8.4 12.3l2.4 2.4 4.8-5.2"/></svg>';
 // besides Troya (Buy, through the Gate), each coin opens on the venues people already trade on
 const VENUES = [
@@ -87,6 +89,15 @@ export async function mount(view, ctx) {
     const pct = Math.max(0, Math.min(100, Number(c.progressPct) || 0));
     // tags appear only when they are true for this coin
     const tags = [];
+    // V6 F30 Born at the gate: the coin's live Troya Gate verdict (a 0.01 ETH buy and its sell simulated, every 10 minutes)
+    if (c.gate?.verdict) {
+      const G = { passed: ["Gate: passed", `Troya Gate passed it: ${c.gate.passed} of ${c.gate.total} checks clean, the buy and the sell simulated.`, "green"],
+        caution: ["Gate: caution", `Troya Gate passed it with a warning. ${c.gate.why || ""}`, "yellow"],
+        failed: ["Gate: failed", `Troya Gate would stop a trade right now. ${c.gate.why || ""}`, "red"],
+        untested: ["Gate: not tested yet", "Nobody has sold yet, so the sell can't be simulated. Troya checks again every 10 minutes.", "blue"],
+        launching: ["Gate: launching", "Its first minutes carry Pons's snipe tax, so the Gate waits for it to settle. Checked again in 30 seconds.", "blue"] }[c.gate.verdict];
+      if (G) tags.push(tipOn(h("span", { class: `hp-tag hp-gate ${c.gate.verdict} ic` }, svg(SHIELD, "hp-tag-ic")), G[0], `${G[1].trim()} Checked ${ago(c.gate.checkedAt)}.`, G[2]));
+    }
     if (c.og) tags.push(tipOn(h("span", { class: "hp-tag og" }, "OG"), "OG", c.badgesFrom === "gmgn" ? "Flagged as an OG token on GMGN." : "The original $TROYA, the coin Troya is built around.", "green"));
     if (c.cto) tags.push(tipOn(h("span", { class: "hp-tag cto ic on" }, svg(PEOPLE, "hp-tag-ic")), "Community takeover", "The community runs this coin.", "yellow"));
     if (c.dexPaid) tags.push(tipOn(h("span", { class: "hp-tag paid ic on" }, svg(VERIFIED, "hp-tag-ic")), "Dex Paid", "This coin's DexScreener profile is paid and approved.", "blue"));

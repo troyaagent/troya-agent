@@ -175,6 +175,19 @@ async function handleMention(t, { users, media, bot, m, L }) {
     }
     return entry;
   }
+  // V6 F29: a buy/sell command is answered by xtrade.mjs with a fixed text, never by the model
+  const tr = await import("./xtrade.mjs").then((x) => x.fromX({ tweetId: t.id, authorId: t.author_id, text: t.text })).catch((e) => ({ reply: null, error: e.message }));
+  if (tr) {
+    entry.kind = "trade"; entry.token = tr.trade?.token || null; entry.why = tr.error || null;
+    if (tr.reply) {
+      entry.reply = oneCashtag(tr.reply);
+      if (await spend("posts")) {
+        const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: entry.reply, reply: { in_reply_to_tweet_id: t.id } } }).catch((e) => { entry.why = e.message; return null; });
+        entry.status = p?.data?.id ? "posted" : "failed"; entry.replyId = p?.data?.id || null;
+      } else { entry.status = "draft"; entry.why = "daily post cap reached"; }
+    }
+    return entry;
+  }
   if (m === "off") entry.why = "AI replies are off";
   else if (!text || text.length < 3) entry.why = "nothing to answer";
   // people learning to launch or trade ask several questions in a row: guide them (owner, 18 Nov), still capped

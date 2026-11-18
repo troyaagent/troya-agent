@@ -39,6 +39,7 @@ const MODULES = [
   "./registry.mjs",    // F24: agent registry, agents file signed calls on Robinhood Chain coins and earn a public reputation
   "./rail.mjs",        // F25: the audited rail, limits/allowlist/kill switch for agents trading through Robinhood's agentic MCP
   "./launch.mjs",      // V6 Hermes: launching through Troya (X, Telegram, web), the fee rule and the TroyaFeeSplitter
+  "./xtrade.mjs",      // V6 F29: Trade on X (buy/sell by posting to @Troyaagent, from the Agent Wallet)
   "./community.mjs",   // community inbox: bug reports, ideas and suspicious-activity flags (web + Telegram), admins only
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
 ];

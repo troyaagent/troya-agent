@@ -122,4 +122,34 @@ await at("2% tax and 0.01 ETH buy are read by the rule, no model", async () => {
   assert.deepEqual(await readLaunch("@Troyaagent launch Wooden Horse $HORSE 2% tax 0.01 ETH buy"), { name: "Wooden Horse", symbol: "HORSE", taxBps: 200, buyEth: 0.01, via: "rule" });
   assert.equal(calls, c);
 });
+/* ---------- V6 F29 · Trade on X: reading buy and sell posts ---------- */
+const { parseTrade } = await import("../server/xtrade.mjs");
+const CA = "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074";
+await t("buy posts: amount and coin, in the common shapes", () => {
+  assert.deepEqual(parseTrade("@Troyaagent buy 0.01 $HORSE"), { side: "buy", eth: 0.01, token: "$HORSE" });
+  assert.deepEqual(parseTrade("@Troyaagent buy 0.01 ETH of $HORSE"), { side: "buy", eth: 0.01, token: "$HORSE" });
+  assert.deepEqual(parseTrade("@Troyaagent buy 0.05 eth worth of " + CA), { side: "buy", eth: 0.05, token: CA });
+  assert.deepEqual(parseTrade("hey @Troyaagent please buy $HORSE for 0.02 ETH"), { side: "buy", eth: 0.02, token: "$HORSE" });
+  assert.deepEqual(parseTrade("@Troyaagent buy .5 $HORSE now"), { side: "buy", eth: 0.5, token: "$HORSE" });
+});
+await t("sell posts: a share, all or half", () => {
+  assert.deepEqual(parseTrade("@Troyaagent sell 50% $HORSE"), { side: "sell", pct: 50, token: "$HORSE" });
+  assert.deepEqual(parseTrade("@Troyaagent sell all " + CA), { side: "sell", pct: 100, token: CA });
+  assert.deepEqual(parseTrade("@Troyaagent sell half of my $HORSE"), { side: "sell", pct: 50, token: "$HORSE" });
+  assert.deepEqual(parseTrade("@Troyaagent sell $HORSE 25%"), { side: "sell", pct: 25, token: "$HORSE" });
+  assert.deepEqual(parseTrade("@Troyaagent sell everything of $HORSE"), { side: "sell", pct: 100, token: "$HORSE" });
+});
+await t("questions and chat are never trades", () => {
+  assert.equal(parseTrade("@Troyaagent should I buy 0.01 $HORSE?"), null);
+  assert.equal(parseTrade("@Troyaagent buy 0.01 $HORSE?"), null);
+  assert.equal(parseTrade("@Troyaagent I want to buy some $HORSE later"), null);
+  assert.equal(parseTrade("@Troyaagent launch Wooden Horse $HORSE buy 0.01"), null);
+  assert.equal(parseTrade("@Troyaagent gm, how is $TROYA doing"), null);
+});
+await t("a buy or sell that can't be read for sure is unclear, never guessed", () => {
+  assert.deepEqual(parseTrade("@Troyaagent buy $HORSE"), { unclear: true });
+  assert.deepEqual(parseTrade("@Troyaagent sell $HORSE"), { unclear: true });
+  assert.deepEqual(parseTrade("@Troyaagent buy a lot of horse"), { unclear: true });
+  assert.deepEqual(parseTrade("@Troyaagent sell 50% horse"), { unclear: true });
+});
 console.log(`\n${n}/${n} passed`);

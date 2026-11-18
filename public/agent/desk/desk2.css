@@ -1372,3 +1372,10 @@ html[data-theme="light"] .d-side::-webkit-scrollbar-thumb { background: #d6d1c7;
 .pf2-donut-c.off b { font-size: 13px; font-weight: 600; letter-spacing: .04em; color: var(--muted); }
 .pf2-legend.off { max-width: 240px; } .pf2-legend.off li { display: block; }
 .pf2-legend.off li span { font-size: 13px; font-weight: 500; line-height: 1.5; letter-spacing: 0; text-transform: none; color: var(--fg-2); }
+
+/* V6 F30 Born at the gate: the live Troya Gate verdict on each Troya Launches card */
+.hp-tag.hp-gate.passed { color: #6fd39a; border-color: rgba(111, 211, 154, .5); background: rgba(111, 211, 154, .1); }
+.hp-tag.hp-gate.caution { color: #f5c84a; border-color: rgba(245, 200, 74, .5); background: rgba(245, 200, 74, .1); }
+.hp-tag.hp-gate.failed { color: #ff6b6b; border-color: rgba(255, 107, 107, .5); background: rgba(255, 107, 107, .1); }
+.hp-tag.hp-gate.untested, .hp-tag.hp-gate.launching { color: #8edff5; border-color: rgba(142, 223, 245, .4); background: rgba(142, 223, 245, .08); }
+.hp-tag.hp-gate svg { fill: currentColor; }

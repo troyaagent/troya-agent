@@ -35,8 +35,12 @@ export async function holderOf(owner) {
   for (const a of addrs) {
     // a failed read is an error, never a balance of 0: counted as 0 and kept for 10 minutes, it made a 1M holder a
     // non-holder, and a coin launched in that window had Troya's fee splitter fixed on chain for good. Not memoized.
-    const b = await getBalances(a, [ca]);
-    const t = b?.balances?.find((x) => x.address !== "native" && x.address.toLowerCase() === ca.toLowerCase());
+    let t = null;
+    for (let i = 0; i < 2 && !t; i++) {
+      if (i) await new Promise((res) => setTimeout(res, 1500));
+      const b = await getBalances(a, [ca]).catch(() => null);
+      t = b?.balances?.find((x) => x.address !== "native" && x.address.toLowerCase() === ca.toLowerCase()) || null;
+    }
     if (!t) throw new Error("Couldn't read the $TROYA balance right now.");
     balance += Number(t.amount);
   }

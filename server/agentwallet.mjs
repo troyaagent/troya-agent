@@ -79,12 +79,23 @@ async function addSpent(owner, usd) {
 }
 
 const lcs = (s) => String(s || "").toLowerCase();
+const NEXT_NONCE = new Map();   // lower(Agent Wallet address) → { n: the next nonce this server will use, at }; trusted for 2 min
 async function send(owner, w, tx, label) {
   if (NO_BROADCAST) {
     const populated = await w.populateTransaction(tx).catch((e) => ({ error: e.shortMessage || e.message }));
     return { broadcast: false, note: "TROYA_NO_BROADCAST is set: the transaction was built but not sent.", tx: populated?.error ? null : { to: populated.to, value: String(populated.value ?? 0), data: (populated.data || "0x").slice(0, 74) + "…" }, error: populated?.error || null };
   }
-  const sent = await w.sendTransaction(tx);
+  // the nonce is read straight from the node and counted here: ethers caches an identical request for 250 ms, so a swap sent
+  // right after its approval could reuse the approval's nonce ("nonce has already been used"). A failed send starts over.
+  const a = lcs(w.address);
+  let sent;
+  try {
+    const onChain = Number(BigInt(await w.provider.send("eth_getTransactionCount", [w.address, "pending"])));
+    const mine = NEXT_NONCE.get(a);
+    const nonce = Math.max(onChain, mine && Date.now() - mine.at < 120_000 ? mine.n : 0);
+    NEXT_NONCE.set(a, { n: nonce + 1, at: Date.now() });
+    sent = await w.sendTransaction({ ...tx, nonce });
+  } catch (e) { NEXT_NONCE.delete(a); throw e; }
   const receipt = await sent.wait(1, 90_000).catch(() => null);
   // Troya pays gas: the fee goes back to the Agent Wallet (daily limits in gas.mjs); never for a withdrawal to the owner
   if (receipt?.status === 1 && lcs(tx.to) !== lcs(owner)) {

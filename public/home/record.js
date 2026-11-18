@@ -47,6 +47,32 @@
         <td>${c.peakX == null ? '<span class="rec-na">–</span>' : `${c.peakX.toFixed(2)}×`}</td><td>${res}${c.late ? ' <em class="rec-via">late</em>' : ""}</td></tr>`;
     }).join("") + more;
   }
+  // V6 F30: coins born through Troya, in a list of their own
+  const FROM = { x: "From X", tg: "From Telegram", web: "From troya.codes", origin: "The original $TROYA" };
+  function born(b) {
+    if (!b || !$("[data-born-rows]")) return;
+    const s = b.stats || {};
+    const tile = (k, v, sub = "") => `<div class="rec-tile"><span>${k}</span><b>${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+    $("[data-born-stats]").innerHTML = [
+      tile("Coins born through Troya", (s.coins || 0).toLocaleString("en-US"), `${s.watching || 0} still inside their first day`),
+      tile("Past their first day", (s.graded || 0).toLocaleString("en-US"), `${s.up24h || 0} higher after a day · ${(s.graded || 0) - (s.up24h || 0)} lower`),
+      tile("Median at 24 h", s.median24h == null ? "–" : `${s.median24h >= 0 ? "+" : ""}${s.median24h.toFixed(1)}%`, "against the price at birth"),
+      tile("Median peak", s.medianPeakX == null ? "–" : `${s.medianPeakX.toFixed(2)}×`, "highest price in the first day"),
+    ].join("");
+    const list = b.coins || [];
+    if (!list.length) { $("[data-born-rows]").innerHTML = '<tr><td colspan="7" class="rec-empty">No coin born through Troya yet. The first launch starts this list.</td></tr>'; return; }
+    $("[data-born-rows]").innerHTML = list.map((c) => {
+      const res = c.result === "win" ? '<b class="rec-win">Higher</b>' : c.result === "miss" ? '<b class="rec-miss">Lower</b>'
+        : c.status === "watching" ? `<span class="rec-watch">First day${c.changeNow != null ? " · " + ch(c.changeNow) : ""}</span>`
+        : c.priceAtCall != null ? '<span class="rec-na">No 24 h price</span>' : '<span class="rec-na">No price</span>';
+      const sym = c.symbol ? "$" + esc(c.symbol) : short(c.token);
+      const via = c.via && c.via.startsWith("candles") ? ' <em class="rec-via">candles</em>' : "";
+      return `<tr>
+        <td><a class="rec-coin" href="/agent#/token/${esc(c.token)}">${sym}</a><small>${esc(FROM[c.source] || "Born through Troya")}</small></td>
+        <td>${ago(c.at)}</td><td>${price(c.priceAtCall)}${via}</td><td>${ch(c.change1h)}</td><td>${ch(c.change24h)}</td>
+        <td>${c.peakX == null ? '<span class="rec-na">–</span>' : `${c.peakX.toFixed(2)}×`}</td><td>${res}${c.late ? ' <em class="rec-via">late</em>' : ""}</td></tr>`;
+    }).join("");
+  }
   document.addEventListener("click", (e) => {
     if (!e.target.closest("[data-rec-more]") || !last) return;
     shown += PAGE; rows(last.calls, last.stats.calls);
@@ -57,7 +83,7 @@
       const d = await (await fetch("/api/record?limit=500", { cache: "no-store" })).json();
       $("[data-rec-rules]").textContent = d.rules;
       last = d;
-      stats(d.stats); rows(d.calls, d.stats.calls);
+      stats(d.stats); rows(d.calls, d.stats.calls); born(d.born);
     } catch {
       $("[data-rec-rules]").textContent = "The ledger could not be read right now. Try again in a minute.";
     }

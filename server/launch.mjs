@@ -160,7 +160,52 @@ async function addRecord(r) {
     l.push(r);
     return l.slice(-5000);
   });
+  // V6 F30: the coin takes its place on The Record from its first block (team tests stay off it)
+  if (!dup && r.token && !r.teamTest) import("./record.mjs").then((m) => m.noteBorn({ token: r.token, symbol: r.symbol, at: r.at || Date.now(), source: r.source })).catch(() => {});
   return !dup;
+}
+/* ---------- V6 F30 · Born at the gate: a live Troya Gate verdict for every coin born through Troya ---------- */
+// the same check as a trade in the app (0.01 ETH buy simulated, then the sell), refreshed every 10 minutes per coin
+const GATE_TTL = 10 * 60_000;
+const gateMemo = new Map();
+// A coin's first minutes carry Pons's snipe tax (99%, halving every few blocks): a check then fails on "fees and taxes"
+// although nothing is wrong with the coin. A young coin that fails only on fees shows "launching" and is checked again
+// in 30 seconds, never kept as failed for 10 minutes.
+const SNIPE_WINDOW = 10 * 60_000, YOUNG_TTL = 30_000;
+async function bornGate(token, bornAt = null) {
+  const k = lc(token), hit = gateMemo.get(k);
+  if (hit && Date.now() - hit.at < (hit.ttl || GATE_TTL)) return hit.v;
+  if (hit?.inflight) return hit.v || null;
+  gateMemo.set(k, { ...(hit || {}), inflight: true });
+  try {
+    const [{ gateCheck }, { verdict }] = await Promise.all([import("./robinhood.mjs"), import("./sentry.mjs")]);
+    const g = await gateCheck({ tokenIn: "ETH", tokenOut: getAddress(token), amountIn: "0.01", slippageBps: 300 });
+    const vd = verdict(g);
+    const young = bornAt && Date.now() - bornAt < SNIPE_WINDOW;
+    // the fee check fails first while the snipe tax runs (the sell simulation then pays it too): that is "launching"
+    const onlyFees = vd.v === "failed" && /fee|tax/i.test(`${vd.why?.key || ""} ${vd.why?.label || ""}`);
+    const settling = young && onlyFees;
+    const v = { verdict: settling ? "launching" : vd.v === "nobuys" ? "untested" : vd.v, why: settling ? null : vd.why ? `${vd.why.label}: ${vd.why.detail}`.slice(0, 200) : null,
+      passed: g.checks.filter((c) => c.status === "pass").length, total: g.checks.filter((c) => c.status !== "skip").length, checkedAt: g.checkedAt || Date.now() };
+    gateMemo.set(k, { at: Date.now(), v, ttl: settling || (young && vd.v === "nobuys") ? YOUNG_TTL : GATE_TTL });
+    return v;
+  } catch {
+    gateMemo.set(k, { at: Date.now() - GATE_TTL + 60_000, v: hit?.v || null });   // a failed check is tried again in a minute
+    return hit?.v || null;
+  }
+}
+// the board never waits for a check: it shows the last verdict and a stale one is refreshed in the background
+function bornGateNow(token, bornAt) {
+  const hit = gateMemo.get(lc(token));
+  if (!hit || (!hit.inflight && Date.now() - (hit.at || 0) >= (hit.ttl || GATE_TTL))) bornGate(token, bornAt).catch(() => {});
+  return hit?.v || null;
+}
+/** tests only: the live Gate verdict of one coin */
+export const _bornGate = (token, bornAt) => bornGate(token, bornAt);
+// coins launched before F30 take their place on The Record too (older ones from candles), once at start
+async function bornToRecord() {
+  const m = await import("./record.mjs");
+  for (const r of await bornRecords()) await m.noteBorn({ token: r.token, symbol: r.symbol, at: r.at, source: r.source }).catch(() => {});
 }
 
 const RECORD_WINDOW_MS = 60 * 60_000;
@@ -354,6 +399,7 @@ Rules: "launch" only for a clear request to create a new coin now; questions abo
  * cannot be read safely, or null when the post is not about launching.
  */
 export async function readLaunch(text) {
+  if (/^(?:(?:hey|hi|yo|gm|ok|okay|please|pls|troya)\b[\s,!.:-]*)*(?:buy|sell)\b/i.test(plainOf(text))) return null;
   const rule = parseLaunch(text);
   if (rule && rule.symbol && rule.name && !MESSY_NAME.test(rule.name)) return { ...rule, via: "rule" };
   if (!rule && !looksLikeLaunch(text)) return null;
@@ -683,8 +729,8 @@ function socialLinks(t) {
 async function boardItem(rec, handles) {
   const m = await import("./market.mjs");
   const devs = [...new Set([rec.wallet, rec.owner].filter((a) => isAddress(String(a || ""))).map(lc))];
-  const [d, ds, dev, hold, gm] = await Promise.all([m.getRobinhoodToken(rec.token).catch(() => null), dexOrders(rec.token), devs.length ? devStatus(rec.token, devs, rec.block || null).catch(() => null) : null,
-    rec.source !== "origin" && rec.owner ? holderInfo(rec.owner).catch(() => null) : null, gmgnFlags(rec.token).catch(() => null)]);
+  const [d, ds, dev, hold, gm, gate] = await Promise.all([m.getRobinhoodToken(rec.token).catch(() => null), dexOrders(rec.token), devs.length ? devStatus(rec.token, devs, rec.block || null).catch(() => null) : null,
+    rec.source !== "origin" && rec.owner ? holderInfo(rec.owner).catch(() => null) : null, gmgnFlags(rec.token).catch(() => null), bornGateNow(rec.token, rec.at)]);
   const t = d?.token || {}, p = d?.pons || null;
   const graduated = !!p?.graduated || (rec.source === "origin" && !p);
   return {
@@ -696,7 +742,7 @@ async function boardItem(rec, handles) {
     progressPct: graduated ? 100 : p?.progressPct ?? null, graduated, raisedEth: p?.raised ?? null, ponsUrl: p?.ponsUrl || null,
     // badges from GMGN when its key is set (the same flags GMGN shows); until then DexScreener's orders, and $TROYA's own
     og: gm ? gm.og : rec.source === "origin", cto: gm ? gm.cto : ds.cto || !!rec.cto, dexPaid: gm ? gm.dexPaid || ds.paid : ds.paid,
-    badgesFrom: gm ? "gmgn" : "dexscreener", boosts: ds.boosts || 0, dev,
+    badgesFrom: gm ? "gmgn" : "dexscreener", boosts: ds.boosts || 0, dev, gate,
     // the coin's own links (Pons socials(), then DexScreener): shown as X / Telegram / Web icons on its card
     socials: socialLinks(t),
     // the creator holds 1M $TROYA right now (main wallet + Agent Wallet)
@@ -734,6 +780,7 @@ export async function register(r, ctx) {
   // keep Troya Launches warm: built once at start, then refreshed every 20 s in the background
   setTimeout(() => board().catch(() => {}), 8_000).unref?.();
   setInterval(() => { if (!boardInflight) boardInflight = buildBoard().catch(() => null).finally(() => { boardInflight = null; }); }, 20_000).unref?.();
+  setTimeout(() => bornToRecord().catch((e) => console.warn("[launch] born → record:", e.message)), 45_000).unref?.();
   r.get("/api/launch/rules", async () => {
     const factory = await splitterFactory();
     return { holderMin: HOLDER_MIN, limits: LIMITS, maxCreatorTaxBps: MAX_TAX_BPS, troyaVolumePct: TROYA_VOLUME_BPS / 100, creatorFeePct: CREATOR_FEE_BPS / 100,
@@ -755,14 +802,18 @@ export async function register(r, ctx) {
     const a = requireSession(req).address;
     const x = await import("./xsocial.mjs").then((m) => m.handleOf(a)).catch(() => null);
     const fee = await launchMenu().then((m) => m.launchFeeEth).catch(() => null);
-    return { ...(await prefsOf(a)), xAccount: x, holder: await holderInfo(a), holderMin: HOLDER_MIN, xLaunch: await xLaunchOn(), xLaunchMode: await xLaunchMode(), tgLaunchMode: await tgLaunchMode(), launchFeeEth: fee,
+    return { ...(await prefsOf(a)), xAccount: x, holder: await holderInfo(a).catch(() => null), holderMin: HOLDER_MIN, xLaunch: await xLaunchOn(), xLaunchMode: await xLaunchMode(), tgLaunchMode: await tgLaunchMode(), xTradeMode: await import("./xtrade.mjs").then((m) => m.tradeMode()).catch(() => "off"), launchFeeEth: fee,
       limits: LIMITS, admin: isAdmin(req), factory: await splitterFactory() };
   });
   r.post("/api/launch/prefs", async ({ req, body }) => {
     const a = lc(requireSession(req).address);
-    const x = !!body?.x;
-    await store.update("launch-prefs.json", {}, (m) => { m[a] = { ...(m[a] || {}), x, at: Date.now() }; return m; });
-    return { ok: true, x };
+    // { x } Launch from X, { trade } Trade from X (F29): each switch on its own
+    const patch = {};
+    if (body?.x != null) patch.x = !!body.x;
+    if (body?.trade != null) patch.trade = !!body.trade;
+    let now = {};
+    await store.update("launch-prefs.json", {}, (m) => { m[a] = now = { ...(m[a] || {}), ...patch, at: Date.now() }; return m; });
+    return { ok: true, x: !!now.x, trade: !!now.trade };
   }, { perMin: 20 });
   r.post("/api/launch/tg", async ({ req, body }) => {
     if (!isAdmin(req)) throw new HttpError(403, "Admins only.");

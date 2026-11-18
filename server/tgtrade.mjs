@@ -204,8 +204,9 @@ export async function handleMessage(m, tg, store) {
 }
 
 // returns true when the callback belonged to trading
-export async function handleCallback(cq, tg) {
+export async function handleCallback(cq, tg, store) {
   if (!String(cq?.data || "").startsWith("tt:")) return false;
+  STORE ||= store;   // a button pressed right after a restart must still know the launches and the trade ledger
   const ans = (text, alert = false) => tg("answerCallbackQuery", { callback_query_id: cq.id, text, show_alert: alert }).catch(() => {});
   const id = cq.data.slice(3), p = pend.get(id);
   if (!ON) { await ans("Trading in Telegram is switched off right now."); return true; }

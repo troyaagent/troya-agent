@@ -118,7 +118,7 @@ async function telegramLoop() {
         if (u.message) await onTelegramMessage(u.message).catch((e) => console.warn("[telegram]", e.message));
         if (u.callback_query) {
           const launched = await import("./tglaunch.mjs").then((t) => t.handleCallback(u.callback_query, tg)).catch((e) => { console.warn("[telegram launch]", e.message); return false; });
-          const traded = launched || await import("./tgtrade.mjs").then((t) => t.handleCallback(u.callback_query, tg)).catch((e) => { console.warn("[telegram trade]", e.message); return false; });
+          const traded = launched || await import("./tgtrade.mjs").then((t) => t.handleCallback(u.callback_query, tg, store)).catch((e) => { console.warn("[telegram trade]", e.message); return false; });
           const term = traded || await import("./tgterm.mjs").then((t) => t.handleCallback(u.callback_query, tg)).catch((e) => { console.warn("[telegram terminal]", e.message); return false; });
           if (!term) await import("./tgbot.mjs").then((b) => b.handleCallback(u.callback_query, tg)).catch((e) => console.warn("[telegram guard]", e.message));
         }

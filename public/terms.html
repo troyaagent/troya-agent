@@ -55,7 +55,7 @@
 
   <section class="ip">
     <div class="legal">
-      <p class="updated">Last updated 10 November 2026</p>
+      <p class="updated">Last updated 18 November 2026</p>
 
       <section>
         <h2>Who we are and what this covers</h2>
@@ -64,7 +64,7 @@
 
       <section>
         <h2>What the service is</h2>
-        <p>Troya reads market data and prepares orders on Robinhood Chain (chain 4663), Base, Arbitrum, Solana and Hyperliquid (perps and spot), and bridges ETH to and from Arbitrum, Base and Ethereum. You can approve and sign each action in your own wallet, or you can turn on an optional Agent Wallet that acts for you inside limits you set.</p>
+        <p>Troya reads market data and prepares orders on Robinhood Chain (chain 4663), Base, Arbitrum, Solana and Hyperliquid (perps, spot and the trade.xyz stock perps), and bridges ETH to and from Arbitrum, Base and Ethereum. On Robinhood Chain it also offers Lighter perps, loans against tokenized stocks on Morpho Blue and Uniswap v3 liquidity ranges, and it lets anyone launch a coin on Pons Family, on troya.codes or by posting on X (Launch in Telegram is built but not open yet). Troya also answers on X and in Telegram. You can approve and sign each action in your own wallet, or you can turn on an optional Agent Wallet that acts for you inside limits you set.</p>
         <p>The service is a beta running on mainnet. Transactions move real digital assets, cannot be reversed once confirmed, and can result in total loss.</p>
       </section>
 
@@ -96,13 +96,25 @@
       </section>
 
       <section>
+        <h2>Launching a coin</h2>
+        <p>When you launch a coin through Troya, you are its creator and you alone are responsible for its name, ticker, image and anything said to promote it. A launched coin lives on the chain for good; neither you nor Troya can take it back.</p>
+        <ul>
+          <li>Troya charges nothing to launch. You pay the Pons launch fee (0.0005 ETH today) and, when you sign on troya.codes, the gas. For a launch from X your Agent Wallet pays the Pons fee and Troya pays the gas.</li>
+          <li>You may set a creator tax from 0 to 4%; it is paid to you.</li>
+          <li>Without 1,000,000 $TROYA in your wallet and its Agent Wallet, you can launch 3 coins a day (UTC), at most 1 of them from X. The coin's creator fee then goes to a fee-split contract whose split nobody can change, which pays you 0.6% of trading volume plus the creator tax and pays Troya 0.1% of volume. Traders pay nothing extra.</li>
+          <li>With 1,000,000 $TROYA or more there is no daily limit and the whole creator fee (0.7% of volume plus the creator tax) goes to your own wallet.</li>
+          <li>Do not launch a coin that impersonates a person, project or brand, or that is meant to mislead buyers. Troya refuses tickers already used by major coins and stock tokens, and names that contain Troya, official, admin, team, support or Robinhood.</li>
+        </ul>
+      </section>
+
+      <section>
         <h2>Limits, Pause and the kill switch</h2>
         <p>You choose your limits and can pause the Agent Wallet at any time. The operator may stop all execution at any time, for example during an incident, a venue outage or suspected abuse. Limits reduce risk; they do not remove it. A limit that is set too high, a price that moves fast, or a venue that behaves unexpectedly can still cause losses.</p>
       </section>
 
       <section>
         <h2>Third-party venues and data</h2>
-        <p>Troya connects to networks, contracts and services it does not control, including Hyperliquid, Robinhood Chain, Base, Arbitrum, Solana, Pons Family and other launchpads, Uniswap pools, KyberSwap, Jupiter, LI.FI and the bridges it routes through, GeckoTerminal and other data providers. Their availability, fees, rules and correctness are their own. Tokens on Robinhood Chain can be launched by anyone; a token appearing in Troya, including a tokenized stock, is not an endorsement.</p>
+        <p>Troya connects to networks, contracts and services it does not control, including Hyperliquid and trade.xyz, Robinhood Chain, Base, Arbitrum, Solana, Pons Family and other launchpads, Uniswap pools and positions, Lighter, Morpho Blue, KyberSwap, Jupiter, LI.FI and the bridges it routes through, GeckoTerminal and other data providers, and X and Telegram. Their availability, fees, rules and correctness are their own. Tokens on Robinhood Chain can be launched by anyone; a token appearing in Troya, including a tokenized stock, is not an endorsement.</p>
       </section>
 
       <section>
@@ -112,7 +124,12 @@
 
       <section>
         <h2>Fees</h2>
-        <p>You pay network gas and the fees charged by the venues you trade on. During the beta Troya does not add a fee of its own. If that changes, we will say so on the Plans page before it applies.</p>
+        <p>You pay network gas and the fees charged by the venues you trade on. Troya charges two fees of its own, both listed on the <a href="/plans">Plans</a> page:</p>
+        <ul>
+          <li>0.1% of trading volume on coins launched through Troya by wallets holding less than 1,000,000 $TROYA, taken from the creator's share of the Pons fee and never added for traders;</li>
+          <li>0.01 USDG per Gate API check after the free daily checks.</li>
+        </ul>
+        <p>If Troya adds or changes a fee, the Plans page will say so before it applies.</p>
       </section>
 
       <section>
@@ -122,7 +139,7 @@
 
       <section>
         <h2>Limitation of liability</h2>
-        <p>To the extent the law allows, the operator is not liable for any indirect or consequential loss, or for trading losses, lost profits, lost data or losses caused by third-party venues, networks, smart contracts, or your own configuration. Where liability cannot be excluded, it is limited to the amount you paid us for the service in the twelve months before the claim, which during the free beta is zero.</p>
+        <p>To the extent the law allows, the operator is not liable for any indirect or consequential loss, or for trading losses, lost profits, lost data or losses caused by third-party venues, networks, smart contracts, or your own configuration. Where liability cannot be excluded, it is limited to the amount you paid Troya for the service in the twelve months before the claim.</p>
       </section>
 
       <section>
@@ -132,7 +149,7 @@
 
       <section>
         <h2>Contact</h2>
-        <p>Questions about these terms can be sent through the operator link in the app footer. See also our <a href="/privacy">Privacy Policy</a>.</p>
+        <p>Questions about these terms can be asked in the public Troya Telegram group, <a href="https://t.me/troyaagent" target="_blank" rel="noopener">t.me/troyaagent</a>. Troya will never ask you for a seed phrase or private key. See also our <a href="/privacy">Privacy Policy</a>.</p>
       </section>
     </div>
   </section>

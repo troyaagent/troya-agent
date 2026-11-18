@@ -58,7 +58,7 @@ body.site { overflow-x: hidden; }
 .cards { display: grid; gap: 0; }
 .card { padding: 18px 0 44px; border-top: 1px solid var(--line-2); }
 .card h3 { margin: 0 0 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: clamp(20px, 1.7vw, 28px); font-weight: 500; letter-spacing: -0.02em; line-height: 1.1; }
-.card p { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; max-width: 24em; }
+.card p { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; max-width: 40em; }
 .tag { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 4px; font-size: 10.5px; font-weight: 500; letter-spacing: .01em; background: var(--blue-2); color: #021014; }
 .tag.dim { background: var(--bg-4); color: var(--fg-2); }
 .cards-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; margin-top: 120px; }
@@ -251,6 +251,7 @@ body.site { overflow-x: hidden; }
   .checks.seven .c:nth-child(5) { border-left: 0; }
   .checks.seven .c:nth-child(n+5) { border-top: 1px solid var(--line-2); }
   .checks.seven .c:nth-child(4) { border-bottom: 1px solid var(--line-2); margin-bottom: -1px; }
+  .checks.seven .c:last-child { grid-column: span 2; }   /* 7 checks in 4 columns: the last one fills the row, no empty cell */
   .plans.three { grid-template-columns: 1.3fr 1fr 1fr; }
 }
 
@@ -317,11 +318,13 @@ body.site { overflow-x: hidden; }
   .checks { grid-template-columns: repeat(3, 1fr); }
   .checks .c:nth-child(4) { border-left: 0; }
   .checks .c:nth-child(n+4) { border-top: 1px solid var(--line-2); }
+  .checks.seven .c:last-child { grid-column: 1 / -1; border-left: 0; }   /* 3 + 3 + 1: the seventh spans the row */
   .steps.four { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 900px) {
   .steps, .steps.two, .steps.four, .trust, .posts, .code-grid { grid-template-columns: 1fr; }
   .post.feature, .post.span { grid-column: auto; }
+  .post, .post.span { min-height: 0; }
   .flow { grid-template-columns: 1fr; }
   .flow .arrow { width: auto; height: 34px; transform: rotate(90deg); }
   .tool { grid-template-columns: 1fr; gap: 6px; }
@@ -342,4 +345,4 @@ body.site { overflow-x: hidden; }
 /* verify page: links under each proof */
 .step p.vlinks { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 4px; font-size: 13px; }
 .step p.signer { font-size: 12.5px; color: var(--muted, rgba(232,244,248,.62)); margin-top: 6px; line-height: 1.5; }
-.step code { font-family: var(--mono); font-size: 12px; word-break: break-all; color: var(--fg); }
+.step code { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; word-break: normal; color: var(--fg); }

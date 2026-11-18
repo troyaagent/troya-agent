@@ -55,11 +55,11 @@
 
   <section class="ip">
     <div class="legal">
-      <p class="updated">Last updated 10 November 2026</p>
+      <p class="updated">Last updated 18 November 2026</p>
 
       <section>
         <h2>Who is responsible</h2>
-        <p>The Troya Agent operator runs the website, the app at /agent, the MCP server and the API, and is responsible for the data described here.</p>
+        <p>The Troya Agent operator runs the website, the app at /agent, the MCP server, the API and the Troya accounts on X and Telegram, and is responsible for the data described here. You can reach the operator in the public Troya Telegram group, <a href="https://t.me/troyaagent" target="_blank" rel="noopener">t.me/troyaagent</a>.</p>
       </section>
 
       <section>
@@ -67,32 +67,40 @@
         <ul>
           <li><b>Wallet address.</b> When you sign in, we store the public address you signed with so your settings, journal and inbox belong to you. We never receive your seed phrase or private key.</li>
           <li><b>Journal.</b> A record of proposals, signatures, refusals and Agent Wallet actions, with the reason the agent gave and the rule that applied. This is what makes the audit trail possible.</li>
-          <li><b>Settings and limits.</b> Your caps, allowlist, playbooks, notification choices and similar preferences.</li>
+          <li><b>Settings and limits.</b> Your caps, allowlist, playbooks, notification choices, whether Launch from X is switched on, and similar preferences.</li>
           <li><b>Assistant conversations.</b> Messages you send the assistant and its replies, so the chat keeps context and so we can count your daily allowance. Memory features, where offered, can be switched off and cleared.</li>
           <li><b>Agent Wallet.</b> If you turn it on, its private key is stored encrypted on our servers, together with its address and activity.</li>
           <li><b>API tokens.</b> Stored as hashes; we can tell a token is valid but cannot show it to you again.</li>
+          <li><b>Coins you launch through Troya.</b> Each coin's address, name, ticker and image, the wallet that launched it, where it was launched (troya.codes, X or Telegram), its creator tax and creator-fee recipient, and the launch transaction; for a launch from X, also the post's ID. The coins themselves are public on chain and on Troya Launches.</li>
+          <li><b>Your linked X account.</b> If you link X with Sign in with X, its user ID, handle, display name and profile image, tied to your wallet. Troya never receives your X password, and you can unlink at any time on the Social page.</li>
+          <li><b>Mentions of @Troyaagent on X.</b> The post's ID, the author's X user ID and handle, up to 400 characters of the text and Troya's reply, kept in a log of the latest 300 mentions. An image attached to a launch request becomes the coin's logo.</li>
+          <li><b>Telegram.</b> If you link Telegram for alerts, the brief or Sentry messages, the chat ID tied to your wallet; you can unlink it in Settings. Messages in the public Troya group are kept in a server-side log of the latest 3,000 for moderation, and a newcomer's join check is kept until it is answered.</li>
+          <li><b>Reports.</b> A bug report, idea or flag you send: the message, an optional contact, the page, your wallet if you are signed in, your browser's user agent and up to three screenshots; from Telegram, your Telegram name and user ID, and for /report the message you reported. Only admins can read them.</li>
+          <li><b>Holder votes.</b> A vote is an EIP-712 signature carrying your wallet address and your choice. It is published so anyone can check it.</li>
+          <li><b>Gate API credits.</b> For a wallet that pays for Gate API checks: its USDG deposits (transaction, amount and block) and its balance. Free checks used today are counted per wallet, or per IP address for checks that name no wallet.</li>
+          <li><b>Agent registry.</b> The name and bio you give a registered agent and every call it files are public, by design.</li>
           <li><b>Basic server logs.</b> IP address, time and request path, kept briefly for security and rate limiting.</li>
         </ul>
       </section>
 
       <section>
         <h2>What lives only in your browser</h2>
-        <p>Some conveniences, such as having accepted the notice, your default slippage and your last connected wallet, are saved in your browser's local storage. They never leave your device and you can clear them at any time.</p>
+        <p>Some conveniences, such as having accepted the notice, your default slippage and your last connected wallet, are saved in your browser's local storage. So is the Lighter trading key you create on the Lighter page: it is made on your device and never sent to Troya. These never leave your device and you can clear them at any time; after clearing, the Lighter page asks your wallet to register a new key.</p>
       </section>
 
       <section>
         <h2>What is public anyway</h2>
-        <p>Transactions on Robinhood Chain, Base, Arbitrum, Solana, Hyperliquid and the chains you bridge from are public by nature. Anyone can see an address's activity on chain; that is a property of the networks, not something we control.</p>
+        <p>Transactions on Robinhood Chain, Base, Arbitrum, Solana, Hyperliquid and the chains you bridge from are public by nature. Anyone can see an address's activity on chain; that is a property of the networks, not something we control. The coins you launch, your posts to @Troyaagent and Troya's replies on X, and holder votes are public as well.</p>
       </section>
 
       <section>
         <h2>Who we share data with</h2>
-        <p>We do not sell your data and we do not use it for advertising. To answer a question, the assistant may send the relevant text to an AI model provider chosen by the operator; to fetch market data and send transactions, the service talks to blockchain nodes and venue APIs. Those requests contain what is needed for the task, such as an address or an order, and nothing more. We may disclose data if the law requires it.</p>
+        <p>We do not sell your data and we do not use it for advertising. To answer a question, the assistant may send the relevant text to an AI model provider chosen by the operator; to fetch market data and send transactions, the service talks to blockchain nodes and venue APIs; to answer on X or in Telegram, it sends the reply through their APIs, under their own policies. Those requests contain what is needed for the task, such as an address or an order, and nothing more. We may disclose data if the law requires it.</p>
       </section>
 
       <section>
         <h2>How long we keep it</h2>
-        <p>Your journal and settings are kept while your account is in use, because the audit trail is only useful if it is complete. Server logs are rotated within a short period. If you ask us to delete your data, we will remove what we are not legally required to keep; the journal of past executions may be retained for a limited time for security and dispute purposes.</p>
+        <p>Your journal and settings are kept while your account is in use, because the audit trail is only useful if it is complete. Server logs are rotated within a short period. The log of X mentions keeps the latest 300, the Telegram group log the latest 3,000 messages, and the reports inbox the latest 3,000 reports. If you ask us to delete your data, we will remove what we are not legally required to keep; the journal of past executions may be retained for a limited time for security and dispute purposes.</p>
       </section>
 
       <section>
@@ -101,13 +109,14 @@
           <li>Use Troya without signing in to read markets; only chat, the inbox, playbooks and the Agent Wallet need a session.</li>
           <li>Export your Agent Wallet key, withdraw its funds and delete it from the app.</li>
           <li>Revoke API tokens at any time.</li>
-          <li>Ask for a copy or deletion of your data through the operator link in the app footer.</li>
+          <li>Unlink your X account on the Social page and your Telegram chat in Settings.</li>
+          <li>Ask for a copy or deletion of your data in the public Troya Telegram group, <a href="https://t.me/troyaagent" target="_blank" rel="noopener">t.me/troyaagent</a>. Troya will never ask you for a seed phrase or private key.</li>
         </ul>
       </section>
 
       <section>
         <h2>Security</h2>
-        <p>We encrypt Agent Wallet keys at rest, hash API tokens, use HTTPS, and limit who can reach production systems. No system is perfectly secure, which is one more reason to keep the Agent Wallet small.</p>
+        <p>We encrypt Agent Wallet keys and the keys of Troya's own X account at rest, hash API tokens, use HTTPS, and limit who can reach production systems. No system is perfectly secure, which is one more reason to keep the Agent Wallet small.</p>
       </section>
 
       <section>

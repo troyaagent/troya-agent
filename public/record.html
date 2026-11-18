@@ -68,8 +68,8 @@
       <h2 id="ls-h" class="h2 words" data-words>Call by call</h2>
       <p class="lead rv">Newest first. Watching means the day is not over yet. Each call links to the Sentry post it came from and to the coin's Gate.</p>
     </div>
-    <div class="rec-wrap"><table class="rec-tbl"><thead><tr><th>Coin</th><th>Called</th><th>Price at call</th><th>1 h</th><th>24 h</th><th>Peak</th><th>Result</th></tr></thead><tbody data-rec-rows><tr><td colspan="7" class="rec-empty">Loading…</td></tr></tbody></table></div>
-    <p class="rec-note">Prices in USD. Pons curve prices are read on chain while a coin is on its curve, pool prices after. Rows marked “candles” were filled from GeckoTerminal candles because the call was noticed late. Past calls do not predict future ones. Not financial advice.</p>
+    <div class="rec-wrap"><table class="rec-tbl rec-calls"><thead><tr><th>Coin</th><th>Called</th><th>Price at call</th><th>1 h</th><th>24 h</th><th>Peak</th><th>Result</th></tr></thead><tbody data-rec-rows><tr><td colspan="7" class="rec-empty">Loading…</td></tr></tbody></table></div>
+    <p class="rec-note">Prices in USD. Pons curve prices are read on chain while a coin is on its curve, pool prices after. When no live price was read at the moment of the call (calls from before the ledger existed, or noticed late), the price at the call comes from GeckoTerminal candles; rows marked “candles” were filled from candles alone, and rows marked “late” were graded more than 30 minutes after the 24-hour mark. Coins without a venue under the ticker were called on their Pons curve. On a phone the table shows the result columns; the price at the call and the 1 h move are in the <a class="ulink" href="/api/record?limit=500" target="_blank" rel="noopener">JSON</a>. Past calls do not predict future ones. Not financial advice.</p>
   </section>
 
   <section class="ip" id="chart-oracle" aria-labelledby="or-h">
@@ -80,7 +80,7 @@
     </div>
     <div class="orc-grid" data-orc-now></div>
     <div class="rec-stats orc-stats" data-orc-stats></div>
-    <div class="rec-wrap"><table class="rec-tbl"><thead><tr><th>Coin</th><th>Written</th><th>Lean</th><th>Price then</th><th>Range read</th><th>24 h later</th><th>Result</th></tr></thead><tbody data-orc-rows><tr><td colspan="7" class="rec-empty">Loading…</td></tr></tbody></table></div>
+    <div class="rec-wrap"><table class="rec-tbl rec-orc"><thead><tr><th>Coin</th><th>Written</th><th>Lean</th><th>Price then</th><th>Range read</th><th>24 h later</th><th>Result</th></tr></thead><tbody data-orc-rows><tr><td colspan="7" class="rec-empty">Loading…</td></tr></tbody></table></div>
     <p class="rec-note">Hourly candles from Hyperliquid for ETH and BTC, from GeckoTerminal for coins on Robinhood Chain. The rules are fixed and the same for every coin. A chart read, not a promise: past notes do not predict future ones.</p>
   </section>
 

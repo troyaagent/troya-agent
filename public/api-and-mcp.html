@@ -145,8 +145,8 @@ troya execute &lt;confirmationId&gt; --live</pre>
       <p class="lead rv">Any agent can ask Troya Gate before it buys a coin on Robinhood Chain. Each check is fresh, at the agent's own trade size, adds The Assay's flags and comes back signed, so a second agent can verify it without trusting the first. Every wallet gets free checks each day; after that a check costs <b data-gapi-price>0.01</b> USDG, paid on Robinhood Chain.</p>
     </div>
     <div class="steps four" style="margin-bottom:40px">
-      <article class="step rv"><span class="n">01 · CALL</span><h3>Ask for a check</h3><p><code class="mono">GET /api/gate/v1/check/&lt;token&gt;?amountEth=0.05</code> with your API token, or a wallet signature if you have no account.</p></article>
-      <article class="step rv"><span class="n">02 · FREE FIRST</span><h3><span data-gapi-free>10</span> a day per wallet</h3><p><span data-gapi-holder>200</span> a day for wallets holding 1,000,000 $TROYA. A few a day without naming a wallet, to try it.</p></article>
+      <article class="step rv"><span class="n">01 · CALL</span><h3>Ask for a check</h3><p><code class="mono">GET /api/gate/v1/check/<wbr>&lt;token&gt;?<wbr>amountEth=0.05</code> with your API token, or a wallet signature if you have no account.</p></article>
+      <article class="step rv"><span class="n">02 · FREE FIRST</span><h3><span><span data-gapi-free>10</span> a day per wallet</span></h3><p><span data-gapi-holder>200</span> a day for wallets holding 1,000,000 $TROYA. A few a day without naming a wallet, to try it.</p></article>
       <article class="step rv"><span class="n">03 · THEN USDG</span><h3>HTTP 402 says how</h3><p>Send USDG on Robinhood Chain to <code class="mono" data-gapi-payto>the address in the 402</code> from the wallet that will use it. Credit lands within a minute, always on the sender.</p></article>
       <article class="step rv"><span class="n">04 · VERIFY</span><h3>Signed results</h3><p>Each result carries <code class="mono">attested</code>, its <code class="mono">hash</code> and an EIP-191 <code class="mono">signature</code> from Troya's attestor <code class="mono" data-gapi-attestor>…</code>.</p></article>
     </div>
@@ -251,7 +251,7 @@ npx -y {{origin}}/rail/troyaagent-rail-0.1.0.tgz -- npx -y mcp-remote https://ag
     <h2 id="iface-h" class="h2 words" data-words style="margin-bottom:56px">Four doors, one set of walls</h2>
     <div class="steps four">
       <article class="step rv"><span class="n">01 · READ TOOLS</span><h3>No token needed</h3><p>Hyperliquid perps, the Robinhood Chain token board, swap quotes on Robinhood Chain, token health checks and the daily brief. Nothing in this set can move funds.</p></article>
-      <article class="step rv"><span class="n">02 · AGENT WALLET TOOLS</span><h3>With an API token</h3><p>Add a token and the server can also swap, bridge, trade perps and launch tokens from your Agent Wallet, each call passing Troya Gate and your caps first.</p></article>
+      <article class="step rv"><span class="n">02 · AGENT WALLET TOOLS</span><h3>With an API token</h3><p>Add a token and the server can also swap on Robinhood Chain, fund Hyperliquid from ETH, and open or close perps from your Agent Wallet, each call passing Troya Gate and your caps first.</p></article>
       <article class="step rv"><span class="n">03 · REST</span><h3>Plain HTTP</h3><p>Public GET routes for markets and quotes. POST routes for execution need an <code class="mono">x-api-key</code> header and an <code class="mono">Idempotency-Key</code>, so retries are safe.</p></article>
       <article class="step rv"><span class="n">04 · CLI</span><h3>From the terminal</h3><p><code class="mono">npx @troyaagent/cli</code> wraps the same tools for people: the Gate, picks, the chart oracle and quotes in plain tables, and swaps that stay dry runs until you say otherwise.</p></article>
     </div>
@@ -292,7 +292,7 @@ curl -s -X POST <span class="s">"{{base}}/tools/prepare_order"</span> \
   -H <span class="s">"content-type: application/json"</span> \
   -H <span class="s">"x-api-key: $TROYA_API_KEY"</span> \
   -H <span class="s">"Idempotency-Key: $(uuidgen)"</span> \
-  -d <span class="s">'{"venue":"hyperliquid","coin":"BTC","side":"long","sizeUsd":50,"leverage":3}'</span>
+  -d <span class="s">'{"kind":"perp","coin":"BTC","side":"long","sizeUsd":50,"leverage":3}'</span>
 
 <span class="c"># 2) execute: only the confirmationId is accepted; dry-run unless you turned it off</span>
 curl -s -X POST <span class="s">"{{base}}/tools/execute_intent"</span> \
@@ -315,7 +315,7 @@ curl -s -X POST <span class="s">"{{base}}/tools/execute_intent"</span> \
 
   <section class="ip" aria-labelledby="cta-h">
     <div class="cta-band">
-      <h2 id="cta-h" class="h2 sm words" data-words>Create a token, then connect.</h2>
+      <h2 id="cta-h" class="h2 sm words" data-words>Create an API token, then connect.</h2>
       <div class="acts rv"><a class="ulink" href="/agent#/agent/wallet">Open the Troya app</a><a class="ulink" href="/risk-controls">Risk Controls</a></div>
     </div>
   </section>

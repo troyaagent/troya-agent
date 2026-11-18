@@ -6,9 +6,19 @@ const form = $("[data-badge-form]"), input = $("[data-badge-ca]"), out = $("[dat
 async function copyText(t, b) { try { await navigator.clipboard.writeText(t); b.textContent = "COPIED"; setTimeout(() => (b.textContent = "COPY"), 1400); } catch { b.textContent = "SELECT"; } }
 async function show(ca) {
   out.hidden = false;
-  if (!/^0x[0-9a-fA-F]{40}$/.test(ca)) { $("[data-badge-status]").textContent = "That is not a token address."; return; }
+  const img = $("[data-badge-img]"), grid = out.querySelector(".code-grid");
+  if (!/^0x[0-9a-fA-F]{40}$/.test(ca)) {
+    // never leave the previous coin's badge, checks or embed code on screen next to this message
+    img.hidden = true; img.removeAttribute("src");
+    $("[data-badge-checks]").innerHTML = "";
+    $("[data-code-html]").textContent = ""; $("[data-code-md]").textContent = "";
+    grid.hidden = true;
+    $("[data-badge-status]").textContent = "That is not a token address. Paste a 0x… contract of 42 characters.";
+    return;
+  }
   const svg = `https://troya.codes/api/badge/${ca}.svg`, page = `https://troya.codes/badge?ca=${ca}`;
-  $("[data-badge-img]").src = `/api/badge/${ca}.svg?t=${Date.now()}`;
+  img.hidden = false; grid.hidden = false;
+  img.src = `/api/badge/${ca}.svg?t=${Date.now()}`;
   $("[data-badge-status]").textContent = "Running Troya Gate…";
   $("[data-badge-checks]").innerHTML = "";
   const html = `<a href="${page}"><img src="${svg}" alt="Troya Gate result" height="44"></a>`;

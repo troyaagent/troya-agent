@@ -16,34 +16,48 @@
     const tile = (k, v, sub = "") => `<div class="rec-tile"><span>${k}</span><b>${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
     const pct = (x) => (x == null ? "–" : `${Math.round(x * 100)}%`);
     $("[data-rec-stats]").innerHTML = [
-      tile("Calls recorded", s.calls.toLocaleString("en-US"), `${s.watching} still inside their first day`),
+      tile("Calls recorded", s.calls.toLocaleString("en-US"), `${s.watching} still inside their first day · ${Math.max(0, s.calls - s.watching - s.graded)} without a 24 h price`),
       tile("Graded", s.graded.toLocaleString("en-US"), `${s.wins} wins · ${s.graded - s.wins} misses`),
       tile("Win rate, 24 h", pct(s.winRate), "higher 24 hours after the call"),
       tile("Median at 24 h", s.median24h == null ? "–" : `${s.median24h >= 0 ? "+" : ""}${s.median24h.toFixed(1)}%`, "half did better, half worse"),
       tile("Median peak", s.medianPeakX == null ? "–" : `${s.medianPeakX.toFixed(2)}×`, "highest price in the first day"),
-      tile("Reached 2×", s.reachedOf ? `${s.reached2x} of ${s.reachedOf}` : "–", "at some point in the first day"),
+      tile("Reached 2×", s.reachedOf ? `${s.reached2x} of ${s.reachedOf}` : "–", s.reachedOf ? "hit 2× within a day, of the calls past their first day with a price" : "at some point in the first day"),
     ].join("");
   }
 
-  function rows(calls) {
+  // the venue a call was found on; Sentry leaves it empty for Pons curves, and an unknown GeckoTerminal dex id reads as "Other launchpad"
+  const venue = (src) => (!src ? "Pons curve" : /^[a-z0-9]+(-[a-z0-9]+)+$/.test(src) ? "Other launchpad" : src);
+  const PAGE = 50;
+  let shown = PAGE, last = null;
+  function rows(calls, total) {
     if (!calls.length) { $("[data-rec-rows]").innerHTML = '<tr><td colspan="7" class="rec-empty">No calls recorded yet. The first Sentry post starts the ledger.</td></tr>'; return; }
-    $("[data-rec-rows]").innerHTML = calls.map((c) => {
+    const list = calls.slice(0, shown);
+    const more = calls.length > list.length
+      ? `<tr class="rec-more"><td colspan="7"><button class="btn-line" type="button" data-rec-more>Show ${Math.min(PAGE, calls.length - list.length)} more</button><span class="rec-count">Showing ${list.length} of ${total.toLocaleString("en-US")} calls, newest first</span></td></tr>`
+      : `<tr class="rec-more"><td colspan="7"><span class="rec-count">${list.length < total ? `Showing the newest ${list.length} of ${total.toLocaleString("en-US")} calls; every call is in the <a class="ulink" href="/api/record?limit=500" target="_blank" rel="noopener">JSON</a>` : `All ${total.toLocaleString("en-US")} calls shown`}</span></td></tr>`;
+    $("[data-rec-rows]").innerHTML = list.map((c) => {
       const res = c.result === "win" ? '<b class="rec-win">Win</b>' : c.result === "miss" ? '<b class="rec-miss">Miss</b>'
-        : c.status === "watching" ? `<span class="rec-watch">Watching${c.changeNow != null ? " · " + ch(c.changeNow) : ""}</span>` : '<span class="rec-na">No price</span>';
+        : c.status === "watching" ? `<span class="rec-watch">Watching${c.changeNow != null ? " · " + ch(c.changeNow) : ""}</span>`
+        : c.priceAtCall != null ? '<span class="rec-na">No 24 h price</span>' : '<span class="rec-na">No price</span>';
       const sym = c.symbol ? "$" + esc(c.symbol) : short(c.token);
-      const via = c.via && c.via.startsWith("candles") ? ' <em class="rec-via">candles</em>' : "";
+      const via = c.via && c.via.startsWith("candles-") ? ' <em class="rec-via">candles</em>' : "";
       return `<tr>
-        <td><a class="rec-coin" href="/agent#/gate/${esc(c.token)}">${sym}</a>${c.post ? ` <a class="rec-post" href="${esc(c.post)}" target="_blank" rel="noopener">post</a>` : ""}${c.source ? `<small>${esc(c.source)}</small>` : ""}</td>
+        <td><a class="rec-coin" href="/agent#/gate/${esc(c.token)}">${sym}</a>${c.post ? ` <a class="rec-post" href="${esc(c.post)}" target="_blank" rel="noopener">post</a>` : ""}<small>${esc(venue(c.source))}</small></td>
         <td>${ago(c.at)}</td><td>${price(c.priceAtCall)}${via}</td><td>${ch(c.change1h)}</td><td>${ch(c.change24h)}</td>
         <td>${c.peakX == null ? '<span class="rec-na">–</span>' : `${c.peakX.toFixed(2)}×`}</td><td>${res}${c.late ? ' <em class="rec-via">late</em>' : ""}</td></tr>`;
-    }).join("");
+    }).join("") + more;
   }
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("[data-rec-more]") || !last) return;
+    shown += PAGE; rows(last.calls, last.stats.calls);
+  });
 
   async function load() {
     try {
-      const d = await (await fetch("/api/record?limit=300", { cache: "no-store" })).json();
+      const d = await (await fetch("/api/record?limit=500", { cache: "no-store" })).json();
       $("[data-rec-rules]").textContent = d.rules;
-      stats(d.stats); rows(d.calls);
+      last = d;
+      stats(d.stats); rows(d.calls, d.stats.calls);
     } catch {
       $("[data-rec-rules]").textContent = "The ledger could not be read right now. Try again in a minute.";
     }
@@ -55,9 +69,11 @@
   const LEAN = { up: "Leaning up", down: "Leaning down", sideways: "Sideways" };
   const num = (p) => (p == null ? "–" : p >= 100 ? "$" + p.toLocaleString("en-US", { maximumFractionDigits: 0 }) : price(p));
   const coinHref = (n) => (n.kind === "hl" ? `/agent#/perps/${esc(n.id)}` : `/agent#/token/${esc(n.id)}`);
+  // a read from too few real candles (RSI pinned at 0 or 100, or a two-day range over 5×) is not shown as a current note
+  const thin = (n) => n.rsi === 0 || n.rsi === 100 || (n.support > 0 && n.resistance / n.support > 5);
   function oracleNow(notes) {
     const seen = new Set(), now = [];
-    for (const n of notes) if (!seen.has(n.id)) { seen.add(n.id); now.push(n); }
+    for (const n of notes) if (!seen.has(n.id)) { seen.add(n.id); if (n.status === "open" && !thin(n)) now.push(n); }
     $("[data-orc-now]").innerHTML = now.length ? now.map((n) => {
       const span = n.resistance - n.support, pos = span > 0 ? Math.max(0, Math.min(1, (n.price - n.support) / span)) : 0.5;
       return `<article class="orc-card orc-${n.call}">
@@ -68,11 +84,21 @@
         <ul class="orc-why">${n.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>
         <small class="orc-at">Written ${ago(n.at)} · graded ${n.status === "graded" ? "already" : "in " + Math.max(0, Math.round((n.at + 864e5 - Date.now()) / 36e5)) + " h"}</small>
       </article>`;
-    }).join("") : '<p class="rec-empty">The first notes are written a minute after the server starts.</p>';
+    }).join("") : '<p class="rec-empty">No open chart note right now. New notes are written every 6 hours.</p>';
   }
   function oracleStats(s) {
     const tile = (k, v, sub = "") => `<div class="rec-tile"><span>${k}</span><b>${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
     const rate = (o) => (o.graded ? `${Math.round((o.wins / o.graded) * 100)}%` : "–");
+    $("[data-orc-stats]").classList.toggle("two", !s.graded);
+    if (!s.graded) {
+      // nothing graded yet: two honest tiles instead of four rows of dashes
+      const first = s.firstOpenAt ? Math.max(0, Math.round((s.firstOpenAt + 864e5 - Date.now()) / 36e5)) : null;
+      $("[data-orc-stats]").innerHTML = [
+        tile("Notes written", s.notes.toLocaleString("en-US"), `${s.open} still inside their 24 hours`),
+        tile("First grades", first == null ? "Soon" : first <= 0 ? "Due now" : `In ${first} h`, "each note is graded against the price 24 h after it"),
+      ].join("");
+      return;
+    }
     $("[data-orc-stats]").innerHTML = [
       tile("Notes written", s.notes.toLocaleString("en-US"), `${s.open} still inside their 24 hours`),
       tile("Graded", s.graded.toLocaleString("en-US"), `${s.wins} right · ${s.graded - s.wins} wrong`),
@@ -95,7 +121,8 @@
     try {
       const d = await (await fetch("/api/oracle?limit=300", { cache: "no-store" })).json();
       $("[data-orc-rules]").textContent = d.rules;
-      oracleNow(d.notes); oracleStats(d.stats); oracleRows(d.notes);
+      const open = d.notes.filter((n) => n.status === "open").map((n) => n.at);
+      oracleNow(d.notes); oracleStats({ ...d.stats, firstOpenAt: open.length ? Math.min(...open) : null }); oracleRows(d.notes);
     } catch {
       $("[data-orc-rules]").textContent = "The chart notes could not be read right now. Try again in a minute.";
     }

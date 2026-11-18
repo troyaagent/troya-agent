@@ -403,7 +403,7 @@ async function scanLaunchpads(s) {
   for (const p of await newLaunchPools()) {
     if (!p.base || p.pad === "pons" || /^uniswap-v[34]/.test(p.dex)) continue;
     if (p.createdAt && p.createdAt < Date.now() - LAUNCH_MAX_AGE_MS) continue;
-    notePool(s, p.base, { source: LAUNCHPADS[p.pad] && p.pad !== "other" ? LAUNCHPADS[p.pad] : p.dex, pool: p.pool, block: null });
+    notePool(s, p.base, { source: LAUNCHPADS[p.pad] && p.pad !== "other" ? LAUNCHPADS[p.pad] : "Other launchpad", pool: p.pool, block: null });   // never a raw GeckoTerminal dex id
   }
 }
 

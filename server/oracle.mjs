@@ -46,6 +46,8 @@ function read(candles) {
   const last48 = c.slice(-48), support = Math.min(...last48.map((k) => k.low || k.close)), resistance = Math.max(...last48.map((k) => k.high || k.close));
   const v = c.map((k) => k.volume || 0), vNow = v.slice(-12).reduce((s, x) => s + x, 0), vPrev = v.slice(-36, -12).reduce((s, x) => s + x, 0) / 2;
   const volUp = vPrev > 0 ? vNow / vPrev : null;
+  // too few real candles to read: RSI pinned at 0 or 100 (flat or one-way hours) or a two-day range over 5×. No note.
+  if (r === 0 || r === 100 || (support > 0 && resistance / support > 5)) return null;
   const range = resistance - support, pos = range > 0 ? (px - support) / range : 0.5;
   // the lean: trend from the averages, momentum from RSI, confirmation from volume and range position
   let score = 0;

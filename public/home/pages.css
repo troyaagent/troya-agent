@@ -61,7 +61,7 @@ body.pn .page-hero > canvas.rain, body.pn .nf > canvas.rain { position: absolute
 .page-hero > *:not(.rain), .nf > *:not(.rain) { position: relative; z-index: 2; }
 .page-hero .eyebrow, .gate-card .eyebrow { font: 500 11px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin-bottom: 22px; display: inline-flex; align-items: center; gap: 12px; }
 .page-hero .eyebrow .dot, .dot { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: none; }
-.page-hero h1, .nf h1 { margin: 0 0 26px; font: 700 clamp(42px, 6vw, 104px)/.9 var(--sans); letter-spacing: -0.045em; text-transform: uppercase; max-width: 12em; }
+.page-hero h1, .nf h1 { margin: 0 0 26px; font: 700 clamp(42px, 6vw, 104px)/.9 var(--sans); letter-spacing: -0.045em; text-transform: uppercase; max-width: 12em; text-wrap: balance; }
 .acc, .w.acc > i { font-family: var(--serif); font-style: italic; font-weight: 400; text-transform: none; letter-spacing: -0.01em; color: var(--accent); font-size: 1.1em; line-height: .8; }
 .acc, .w.acc > i { background-image: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-box-decoration-break: clone; box-decoration-break: clone; padding-right: .12em; margin-right: -.08em; }
 .page-hero .lead { font-size: 16px; line-height: 1.6; color: var(--fg-2); max-width: 36em; }
@@ -176,8 +176,10 @@ body.pn input:focus, body.pn textarea:focus { border-color: var(--accent); outli
 p:not(.vlinks) .ulink, li .ulink, td .ulink, .legal .ulink { display: inline; font: inherit; font-weight: 600; letter-spacing: 0; text-transform: none; padding: 0; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 p:not(.vlinks) .ulink::after, li .ulink::after, td .ulink::after, .legal .ulink::after { display: none; }
 p:not(.vlinks) .ulink::before, li .ulink::before, td .ulink::before { display: none; }
-/* two links side by side in a card get room between them */
-.card .ulink + .ulink, .step .ulink + .ulink, .post .ulink + .ulink, .plan .ulink + .ulink { margin-left: 22px; }
+/* two links side by side in a card get room between them; link rows (.vlinks, .plan .foot) space theirs with a flex gap,
+   and links inside a sentence get none */
+.card > .ulink:not(:last-child) { margin-right: 22px; }
+.plan .foot { display: flex; flex-wrap: wrap; gap: 6px 22px; }
 
 /* The Record (/record): the score tiles and the call table */
 .rec-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); }
@@ -362,4 +364,49 @@ body { touch-action: manipulation; }
 @media (max-width: 900px) {
   .lg-steps, .lg-grid, .lg-grid.three, .lg-icons { grid-template-columns: 1fr; }
   .lg-step, .lg-step:nth-child(even) { padding: 18px 0; border-left: 0; }
+}
+
+/* ---------- audit fixes, 18 Nov 2026 ---------- */
+/* the closing band never sits on the paragraph above it */
+.split + .cta-band { margin-top: 56px; }
+
+/* a short heading beside a long list of cards stays in view while the cards scroll by (wide screens only) */
+/* (overflow-x: hidden on body or .ip would make them scroll containers and stop position: sticky; clip cuts the same way) */
+body.site.pn { overflow-x: clip; }
+.ip:has(> .split > .cards) { overflow: clip; }
+@media (min-width: 901px) {
+  .split:has(> .cards) > :first-child { position: sticky; top: 110px; }
+}
+
+/* cards laid out in a grid of three (Capabilities) instead of one long column */
+.cards.grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 32px; }
+@media (max-width: 1100px) { .cards.grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .cards.grid3 { grid-template-columns: minmax(0, 1fr); } .cards.grid3 .card { padding-bottom: 34px; } }
+
+/* who holds what: four keys, and a reassurance never gets a warning-red dash */
+.trust.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .trust.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .trust.four { grid-template-columns: minmax(0, 1fr); } }
+.trust .t li.no::before { background: var(--accent); }
+
+/* the badge form: a pill input next to the site's solid pill button */
+.badge-form { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 28px; }
+.badge-form input { flex: 1 1 420px; min-width: 0; height: 48px; padding: 0 20px; border-radius: 999px; border: 1px solid var(--line-3); font-family: var(--mono); font-size: 14px; }
+.badge-form .btn-solid { height: 48px; padding: 0 26px; border: 0; cursor: pointer; }
+@media (max-width: 720px) { .badge-form .btn-solid { flex: 1 1 100%; justify-content: center; } }
+
+/* The Record on a phone: the columns that matter (coin, when, 24 h, peak, result) fit without sideways scrolling */
+.rec-more td, .rec-tbl td.rec-empty { white-space: normal; }
+.rec-more .btn-line { margin-right: 16px; }
+.rec-count { font: 400 12.5px/1.6 var(--sans); color: var(--muted); }
+.rec-stats.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 720px) {
+  .rec-calls th:nth-child(3), .rec-calls td:nth-child(3), .rec-calls th:nth-child(4), .rec-calls td:nth-child(4),
+  .rec-orc th:nth-child(4), .rec-orc td:nth-child(4), .rec-orc th:nth-child(5), .rec-orc td:nth-child(5) { display: none; }
+  .rec-calls td, .rec-calls th, .rec-orc td, .rec-orc th { padding-right: 10px; }
+  .rec-calls td, .rec-orc td { font-size: 13px; }
+  .rec-calls td:nth-child(1), .rec-calls td:nth-child(2), .rec-calls td:nth-child(7), .rec-orc td:nth-child(2) { white-space: normal; }
+  .rec-calls td:nth-child(1) .rec-post { margin-left: 0; display: inline-block; }
+  .rec-calls td:last-child, .rec-calls th:last-child, .rec-orc td:last-child, .rec-orc th:last-child { padding-right: 0; }
+  .rec-wrap:has(.rec-calls), .rec-wrap:has(.rec-orc) { -webkit-mask-image: none; mask-image: none; }
 }

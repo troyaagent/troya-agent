@@ -59,9 +59,9 @@
       <h2 id="get-h" class="h2 words" data-words>Paste a contract</h2>
       <p class="lead rv">Any token on Robinhood Chain works. The badge links back to this page with the full result, so anyone can read what was checked.</p>
     </div>
-    <form class="rv" data-badge-form style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:28px">
-      <input name="ca" data-badge-ca placeholder="0x… token contract on Robinhood Chain" autocomplete="off" spellcheck="false" aria-label="Token contract address" style="flex:1 1 420px;min-width:0;height:48px;padding:0 16px;border-radius:10px;border:1px solid var(--line-3);background:var(--bg-1);color:var(--fg);font-family:var(--mono);font-size:14px">
-      <button type="submit" style="height:48px;padding:0 22px;border-radius:10px;border:1px solid var(--blue);background:transparent;color:var(--blue-3);font-weight:600;cursor:pointer">Make badge</button>
+    <form class="badge-form rv" data-badge-form>
+      <input name="ca" data-badge-ca placeholder="0x… token contract on Robinhood Chain" autocomplete="off" spellcheck="false" aria-label="Token contract address">
+      <button type="submit" class="btn-solid">Make badge</button>
     </form>
     <div data-badge-out hidden>
       <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:22px"><img data-badge-img alt="Troya Gate badge" height="44"><span data-badge-status style="color:var(--muted);font-size:14px"></span></div>
@@ -79,7 +79,7 @@
       <h2 id="what-h" class="h2 words" data-words>Four states, one line</h2>
       <p class="lead rv">A 0.01 ETH buy is routed and simulated against the pool as it is, then sold back in a test, with transfer tax and fees measured. A thin young curve is reported, never counted as a failure on its own.</p>
     </div>
-    <div class="steps">
+    <div class="steps four">
       <article class="step rv"><span class="n">01</span><h3>Passed</h3><p>Route, simulation, test sell, tax and fees all went through at that moment.</p></article>
       <article class="step rv"><span class="n">02</span><h3>Caution</h3><p>Something worth reading first, such as fees above 5%. The page says which one.</p></article>
       <article class="step rv"><span class="n">03</span><h3>Failed</h3><p>A check failed: the swap would not go through, a sell back reverted, or the tax is high. The page names it.</p></article>
@@ -95,7 +95,7 @@
     </div>
     <div class="cta-band">
       <h2 id="cta-h" class="h2 sm words" data-words>Wheel nothing in blind.</h2>
-      <div class="acts rv"><a class="ulink" href="/agent">Launch app</a><a class="ulink" href="https://t.me/troyasentry">Troya Sentry</a></div>
+      <div class="acts rv"><a class="ulink" href="/agent">Launch app</a><a class="ulink" href="https://t.me/troyasentry" target="_blank" rel="noopener">Troya Sentry</a></div>
     </div>
   </section>
 </main>

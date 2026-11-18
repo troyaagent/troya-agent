@@ -54,12 +54,12 @@ if (foot) {
   foot.innerHTML = `
   <nav class="pn-pages" aria-label="Pages">${PAGES.map(([t, p]) => `<a href="${PAGE(p)}"${cur(PAGE(p))}>${t}</a>`).join("")}</nav>
   <div class="pn-row">
-    <div class="pn-l"><a href="${PAGE("community")}">Community</a>${ext(TG, "Telegram")}${ext(X, "X")}${ext(GH, "GitHub")}<a href="${PAGE("privacy")}">Privacy policy</a></div>
+    <div class="pn-l"><a href="${PAGE("community")}">Community</a>${ext(TG, "Telegram")}${ext(X, "X")}${ext(GH, "GitHub")}<a href="${PAGE("privacy")}">Privacy Policy</a></div>
     <button class="pn-ca" type="button" data-pn-ca><b>CA</b><span data-pn-ca-full></span></button>
-    <div class="pn-rr"><a href="${PAGE("terms")}">Terms of service</a><a href="${PAGE("verify")}">Verify</a><a href="/agent#/docs">Docs</a></div>
+    <div class="pn-rr"><a href="${PAGE("terms")}">Terms of Use</a><a href="${PAGE("verify")}">Verify</a><a href="/agent#/docs">Docs</a></div>
   </div>
   <p class="pn-legal">Troya Agent is software for reading markets and preparing orders on Robinhood Chain, Base, Arbitrum, Solana and Hyperliquid mainnet. It is in beta and handles real funds. You can sign every action in your own wallet, which Troya never holds, or switch on an optional Agent Wallet: a small custodial wallet whose key the operator stores encrypted, so the agent can act within the caps you and the operator set. Nothing on this site or in the app is investment, legal or tax advice, an offer or a solicitation. Digital assets are volatile and you can lose everything you put in. You are responsible for the limits you choose and for every action taken under them.</p>
-  <div class="pn-bar"><span>© ${year} Troya Agent</span><span>Mainnet beta</span><span>All rights reserved</span><a href="${PAGE("privacy")}">Privacy Policy</a><a href="${PAGE("terms")}">Terms of Use</a></div>`;
+  <div class="pn-bar"><span>© ${year} Troya Agent</span><span>Mainnet beta</span><span>All rights reserved</span></div>`;
 }
 
 /* ---------- contract address (nav + footer) ---------- */

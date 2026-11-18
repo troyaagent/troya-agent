@@ -83,8 +83,9 @@ async function facilitator(c, path, body) {
 const EXAMPLE = {
   attested: {
     v: 1, chainId: 4663, token: "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", symbol: "TROYA", amountEth: 0.01, verdict: "passed", reason: null,
-    checks: [{ key: "route", status: "pass", detail: "example" }, { key: "sim", status: "pass", detail: "example" }, { key: "sell", status: "pass", detail: "example" }, { key: "tax", status: "pass", detail: "example" }, { key: "depth", status: "pass", detail: "example" }],
-    quote: { amountOut: "1000000000000000000", minOut: "990000000000000000", priceImpactPct: 0.2, feePct: 0.3, route: "example" },
+    checks: [{ key: "route", status: "pass", detail: "Uniswap v4 · ETH → TROYA" }, { key: "impact", status: "pass", detail: "0.44%" }, { key: "depth", status: "pass", detail: "2.33 ETH" }, { key: "fee", status: "pass", detail: "2.90%" },
+      { key: "sim", status: "pass", detail: "The exact swap succeeds against the current pool" }, { key: "sell", status: "pass", detail: "Selling back succeeds" }, { key: "tax", status: "pass", detail: "None on a transfer to the pool or to a wallet" }],
+    quote: { amountOut: "1610989.54", minOut: "1594879.64", priceImpactPct: 0.44, feePct: 2.9, route: "Uniswap v4 · ETH → TROYA" },
     assay: { flags: [], devHoldsPct: 0, devSoldPct: 0, top10Pct: 20 },
     checkedAt: 0,
   },

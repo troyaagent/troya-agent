@@ -182,6 +182,56 @@ const ok = verifyMessage(`Troya Gate result\n${g.hash}`, g.signature) === g.atte
       </div>
     </div>
     <p class="rec-note rv">The verdict is <code class="mono">passed</code>, <code class="mono">caution</code>, <code class="mono">failed</code> or <code class="mono">untested</code> (a curve with no buyers yet). A red Assay flag turns a pass into caution. Add <code class="mono">pay=credit</code> to spend a wallet's credit before its free checks. <code class="mono">hash</code> is keccak256 of <code class="mono">JSON.stringify(attested)</code>; <code class="mono">POST /api/gate/v1/verify</code> checks one for you. Over MCP or Troya CLI the same check is the <code class="mono">gate_check</code> tool. Totals so far: <span data-gapi-totals>…</span>. A check reads the chain at that moment; a coin can change after it.</p>
+
+    <div id="x402" class="split" style="margin:64px 0 32px">
+      <h3 class="h2 words" data-words style="font-size:clamp(26px,3.2vw,40px)">No account at all: x402 and Virtuals</h3>
+      <p class="lead rv">The same signed check, sold to any agent without an API key or a deposit. Over x402 the agent pays $0.01 in USDC per call on Base, Arbitrum or Polygon. On Virtuals ACP it hires the agent "Troya Gate" and pays through ACP's escrow, in USDC on Base or USDG on Robinhood Chain. Both were tested with real money on 19 Nov 2026 (receipts on <a class="link" href="/verify#x402">/verify</a>).</p>
+    </div>
+    <div class="steps four" style="margin-bottom:40px">
+      <article class="step rv"><span class="n">01 · x402</span><h3>402, sign, done</h3><p><code class="mono">GET /api/gate/x402/<wbr>check?token=0x…</code> answers 402 with a <code class="mono">PAYMENT-REQUIRED</code> header. Sign the USDC transfer it names (EIP-3009), send it back as <code class="mono">PAYMENT-SIGNATURE</code>, get the result.</p></article>
+      <article class="step rv"><span class="n">02 · NO RISK</span><h3>Charged after the check</h3><p>Coinbase's facilitator verifies the payment first, Troya runs the check, and only then is it settled. A check that cannot run is never charged. Gas is paid by the facilitator.</p></article>
+      <article class="step rv"><span class="n">03 · VIRTUALS</span><h3>Hire "Troya Gate"</h3><p>Job <code class="mono">troyaGateCheck</code>, 0.01 per job, 5 minute SLA, requirement <code class="mono">{"token":"0x…","amountEth":0.01}</code>. Agent wallet <code class="mono">0x1731…7e6c</code>.</p></article>
+      <article class="step rv"><span class="n">04 · SAME PROOF</span><h3>One attestor</h3><p>Every route returns the same <code class="mono">attested</code> JSON, <code class="mono">hash</code> and signature from attestor <code class="mono">0xbEa3…5fDE</code>, so a result bought anywhere can be checked anywhere.</p></article>
+    </div>
+    <div class="code-grid">
+      <div class="code rv">
+        <div class="code-h">Pay per call with x402 · Node<button type="button" data-copy-block>COPY</button></div>
+        <pre data-tpl><span class="c">// npm i ethers · a wallet with a little USDC on Base, Arbitrum or Polygon</span>
+import { Wallet, hexlify, randomBytes } from "ethers";
+const url = "{{origin}}/api/gate/x402/check?token=0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074";
+const r1 = await fetch(url);                                   <span class="c">// 402</span>
+const pr = JSON.parse(atob(r1.headers.get("payment-required")));
+const req = pr.accepts[0];                                     <span class="c">// or pick Arbitrum / Polygon</span>
+const w = new Wallet(process.env.AGENT_KEY), now = Math.floor(Date.now() / 1000);
+const authorization = { from: w.address, to: req.payTo, value: req.amount,
+  validAfter: String(now - 600), validBefore: String(now + 120), nonce: hexlify(randomBytes(32)) };
+const signature = await w.signTypedData(
+  { name: req.extra.name, version: req.extra.version, chainId: Number(req.network.split(":")[1]), verifyingContract: req.asset },
+  { TransferWithAuthorization: [["from","address"],["to","address"],["value","uint256"],["validAfter","uint256"],
+    ["validBefore","uint256"],["nonce","bytes32"]].map(([name, type]) => ({ name, type })) }, authorization);
+const pay = btoa(JSON.stringify({ x402Version: 2, resource: pr.resource, accepted: req,
+  payload: { signature, authorization }, extensions: pr.extensions }));
+const g = await (await fetch(url, { headers: { "PAYMENT-SIGNATURE": pay } })).json();
+<span class="c">// g.attested, g.hash, g.signature, g.paid.transaction</span></pre>
+      </div>
+      <div class="code rv">
+        <div class="code-h">Hire Troya Gate on Virtuals ACP · Node<button type="button" data-copy-block>COPY</button></div>
+        <pre data-tpl><span class="c">// npm i @virtuals-protocol/acp-node-v2 @account-kit/infra · your agent from app.virtuals.io</span>
+import { AcpAgent, PrivyAlchemyEvmProviderAdapter, AssetToken } from "@virtuals-protocol/acp-node-v2";
+import { base } from "@account-kit/infra";                    <span class="c">// or robinhood (USDG)</span>
+const me = await AcpAgent.create({ evmProvider: await PrivyAlchemyEvmProviderAdapter.create({
+  walletAddress, walletId, signerPrivateKey, chains: [base] }) });
+me.on("entry", async (job, e) =&gt; {
+  if (e.event?.type === "budget.set") await job.fund(AssetToken.usdc(0.01, job.chainId));
+  if (e.event?.type === "job.submitted") await job.complete("checked");   <span class="c">// the signed result</span>
+});
+await me.start();
+await me.createJobByOfferingName(base.id, "troyaGateCheck",
+  "0x1731a0D264A4fd6aB6702bD849Aa6A13533c7E6C",
+  { token: "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", amountEth: 0.01 },
+  { evaluatorAddress: await me.getAddress() });</pre>
+      </div>
+    </div>
   </section>
 
   <section class="ip" id="registry" aria-labelledby="reg-h">

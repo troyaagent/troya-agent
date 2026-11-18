@@ -25,7 +25,8 @@
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { request as httpsRequest } from "node:https";
 import { Interface, AbiCoder, getAddress, isAddress } from "ethers";
 import { rpc, ADDR, tokenMeta, launchMenu } from "./robinhood.mjs";
 import { HttpError } from "./api.mjs";
@@ -613,6 +614,37 @@ export async function devStatus(token, devs, fromBlock = null) {
 const ORIGIN = { token: "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", name: "Troya Agent", symbol: "TROYA", source: "origin", owner: "0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4", at: Date.parse("2026-11-14T17:08:43Z"), cto: true };   // creation tx 0xf5e33fcd… on chain
 // DexScreener orders per coin: a paid token profile ("Dex Paid") and a community takeover ("CTO"), read every 10 minutes
 const dsOrders = new Map();
+// The badges on a coin follow GMGN (owner, 18 Nov: "ikutin onchain, kalau di GMGN OG / CTO / Dex Paid, kasih di sini"):
+// GMGN's official Agent API (openapi.gmgn.ai, the account's own read-only key in GMGN_API_KEY) gives og, cto_flag and the
+// DexScreener flags for Robinhood Chain coins. Without a key, DexScreener's own orders give Dex Paid and CTO.
+const gmgnMemo = new Map();
+function gmgnGet(path, query) {
+  const key = process.env.GMGN_API_KEY;
+  if (!key) return Promise.resolve(null);
+  const q = new URLSearchParams({ ...query, timestamp: String(Math.floor(Date.now() / 1000)), client_id: randomUUID() });
+  return new Promise((resolve) => {
+    // GMGN answers over IPv4 only
+    const req = httpsRequest({ host: "openapi.gmgn.ai", path: `${path}?${q}`, method: "GET", family: 4, timeout: 8000, headers: { "X-APIKEY": key, accept: "application/json" } }, (res) => {
+      let body = "";
+      res.on("data", (c) => { body += c; });
+      res.on("end", () => { try { const j = JSON.parse(body); resolve(j?.code === 0 || j?.data ? j.data || null : null); } catch { resolve(null); } });
+    });
+    req.on("timeout", () => req.destroy());
+    req.on("error", () => resolve(null));
+    req.end();
+  });
+}
+async function gmgnFlags(token) {
+  if (!process.env.GMGN_API_KEY) return null;
+  const k = lc(token), hit = gmgnMemo.get(k);
+  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.v;
+  const t = await gmgnGet("/v1/token/info", { chain: "robinhood", address: getAddress(token) });
+  const dev = t?.dev || {};
+  const on = (x) => x === true || x === 1 || x === "1";
+  const v = t ? { og: on(t.og), cto: on(dev.cto_flag), dexPaid: on(dev.dexscr_ad) || on(dev.dexscr_update_link), boosted: on(dev.dexscr_boost_fee), trending: on(dev.dexscr_trending_bar) } : null;
+  if (v) gmgnMemo.set(k, { at: Date.now(), v });   // a failed read is asked again next time
+  return v;
+}
 async function dexOrders(token) {
   const k = lc(token), hit = dsOrders.get(k);
   if (hit && Date.now() - hit.at < 10 * 60_000) return hit.v;
@@ -651,8 +683,8 @@ function socialLinks(t) {
 async function boardItem(rec, handles) {
   const m = await import("./market.mjs");
   const devs = [...new Set([rec.wallet, rec.owner].filter((a) => isAddress(String(a || ""))).map(lc))];
-  const [d, ds, dev, hold] = await Promise.all([m.getRobinhoodToken(rec.token).catch(() => null), dexOrders(rec.token), devs.length ? devStatus(rec.token, devs, rec.block || null).catch(() => null) : null,
-    rec.source !== "origin" && rec.owner ? holderInfo(rec.owner) : null]);
+  const [d, ds, dev, hold, gm] = await Promise.all([m.getRobinhoodToken(rec.token).catch(() => null), dexOrders(rec.token), devs.length ? devStatus(rec.token, devs, rec.block || null).catch(() => null) : null,
+    rec.source !== "origin" && rec.owner ? holderInfo(rec.owner).catch(() => null) : null, gmgnFlags(rec.token).catch(() => null)]);
   const t = d?.token || {}, p = d?.pons || null;
   const graduated = !!p?.graduated || (rec.source === "origin" && !p);
   return {
@@ -662,7 +694,9 @@ async function boardItem(rec, handles) {
     priceUsd: t.priceUsd ?? null, mcapUsd: t.mcapUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, holders: t.holders ?? null,
     txns24h: t.txns24h ?? null, buys24h: t.buys24h ?? null, sells24h: t.sells24h ?? null, change1h: t.change1h ?? null, change24h: t.change24h ?? null,
     progressPct: graduated ? 100 : p?.progressPct ?? null, graduated, raisedEth: p?.raised ?? null, ponsUrl: p?.ponsUrl || null,
-    dexPaid: ds.paid, cto: ds.cto || !!rec.cto, boosts: ds.boosts || 0, dev,
+    // badges from GMGN when its key is set (the same flags GMGN shows); until then DexScreener's orders, and $TROYA's own
+    og: gm ? gm.og : rec.source === "origin", cto: gm ? gm.cto : ds.cto || !!rec.cto, dexPaid: gm ? gm.dexPaid || ds.paid : ds.paid,
+    badgesFrom: gm ? "gmgn" : "dexscreener", boosts: ds.boosts || 0, dev,
     // the coin's own links (Pons socials(), then DexScreener): shown as X / Telegram / Web icons on its card
     socials: socialLinks(t),
     // the creator holds 1M $TROYA right now (main wallet + Agent Wallet)

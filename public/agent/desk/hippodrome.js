@@ -87,7 +87,7 @@ export async function mount(view, ctx) {
     const pct = Math.max(0, Math.min(100, Number(c.progressPct) || 0));
     // tags appear only when they are true for this coin
     const tags = [];
-    if (c.source === "origin") tags.push(tipOn(h("span", { class: "hp-tag og" }, "OG"), "OG", "The original $TROYA, the coin Troya is built around.", "green"));
+    if (c.og) tags.push(tipOn(h("span", { class: "hp-tag og" }, "OG"), "OG", c.badgesFrom === "gmgn" ? "Flagged as an OG token on GMGN." : "The original $TROYA, the coin Troya is built around.", "green"));
     if (c.cto) tags.push(tipOn(h("span", { class: "hp-tag cto ic on" }, svg(PEOPLE, "hp-tag-ic")), "Community takeover", "The community runs this coin.", "yellow"));
     if (c.dexPaid) tags.push(tipOn(h("span", { class: "hp-tag paid ic on" }, svg(VERIFIED, "hp-tag-ic")), "Dex Paid", "This coin's DexScreener profile is paid and approved.", "blue"));
     const dv = c.dev, pc = (x) => `${x >= 10 ? x.toFixed(0) : x.toFixed(1)}%`;

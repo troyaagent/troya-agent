@@ -53,6 +53,26 @@ function extraCss() {
   const s = document.createElement("style"); s.id = "hp-extra-css"; s.textContent = EXTRA_CSS; document.head.append(s);
 }
 
+// hovering a coin's logo shows it large beside the row, like a trench board (owner, 18 Nov); mouse only, never on touch
+const zoom = h("div", { class: "hp-zoom", "aria-hidden": "true" }, h("img", { alt: "" }));
+let zoomOn = null;
+function showZoom(ava) {
+  if (!matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+  const im = [...ava.querySelectorAll("img")].find((x) => x.complete && x.naturalWidth > 0 && x.offsetParent !== null && !x.closest(".tok-net"));
+  if (!im) return;                                   // a coin with no logo (letters only) has nothing to show large
+  zoom.firstChild.src = im.currentSrc || im.src;
+  if (!zoom.isConnected) document.body.append(zoom);
+  const r = ava.getBoundingClientRect(), S = 200, G = 12;
+  let left = r.right + G;
+  if (left + S > innerWidth - 8) left = Math.max(8, r.left - G - S);
+  const top = Math.max(8, Math.min(r.top, innerHeight - S - 8));
+  zoom.style.left = `${left}px`; zoom.style.top = `${top}px`;
+  zoom.classList.add("on"); zoomOn = ava;
+}
+function hideZoom() { if (!zoomOn) return; zoomOn = null; zoom.classList.remove("on"); }
+addEventListener("scroll", hideZoom, true);
+addEventListener("hashchange", hideZoom);
+
 export async function mount(view, ctx) {
   useCss("perps");
   extraCss();
@@ -135,7 +155,7 @@ export async function mount(view, ctx) {
       onkeydown: stop });
     copy.innerHTML = COPY_ICON;
     return h("article", { class: `hp-card${fresh ? " fresh" : ""}`, tabindex: "0", role: "link", "aria-label": `${c.symbol} ${c.name}`, onclick: go, onkeydown: (e) => { if (e.key === "Enter") go(); } },
-      h("div", { class: "hp-ava" }, tokenIcon({ address: c.token, symbol: c.symbol, image: c.image }, "xl")),
+      h("div", { class: "hp-ava", onmouseenter: (e) => showZoom(e.currentTarget), onmouseleave: hideZoom }, tokenIcon({ address: c.token, symbol: c.symbol, image: c.image }, "xl")),
       h("div", { class: "hp-top" }, h("b", { class: "hp-sym" }, c.symbol || short(c.token)), h("span", { class: "hp-name" }, c.name || ""), copy),
       h("div", { class: "hp-body" },
         tags.length || socials ? h("div", { class: "hp-tags" }, tags, socials) : null,
@@ -180,5 +200,5 @@ export async function mount(view, ctx) {
 
   paint();
   const stop = every(15_000, refresh);
-  return () => { alive = false; stop(); };
+  return () => { alive = false; stop(); hideZoom(); };
 }

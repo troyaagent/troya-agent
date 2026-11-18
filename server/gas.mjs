@@ -74,6 +74,32 @@ function pay(to, eth, kind, owner) {
 }
 
 /** Called by the Agent Wallet after a confirmed transaction: send its gas back, inside the per-wallet daily limit. */
+/** Sends a contract call from the sponsor wallet (value 0) in the same one-at-a-time queue and waits for it. Used by the
+ *  x402 module to settle USDG payments on Robinhood Chain (transferWithAuthorization), so Troya pays that gas. */
+export async function sponsorTx({ to, data, kind = "call", maxEth = 0.0003 }) {
+  const run = busy.then(async () => {
+    const w = await sponsor();
+    const bal = Number(formatEther(await provider.getBalance(w.address)));
+    if (bal < maxEth) throw new HttpError(503, "The gas sponsor is low right now. The team has been told.");
+    const est = await w.estimateGas({ to: getAddress(to), data });
+    const fee = await provider.getFeeData();
+    const price = fee.maxFeePerGas || fee.gasPrice || 0n;
+    if (Number(formatEther(est * price)) > maxEth) throw new HttpError(503, "Gas is unusually high right now; try again shortly.");
+    const tx = await w.sendTransaction({ to: getAddress(to), data, chainId: 4663, gasLimit: (est * 12n) / 10n });
+    const rc = await tx.wait(1, 60_000);
+    const spent = rc ? Number(formatEther((rc.gasUsed || 0n) * (rc.gasPrice || price))) : 0;
+    await store.update(FILE, {}, (d) => {
+      const t = today(); if (d.day !== t) { d.day = t; d.spentEth = 0; d.refunds = {}; }
+      d.spentEth = +((d.spentEth || 0) + spent).toFixed(10);
+      d.log = [{ at: Date.now(), kind, to: getAddress(to), eth: spent, hash: tx.hash, status: rc?.status }, ...(d.log || [])].slice(0, 200);
+      return d;
+    }).catch(() => {});
+    return { hash: tx.hash, status: rc?.status ?? 0, feeEth: spent };
+  });
+  busy = run.catch(() => {});
+  return run;
+}
+
 export async function refundGas(owner, agentAddress, feeWei) {
   try {
     if (!store) return null;

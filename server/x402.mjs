@@ -15,7 +15,7 @@
 //   GET /api/gate/x402          what it costs, where it pays, which network, whether it is on
 //   GET /api/gate/x402/check    ?token=0x…&amountEth=0.01&assay=1 → the x402-paid, signed Gate check
 import { createPrivateKey, sign as edSign, randomBytes } from "node:crypto";
-import { getAddress, isAddress } from "ethers";
+import { getAddress, isAddress, verifyTypedData, Signature, Interface, Contract, JsonRpcProvider } from "ethers";
 import { send, HttpError } from "./api.mjs";
 
 const FILE = "x402.json";
@@ -23,6 +23,9 @@ const NETS = {
   "eip155:8453": { name: "Base", chainId: 8453, usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", extra: { name: "USD Coin", version: "2" }, facilitator: "https://api.cdp.coinbase.com/platform/v2/x402", scan: "https://basescan.org/tx/" },
   "eip155:42161": { name: "Arbitrum", chainId: 42161, usdc: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", extra: { name: "USD Coin", version: "2" }, facilitator: "https://api.cdp.coinbase.com/platform/v2/x402", scan: "https://arbiscan.io/tx/" },
   "eip155:137": { name: "Polygon", chainId: 137, usdc: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", extra: { name: "USD Coin", version: "2" }, facilitator: "https://api.cdp.coinbase.com/platform/v2/x402", scan: "https://polygonscan.com/tx/" },
+  // Robinhood Chain: USDG (EIP-3009, domain "Global Dollar" v1). No hosted facilitator serves chain 4663, so Troya verifies the
+  // signature itself and settles transferWithAuthorization from its gas sponsor wallet ("self").
+  "eip155:4663": { name: "Robinhood Chain", chainId: 4663, usdc: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", symbol: "USDG", extra: { name: "Global Dollar", version: "1" }, facilitator: "self", scan: "https://robinhoodchain.blockscout.com/tx/" },
   "eip155:84532": { name: "Base Sepolia", chainId: 84532, usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", extra: { name: "USDC", version: "2" }, facilitator: "https://x402.org/facilitator", scan: "https://sepolia.basescan.org/tx/" },
 };
 const lc = (s) => String(s || "").toLowerCase();
@@ -67,8 +70,9 @@ export function cdpJwt(method, url) {
   return `${input}.${b64url(edSign(null, Buffer.from(input), key))}`;
 }
 
-async function facilitator(c, path, body) {
-  const url = `${c.facilitator}/${path}`;
+const facUrl = (c, net) => String(process.env.X402_FACILITATOR_URL || net?.facilitator || c.facilitator).replace(/\/+$/, "");
+async function facilitator(c, path, body, net) {
+  const url = `${facUrl(c, net)}/${path}`;
   const headers = { "content-type": "application/json" };
   if (/api\.cdp\.coinbase\.com/.test(url)) {
     const jwt = cdpJwt("POST", url);
@@ -81,6 +85,36 @@ async function facilitator(c, path, body) {
   let j = null; try { j = JSON.parse(text); } catch {}
   if (!j) throw new Error(`facilitator ${path} answered ${r.status}: ${text.slice(0, 200)}`);
   return j;
+}
+
+/* ---------- Troya's own facilitator for USDG on Robinhood Chain ---------- */
+const TWA = { TransferWithAuthorization: [{ name: "from", type: "address" }, { name: "to", type: "address" }, { name: "value", type: "uint256" }, { name: "validAfter", type: "uint256" }, { name: "validBefore", type: "uint256" }, { name: "nonce", type: "bytes32" }] };
+const TOKEN_ABI = ["function balanceOf(address) view returns (uint256)", "function authorizationState(address,bytes32) view returns (bool)",
+  "function transferWithAuthorization(address,address,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)"];
+let rh = null;
+const rhProvider = () => (rh ||= new JsonRpcProvider(process.env.ROBINHOOD_RPC || "https://rpc.mainnet.chain.robinhood.com", 4663, { staticNetwork: true }));
+async function selfVerify(pp, req) {
+  const a = pp.payload.authorization, sig = pp.payload.signature;
+  let signer = null;
+  try { signer = verifyTypedData({ name: req.extra.name, version: req.extra.version, chainId: 4663, verifyingContract: req.asset }, TWA, a, sig); } catch {}
+  if (!signer || lc(signer) !== lc(a.from)) return { isValid: false, invalidReason: "invalid_exact_evm_payload_signature", payer: a.from };
+  const t = new Contract(req.asset, TOKEN_ABI, rhProvider());
+  const [bal, used] = await Promise.all([t.balanceOf(a.from), t.authorizationState(a.from, a.nonce)]);
+  if (used) return { isValid: false, invalidReason: "invalid_exact_evm_payload_authorization_nonce_used", payer: a.from };
+  if (bal < BigInt(a.value)) return { isValid: false, invalidReason: "insufficient_funds", payer: a.from };
+  return { isValid: true, payer: a.from };
+}
+async function selfSettle(pp, req) {
+  const a = pp.payload.authorization, s = Signature.from(pp.payload.signature);
+  const data = new Interface(TOKEN_ABI).encodeFunctionData("transferWithAuthorization", [a.from, a.to, a.value, a.validAfter, a.validBefore, a.nonce, s.v, s.r, s.s]);
+  try {
+    const out = await (await import("./gas.mjs")).sponsorTx({ to: req.asset, data, kind: "x402-settle" });
+    return out.status === 1 ? { success: true, transaction: out.hash, network: req.network, payer: a.from }
+      : { success: false, errorReason: "invalid_transaction_state", transaction: out.hash, network: req.network, payer: a.from };
+  } catch (e) {
+    console.error("[x402] self settle:", e.message);
+    return { success: false, errorReason: "unexpected_settle_error", transaction: "", network: req.network, payer: a.from };
+  }
 }
 
 /* ---------- what the 402 says ---------- */
@@ -102,7 +136,7 @@ function required(c, error) {
     error,
     resource: {
       url: `${SITE()}/api/gate/x402/check`,
-      description: "Troya Gate: a fresh pre-trade safety check for any token on Robinhood Chain, run at your trade size. Can it be bought and sold, the real taxes, price impact, honeypot and liquidity tests, plus dev and holder flags. Signed by Troya's attestor so any agent can verify it.",
+      description: "Troya Gate: a fresh pre-trade safety check for any token on Robinhood Chain, run at your trade size. Can it be bought and sold, the real taxes, price impact, honeypot and liquidity tests, plus dev and holder flags. Signed by Troya's attestor so any agent can verify it. Pay $0.01 in USDC (Base, Arbitrum, Polygon) or USDG (Robinhood Chain).",
       mimeType: "application/json",
       serviceName: "Troya Gate",
       tags: ["crypto", "token-safety", "trading", "robinhood-chain", "honeypot-check"],
@@ -174,7 +208,7 @@ export async function register(r, ctx) {
     return {
       name: "Troya Gate over x402", x402Version: 2, enabled: c.enabled,
       network: c.network, networkName: c.net.name, price: { usd: c.price, amount: c.amount, asset: "USDC", token: c.net.usdc, decimals: 6 },
-      networks: c.networks.map((n) => ({ network: n, name: NETS[n].name, usdc: NETS[n].usdc })),
+      networks: c.networks.map((n) => ({ network: n, name: NETS[n].name, asset: NETS[n].symbol || "USDC", token: NETS[n].usdc, facilitator: NETS[n].facilitator === "self" ? "troya.codes" : new URL(facUrl(c, NETS[n])).host })),
       payTo: c.payTo, facilitator: new URL(c.facilitator).host, resource: `${SITE()}/api/gate/x402/check?token=0x…`,
       attestor: await gate.attestorAddress(),
       howToPay: "Call the resource, read the PAYMENT-REQUIRED header (base64 JSON), sign the USDC transfer it asks for (EIP-3009, any x402 client does this) and call again with PAYMENT-SIGNATURE. Nothing is charged when the check cannot run.",
@@ -183,13 +217,21 @@ export async function register(r, ctx) {
     };
   }, { weight: 1 });
 
+  // /.well-known/x402 is rewritten here by server.mjs (x402scan and Agent402 read it)
+  r.get("/api/gate/x402/well-known", async () => ({
+    version: 1,
+    resources: [`${SITE()}/api/gate/x402/check`],
+    instructions: "GET /api/gate/x402/check?token=<Robinhood Chain token>&amountEth=0.01 answers 402 with the price; pay $0.01 in USDC on Base, Arbitrum or Polygon, or USDG on Robinhood Chain, and get a signed Troya Gate check. Docs: https://troya.codes/api-and-mcp#x402",
+  }), { weight: 1 });
+
   r.get("/api/gate/x402/check", async ({ req, res, query }) => {
     const c = cfg();
     if (!c.enabled) throw new HttpError(503, "Troya Gate over x402 is not switched on yet. The USDG version works now: GET /api/gate/v1/check/:token", { docs: "https://troya.codes/api-and-mcp#gate-api" });
     const token = String(query.token || "");
-    if (!isAddress(token)) throw new HttpError(400, "Add ?token= with a token contract address on Robinhood Chain (0x + 40 hex).");
     const sigHeader = req.headers["payment-signature"] || req.headers["x-payment"];
+    // directories probe without arguments: the 402 challenge comes first, the token is checked once a payment is sent
     if (!sigHeader) return ask402(res, c, "PAYMENT-SIGNATURE header is required");
+    if (!isAddress(token)) throw new HttpError(400, "Add ?token= with a token contract address on Robinhood Chain (0x + 40 hex). Nothing was charged.");
 
     // 1) read the payment and hold it to exactly what this endpoint asks for
     let pp;
@@ -217,7 +259,7 @@ export async function register(r, ctx) {
 
     // 2) the facilitator checks the signature and the balance; nothing moves yet
     let v;
-    try { v = await facilitator(c, "verify", body); }
+    try { v = pnet.facilitator === "self" ? await selfVerify(pp, want) : await facilitator(c, "verify", body, pnet); }
     catch (e) { release(); if (e.status) throw e; console.error("[x402] verify:", e.message); throw new HttpError(502, "The payment could not be checked right now. Nothing was charged; try again in a minute."); }
     if (!v?.isValid) { release(); return ask402(res, c, v?.invalidReason || "payment not valid"); }
     const payer = v.payer || auth.from;
@@ -229,7 +271,7 @@ export async function register(r, ctx) {
 
     // 4) settle on Base, then hand the result over
     let s;
-    try { s = await facilitator(c, "settle", body); }
+    try { s = pnet.facilitator === "self" ? await selfSettle(pp, want) : await facilitator(c, "settle", body, pnet); }
     catch (e) { console.error("[x402] settle:", e.message); s = { success: false, errorReason: "unexpected_settle_error", transaction: "", network: want.network, payer }; }
     if (!s?.success) {
       console.error("[x402] settle failed:", s?.errorReason, s?.transaction || "");

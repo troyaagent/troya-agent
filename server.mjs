@@ -70,6 +70,7 @@ await initApi({ dataDir: process.env.DATA_DIR || join(HERE, "data"), root: HERE 
 
 async function serve(req, res) {
   const url = new URL(req.url, "http://x");
+  if (url.pathname === "/.well-known/x402") url.pathname = "/api/gate/x402/well-known";   // x402 discovery (x402scan, Agent402)
   if (await handleApi(req, res, url)) return;
   let path;
   try { path = decodeURIComponent(url.pathname); } catch { res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }).end("Bad request"); return; }

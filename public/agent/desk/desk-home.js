@@ -1,7 +1,7 @@
 // Desk (#/): one calm page that answers "where am I, what's moving, what is my agent doing, what next".
 // Everything the old Home had (ask box, the four start steps, live stats, brief, signals, movers) plus
 // the Gate, the agent's status, Sentry's latest results and shortcuts to every tool.
-import { h, clear, icon, useCss, every, sparkline, pctEl, usd, toast, store, infoTip, tokenIcon, coinIcon, short, ago, greeting } from "/agent/js/ui.js";
+import { h, clear, icon, useCss, every, sparkline, pctEl, usd, tiny, toast, store, infoTip, tokenIcon, coinIcon, short, ago, greeting } from "/agent/js/ui.js";
 import { api, cached } from "/agent/js/api.js";
 import { wallet, onWallet, openConnect, reader, signIn } from "/agent/js/wallet.js";
 import { tokenCell, priceCell, usdCell, perpPrice, fmtApr } from "/agent/js/marketlib.js";
@@ -56,6 +56,7 @@ export async function mount(view, { go, ask: askDrawer }) {
       h("div", { class: "dk-steps-h" },
         h("div", {}, h("b", {}, "Start in four steps"), h("span", { class: "fine" }, ` ${n} of 4 done`)),
         h("div", { class: "dk-bar", style: { "--p": `${(n / 4) * 100}%` } }, h("i")),
+        h("a", { class: "link fine", href: "#/start" }, "Full setup"),
         h("button", { class: "link fine", type: "button", onclick: () => { hideSteps.set(true); renderSteps(); } }, "Hide")),
       h("ol", { class: "dk-steps-list" }, list.map((s, i) => h("li", { class: s.done ? "done" : i === next ? "next" : "" },
         h("span", { class: "sn" }, s.done ? icon("check") : String(i + 1)),
@@ -158,17 +159,24 @@ export async function mount(view, { go, ask: askDrawer }) {
     senBody);
 
   /* ---------- shortcuts: every tool, one line each ---------- */
+  const COPY = ["leaderboard", "Copy", "Follow traders from the leaderboard", "#/leaderboard"];
+  const STOCKS = ["stocks", "Stocks", "Tokenized stocks with live prices and dividends", "#/stocks"];
   const tools = [
     ["swap", "Swap", "Coins and tokenized stocks on Robinhood Chain", "#/swap"],
-    ["bolt", "Perps", "Hyperliquid perps with stops and take-profit", "#/perps"],
+    ["perps", "Perps", "Hyperliquid perps with stops and take-profit", "#/perps"],
     ["bridge", "Bridge", "Bring ETH in from Ethereum, Arbitrum or Base", "#/bridge"],
-    ["rocket", "Launch", "Create a coin on Pons with the Gate on it", "#/create"],
-    ["loop", "Copy", "Follow traders from the leaderboard", "#/leaderboard"],
-    ["key", "API and MCP", "Give your own agent a scoped token", "#/agent/wallet"],
+    ["launch", "Launch", "Create a coin on Pons with the Gate on it", "#/create"],
+    STOCKS,
+    ["agent", "API and MCP", "Give your own agent a scoped token", "#/agent/wallet"],
   ];
+  const toolsGrid = h("div", { class: "dk-tools-g" });
+  const paintTools = () => clear(toolsGrid, tools.map(([ic, t, d, href]) => h("a", { class: "dk-tool", href }, h("span", { class: "dk-tool-ic d2-tile" }, chromeIcon(ic)), h("b", {}, t), h("span", {}, d))));
+  paintTools();
+  // the leaderboard is empty until traders opt in; until then the Copy shortcut would lead nowhere, so Stocks takes its place
+  api.get("leaderboard?days=30").then((d) => { if (d?.rows?.length) { tools[4] = COPY; paintTools(); } }).catch(() => {});
   const shortcuts = h("section", { class: "panel dk-tools" },
     h("div", { class: "panel-h" }, h("h2", {}, "Tools"), h("a", { class: "link fine", href: "#/docs" }, "Docs")),
-    h("div", { class: "dk-tools-g" }, tools.map(([ic, t, d, href]) => h("a", { class: "dk-tool", href }, h("span", { class: "dk-tool-ic" }, icon(ic)), h("b", {}, t), h("span", {}, d)))));
+    toolsGrid);
 
   const gate = gatePanel({ go, ask, compact: true });
   stops.push(gate.stop);
@@ -176,12 +184,12 @@ export async function mount(view, { go, ask: askDrawer }) {
   /* ---------- Desk 2.0 hero: the Troya horse, the promise, live numbers ---------- */
   const CA = (window.SITE && window.SITE.ca) || "";
   const compact = (n) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(Math.round(n)));
-  const tiny = (n) => (n >= 1 ? `$${n.toFixed(2)}` : `$${n.toLocaleString("en-US", { maximumSignificantDigits: 3, maximumFractionDigits: 12 })}`);
+  const troyaPx = (n) => `$${tiny(n)}`;
   const kpi = (label, v, s) => h("div", { class: "d2-kpi" }, h("div", { class: "l" }, label), v, s);
   const kEth = h("div", { class: "v" }, "–"), kEthS = h("div", { class: "s" }, "gas under $0.01");
   const kTro = h("div", { class: "v" }, "–"), kTroS = h("div", { class: "s" }, "on chain, live");
   const kSen = h("div", { class: "v" }, "–"), kSenS = h("div", { class: "s" }, "Sentry calls");
-  const kBurn = h("div", { class: "v" }, "–"), kBurnS = h("div", { class: "s" }, "of supply");
+  const kBurn = h("div", { class: "v" }, "–"), kBurnS = h("div", { class: "s" }, "of the 1B minted");
   const tagGateB = h("b", {}, "Troya Gate"), tagGateS = h("small", {}, "$TROYA, checking…");
   const tagFlyB = h("b", {}, "Flywheel"), tagFlyS = h("small", {}, "reading the chain…");
   const horseLogo = h("img", { class: "d2-logo", src: "/img/logo-3d-hd.png", alt: "", width: "1024", height: "1024", decoding: "async" });
@@ -223,12 +231,16 @@ export async function mount(view, { go, ask: askDrawer }) {
       const rows = (d.candles || []).filter((c) => c && c.close > 0 && !seen.has(c.time) && seen.add(c.time)).sort((x, y) => x.time - y.time).map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, value: c.close }));
       if (rows.length < 2) { cst.series?.setData([]); clear(chCh); chSrc.textContent = "Not enough trades for a chart yet."; return; }
       const first = rows[0].value, last = rows[rows.length - 1].value, ch = (last / first - 1) * 100;
-      chPx.textContent = cst.sym === "ETH" ? usd(last) : tiny(last);
+      chPx.textContent = cst.sym === "ETH" ? usd(last) : troyaPx(last);
       clear(chCh, h("span", { class: ch >= 0 ? "up" : "down" }, `${ch >= 0 ? "+" : ""}${ch.toFixed(2)}%`), ` · ${cst.tf === "1D" ? "24 hours" : cst.tf === "1W" ? "7 days" : "30 days"}`);
       chSrc.textContent = cst.sym === "ETH" ? "Hyperliquid" : (d.source || "GeckoTerminal");
       if (!cst.chart) {
         const LW = await import("lightweight-charts");
-        if (!alive) return;
+        // two loads can overlap at mount: only the newest one draws, and only one chart is ever made
+        if (!alive || my !== cst.seq) return;
+      }
+      if (!cst.chart) {
+        const LW = await import("lightweight-charts");
         const light = document.documentElement.dataset.theme === "light";
         cst.chart = LW.createChart(chBox, { autoSize: true, layout: { background: { type: "solid", color: "transparent" }, textColor: light ? "#6e685f" : "#6f7c89", fontFamily: "Instrument Sans, system-ui, sans-serif", fontSize: 11 },
           grid: { vertLines: { color: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.035)" }, horzLines: { color: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.035)" } },
@@ -250,8 +262,8 @@ export async function mount(view, { go, ask: askDrawer }) {
   stops.push(every(60000, async () => {
     try {
       const f = await api.get("flywheel");
-      if (f.price?.troyaUsd) kTro.textContent = tiny(f.price.troyaUsd);
-      if (f.burned) { kBurn.textContent = compact(f.burned.total); kBurnS.textContent = `${f.burned.pctOfMinted.toFixed(2)}% of supply`; tagFlyB.textContent = `${compact(f.burned.total)} burned`; }
+      if (f.price?.troyaUsd) kTro.textContent = troyaPx(f.price.troyaUsd);
+      if (f.burned) { kBurn.textContent = compact(f.burned.total); kBurnS.textContent = `${f.burned.pctOfMinted.toFixed(2)}% of the 1B minted`; tagFlyB.textContent = `${compact(f.burned.total)} burned`; }
       const c = f.totals?.cycles || 0; tagFlyS.textContent = `flywheel · ${c} cycle${c === 1 ? "" : "s"}`;
     } catch { tagFlyS.textContent = "flywheel"; }
     try { const r = await api.get("record?limit=1"); kSen.textContent = String(r.stats.calls); kSenS.textContent = `calls, ${r.stats.graded} graded in public`; } catch {}
@@ -268,8 +280,8 @@ export async function mount(view, { go, ask: askDrawer }) {
   clear(view, h("div", { class: "dk" },
     hero, quick, steps,
     h("div", { class: "dk-cols" },
-      h("div", { class: "dk-col" }, chart, gate.el, brief, hlTable, rhTable),
-      h("div", { class: "dk-col" }, agent, sentry, sigs, shortcuts))));
+      h("div", { class: "dk-col" }, chart, gate.el, brief, hlTable),
+      h("div", { class: "dk-col" }, agent, sentry, sigs, rhTable, shortcuts))));
 
   /* ---------- data ---------- */
   stops.push(every(10000, async () => {
@@ -316,7 +328,7 @@ export async function mount(view, { go, ask: askDrawer }) {
     if (!lastSignals.length) { clear(sigBody, h("p", { class: "muted" }, "Nothing crosses the thresholds right now.")); return; }
     clear(sigBody, list.map((s) => h("div", { class: `sig ${s.kind}` },
       h("span", { class: "sig-k" }, { funding: "Funding", move: "Move", volume: "Volume", new: "New" }[s.kind] || s.kind),
-      h("div", { class: "sig-t" }, h("b", { class: "tok-link" }, s.coin ? coinIcon(s.coin, "sm") : s.address ? tokenIcon({ symbol: s.symbol || (([, d, c]) => d || c)(String(s.title || "").match(/\$([A-Za-z0-9]{2,12})|:\s*([A-Za-z0-9]{2,12})\s*$/) || []), address: s.address, image: s.image }, "sm") : null, String(s.title || "").replace(/\b[a-z0-9]+:(?=[A-Z])/g, "")), h("span", {}, s.detail)),
+      h("div", { class: "sig-t" }, h("b", { class: "tok-link" }, s.coin ? coinIcon(s.coin, "sm") : s.address ? tokenIcon({ symbol: s.symbol || (([, d, c]) => d || c)(String(s.title || "").match(/\$([A-Za-z0-9]{2,12})|:\s*([A-Za-z0-9]{2,12})\s*$/) || []), address: s.address, image: s.image }, "sm") : null, h("span", { class: "sig-tt", title: s.title || "" }, String(s.title || "").replace(/\b[a-z0-9]+:(?=[A-Z])/g, ""))), h("span", {}, s.detail)),
       h("div", { class: "sig-a" },
         h("button", { class: "link", type: "button", onclick: () => watch(s) }, "Watch"),
         h("button", { class: "link", type: "button", onclick: () => ask(`${s.title}. ${s.detail} What does this mean and is there a trade here inside my limits?`) }, "Ask"),
@@ -343,7 +355,7 @@ export async function mount(view, { go, ask: askDrawer }) {
       const word = { passed: "Passed", caution: "Caution", failed: "Failed" };
       clear(senBody, h("ul", { class: "dk-sen" }, items.map((it) => h("li", {},
         tokenIcon({ symbol: it.symbol, address: it.token }, "sm"),
-        h("div", { class: "dk-sen-t" }, h("b", {}, it.symbol ? `$${it.symbol}` : short(it.token)), h("span", {}, [it.name, it.source || "Pons", it.buyers != null ? `${it.buyers} buyers` : null].filter(Boolean).join(" · "))),
+        h("div", { class: "dk-sen-t" }, h("b", {}, it.symbol ? `$${it.symbol}` : short(it.token)), h("span", {}, [it.name, it.source || "Pons", it.buyers != null ? (it.buyers === 0 ? "no buyers yet" : `${it.buyers} buyer${it.buyers === 1 ? "" : "s"}`) : null].filter(Boolean).join(" · "))),
         h("span", { class: `dk-v v-${it.verdict}` }, word[it.verdict] || it.verdict || "Checked"),
         h("span", { class: "fine dk-sen-at" }, ago(it.at)),
         h("span", { class: "dk-sen-a" },

@@ -20,7 +20,8 @@ const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").
 const short = (a) => `${String(a).slice(0, 6)}…${String(a).slice(-4)}`;
 const lc = (s) => String(s || "").toLowerCase();
 // a reason as one clause, so ". Nothing was spent." never doubles the full stop
-const why = (e, n = 220) => esc(String(e?.message || e || "").replace(/[.\s]+$/, "").slice(0, n));
+// the reason on its own: "Nothing was spent" is added by each message, never twice
+const why = (e, n = 220) => esc(String(e?.message || e || "").replace(/[.\s]*Nothing was spent[.\s]*$/i, "").replace(/[.\s]+$/, "").slice(0, n));
 function issue(p, ttl) {
   const now = Date.now();
   for (const [k, v] of pend) if (v.exp < now) pend.delete(k);
@@ -152,7 +153,7 @@ export async function handleMessage(m, tg, st) {
         await say("Troya couldn't read the name and ticker for sure. Send it like this, as the caption of the coin's image:\n<code>/launch Wooden Horse $HORSE tax 2% buy 0.01</code>\n\nOr send /launch alone and answer step by step.", guideBtn());
         return true;
       }
-      Object.assign(fresh, { name: ask.name, symbol: ask.symbol, taxBps: ask.taxBps || 0, buyEth: ask.buyEth || 0, step: "preview" });
+      Object.assign(fresh, { name: ask.name, symbol: ask.symbol, taxBps: ask.taxBps || 0, buyEth: ask.buyEth || 0, step: "preview", quick: true });
       const np = L.nameProblem(fresh.name, fresh.symbol, { team: L.isAdminWallet(owner) });
       if (np) { await say(`<b>Not launched:</b> ${esc(np)}`); return true; }
       if (fresh.taxBps > L.MAX_TAX_BPS) { await say("<b>Not launched:</b> the creator tax can be 4% at most."); return true; }
@@ -174,6 +175,9 @@ export async function handleMessage(m, tg, st) {
     const name = text.replace(/\s+/g, " ").trim();
     if (!name || name.startsWith("/")) { await say("Send the coin's name as plain text, or /cancel."); return true; }
     if (name.length > 48) { await say("Keep the name to 48 characters."); return true; }
+    // the name's own rules right here: checked only at the ticker step, a reserved name asked for "another ticker" forever
+    const bad = L.coinNameProblem(name, { team: L.isAdminWallet(s.owner) });
+    if (bad) { await say(`${esc(bad.replace(/\s*Pick another[^.]*\.?$/i, ""))}\n\nSend another name, or /cancel.`); return true; }
     s.name = name; s.step = "symbol";
     await say(`<b>${esc(name)}</b>. Now the ticker, letters and numbers only (for example: HORSE).`);
     return true;
@@ -181,16 +185,21 @@ export async function handleMessage(m, tg, st) {
   if (s.step === "symbol") {
     const sym = text.replace(/^\$/, "").trim();
     const np = L.nameProblem(s.name, sym, { team: L.isAdminWallet(s.owner) });
-    if (np) { await say(`${esc(np)}\n\nSend another ticker, or /cancel.`); return true; }
+    if (np) { await say(`${esc(np.replace(/\s*Pick another[^.]*\.?$/i, ""))}\n\nSend another ticker, or /cancel.`); return true; }
     s.symbol = sym; s.step = "image";
     await say(`$${esc(sym)}. Now send the coin's image as a photo (square works best; other shapes get cropped to the middle), or /skip to launch without one.`);
     return true;
   }
   if (s.step === "image") {
-    if (/^\/skip\b/i.test(text)) { s.logo = ""; s.step = "tax"; await say("No image. Creator tax? It's yours on every buy and sell, fixed for good.", taxKb(chat)); return true; }
+    if (/^\/skip\b/i.test(text)) {
+      s.logo = "";
+      if (s.quick) return showPreview(L, tg, s, say);
+      s.step = "tax"; await say("No image. Creator tax? It's yours on every buy and sell, fixed for good.", taxKb(chat)); return true;
+    }
     const fid = imageOf(m);
     if (!fid) { await say(m.document ? "Send the image as a photo rather than as a file, or /skip." : "Send the image as a photo, or /skip."); return true; }
     try { s.logo = await saveImage(tg, fid); } catch { await say("Troya couldn't read that image. Send it as a photo (PNG or JPEG) rather than as a file, or /skip."); return true; }
+    if (s.quick) return showPreview(L, tg, s, say);
     s.step = "tax";
     await say("Image saved. Creator tax? It's yours on every buy and sell, fixed for good.", taxKb(chat));
     return true;
@@ -250,6 +259,11 @@ export async function handleCallback(cq, tg) {
       try {
         const out = await L.launchWithAgentWallet({ owner: s.owner, name: s.name, symbol: s.symbol, logo: s.logo, creatorTaxBps: s.taxBps, source: "tg", ref: `tg:${chat}:${mid}`, buyEth: s.buyEth });
         if (!out.ok) {
+          if (out.why === "pending") {
+            await edit(`<b>$${esc(s.symbol)} is still confirming on Robinhood Chain.</b> Once it lands it shows on Troya Launches and in your Creator desk.`, { inline_keyboard: [[{ text: "Troya Launches", url: `${SITE}/agent#/troya-launches` }]] });
+            return;
+          }
+          if (out.why === "reverted") { await edit("<b>Not launched:</b> the launch transaction failed on Robinhood Chain, so no coin was created (only a little gas was used). Wait a minute and send /launch again.", guideBtn()); return; }
           const reason = out.why === "no-agent-wallet" ? "your wallet has no Agent Wallet yet" : (out.reasons || [])[0] || "the launch could not be sent";
           await edit(`<b>Not launched:</b> ${why(reason, 200)}. Nothing was spent.`, guideBtn());
           return;

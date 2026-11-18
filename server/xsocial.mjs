@@ -99,11 +99,13 @@ function redirect(res, to) { res.writeHead(302, { location: to, "cache-control":
 async function callback(query, res) {
   const p = pending.get(String(query.state || ""));
   pending.delete(String(query.state || ""));
-  if (!p || p.exp < Date.now()) return redirect(res, "/agent#/social?x=expired");
-  if (query.error || !query.code) return redirect(res, "/agent#/social?x=cancelled");
+  // back to the page the sign-in started from (Launch from X or Social), whatever happened
+  const home = p?.home || "/agent#/social";
+  if (!p || p.exp < Date.now()) return redirect(res, `${home}?x=expired`);
+  if (query.error || !query.code) return redirect(res, `${home}?x=cancelled`);
   try {
     const t = await tokenCall({ grant_type: "authorization_code", code: String(query.code), redirect_uri: REDIRECT, code_verifier: p.verifier, client_id: process.env.X_CLIENT_ID });
-    if (!(await spend("users"))) return redirect(res, "/agent#/social?x=busy");
+    if (!(await spend("users"))) return redirect(res, `${home}?x=busy`);
     const me = (await xApi("/2/users/me?user.fields=profile_image_url", { token: t.access_token })).data;
     if (!me?.id) throw new Error("no user");
     if (p.purpose === "bot") {
@@ -116,10 +118,10 @@ async function callback(query, res) {
       m[lc(p.address)] = { id: me.id, username: me.username, name: String(me.name || "").slice(0, 60), avatar: me.profile_image_url || null, at: Date.now() };
       return m;
     });
-    return redirect(res, `${p.home || "/agent#/social"}?x=linked`);
+    return redirect(res, `${home}?x=linked`);
   } catch (e) {
     console.warn("[x] sign-in:", e.message);
-    return redirect(res, "/agent#/social?x=failed");
+    return redirect(res, `${home}?x=failed`);
   }
 }
 
@@ -153,14 +155,21 @@ async function handleMention(t, { users, media, bot, m, L }) {
   const recent = log.filter((x) => x.authorId === t.author_id && Date.now() - x.at < 6 * 3600_000).length;
   const entry = { id: t.id, at: Date.now(), authorId: t.author_id, author: u.username || null, text: text.slice(0, 400), status: "skipped", reply: null };
   // V6 F26: a launch request is answered by launch.mjs with a fixed text, never by the model
-  const photo = (t.attachments?.media_keys || []).map((k) => media.get(k)).find((x) => x?.type === "photo" && x.url);
-  const lx = L ? await L.fromX({ tweetId: t.id, authorId: t.author_id, text: t.text, mediaUrl: photo?.url || null }).catch((e) => ({ reply: null, error: e.message })) : null;
+  const att = (t.attachments?.media_keys || []).map((k) => media.get(k)).filter(Boolean);
+  const photo = att.find((x) => x.type === "photo" && x.url);
+  // a GIF or a video comes with no image url: said so in the reply, never launched as "no image attached"
+  const lx = L ? await L.fromX({ tweetId: t.id, authorId: t.author_id, text: t.text, mediaUrl: photo?.url || null, mediaKinds: att.map((x) => x.type) }).catch((e) => ({ reply: null, error: e.message })) : null;
   if (lx) {
     entry.kind = "launch"; entry.token = lx.launch?.token || null; entry.why = lx.error || null;
     if (lx.reply) {
       entry.reply = oneCashtag(lx.reply);
       if (await spend("posts")) {
-        const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: entry.reply, reply: { in_reply_to_tweet_id: t.id } } }).catch((e) => { entry.why = e.message; return null; });
+        let p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: entry.reply, reply: { in_reply_to_tweet_id: t.id } } }).catch((e) => { entry.why = e.message; return null; });
+        // the coin went live: the poster must get its CA even if X refused the full reply, so a short one goes out instead
+        if (!p?.data?.id && lx.launch?.token && lx.short && (await spend("posts"))) {
+          entry.reply = oneCashtag(lx.short);
+          p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: entry.reply, reply: { in_reply_to_tweet_id: t.id } } }).catch((e) => { entry.why = e.message; return null; });
+        }
         entry.status = p?.data?.id ? "posted" : "failed"; entry.replyId = p?.data?.id || null;
       } else { entry.status = "draft"; entry.why = "daily post cap reached"; }
     }

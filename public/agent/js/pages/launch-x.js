@@ -20,7 +20,10 @@ export async function mount(view, ctx) {
     h("header", { class: "page-head lc-head" }, h("h1", {}, "Launch from X"),
       h("p", {}, "Post on X and the coin goes live on Pons from your Agent Wallet. Open to everyone: one launch a day, or as many as you like with 1,000,000 $TROYA, which also keeps the whole creator fee for you. ", h("a", { class: "link", href: "/launch-on-x", target: "_blank", rel: "noopener" }, "Read the full guide"))),
     body);
-  if (ctx.query.x === "linked") toast("X account linked.", "ok");
+  // back from X's sign-in page: say what happened, here where it started
+  const X_BACK = { linked: ["X account linked.", "ok"], cancelled: ["X sign-in was cancelled. Press Link X to try again.", "warn"], expired: ["The X sign-in took too long. Press Link X to try again.", "warn"],
+    busy: ["X is busy right now. Try linking again in a few minutes.", "warn"], failed: ["X sign-in didn't go through. Try again in a minute.", "error"], signin: ["Connect and sign in with your wallet first, then link X.", "warn"] };
+  if (X_BACK[ctx.query.x]) toast(X_BACK[ctx.query.x][0], X_BACK[ctx.query.x][1], 7000);
 
   async function load() {
     st.err = null;
@@ -132,7 +135,7 @@ export async function mount(view, ctx) {
     const f = st.factory, p = st.prefs;
     const card = h("section", { class: "panel lx-panel" }, h("h2", {}, "Admin"));
     const mode = p.xLaunchMode || "off";
-    const label = { off: "Off: posts get a not-open-yet reply.", test: "Test: only admin wallets can launch from X.", live: "Live: every holder who set it up can launch from X." }[mode];
+    const label = { off: "Off: posts get a not-open-yet reply.", test: "Test: only admin wallets can launch from X.", live: "Live: everyone who set it up can launch from X (once a day without 1M $TROYA)." }[mode];
     card.append(h("div", { class: "lx-coin" }, h("b", {}, "Launch on X"), h("span", { class: "muted" }, label),
       h("span", { style: { display: "inline-flex", gap: "6px" } }, ["off", "test", "live"].map((m) => h("button", { class: `btn${m === mode ? " primary" : ""}`, type: "button", disabled: !!st.busy || m === mode,
         onclick: run("Saving…", () => api.post("x/launch", { launch: m })) }, m[0].toUpperCase() + m.slice(1))))));

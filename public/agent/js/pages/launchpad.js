@@ -45,12 +45,13 @@ export async function mount(view, ctx) {
     cols: [
       { key: "token", label: "Token", align: "l", render: (t) => tokenCell(t) },
       { key: "age", label: "Age", render: (t) => h("span", { class: "muted" }, ageText(t.createdAt)), hide: NARROW },
-      { key: "price", label: "Price", render: (t) => priceCell(t.priceEth, t.priceUsd) },
+      // phones: the market cap sits under the price (as on Market), so no column hides off-screen
+      { key: "price", label: NARROW ? "Price · MC" : "Price", render: (t) => (NARROW ? h("div", { class: "pcell" }, h("span", {}, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"), h("span", { class: "sub" }, t.mcapUsd > 0 ? `MC ${usd(t.mcapUsd, { compact: true })}` : "MC –")) : priceCell(t.priceEth, t.priceUsd)) },
       { key: "change", label: "24h", render: (t) => pctEl(t.change24h) },
       { key: "volume", label: "24h volume", render: (t) => usdCell(t.volume24hUsd, t.volume24hEth), hide: NARROW },
       { key: "liq", label: "Liquidity", render: (t) => usdCell(t.liquidityUsd, null), hide: NARROW },
       { key: "txns", label: "Trades 24h", render: (t) => (t.txns24h != null ? compact(t.txns24h, 1) : "–"), hide: NARROW },
-      { key: "mcap", label: "Market cap", render: (t) => mcapCell(t) },
+      { key: "mcap", label: "Market cap", render: (t) => mcapCell(t), hide: NARROW },
     ],
   });
 

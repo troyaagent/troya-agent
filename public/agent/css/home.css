@@ -79,3 +79,5 @@
 }
 .sig-t b.tok-link { display: flex; align-items: center; gap: 8px; }
 .sig-t b.tok-link .tok-ico.sm { width: 18px; height: 18px; flex: none; }
+.sig-t b.tok-link { min-width: 0; }
+.sig-t b.tok-link > .sig-tt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

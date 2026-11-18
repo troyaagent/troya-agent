@@ -8,6 +8,7 @@ const PKG = SITE.mcpPackage || "@troyaagent/mcp";
 const code = (text, label) => h("div", { class: "dc-code" }, h("button", { class: "btn ghost sm", type: "button", onclick: () => copyText(text, `${label || "Snippet"} copied`) }, icon("copy"), "Copy"), h("pre", {}, h("code", {}, text)));
 const P = (...kids) => h("p", {}, ...kids);
 const UL = (items) => h("ul", {}, items.map((x) => h("li", {}, x)));
+const L = (href, text) => h("a", { href, ...(/^https?:/.test(href) ? { target: "_blank", rel: "noopener" } : {}) }, text);
 
 export async function mount(view) {
   useCss("docs");
@@ -16,18 +17,18 @@ export async function mount(view) {
     ["overview", "Overview", [
       P("Troya Agent is a trading desk for Robinhood Chain (chain 4663) and Hyperliquid perps, with an assistant in front of it. You ask in plain words; Troya reads live data, runs checks, and hands you a ticket. Nothing moves until you sign it, or until your optional Agent Wallet acts inside the caps you set."),
       UL([
-        [h("b", {}, "Desk: "), "the app's home (troya.codes/agent): the next setup step, live prices, the Gate, your agent's status, the brief, signals and Sentry on one page. The sidebar groups every tool (Trade, Discover, Agent, You, Help), and Ask Troya or Cmd K opens the agent beside any page; paste a coin there to gate it."],
-        [h("b", {}, "Gate a coin: "), "paste any Robinhood Chain address at #/gate and see the seven checks, the same ones that run before every order."],
+        [h("b", {}, "Desk: "), "the app's home at ", L("#/", "troya.codes/agent"), ": the next setup step, live prices, the Gate, your agent's status, the brief, signals and Sentry on one page. The sidebar groups every tool (Trade, Discover, Agent, You, Help), and Ask Troya or Cmd K opens the agent beside any page; paste a coin there to gate it."],
+        [h("b", {}, "Gate a coin: "), "paste any Robinhood Chain address on ", L("#/gate", "Gate a coin"), " and see the seven checks, the same ones that run before every order."],
         [h("b", {}, "Market: "), "Robinhood Chain coins and tokenized stocks from GeckoTerminal pools and Pons on chain (Long.xyz, Bankr, Frontier.fun, Abyss, Goo, Clank.trade, o1 and Virtuals included), plus every Hyperliquid perp and spot pair."],
         [h("b", {}, "Swap: "), "any pair on Robinhood Chain through Pons curves and Uniswap v3/v4 pools, and coins from the other Robinhood Chain launchpads (Long.xyz, Bankr, Frontier.fun, Abyss, Virtuals and more) through KyberSwap. You sign in your own wallet."],
         [h("b", {}, "Perps: "), "Hyperliquid orders with leverage, take-profit and stop-loss, signed by a trade-only key you approve once."],
         [h("b", {}, "Bridge: "), "ETH between Robinhood Chain and Arbitrum, Base or Ethereum through LI.FI routes, or To Hyperliquid: ETH on Robinhood Chain becomes USDC on your own Hyperliquid account in one transaction."],
-        [h("b", {}, "Telegram: "), "trade Robinhood Chain coins from a private chat with @TrojanTroya_bot (Gate first, then Confirm), and follow t.me/troyasentry: every new Pons launch, and new pools on Uniswap and the other Robinhood Chain launchpads, go through the Gate, and the channel posts the clean passes with at least 0.5 ETH of real buying from 25 or more independent wallets (no bots, farms or copies)."],
-        [h("b", {}, "Gate badge: "), "a live Troya Gate result Pons devs can embed on their site (troya.codes/badge)."],
+        [h("b", {}, "Telegram: "), "trade Robinhood Chain coins from a private chat with @TrojanTroya_bot (Gate first, then Confirm), and follow the ", L("https://t.me/troyasentry", "Sentry channel"), ": every new Pons launch, and new pools on Uniswap and the other Robinhood Chain launchpads, go through the Gate, and the channel posts the clean passes with at least 0.5 ETH of real buying from 25 or more independent wallets (no bots, farms or copies)."],
+        [h("b", {}, "Gate badge: "), "a live Troya Gate result Pons devs can embed on their site (", L("/badge", "Gate badge"), ")."],
         [h("b", {}, "Daily brief: "), "positions, PnL, liquidation distance, funding, the nearest stop, the market and Sentry every morning, with smart alerts (Portfolio → Today's brief, /brief in Telegram)."],
-        [h("b", {}, "Sentry Autopilot: "), "your rules on every launch that passes the Gate, in practice mode first, with a leaderboard you can copy rules from (Agent → Sentry Autopilot, #/leaderboard, /autopilot)."],
-        [h("b", {}, "Start: "), "a guided 60-second setup at #/start."],
-        [h("b", {}, "Launchpad: "), "new coins from Pons, Long.xyz, Bankr, Frontier.fun, Abyss, Virtuals and more, and a form to launch your own on Pons."],
+        [h("b", {}, "Sentry Autopilot: "), "your rules on every launch that passes the Gate, in practice mode first, with a leaderboard you can copy rules from (", L("#/agent/sentry", "Sentry Autopilot"), ", the ", L("#/leaderboard", "Leaderboard"), ", /autopilot in Telegram)."],
+        [h("b", {}, "Start: "), "a guided setup: ", L("#/start", "Start in 60 seconds"), "."],
+        [h("b", {}, "All launches: "), "new coins from Pons, Long.xyz, Bankr, Frontier.fun, Abyss, Virtuals and more (", L("#/launch", "All launches"), "). To launch your own coin, see Launch a coin below."],
         [h("b", {}, "Agent: "), "chat, Agent Wallet, Autopilot and Playbooks."],
         [h("b", {}, "Arbitrum and Base: "), "pick the network above the Swap card; KyberSwap routes, the same Troya Gate, your own wallet signs (live since 16 Nov 2026, each tested with real money)."],
         [h("b", {}, "Solana: "), "pick Solana above the Swap card: Jupiter routes (pump.fun and every other Solana launchpad), a Solana Gate (who can freeze or mint the coin, Token-2022 traps, the swap simulated from your address, a sell route), signed in your own Solana wallet (live since 16 Nov 2026)."],
@@ -36,30 +37,58 @@ export async function mount(view) {
         [h("b", {}, "TWAP and Smart DCA: "), "Agent → Playbooks. TWAP splits a big buy or sell into slices that each stay under a price-impact cap (a slice waits for depth instead of going through); Smart DCA buys 0.5–1.5× the base by the 7-day average, within the total budget."],
         [h("b", {}, "More perps: "), "the Perps page also lists trade.xyz stock, index and metal perps (same Hyperliquid key; USDC moves into the trade.xyz balance with one signature), and Perps · Lighter (Robinhood) trades Lighter's exchange on Robinhood Chain with USDG and a key made in your browser."],
         [h("b", {}, "Stock desk: "), "stock tokens with their dividend and split multiplier, the corporate actions calendar, baskets in one go, a rebalance playbook, and USDG loans against your stocks on Morpho Blue with a Loan Gate and alerts."],
-        [h("b", {}, "The Record: "), "troya.codes/record grades every Sentry call: the price at the call, an hour later, a day later and the peak."],
+        [h("b", {}, "The Record: "), L("/record", "The Record"), " grades every Sentry call: the price at the call, an hour later, a day later and the peak."],
       ]),
     ]],
+    ["launch", "Launch a coin", (() => {
+      const tg = h("span", {}, h("b", {}, "In Telegram: "), "launching from a private chat with @TrojanTroya_bot is built and in its real-money test; it opens once that test is done.");
+      api.get("launch/rules").then((r) => { if (r?.tgLaunch) clear(tg, h("b", {}, "In Telegram: "), "send /launch to ", L(`https://t.me/${r.tgBot || "TrojanTroya_bot"}`, `@${r.tgBot || "TrojanTroya_bot"}`), " in a private chat and answer the questions, or send one photo with the launch line as its caption."); }).catch(() => {});
+      return [
+        P("Anyone can launch a Pons coin through Troya. Launching is free; Pons charges its own small launch fee. Every coin born through Troya wears the Troya horse on its logo across Troya and shows on ", L("#/troya-launches", "Troya Launches"), " in three lanes: New, Almost bonded and Migrated."),
+        h("h3", {}, "Three ways to launch"),
+        UL([
+          [h("b", {}, "On troya.codes: "), L("#/create", "Create coin"), ". Your own wallet signs."],
+          [h("b", {}, "From X: "), "set it up once on ", L("#/launch/x", "Launch from X"), " (sign in, link X, an Agent Wallet with a little ETH), then post \"@Troyaagent launch Name $TICKER\" with the image attached. Add \"tax 2%\" for a creator tax and \"buy 0.01\" for an initial buy. Troya replies with the address, or with what to fix (nothing is spent then). The full guide is on ", L("/launch-on-x", "Launch on X"), "."],
+          tg,
+        ]),
+        h("h3", {}, "Fees and limits"),
+        UL([
+          "The Pons fee is 1% of volume, and 0.7% of it is the creator's share.",
+          "Without 1,000,000 $TROYA: you keep 0.6% of volume and all of your creator tax; Troya takes 0.1% through a fee-split contract nobody can change. Up to 3 launches a day per wallet, at most 1 of them from X (days in UTC).",
+          "With 1,000,000 $TROYA or more (your wallet plus its Agent Wallet): 100% of the creator fee goes straight to your wallet, and there is no daily limit.",
+          "Creator tax: 0% to 4%, all of it yours.",
+          "Names and tickers that copy ETH, BTC, USDG, stock tokens, big coins or Troya itself are refused.",
+        ]),
+        h("h3", {}, "After the launch"),
+        P(L("#/creator", "Creator desk"), " shows every coin you launched through Troya with the creator fees waiting for each, and claims them in one click, signed by your own wallet. An initial buy from X sits in your Agent Wallet; sell it from ", L("#/launch/x", "Launch from X"), " (Your launches)."),
+      ];
+    })()],
     ["token", "$TROYA token", (() => {
       // Facts read from chain on 15 Nov 2026 (mint log, totalSupply, burns to 0x0, curve state, owner()). Each links to a place to check it.
       const ca = SITE.ca || "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074";
       const BS = "https://robinhoodchain.blockscout.com";
       const A = (href, text) => h("a", { href, target: "_blank", rel: "noopener" }, text);
+      const big = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : Math.round(n).toLocaleString("en-US"));
+      const burnLine = h("span", {}, "every $TROYA burned lowers the total supply; the running total is read from the chain on the flywheel page.");
+      api.get("flywheel").then((f) => { const b = f?.burned; if (b?.total > 0) burnLine.textContent = `${big(b.total)} $TROYA burned so far (${b.pctOfMinted.toFixed(2)}% of the 1B minted), so the supply is now about ${big(b.supply)}. Every burn is listed on the flywheel page.`; }).catch(() => {});
       return [
         P("$TROYA is the Troya Agent token on Robinhood Chain. Everything below can be checked on chain; the links show where."),
         h("div", { class: "dc-ca" }, code(ca, "Contract address")),
         UL([
           [h("b", {}, "Fair launch on Pons: "), "launched 14 Nov 2026 (UTC). All 1,000,000,000 tokens were minted once, straight into the Pons bonding curve. There was no presale and no pre-minted team allocation: every token in a wallet, the team's included, was bought from the curve."],
           [h("b", {}, "No owner: "), "the token contract has no owner."],
-          [h("b", {}, "Burns: "), "the dev wallet has burned 26,884,853 $TROYA in 6 transactions to the zero address (as of 15 Nov 2026), so supply is now about 973.1M. ", A(`${BS}/token/${ca}`, "Live supply on Blockscout"), "."],
+          [h("b", {}, "Burns: "), burnLine, " ", A(`${BS}/token/${ca}`, "Live supply on Blockscout"), "."],
           [h("b", {}, "Fees on the curve: "), "each curve trade pays 1% to Pons and a 1.9% creator tax to the ", A(`${BS}/address/0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4`, "creator wallet"), ". At 4.2 ETH raised the curve graduates to a Uniswap v4 pool."],
           [h("b", {}, "Uniswap pool: "), "an ETH/TROYA Uniswap v4 pool (1% fee) has traded alongside the curve since 15 Nov 2026. It is the pair ", A(`https://dexscreener.com/robinhood/${ca}`, "DexScreener"), " tracks. Its liquidity position (Uniswap v4 NFT #4293939) was burned by the creator wallet on 15 Nov 2026, so nobody, the team included, can remove that liquidity: ", A(`${BS}/tx/0xfe7f12591df9b9f53a0366a31cf36d1cf00b8200b6ae05fb8eeb7989afc24ea0`, "burn transaction"), "."],
         ]),
         h("h3", {}, "What holding it does"),
         P("Live since 16 Nov 2026, 12:00 UTC: a wallet holding at least 1,000,000 $TROYA (your signed-in wallet plus its Agent Wallet, read from chain) gets:"),
-        UL(["200 assistant messages a day instead of 20", "100 active playbooks instead of 25", "Every coin Troya Sentry posts, by private message on Telegram"]),
+        UL(["200 assistant messages a day instead of 20", "100 active playbooks instead of 25", "Every coin Troya Sentry posts, by private message on Telegram", "No daily limit on launches through Troya", "100% of the creator fee on the coins you launch through Troya", "A small gas claim in ETH on Robinhood Chain once a week (Portfolio → Troya pays your gas)"]),
         P("Check your status with /wallet in a private chat with ", A("https://t.me/TrojanTroya_bot", "@TrojanTroya_bot"), "."),
+        h("h3", {}, "The flywheel"),
+        P("A flywheel cycle, signed by the creator wallet, claims creator fees from the Pons fee escrow, buys $TROYA back through Troya Gate, burns it with the token's own burn() so the supply goes down, and adds full-range liquidity to the Pons pool as a position minted to the dead address, so nobody can remove it. Phase One ran on 17 Nov 2026. Every cycle, burn and locked position is read back from the chain on ", L("#/flywheel", "the flywheel page"), " (public copy: ", L("/flywheel", "troya.codes/flywheel"), ")."),
         h("h3", {}, "Not announced"),
-        P("Allocations beyond the above, vesting, buybacks, future burns and exchange listings have not been announced. Anything about $TROYA that is not here, on x.com/Troyaagent or in t.me/troyaagent is not from the team."),
+        P("Further buybacks after Phase One, allocations beyond the above, vesting and exchange listings have not been announced. Anything about $TROYA that is not here, on x.com/Troyaagent or in t.me/troyaagent is not from the team."),
         P(A(`${BS}/token/${ca}`, "Blockscout"), " · ", A(`https://dexscreener.com/robinhood/${ca}`, "DexScreener"), " · ", A(`https://ponsfamily.com/launchpad/${ca}`, "Pons"), " · ", A("https://troya.codes/verify", "Proof log")),
       ];
     })()],
@@ -81,7 +110,7 @@ export async function mount(view) {
       P("Sentry checks every Pons launch about 90 seconds in, and again at 5, 15 and 60 minutes while it is quiet. When a launch passes and its curve has raised at least what you set, Autopilot buys your amount, then sells at your take-profit or stop, or after 7 days. Exits are checked every 60 seconds."),
       UL([
         [h("b", {}, "Practice: "), "play money at real prices. Entries and exits are quoted on chain when they happen; nothing is sent."],
-        [h("b", {}, "Live: "), "buys and sells from your Agent Wallet, so Troya Gate and your caps run again on each trade. Tested with real money on 15 Nov 2026 (troya.codes/verify)."],
+        [h("b", {}, "Live: "), "buys and sells from your Agent Wallet, so Troya Gate and your caps run again on each trade. Tested with real money on 15 Nov 2026 (", L("/verify", "proof log"), ")."],
         [h("b", {}, "Rules: "), "curve raised at least (ETH), buy per coin (ETH), take profit (x), stop (% down), open at once, buys a day. In Telegram: /autopilot set min 1 buy 0.01 tp 2 sl 30 max 3, or plain words."],
         [h("b", {}, "Leaderboard: "), "opt in to show your results with a shortened address; anyone can copy the rules of a trader on the board."],
       ]),
@@ -102,7 +131,7 @@ export async function mount(view) {
     ["limits", "Limits and policy", [
       P("Limits live outside any model, in a policy file the server re-reads on every action. The operator sets the ceiling; you can only go stricter, in Agent → Autopilot."),
       UL(["Per-action and per-day USD caps", "Maximum leverage", "Allowed perp markets (empty means all)", "Pause: stops every Agent Wallet action at once", "Operator kill switch: stops all execution for everyone"]),
-      P("Troya charges no fee during the beta. Network gas and venue fees (pool fees, Hyperliquid fees) still apply."),
+      P("Swaps, perps and bridges: Troya adds no fee of its own. Network gas and venue fees (pool fees, token taxes, Hyperliquid fees) still apply and are shown before you sign. Launches: free, and Troya takes 0.1% of a coin's volume from creators without 1,000,000 $TROYA (see Launch a coin)."),
     ]],
     ["wallet", "Agent Wallet trust model", [
       P("By default Troya is non-custodial: your wallet signs every transaction and the app never sees its key."),
@@ -152,7 +181,7 @@ export async function mount(view) {
     ["chains", "Chains and venues", [
       UL([
         [h("b", {}, "Robinhood Chain: "), "chain 4663, an Ethereum L2 on Arbitrum Orbit, gas in ETH. Explorer: robinhoodchain.blockscout.com."],
-        [h("b", {}, "Pons Family: "), "bonding-curve launches; a coin graduates into a Uniswap v4 pool with the Pons hook. 1% fee (70% to the creator) plus an optional creator tax up to 10%."],
+        [h("b", {}, "Pons Family: "), "bonding-curve launches; a coin graduates into a Uniswap v4 pool with the Pons hook. 1% fee (70% to the creator) plus an optional creator tax: 0% to 4% on coins launched through Troya."],
         [h("b", {}, "Uniswap v3 / v4: "), "everything else, with WETH and USDG as the main hubs. Tokenized stocks trade here."],
         [h("b", {}, "Hyperliquid: "), "perps. Orders go to Hyperliquid mainnet."],
         [h("b", {}, "Bridge: "), "LI.FI routes between Robinhood Chain and Arbitrum, Base or Ethereum, usually minutes."],
@@ -166,7 +195,7 @@ export async function mount(view) {
     ["faq", "FAQ", [
       ...[["Does Troya hold my funds?", "No, unless you create an Agent Wallet. That one is custodial by design and capped; your own wallet stays yours."],
         ["Can the agent trade without me?", "Only through the Agent Wallet, only inside its caps and your limits, and only when it is switched on. Pause stops it instantly."],
-        ["Is the token health score an audit?", "No. It reads the contract bytecode for common owner controls. A clean score does not make a token safe."],
+        ["Is a Gate pass an audit?", "No. The seven Gate checks simulate the trade from a fresh address and read the contract for common owner powers, at one moment. A pass is a snapshot, not an audit, and a coin can change after it."],
         ["Why was my action blocked?", "The ticket shows which Troya Gate check or limit failed. Your journal keeps the reason."],
         ["How many chat messages do I get?", "The operator sets a free daily allowance per wallet (20 by default)."]]
         .map(([q, a]) => h("details", { class: "dc-faq" }, h("summary", {}, q), h("p", {}, a))),

@@ -147,7 +147,8 @@ export async function mount(view, ctx) {
     let off = 0;
     const donut = h("span", { class: "pf2-donut" });
     donut.innerHTML = `<svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="46" class="bg"/>${slices.map(([, v, c]) => { const len = total ? (v / total) * C : 0; const el = `<circle cx="60" cy="60" r="46" stroke="${c}" style="stroke-dasharray:${len} ${C};stroke-dashoffset:${-off}"/>`; off += len; return el; }).join("")}</svg>`;
-    donut.append(h("span", { class: "pf2-donut-c" }, h("b", {}, connected ? String(slices.length || 0) : "–"), h("small", {}, "places")));
+    donut.append(connected ? h("span", { class: "pf2-donut-c" }, h("b", {}, String(slices.length || 0)), h("small", {}, slices.length === 1 ? "account" : "accounts"))
+      : h("span", { class: "pf2-donut-c off" }, h("b", {}, "No wallet")));
     const pnl = st.hl?.unrealizedPnl;
     const hero = h("section", { class: "pf2-hero" },
       h("div", { class: "pf2-txt" },
@@ -163,7 +164,7 @@ export async function mount(view, ctx) {
           connected ? h("a", { class: "btn primary d2-big", href: "#/swap" }, icon("swap"), "Swap") : h("button", { class: "btn primary d2-big", type: "button", onclick: () => openConnect() }, icon("wallet"), "Connect wallet"),
           h("a", { class: "btn d2-big", href: "#/bridge" }, "Bridge"), h("a", { class: "btn d2-big", href: "#/bridge?dir=hl" }, "Fund Hyperliquid"))),
       h("div", { class: "pf2-split" }, donut,
-        h("ul", { class: "pf2-legend" },
+        !connected ? h("ul", { class: "pf2-legend off" }, h("li", {}, h("span", {}, "Connect a wallet to see where your funds sit: Robinhood Chain, its tokens and Hyperliquid."))) : h("ul", { class: "pf2-legend" },
           h("li", {}, h("i", { style: { background: "#bff0fd" } }), h("span", {}, "Robinhood Chain"), h("b", {}, connected ? (st.rh == null ? "…" : `${num(st.rh, 5)} ETH`) : "–"), h("small", {}, connected && st.eth && st.rh != null ? usd(rhUsd) : "")),
           h("li", {}, h("i", { style: { background: "#5fc3e0" } }), h("span", {}, "Tokens"), h("b", {}, connected ? (st.toks == null ? "…" : usd(tokUsd)) : "–"), h("small", {}, connected && st.toks ? `${st.toks.length} on Robinhood Chain` : "")),
           h("li", {}, h("i", { style: { background: "#3c8fa8" } }), h("span", {}, "Hyperliquid"), h("b", {}, connected ? (st.hl ? usd(hlUsd) : "…") : "–"), h("small", {}, connected && st.hl ? `withdrawable ${usd(st.hl.withdrawable)}` : "")))));
@@ -196,12 +197,14 @@ export async function mount(view, ctx) {
     if (!hideSetup.get()) {
       const swapped = (st.journal || []).some((j) => /swap/i.test(j.kind || j.type || ""));
       const steps = [
-        { t: "Connect wallet", done: connected, act: connected ? null : h("button", { class: "btn sm", type: "button", onclick: () => openConnect() }, "Connect"), tip: "Your wallet signs everything; Troya never holds its key." },
-        { t: "Get ETH on Robinhood Chain", done: (st.rh || 0) > 0, act: h("a", { class: "link", href: "#/bridge" }, "Bridge"), tip: "Robinhood Chain pays gas in ETH. Bridge it from Arbitrum, Base or Ethereum." },
-        { t: "Fund USDC on Hyperliquid", done: (st.hl?.accountValue || 0) > 0, act: h("a", { class: "link", href: "#/bridge?dir=hl" }, "Fund from Robinhood Chain"), tip: "Perps margin is USDC in your Hyperliquid account. Bridge → To Hyperliquid turns ETH on Robinhood Chain into it in one transaction." },
-        { t: "Approve a trading key", done: st.key?.state === "approved", act: h("a", { class: "link", href: "#/perps" }, "Perps"), tip: "A trade-only key in this browser, approved once with your wallet. It cannot withdraw." },
-        { t: "First swap", done: swapped, act: h("a", { class: "link", href: "#/swap" }, "Swap"), tip: wallet.session ? "Ticked once a swap appears in your journal." : "Sign in so your journal can confirm it." },
+        { t: "Connect wallet", done: connected, act: (c) => h("button", { class: c, type: "button", onclick: () => openConnect() }, "Connect"), tip: "Your wallet signs everything; Troya never holds its key." },
+        { t: "Get ETH on Robinhood Chain", done: (st.rh || 0) > 0, act: (c) => h("a", { class: c, href: "#/bridge" }, "Bridge"), tip: "Robinhood Chain pays gas in ETH. Bridge it from Arbitrum, Base or Ethereum." },
+        { t: "Fund USDC on Hyperliquid", done: (st.hl?.accountValue || 0) > 0, act: (c) => h("a", { class: c, href: "#/bridge?dir=hl" }, "Fund from Robinhood Chain"), tip: "Perps margin is USDC in your Hyperliquid account. Bridge → To Hyperliquid turns ETH on Robinhood Chain into it in one transaction." },
+        { t: "Approve a trading key", done: st.key?.state === "approved", act: (c) => h("a", { class: c, href: "#/perps" }, "Perps"), tip: "A trade-only key in this browser, approved once with your wallet. It cannot withdraw." },
+        { t: "First swap", done: swapped, act: (c) => h("a", { class: c, href: "#/swap" }, "Swap"), tip: wallet.session ? "Ticked once a swap appears in your journal." : "Sign in so your journal can confirm it." },
       ];
+      const next = steps.findIndex((s) => !s.done);
+      for (const [i, s] of steps.entries()) s.act = s.act(`btn sm${i === next ? " primary" : ""}`);
       const n = steps.filter((s) => s.done).length;
       parts.push(h("section", { class: "panel pf-setup", "aria-label": "Get set up" },
         h("div", { class: "pf-setup-h" }, h("h2", {}, "Get set up"), h("span", { class: "ct" }, `${n} of ${steps.length}`), h("a", { class: "link", href: "#/start", style: { fontSize: "12.5px" } }, "Start in 60 seconds"), h("div", { class: "pf-bar", "aria-hidden": "true" }, h("i", { style: { width: `${(n / steps.length) * 100}%` } })),

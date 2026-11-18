@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 import { getBalances } from "./robinhood.mjs";
 import { requireSession } from "./auth.mjs";
+import { HttpError } from "./api.mjs";
 
 const MIN = Number(process.env.HOLDER_MIN || 1_000_000);
 const START = process.env.HOLDER_START ? Date.parse(process.env.HOLDER_START) : 0;
@@ -32,9 +33,12 @@ export async function holderOf(owner) {
   const addrs = [k, await agentAddress(k)].filter(Boolean);
   let balance = 0;
   for (const a of addrs) {
-    const b = await getBalances(a, [ca]).catch(() => null);
+    // a failed read is an error, never a balance of 0: counted as 0 and kept for 10 minutes, it made a 1M holder a
+    // non-holder, and a coin launched in that window had Troya's fee splitter fixed on chain for good. Not memoized.
+    const b = await getBalances(a, [ca]);
     const t = b?.balances?.find((x) => x.address !== "native" && x.address.toLowerCase() === ca.toLowerCase());
-    if (t) balance += Number(t.amount);
+    if (!t) throw new Error("Couldn't read the $TROYA balance right now.");
+    balance += Number(t.amount);
   }
   const v = { holder: balance >= MIN, balance, min: MIN, start: START || null };
   memo.set(k, { at: Date.now(), v });
@@ -57,7 +61,8 @@ export async function register(r, ctx) {
   store = ctx.store;
   r.get("/api/holder", async ({ req }) => {
     const s = requireSession(req);
-    const h = await holderOf(s.address);
+    const h = await holderOf(s.address).catch(() => null);
+    if (!h) throw new HttpError(503, "Couldn't read your $TROYA balance right now. Try again in a minute.");
     return { ...h, perks: PERKS, ca: troyaCa() };
   });
   r.get("/api/holder/terms", () => ({ min: MIN, start: START ? new Date(START).toISOString() : null, on: perksOn(), perks: PERKS, counted: "your signed-in wallet plus its Agent Wallet", ca: troyaCa() }));

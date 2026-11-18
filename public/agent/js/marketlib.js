@@ -55,9 +55,11 @@ export function updatedText(ts) {
   return s < 60 ? "updated just now" : s < 3600 ? `updated ${Math.floor(s / 60)} min ago` : `updated ${Math.floor(s / 3600)} h ago`;
 }
 export const fmtFunding = (pctPerHr) => (pctPerHr == null ? "–" : `${pctPerHr > 0 ? "+" : ""}${pctPerHr.toFixed(4)}%`);
-export const fmtApr = (v) => (v == null ? "–" : `${v > 0 ? "+" : ""}${Math.abs(v) >= 1000 ? compact(v, 1) : v.toFixed(Math.abs(v) >= 10 ? 0 : 1)}%`);
+// a percent never compacts to "1.4K%" (that reads like money): big values print in full with grouping, "+1,400%"
+export const fmtApr = (v) => (v == null ? "–" : `${v > 0 ? "+" : ""}${Math.abs(v) >= 1000 ? Math.round(v).toLocaleString("en-US") : v.toFixed(Math.abs(v) >= 10 ? 0 : 1)}%`);
+// a perp or spot price in a table: dollar-quoted like every other price column ("$23.118", "$0.0₄4438")
 export function perpPrice(v) {
   if (v == null) return "–";
   const a = Math.abs(v);
-  return a >= 1000 ? v.toLocaleString("en-US", { maximumFractionDigits: 1 }) : a >= 1 ? v.toLocaleString("en-US", { maximumFractionDigits: 4 }) : tiny(v, 5);
+  return "$" + (a >= 1000 ? v.toLocaleString("en-US", { maximumFractionDigits: 1 }) : a >= 1 ? v.toLocaleString("en-US", { maximumFractionDigits: 4 }) : tiny(v, 5));
 }

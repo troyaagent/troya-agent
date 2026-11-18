@@ -1,5 +1,5 @@
 // Create coin (#/create): the one place every "Create coin" button leads to. Three ways to launch on Robinhood Chain
-// through Troya: troya.codes (own wallet, open to everyone), X (post to @Troyaagent, holders) and Telegram (/launch to the bot).
+// through Troya: troya.codes (own wallet), X (post to @Troyaagent) and Telegram (/launch to the bot), all open to everyone.
 // Numbers and status come from /api/launch/rules, so the page never promises what is not live.
 import { h, clear, useCss, pageHead } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
@@ -34,7 +34,7 @@ export async function mount(view) {
       card({ ic: WEB_ICON, title: "On troya.codes", sub: "Fill in the form and sign with your own wallet.", status: "Open to everyone", tone: "ok",
         points: ["Free to launch through Troya: you pay the Pons launch fee and gas.", fee, `Creator tax 0–4%, all yours. Up to ${r?.limits?.perDay ?? 3} launches a day; holders of ${min} $TROYA have no limit.`],
         cta: "Create on troya.codes", href: "#/launch/create" }),
-      card({ ic: X_ICON, title: "From X", sub: "Post to @Troyaagent and your Agent Wallet launches it.", status: r?.xLaunch ? "Open to everyone" : "In its real-money test", tone: r?.xLaunch ? "ok" : "test",
+      card({ ic: X_ICON, title: "From X", sub: "Post to @Troyaagent and your Agent Wallet launches it.", status: !r ? "Checking…" : r.failed ? "Status unavailable" : r.xLaunch ? "Open to everyone" : "In its real-money test", tone: r?.xLaunch ? "ok" : "test",
         points: [`One launch a day, or as many as you like with ${min} $TROYA.`, fee, "Write \"launch Name $TICKER\", or in your own words; add \"tax 2%\" and \"buy 0.01\".",
           "Attach the coin's image: square (1:1) works best, PNG or JPEG; other shapes get cropped to the middle. Without one, the coin launches with no image, for good.", "Troya replies in seconds with the address and market cap, or with what to fix."],
         cta: "Set up Launch from X", href: "#/launch/x", guide: "/launch-on-x" }),
@@ -44,12 +44,14 @@ export async function mount(view) {
             fee, "Your Agent Wallet pays the Pons launch fee and the buy; Troya pays the gas. Link the chat once in Settings → Telegram alerts.",
             "A preview with a Confirm button comes before anything is sent."],
           cta: "Open the Troya bot", href: `https://t.me/${r.tgBot}?start=launch` })
-        : card({ ic: TG_ICON, title: "In Telegram", sub: "Launch from a private chat with the Troya bot.", status: "In its real-money test", tone: "test", off: true,
+        : card({ ic: TG_ICON, title: "In Telegram", sub: "Launch from a private chat with the Troya bot.", status: !r ? "Checking…" : r.failed ? "Status unavailable" : "In its real-money test", tone: "test", off: true,
           points: ["Same rules and fees as X and troya.codes once it opens.", "Step by step in the chat, or one photo with a caption, then a preview and a Confirm button.", "Opens after its real-money test."],
           cta: "Opening soon" }));
   }
 
+  // the status says "Checking…" until the rules arrive, and never claims a test or an opening it could not read
   paint(null);
-  api.get("/api/launch/rules").then((r) => { if (alive) paint(r); }).catch(() => {});
+  const rules = () => api.get("/api/launch/rules");
+  rules().catch(() => new Promise((res) => setTimeout(res, 3000)).then(rules)).then((r) => { if (alive) paint(r); }).catch(() => { if (alive) paint({ failed: true }); });
   return () => { alive = false; };
 }

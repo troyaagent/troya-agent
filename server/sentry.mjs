@@ -212,7 +212,7 @@ export function formatPost(r) {
   if (ck.tax) bits.push(`Tax ${ck.tax.status === "pass" ? "none" : ck.tax.status === "skip" ? "not measured" : esc(ck.tax.detail)}`);
   if (ck.fee) bits.push(`Fees ${esc(ck.fee.detail)}`);
   if (bits.length) lines.push(bits.join(" · "));
-  if (r.pons) lines.push(`Curve ${eth(r.pons.raised)} ${esc(r.pons.pair?.symbol || "ETH")} raised · ${r.pons.progressPct != null ? r.pons.progressPct.toFixed(r.pons.progressPct < 1 ? 2 : 1) : "–"}% to graduation · creator tax ${(r.pons.fees.creatorTaxBps / 100).toFixed(2)}%`);
+  if (r.pons) lines.push(`Curve ${eth(r.pons.raised)} ${esc(r.pons.pair?.symbol || "ETH")} raised · ${r.pons.progressPct != null ? r.pons.progressPct.toFixed(r.pons.progressPct < 1 ? 2 : 1) : "–"}% to graduation · tax ${Number((1 + (r.pons.fees.creatorTaxBps || 0) / 100).toFixed(2))}% (1% Pons fee${r.pons.fees.creatorTaxBps ? ` + ${Number((r.pons.fees.creatorTaxBps / 100).toFixed(2))}% creator tax` : ", no creator tax"})`);
   if (r.assay?.length) for (const l of r.assay) lines.push(esc(l));
   lines.push(`<code>${r.token}</code>`);
   return lines.join("\n");

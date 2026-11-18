@@ -1,7 +1,8 @@
 // Troya Desk (concept shell). Same pages, same API and wallet modules as /agent; only the frame changes:
 // grouped sidebar, top bar with Ask, an agent drawer that stays open beside any page, and a new Desk home.
 // Pages live in /agent/js/pages/<name>.js (unchanged). Desk home and Gate live next to this file.
-import { h, $, clear, icon, toast, modal, short, store, chainLogo, tokenIcon, setBorn } from "/agent/js/ui.js";
+import { h, $, clear, icon, toast, modal, short, store, chainLogo, tokenIcon, setBorn, price } from "/agent/js/ui.js";
+import { padName } from "/agent/js/marketlib.js";
 import { wallet, onWallet, openConnect, restore, disconnect, signIn, CHAINS, chainById } from "/agent/js/wallet.js";
 import { api } from "/agent/js/api.js";
 import { chromeIcon } from "./chrome-icons.js";
@@ -61,9 +62,9 @@ export const GROUPS = [
   [null, [["Desk", "#/", "desk"]]],
   ["Trade", [["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Lighter perps", "#/lighter", "lighter"], ["Stock desk", "#/stocks", "stocks"], ["Liquidity desk", "#/liquidity", "liquidity"], ["Bridge", "#/bridge", "bridge"]]],
   ["Discover", [["Gate a coin", "#/gate", "gate"], ["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["Create coin", "#/create", "create"], ["Creator desk", "#/creator", "creator"], ["All launches", "#/launch", "launch"], ["Leaderboard", "#/leaderboard", "leaderboard"], ["Agent registry", "#/registry", "agent"]]],
-  ["Agent", [["Chat", "#/agent", "chat"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Sentry Autopilot", "#/agent/sentry", "sentry"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Audited rail", "#/rail", "sentry"]]],
+  ["Agent", [["Chat", "#/agent", "chat"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Sentry Autopilot", "#/agent/sentry", "sentry"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Audited rail", "#/rail", "rail"]]],
   ["You", [["Portfolio", "#/portfolio", "portfolio"], ["Inbox", "#/portfolio/inbox", "inbox"], ["History", "#/portfolio/history", "history"], ["Social", "#/social", "social"]]],
-  ["Help", [["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Verify", "/verify", "verify"], ["The Record", "/record", "verify"], ["$TROYA flywheel", "#/flywheel", "flywheel"]]],
+  ["Help", [["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Verify", "/verify", "verify"], ["The Record", "/record", "record"], ["$TROYA flywheel", "#/flywheel", "flywheel"]]],
 ];
 const FLAT = GROUPS.flatMap(([g, items]) => items.map(([t, href, ic]) => ({ g, t, href, ic })));
 // route table: first path segment → page module (same as /agent) plus the Desk's own Gate page
@@ -86,6 +87,7 @@ function parse() {
 }
 export function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
 
+const SUBTITLES = { "launch/x": "Launch from X", "launch/create": "Create coin" };
 // the sidebar item for a path: longest matching href (token pages sit under Market, assistant under Chat)
 function activeItem(path) {
   const p = path.replace(/^token\b/, "market").replace(/^assistant\b/, "agent").replace(/^launch\/(create|x)\b/, "create");
@@ -112,6 +114,7 @@ async function route() {
     const on = !!act && a.getAttribute("href") === act.href;
     if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   }
+  revealActive();
   clear($("[data-crumb]"), act?.g ? h("span", {}, act.g) : null, h("b", {}, act?.t || (page ? page[0].toUpperCase() + page.slice(1) : "Desk")));
   closeSide();
   // the full chat page and the drawer are the same chat: never show both
@@ -134,9 +137,14 @@ async function route() {
   if (id !== routeId) return;
   clear(view);
   window.scrollTo(0, 0);
-  try { cleanup = (await mod.mount(view, { parts: r.parts, query: r.query, go, prefs, ask: askTroya })) || null; }
-  catch (e) { console.error(e); clear(view, h("div", { class: "empty", style: { padding: "120px 0" } }, h("b", {}, "Something broke on this page."), h("div", {}, String(e.message || e)))); }
-  document.title = `${act?.t || page[0].toUpperCase() + page.slice(1)} · Troya Agent`;
+  // pages that share a sidebar item keep their own tab title ("Launch from X" sits under Create coin)
+  document.title = `${SUBTITLES[r.path] || act?.t || page[0].toUpperCase() + page.slice(1)} · Troya Agent`;
+  let cu = null;
+  try { cu = (await mod.mount(view, { parts: r.parts, query: r.query, go, prefs, ask: askTroya })) || null; }
+  catch (e) { console.error(e); if (id === routeId) clear(view, h("div", { class: "empty", style: { padding: "120px 0" } }, h("b", {}, "Something broke on this page."), h("div", {}, String(e.message || e)))); }
+  // left before it finished loading: its timers stop now, never on the next page's watch
+  if (id !== routeId) { try { cu?.(); } catch {} return; }
+  cleanup = cu;
 }
 
 /* ---------- the room: soft chrome light behind every page (dark theme) ---------- */
@@ -162,9 +170,16 @@ clear($("[data-side-foot]"),
     h("a", { href: "https://t.me/troyasentry", target: "_blank", rel: "noopener" }, "Sentry")));
 
 const side = $("[data-side]"), scrim = $("[data-scrim]");
-function openSide() { side.classList.add("open"); scrim.hidden = false; }
+function revealActive() {
+  const a = side.querySelector("[data-nav] a[aria-current]");
+  if (!a) return;
+  const ar = a.getBoundingClientRect(), sr = side.getBoundingClientRect();
+  if (ar.top < sr.top + 90 || ar.bottom > sr.bottom - 110) side.scrollTop += ar.top - sr.top - (side.clientHeight - ar.height) / 2;
+}
+function openSide() { side.classList.add("open"); scrim.hidden = false; revealActive(); }
 function closeSide() { side.classList.remove("open"); scrim.hidden = true; }
 $("[data-burger]").append(si("menu"));
+$("[data-burger]").after(h("a", { class: "d-top-mark", href: "#/", "aria-label": "Desk home" }, h("img", { src: "/img/logo-3d-128.png", alt: "", width: "128", height: "128" })));
 $("[data-burger]").addEventListener("click", () => (side.classList.contains("open") ? closeSide() : openSide()));
 scrim.addEventListener("click", closeSide);
 
@@ -328,7 +343,7 @@ $("[data-ask-fab]").addEventListener("click", () => openDrawer());
 /* ---------- Ask palette (⌘K): ask the agent, gate a pasted coin, or jump to any page ---------- */
 const ASKS = ["What is moving on Robinhood Chain right now?", "Show funding extremes on Hyperliquid", "What should I watch today?"];
 function openAsk(prefill = "") {
-  const input = h("input", { class: "d-pal-in", placeholder: "Ask Troya anything, paste a coin address, or type a page name", value: prefill, "aria-label": "Ask Troya", autocomplete: "off", spellcheck: "false" });
+  const input = h("input", { class: "d-pal-in", placeholder: matchMedia("(max-width: 560px)").matches ? "Ask, paste a coin or find a page" : "Ask Troya anything, paste a coin address, or type a page name", value: prefill, "aria-label": "Ask Troya", autocomplete: "off", spellcheck: "false" });
   let sel = 0, flat = [], coins = [], coinQ = "", coinSeq = 0, coinTimer = 0;
   const opts = h("div", { class: "d-pal-list", role: "listbox" });
   // coins by symbol, name or ticker: the server searches the whole chain (index, stock tokens, DexScreener)
@@ -348,10 +363,10 @@ function openAsk(prefill = "") {
     const out = [];
     const asks = [];
     const fmt = (n) => (n == null ? null : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${Math.round(n)}`);
-    const px = (n) => (n == null ? null : n >= 1 ? `$${n.toFixed(2)}` : n > 0 ? `$${n.toLocaleString("en-US", { maximumSignificantDigits: 3, maximumFractionDigits: 20 })}` : null);
+    const px = (n) => (n == null || !(n > 0) ? null : `$${price(n)}`);
     if (coins.length && coinQ && q.replace(/^\$/, "").startsWith(coinQ.toLowerCase().slice(0, 2))) {
       const rows = coins.map((c) => ({ kind: "coin", coin: c, title: `${c.symbol}${c.name && c.name.toLowerCase() !== c.symbol.toLowerCase() ? ` · ${c.name}` : ""}`,
-        hint: [c.kind === "stock" ? "Robinhood stock token" : c.kind === "major" ? "Major" : c.launchpad || null, px(c.priceUsd), c.liquidityUsd ? `liq ${fmt(c.liquidityUsd)}` : null, c.copy ? "small copy of a bigger coin with this ticker" : null].filter(Boolean).join(" · "),
+        hint: [c.kind === "stock" ? "Robinhood stock token" : c.kind === "major" ? "Major" : c.launchpad ? padName(c.launchpad) : null, px(c.priceUsd), c.liquidityUsd ? `liq ${fmt(c.liquidityUsd)}` : null, c.copy ? "small copy of a bigger coin with this ticker" : null].filter(Boolean).join(" · "),
         target: c.address === "native" ? "#/swap" : `#/token/${c.address}` }));
       const t = coins[0];
       if (t && t.address !== "native") rows.splice(1, 0,
@@ -368,7 +383,7 @@ function openAsk(prefill = "") {
       { kind: "page", title: `Swap into it`, hint: "Opens Swap with the coin selected", icon: "swap", target: `#/swap?out=${ca}` },
     ]]);
     const pages = FLAT.filter((it) => !q || it.t.toLowerCase().includes(q) || String(it.g || "").toLowerCase().includes(q))
-      .map((it) => ({ kind: "page", title: it.t, hint: it.g || "Desk", icon: it.ic, target: it.href }));
+      .map((it) => ({ kind: "page", title: it.t, hint: it.g || "Home", icon: it.ic, target: it.href }));
     const goTo = ["Go to", q ? pages.slice(0, 6) : pages.slice(0, 8)];
     // a single word that names a page ("swap", "perps") jumps there first; anything longer reads as a question
     const pageFirst = q && !/\s/.test(q) && pages.some((p) => p.title.toLowerCase().startsWith(q));
@@ -413,7 +428,7 @@ addEventListener("keydown", (e) => {
 window.troya = { go, openAsk, openConnect, signIn, CHAINS, ask: openDrawer };
 
 // the coins born through Troya, so every logo of one carries the horse badge
-api.get("/api/launch/born").then((d) => setBorn(d?.tokens, d?.graduated)).catch(() => {});
+api.get("/api/launch/born").then((d) => setBorn(d?.tokens, d?.graduated, { all: true })).catch(() => {});
 addEventListener("hashchange", route);
 restore();
 renderRight();

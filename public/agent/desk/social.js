@@ -181,7 +181,7 @@ export async function mount(view, ctx) {
         h("div", { class: "so-opts" }, x.options.map((name, i) => h("div", { class: "so-opt" },
           h("div", { class: "so-opt-h" }, h("span", {}, name), h("b", {}, `${x.tally[i]} vote${x.tally[i] === 1 ? "" : "s"}`)), h("i", { style: { width: `${(x.tally[i] / total) * 100}%` } }),
           canVote ? h("button", { class: "btn sm", type: "button", disabled: !!st.busy, onclick: () => vote(x, i) }, "Vote") : null))),
-        h("p", { class: "fine", style: { margin: 0 } }, `${x.counted} counted of ${x.cast} cast · passes minted before ${new Date(x.startTime * 1000).toLocaleString()} and still holding the minimum · `, h("a", { class: "ulink", href: `/api/votes/${x.id}`, target: "_blank", rel: "noopener" }, "every signed vote (JSON)")),
+        h("p", { class: "fine", style: { margin: 0 } }, `${x.counted} counted of ${x.cast} cast · passes minted before ${new Date(x.startTime * 1000).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC and still holding the minimum · `, h("a", { class: "ulink", href: `/api/votes/${x.id}`, target: "_blank", rel: "noopener" }, "every signed vote (JSON)")),
         x.open && wallet.address && !canVote ? h("p", { class: "fine" }, !p.me?.passId ? "Mint a Holder Pass to vote in the next proposals." : !p.me.active ? "Your wallet is under the minimum right now." : "Your pass was minted after this vote opened; it counts from the next one.") : null));
     }
     clear(body, ...items);
@@ -294,7 +294,7 @@ export async function mount(view, ctx) {
         : h("div", {}, h("p", { class: "muted" }, `@${s.expected} has not authorized Troya yet. Sign in as @${s.expected} on X first, then press the button (any other account is refused).`),
           s.configured ? h("a", { class: "btn primary", href: "/api/x/login?for=bot" }, `Connect @${s.expected}`) : null),
       s.lastError ? h("p", { class: "fine down" }, `Last error: ${s.lastError}`) : null,
-      h("div", { class: "so-uses" }, bar("reads", "Posts read today"), bar("posts", "Replies posted today"), bar("search", "Searches today"), bar("users", "Sign-ins today")),
+      s.admin || st.isAdmin ? h("div", { class: "so-uses" }, bar("reads", "Posts read today"), bar("posts", "Replies posted today"), bar("search", "Searches today"), bar("users", "Sign-ins today")) : null,
       s.admin ? h("div", { class: "so-admin" }, h("span", { class: "fine" }, "Admin · mode"),
         seg([{ value: "off", label: "Off" }, { value: "draft", label: "Draft" }, { value: "live", label: "Live" }], s.mode, async (v) => {
           try { await api.post("x/mode", { mode: v }); toast(`Troya on X: ${v}`, "ok"); load(); } catch (e) { toast(e.message, "error"); }
@@ -303,7 +303,7 @@ export async function mount(view, ctx) {
           try { const r = await api.post("x/poll", {}); toast(r.lastError ? `X: ${r.lastError}` : "Mentions checked.", r.lastError ? "error" : "ok"); } catch (e) { toast(e.message, "error"); }
           st.polling = false; load();
         } }, st.polling ? "Checking…" : "Check mentions now") : null) : null,
-      s.posted?.length ? h("div", { class: "so-posted" }, h("span", { class: "fine" }, "Latest replies"), s.posted.map((p) => h("a", { class: "ulink", href: `https://x.com/${s.bot?.username || "Troyaagent"}/status/${p.replyId}`, target: "_blank", rel: "noopener" }, `to @${p.author || "someone"} · ${ago(p.at)}`))) : null);
+      s.posted?.length ? h("div", { class: "so-posted" }, h("span", { class: "fine" }, "Latest replies"), s.posted.map((p) => h("a", { class: "ulink", href: `https://x.com/${s.bot?.username || "Troyaagent"}/status/${p.replyId}`, target: "_blank", rel: "noopener" }, `${p.manual || /^\(/.test(p.author || "") ? (/post/i.test(p.author || "") ? "Team post" : "Team reply") : `to @${p.author || "someone"}`} · ${ago(p.at)}`))) : null);
   }
   function logBox() {
     return h("div", { class: "panel sd-panel so-card" }, h("h3", {}, "Mentions and drafts (admins)"),

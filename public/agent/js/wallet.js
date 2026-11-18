@@ -148,6 +148,13 @@ const KNOWN = [
   { name: "OKX Wallet", install: "https://web3.okx.com/download" },
   { name: "Coinbase Wallet", install: "https://www.coinbase.com/wallet/downloads" },
 ];
+// a phone browser (Safari, Chrome) has no wallet inside it: these links open this same page in the wallet app's own browser
+const OPEN_IN = [
+  { name: "MetaMask", href: () => `https://metamask.app.link/dapp/${location.host}${location.pathname}${location.hash}` },
+  { name: "Coinbase Wallet", href: () => `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(location.href)}` },
+  { name: "OKX Wallet", href: () => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(location.href)}` },
+];
+const onPhone = () => matchMedia("(pointer: coarse)").matches && !matchMedia("(hover: hover)").matches;
 export function openConnect() {
   return new Promise((resolve) => {
     const list = available();
@@ -157,7 +164,10 @@ export function openConnect() {
             try { await connectWith(d); m.close(); toast(`Connected ${short(wallet.address)}`, "ok"); resolve(wallet); }
             catch (e) { toast(e?.message?.includes("rejected") ? "Request cancelled in the wallet." : (e.message || "Could not connect"), "error"); }
           } }, walletLogo(d.info.name, d.info.icon), h("span", {}, d.info.name || "Browser wallet"), h("em", {}, "Detected"))))
-        : h("div", {}, h("div", { class: "wl" }, KNOWN.map((k) => h("a", { class: "wl-item", href: k.install, target: "_blank", rel: "noopener" }, walletLogo(k.name), h("span", {}, k.name), h("em", {}, "Install")))),
+        : onPhone()
+          ? h("div", {}, h("div", { class: "wl" }, OPEN_IN.map((k) => h("a", { class: "wl-item", href: k.href(), rel: "noopener" }, walletLogo(k.name), h("span", {}, `Open in ${k.name}`), h("em", {}, "App")))),
+              h("p", { class: "note" }, "This browser has no wallet inside it. Each link opens this page in the wallet app's own browser, where Connect works. No wallet app yet? Install one from your app store first."))
+          : h("div", {}, h("div", { class: "wl" }, KNOWN.map((k) => h("a", { class: "wl-item", href: k.install, target: "_blank", rel: "noopener" }, walletLogo(k.name), h("span", {}, k.name), h("em", {}, "Install")))),
             h("p", { class: "note" }, "No browser wallet was found. Install one, reload this page, then connect.")),
       h("p", { class: "note" }, "Troya never holds your wallet's key. You approve every transaction in the wallet itself."));
     const m = modal({ title: "Connect a wallet", body, onClose: () => resolve(wallet.address ? wallet : null) });

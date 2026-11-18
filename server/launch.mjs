@@ -81,6 +81,10 @@ const MAJOR_NAMES = new Set(["ETHEREUM", "ETHER", "BITCOIN", "TETHER", "TETHERUS
 const COMPANY_TAIL = /\b(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|holdings?|group|class [a-c]|sa|nv|ag|se|ordinary shares?|common stock|adrs?|ads|etf|trust|fund|the)\b/g;
 const bare = (s) => String(s || "").toLowerCase().replace(/&/g, " ").replace(/[^a-z0-9 ]+/g, " ").replace(COMPANY_TAIL, " ").replace(/[^a-z0-9]/g, "").toUpperCase();
 const flatName = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+// stock companies whose name is an everyday word stay free as coin names ("Snap", "Zoom", "Strategy"); brands do not
+const PLAIN_WORDS = new Set(["STRATEGY", "CARNIVAL", "CELSIUS", "COHERENT", "CORNING", "SNAP", "ZOOM", "ORACLE", "AXON", "OUSTER"]);
+// a ticker written as the name counts only for the best-known ones ("NVDA"); BULL, SNOW or SHOP are ordinary coin names
+const BIG_TICKERS = new Set(["TSLA", "NVDA", "AAPL", "GOOGL", "GOOG", "AMZN", "MSFT", "AVGO", "PLTR", "MSTR", "NFLX", "SPCX"]);
 const RESERVED_MSG = "Names with Troya, official, admin, team, support or Robinhood in them are reserved.";
 /** the name's own rules, on their own: Telegram asks for the name before the ticker and checks it right away */
 export function coinNameProblem(name, { team = false } = {}) {
@@ -94,7 +98,7 @@ export function coinNameProblem(name, { team = false } = {}) {
   if (MAJORS.includes(N) || MAJORS.includes(coinName) || MAJOR_NAMES.has(N) || MAJOR_NAMES.has(coinName)) return "That name copies an existing coin. Pick another.";
   // the name of a tokenized stock's company ("Tesla", "NVIDIA", "Apple") or its ticker spelled as the name ("NVDA")
   const B = bare(n);
-  const stock = STOCKS.find((x) => { const c = bare(x.name); return (c.length >= 4 && (c === B || c === coinName)) || (String(x.symbol).length >= 4 && String(x.symbol).toUpperCase() === N); });
+  const stock = STOCKS.find((x) => { const c = bare(x.name); return (c.length >= 4 && !PLAIN_WORDS.has(c) && (c === B || c === coinName)) || (BIG_TICKERS.has(N) && String(x.symbol).toUpperCase() === N); });
   if (stock) return `That name copies the ${stock.name} stock token ($${String(stock.symbol).toUpperCase()}), so Troya will not launch it. Pick another name.`;
   return null;
 }
@@ -156,6 +160,9 @@ export async function plan({ owner, creatorTaxBps = 0, name, symbol, source = "w
   const troyaBps = troyaBpsFor(tax);
   const salt = "0x" + randomBytes(32).toString("hex");
   const [recipient] = await call(factory, facI, "predict", [owner, troyaBps, salt]);
+  // the salt is the only way to reach this coin's fee splitter: kept here as well as in the browser, so a launch whose
+  // record call failed (a closed tab, a slow block) can still be recorded later and its fees claimed
+  if (name != null && symbol != null) await keepPlan({ owner, salt, troyaBps, recipient: getAddress(recipient), at: Date.now() }).catch(() => {});
   return { ...base, recipient: getAddress(recipient), troyaBps, troyaVolumePct: TROYA_VOLUME_BPS / 100, split: true, salt, factory,
     note: `Troya takes 0.1% of trading volume out of your 0.7% creator fee; you keep 0.6%${tax ? ` plus your whole ${tax / 100}% creator tax` : ""}. Hold ${HOLDER_MIN.toLocaleString("en-US")} $TROYA to keep it all.` };
 }
@@ -183,6 +190,11 @@ async function addRecord(r) {
 }
 
 const RECORD_WINDOW_MS = 60 * 60_000;
+const PLAN_KEEP_MS = 30 * 86400_000;
+async function keepPlan(p) {
+  await store.update("launch-plans.json", [], (l) => [...l.filter((x) => Date.now() - x.at < PLAN_KEEP_MS), p].slice(-5000));
+}
+const planFor = async (recipient) => (await store.readJson("launch-plans.json", [])).find((x) => lc(x.recipient) === lc(recipient)) || null;
 /** A web launch (signed in the browser with the creator's own wallet), checked on chain before it is recorded. */
 export async function recordWeb({ hash, owner, salt, troyaBps }) {
   if (!/^0x[0-9a-fA-F]{64}$/.test(String(hash || ""))) throw new HttpError(400, "Bad transaction hash.");
@@ -193,7 +205,10 @@ export async function recordWeb({ hash, owner, salt, troyaBps }) {
   const from = getAddress(tx.from);
   if (owner && lc(owner) !== lc(from)) throw new HttpError(403, "That launch was signed by another wallet.");
   // only a launch made on troya.codes a moment ago: not an old coin, and not one launched elsewhere and brought in later
-  const blk = await rpc("robinhood", "eth_getBlockByNumber", ["0x" + got.block.toString(16), false]).catch(() => null);
+  // a fee splitter Troya planned for this wallet proves the launch came through troya.codes, whenever it is recorded
+  const planned = lc(got.recipient) !== lc(from) ? await planFor(got.recipient) : null;
+  if (planned && lc(planned.owner) !== lc(from)) throw new HttpError(403, "That launch was signed by another wallet.");
+  const blk = planned ? null : await rpc("robinhood", "eth_getBlockByNumber", ["0x" + got.block.toString(16), false]).catch(() => null);
   if (blk?.timestamp && Date.now() - Number(BigInt(blk.timestamp)) * 1000 > RECORD_WINDOW_MS) throw new HttpError(400, "Only a coin launched on troya.codes in the last hour can be added to Troya Launches.");
   if ((await store.readJson("launches.json", [])).some((x) => lc(x.token) === lc(got.token))) return { ok: true, launch: (await store.readJson("launches.json", [])).find((x) => lc(x.token) === lc(got.token)) };
   const meta = await tokenMeta(got.token).catch(() => null);
@@ -202,6 +217,7 @@ export async function recordWeb({ hash, owner, salt, troyaBps }) {
   let split = false, bps = 0;
   if (lc(got.recipient) !== lc(from)) {
     const factory = await splitterFactory();
+    if (planned) { salt = planned.salt; troyaBps = planned.troyaBps; }
     const b = Math.round(Number(troyaBps) || 0);
     if (!factory || !/^0x[0-9a-fA-F]{64}$/.test(String(salt || ""))) throw new HttpError(400, "The creator fee of that coin goes neither to its creator nor to a Troya splitter.");
     const [p] = await call(factory, facI, "predict", [from, b, salt]);
@@ -260,8 +276,9 @@ async function launchPlanned(p, { owner, name, symbol, logo, creatorTaxBps = 0, 
   const hash = out.result?.hash || null;
   if (!hash) return { ok: false, why: "not-sent", reasons: [out.result?.note || "the launch was not sent"], plan: p };
   // the coin is only "live" once its receipt shows the Pons launch: a reverted transaction has no coin at the predicted address
-  let got = await launchedIn(hash).catch(() => null);
-  for (let i = 0; !got && i < 6; i++) { await sleep(5000); got = await launchedIn(hash).catch(() => null); }
+  const read = () => launchedIn(hash).catch((e) => { console.warn("[launch] reading the launch receipt:", String(e.message || e).slice(0, 200)); return null; });
+  let got = await read();
+  for (let i = 0; !got && i < 6; i++) { await sleep(5000); got = await read(); }
   if (got?.failed) return { ok: false, why: "reverted", hash, plan: p };
   const token = got?.token || null;
   const r = { token, curve: got?.curve || null, logo: logo || null, name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim(), owner: p.owner, wallet: w.address, source, recipient: p.recipient, split: p.split, troyaBps: p.troyaBps,
@@ -330,7 +347,8 @@ const plainOf = (text) => String(text || "").replace(/(^|\s)@\w+/g, " ").replace
 const LOOKS = /\$[A-Za-z][A-Za-z0-9]{0,15}\b|\b(?:launch|deploy|create|make|mint|spin\s*up)\b[^.?!]{0,60}\b(?:coin|token|memecoin|meme\s*coin|ticker)\b|\blaunch\b/i;
 export const looksLikeLaunch = (text) => LOOKS.test(plainOf(text));
 // words or numbers in a rule-read name that mean the post was not in the fixed format: the model reads it instead
-const MESSY_NAME = /\b(?:called|named|ticker|symbol|with|and|token|coin|memecoin|tax|buy|eth|initial|percent)\b|%|\d*\.\d+/i;
+// ("Buy Horse" is a name; "Wooden Horse 2 tax" or "… 0.01" is a tax or a buy the rule could not take out)
+const MESSY_NAME = /\b(?:called|named|ticker|symbol|with|and|token|coin|memecoin)\b|%|\d*\.\d+|\b(?:tax|buy|eth|percent)\s*\d|\d\s*(?:tax|buy|eth|percent)\b|\b(?:initial|dev)\s+buy\b/i;
 const STRONG_ASK = /\b(?:launch|deploy|create|make|mint|spin\s*up)\b[^.?!]{0,60}\b(?:coin|token|memecoin|meme\s*coin)\b/i;
 const QUESTION = /\?\s*$|^(?:how|when|what|why|can|could|does|do|is|are|will|where|who|which|should)\b/i;
 const numbersIn = (s) => (s.match(/\d*\.?\d+/g) || []).map(Number);

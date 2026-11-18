@@ -18,13 +18,19 @@ export async function mount(view) {
     pageHead("Creator desk", "Every coin you launched through Troya, the creator fees waiting for you, and a one-click claim. Read live from Pons; your own wallet signs every claim."),
     body));
 
+  // one request at a time per wallet; an answer for a wallet that is no longer connected is dropped
+  let seq = 0;
   async function load() {
     addr = wallet.address || null;
+    const my = ++seq, who = addr;
     if (!addr) { data = null; err = null; paint(); return; }
     loading = true; paint();
-    try { data = await api.get(`/api/launch/fees?wallet=${addr}`); err = null; } catch (e) { err = errText(e); }
+    let d = null, e2 = null;
+    try { d = await api.get(`/api/launch/fees?wallet=${who}`); } catch (e) { e2 = errText(e); }
+    if (my !== seq || !alive) return;
+    if (d) { data = d; err = null; } else err = e2;
     loading = false;
-    if (alive) paint();
+    paint();
   }
   const eth = (v) => (v > 0 ? `${tiny(v)} ETH` : "0 ETH");
   const inUsd = (v) => (data?.ethUsd && v > 0 ? usd(v * data.ethUsd) : "");
@@ -35,7 +41,7 @@ export async function mount(view) {
     if (!wallet.address || wallet.address.toLowerCase() !== String(data?.wallet).toLowerCase()) { toast("Connect the wallet that launched these coins.", "error"); return; }
     const ok = await review({
       title,
-      summary: `About ${eth(amount)}${inUsd(amount) ? ` (${inUsd(amount)})` : ""} goes to your wallet ${short(data.wallet)}. You sign ${txs.length === 1 ? "one transaction" : `${txs.length} transactions`} on Robinhood Chain and pay the gas, a fraction of a cent each.`,
+      summary: `${amount > 0 ? `About ${eth(amount)}${inUsd(amount) ? ` (${inUsd(amount)})` : ""}` : "The fees paid in the coin itself"} go${amount > 0 ? "es" : ""} to your wallet ${short(data.wallet)}. You sign ${txs.length === 1 ? "one transaction" : `${txs.length} transactions`} on Robinhood Chain and pay the gas, a fraction of a cent each.`,
       rows: txs.map((t, i) => [`Step ${i + 1}`, t.label]),
       confirmLabel: "Continue in wallet",
     });
@@ -60,10 +66,12 @@ export async function mount(view) {
       h("span", { class: "cr-chip" }, SRC[c.source] || "Launched through Troya"),
       c.graduated ? h("span", { class: "cr-chip ok" }, "Graduated") : h("span", { class: "cr-chip" }, "On the Pons curve"),
       c.split ? h("span", { class: "cr-chip" }, "You 0.6% · Troya 0.1% of volume") : h("span", { class: "cr-chip gold" }, "100% yours"),
-      c.creatorTaxBps ? h("span", { class: "cr-chip" }, `Tax ${c.creatorTaxBps / 100}%`) : null,
+      h("span", { class: "cr-chip", title: `1% Pons fee (0.7% to the creator, 0.3% to Pons)${c.creatorTaxBps ? ` + ${Number((c.creatorTaxBps / 100).toFixed(2))}% creator tax` : ", no creator tax"}` }, `Tax ${Number((1 + (c.creatorTaxBps || 0) / 100).toFixed(2))}%`),
     ];
+    // fees paid in the coin itself (no ETH yet) still need the collect: the button says so instead of "Nothing yet"
+    const tokenOnly = !(yours > 0) && c.tokenFees > 0 && c.txs?.length;
     const act = c.split
-      ? h("button", { class: `btn${yours > 0 ? " primary" : ""}`, type: "button", disabled: busy || !(c.txs?.length), onclick: () => claim(c.txs, `Claim $${c.symbol || "coin"} creator fees`, yours) }, yours > 0 ? "Claim" : "Nothing yet")
+      ? h("button", { class: `btn${yours > 0 || tokenOnly ? " primary" : ""}`, type: "button", disabled: busy || !(yours > 0 || tokenOnly), onclick: () => claim(c.txs, `Claim $${c.symbol || "coin"} creator fees`, yours) }, yours > 0 ? "Claim" : tokenOnly ? `Collect $${c.symbol || "coin"} fees` : "Nothing yet")
       : yours > 0 ? h("span", { class: "cr-in" }, "In the wallet claim above") : h("button", { class: "btn", type: "button", disabled: true }, "Nothing yet");
     return h("article", { class: "panel cr-coin" },
       h("a", { class: "cr-ava", href: `#/token/${c.token}`, "aria-label": `Open $${c.symbol || "coin"}` }, tokenIcon({ address: c.token, symbol: c.symbol, image: c.logo }, "xl")),
@@ -118,7 +126,9 @@ export async function mount(view) {
         h("a", { class: "ulink", href: "/launch-on-x#money", target: "_blank", rel: "noopener" }, "Where the creator fee goes")));
   }
 
-  const off = onWallet(() => { if ((wallet.address || null) !== addr) load(); });
-  await load();
+  // onWallet calls back at once with the current wallet: that first call is the load (it was loading twice)
+  const off = onWallet(() => { if ((wallet.address || null) !== addr || (!data && !loading)) load(); });
+  // a web launch whose record call did not get through is sent again first, so its coin shows here
+  import("/agent/js/pages/launch-create.js").then((m) => (m.hasPending() ? m.recordPending().then(() => { if (alive) load(); }) : null)).catch(() => {});
   return () => { alive = false; off?.(); };
 }

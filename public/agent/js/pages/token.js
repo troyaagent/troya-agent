@@ -1,6 +1,6 @@
 // Token detail (#/token/<address>): price, chart, stats, holders, trades, links.
-import { h, clear, useCss, icon, tokenIcon, padLogo, tiny, usd, compact, pctEl, short, ago, copyText, tabs, seg, emptyState } from "../ui.js";
-import { api } from "../api.js";
+import { h, clear, useCss, icon, tokenIcon, padLogo, tiny, price, usd, compact, pctEl, short, ago, copyText, tabs, seg, emptyState } from "../ui.js";
+import { api, cached } from "../api.js";
 import { padName, ethAmount, ageText } from "../marketlib.js";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
@@ -15,17 +15,26 @@ export async function mount(view, { parts, go }) {
     clear(view, back, emptyState("That is not a token address.", "Token pages need a 0x… contract address on Robinhood Chain.", h("a", { class: "link", href: "#/market" }, "Back to the market")));
     return;
   }
-  clear(view, back, h("div", { style: { padding: "40px 0" } }, h("div", { class: "sk", style: { height: "52px", width: "320px", marginBottom: "18px" } }), h("div", { class: "sk", style: { height: "380px" } })));
+  const slow = h("p", { class: "fine muted", style: { margin: "14px 0 0" } });
+  clear(view, back, h("div", { style: { padding: "40px 0" } }, h("div", { class: "sk", style: { height: "52px", width: "320px", marginBottom: "18px" } }), h("div", { class: "sk", style: { height: "380px" } }), slow));
+  const slowT = setTimeout(() => { slow.textContent = "Still reading this coin from GeckoTerminal and the chain. A coin nobody opened lately can take up to half a minute."; }, 6000);
 
   let d;
-  try { d = await api.get(`market/robinhood/token?address=${address}`); }
+  try { d = await api.get(`market/robinhood/token?address=${address}`); clearTimeout(slowT); }
   catch (e) {
+    clearTimeout(slowT);
     clear(view, back, emptyState(e.status === 404 ? "This token is not on the Robinhood Chain board yet." : "The token could not be loaded.", e.message,
       h("div", { class: "row" }, h("a", { class: "link", href: "#/market" }, "Back to the market"), h("a", { class: "link", href: `https://robinhoodchain.blockscout.com/token/${address}`, target: "_blank", rel: "noopener" }, "Look it up on Blockscout ↗"))));
     return;
   }
   const t = d.token;
   const pons = d.pons;
+  document.title = `${t.name && t.name !== t.symbol ? `${t.name} ($${t.symbol})` : `$${t.symbol}`} · Troya Agent`;
+  let launch = null;
+  try { const b = await cached("launch/board", 60000); launch = [...(b.new || []), ...(b.almost || []), ...(b.migrated || [])].find((x) => lc(x.token) === address) || null; } catch {}
+  // a stock token's metadata carries Robinhood's own accounts; on a page named after the company they read as its accounts
+  const rhOwn = (u) => { try { const x = new URL(/^https?:/i.test(u) ? u : `https://${u}`); return /(^|\.)robinhood\.com$/i.test(x.hostname) || (/(^|\.)(twitter|x)\.com$/i.test(x.hostname) && /^\/robinhood/i.test(x.pathname)); } catch { return /robinhood/i.test(String(u)); } };
+  if (t.stock) for (const k of ["website", "twitter", "telegram", "discord"]) if (t[k] && rhOwn(t[k])) t[k] = null;
   let chart = null, ro = null, chartStop = false;
 
   const head = h("div", { class: "tk-head" },
@@ -37,14 +46,14 @@ export async function mount(view, { parts, go }) {
         h("div", { class: "tk-addr" }, h("span", { class: "mono tk2-ca" }, address), h("button", { type: "button", "aria-label": "Copy address", onclick: () => copyText(address, "Address copied") }, icon("copy"))),
         socialRow(t))),
     h("div", { class: "tk-px" },
-      h("div", { class: "p" }, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : pons?.priceInPair != null ? `${tiny(pons.priceInPair)} ${pons.pair.symbol}` : "No price yet"),
+      h("div", { class: "p" }, t.priceUsd != null ? `$${price(t.priceUsd)}` : pons?.priceInPair != null ? `${tiny(pons.priceInPair)} ${pons.pair.symbol}` : "No price yet"),
       h("div", { class: "u" }, t.priceEth != null ? `${tiny(t.priceEth)} ETH` : null, pctEl(t.change24h), h("span", { class: "faint" }, "24h"))));
 
   const actions = h("div", { class: "tk-act" },
     h("a", { class: "btn primary", href: `#/swap?out=${address}` }, icon("swap"), "Buy with Troya Swap"),
     h("a", { class: "btn", href: `#/gate/${address}` }, icon("shield"), "Run the Gate"),
     h("a", { class: "btn", href: `#/agent?q=${encodeURIComponent(`Give me a read on ${t.symbol} (${address}) on Robinhood Chain: liquidity, contract risk and recent flow.`)}` }, icon("spark"), "Ask about it"),
-    h("button", { class: "btn ghost", type: "button", onclick: () => copyText(address, "Address copied") }, icon("copy"), "Copy address"));
+    h("button", { class: "btn", type: "button", onclick: () => copyText(address, "Address copied") }, icon("copy"), "Copy address"));
 
   // chart
   const chartBox = h("div", { class: "tk-chart" });
@@ -72,35 +81,39 @@ export async function mount(view, { parts, go }) {
   api.get(`/api/badge/${address}`).then((r) => {
     const checks = r.checks || [];
     tell(`Troya Gate: ${r.verdict}; ${checks.map((c) => `${c.label} ${c.status}`).join(", ")}.`);
-    if (!checks.length) { gVerdict.textContent = "Not tested yet"; return; }
+    if (!checks.length) { gVerdict.textContent = r.verdict === "untested" ? "No buyers yet" : "Not checked yet"; return; }
     const pass = checks.filter((c) => c.status === "pass").length;
     gRing.className = `dk-ring tk2-ring v-${r.verdict}`;
     gRing.querySelector("b").textContent = `${pass}/${checks.length}`;
     requestAnimationFrame(() => requestAnimationFrame(() => { gRing.querySelector(".rb").style.strokeDasharray = `${(pass / checks.length) * C} ${C}`; }));
     gVerdict.className = `dk-v v-${r.verdict}`;
-    gVerdict.textContent = { passed: "Passed", caution: "Caution", failed: "Failed", untested: "Not tested yet" }[r.verdict] || r.verdict;
-    if (r.checkedAt) gNote.textContent = `Checked ${ago(r.checkedAt)} ago. A snapshot, never a safe stamp.`;
+    gVerdict.textContent = { passed: "Passed", caution: "Caution", failed: "Failed", untested: "No buyers yet" }[r.verdict] || r.verdict;
+    if (r.verdict === "untested") gNote.textContent = `Nobody has bought on the curve yet, so the test sell waits for the first buy.${r.checkedAt ? ` Checked ${ago(r.checkedAt)} ago.` : ""}`;
+    else if (r.checkedAt) gNote.textContent = `Checked ${ago(r.checkedAt)} ago. A snapshot, never a safe stamp.`;
     clear(gList, checks.map((c) => h("li", { class: `c-${c.status}` }, h("span", { class: "dk-ck" }, c.status === "pass" ? icon("check") : c.status === "fail" ? icon("close") : h("b", {}, c.status === "warn" ? "!" : "–")), h("span", {}, c.label))));
   }).catch(() => { gVerdict.textContent = "Gate unavailable"; });
 
   const stat = (k, v) => h("div", {}, h("div", { class: "k" }, k), h("div", { class: "v" }, v ?? "–"));
   const stats = h("section", { class: "panel tk-stats" },
-    stat("Market cap", t.mcapUsd != null ? `≈ ${usd(t.mcapUsd, { compact: true })}` : t.mcapEth != null ? ethAmount(t.mcapEth) : null),
+    t.stock
+      ? h("div", { title: `Value of the ${t.symbol} tokens on Robinhood Chain, not ${String(t.name || t.symbol).replace(/\s•.*$/, "")}'s market cap` }, h("div", { class: "k" }, "Tokenized on chain"), h("div", { class: "v" }, t.mcapUsd > 0 ? `≈ ${usd(t.mcapUsd, { compact: true })}` : "–"))
+      : stat("Market cap", t.mcapUsd > 0 ? `≈ ${usd(t.mcapUsd, { compact: true })}` : t.mcapEth > 0 ? ethAmount(t.mcapEth) : null),
     stat("Liquidity", t.liquidityUsd != null ? usd(t.liquidityUsd, { compact: true }) : null),
     stat("24h volume", t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : null),
-    stat("Trades 24h", t.txns24h != null ? `${compact(t.txns24h, 1)}${t.buys24h != null ? ` (${compact(t.buys24h, 1)} buys)` : ""}` : null),
+    stat("Trades 24h", t.txns24h != null ? h("span", {}, compact(t.txns24h, 1), t.buys24h != null ? h("small", { class: "tk2-sub" }, `${compact(t.buys24h, 1)} buys`) : null) : null),
     stat("Holders", t.holders != null ? compact(t.holders, 1).replace(/\.0(?=[KMB]$)/, "") : null),
     stat("Top 10 hold", t.top10Pct != null ? `${Number(t.top10Pct).toFixed(1)}%` : null),
-    pons && !pons.graduated ? stat("Curve raised", `${tiny(pons.raised)} / ${tiny(pons.threshold)} ${pons.pair.symbol}`) : stat("1h change", t.change1h != null ? pctEl(t.change1h) : null),
-    stat("Age", t.createdAt ? ageText(t.createdAt) : null));
+    pons && !pons.graduated ? stat("Curve raised", `${!(pons.raised >= 1e-6) ? "0" : pons.raised < 1 ? (+pons.raised).toFixed(4) : tiny(pons.raised)} / ${tiny(pons.threshold)} ${pons.pair.symbol}`) : stat("1h change", t.change1h != null ? pctEl(t.change1h) : null),
+    stat("Age", launch?.at ? ageText(launch.at) : t.createdAt ? ageText(t.createdAt) : null));
 
   const info = h("section", { class: "panel tk-info" },
     t.description ? h("p", { style: { margin: 0 } }, t.description) : null,
     h("div", { class: "rows", style: { margin: 0 } },
-      pons ? h("div", {}, h("span", {}, "Creator"), h("span", { class: "mono" }, short(pons.deployer, 5))) : null,
-      pons ? h("div", {}, h("span", {}, "Fees"), h("span", {}, `1% Pons fee${pons.fees.creatorTaxBps ? ` + ${(pons.fees.creatorTaxBps / 100).toFixed(2)}% creator tax` : ""}`)) : null,
+      launch?.creator ? h("div", {}, h("span", {}, "Creator"), h("span", {}, launch.creatorX ? h("a", { class: "link", href: `https://x.com/${launch.creatorX}`, target: "_blank", rel: "noopener nofollow" }, `@${launch.creatorX}`) : null, launch.creatorX ? " · " : null, h("span", { class: "mono" }, short(launch.creator, 4)))) : null,
+      pons && (!launch?.creator || lc(launch.creator) !== lc(pons.deployer)) ? h("div", {}, h("span", {}, launch?.creator ? "Deployed by" : "Creator"), h("span", { class: "mono" }, short(pons.deployer, 5))) : null,
+      pons ? h("div", {}, h("span", {}, "Tax"), h("span", {}, `${Number((1 + (pons.fees.creatorTaxBps || 0) / 100).toFixed(2))}% per trade: 1% Pons fee (0.7% creator, 0.3% Pons)${pons.fees.creatorTaxBps ? ` + ${Number((pons.fees.creatorTaxBps / 100).toFixed(2))}% creator tax` : ""}`)) : null,
       pons ? h("div", {}, h("span", {}, "Curve pair"), h("span", {}, pons.pair.symbol)) : null,
-      t.poolDex ? h("div", {}, h("span", {}, "Main pool"), h("span", {}, t.poolDex.replace(/-robinhood$/, "").replace(/-/g, " "))) : null,
+      t.poolDex ? h("div", {}, h("span", {}, "Main pool"), h("span", {}, dexName(t.poolDex))) : null,
       t.pools?.length > 1 ? h("div", {}, h("span", {}, "Pools"), h("span", {}, String(t.pools.length))) : null),
     h("div", { class: "links" },
       t.website ? h("a", { class: "link", href: safeUrl(t.website), target: "_blank", rel: "noopener nofollow" }, "Website ↗") : null,
@@ -129,7 +142,7 @@ export async function mount(view, { parts, go }) {
     } else if (!d.holders) {
       clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Loading the largest wallets…")));
       api.get(`market/robinhood/holders?address=${address}`).then((r) => {
-        const creator = lc(pons?.deployer || "");
+        const creator = lc(launch?.creator || pons?.deployer || "");
         d.holders = (r.holders || []).map((x) => ({ ...x, isCreator: lc(x.address) === creator }));
         d.holdersCount = r.count; d.holdersTop10 = r.top10; d.holdersSource = r.source || "Blockscout"; d.holdersNote = r.note || null;
         renderTab("holders");
@@ -153,12 +166,21 @@ export async function mount(view, { parts, go }) {
         h("p", { class: "fine" }, `The ${d.holders.length} largest of ${d.holdersCount != null ? d.holdersCount.toLocaleString("en-US") : "all"} holders, from ${d.holdersSource || "Blockscout"}. Pools, lockers and the dead address are labelled; they are not people.`));
     }
   }
-  api.get(`market/robinhood/trades?address=${address}`).then((r) => {
-    if (chartStop) return;
-    d.trades = r.trades || [];
-    if (d.trades.length) renderTab("activity");
-    else clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "No recent trades in the main pool.")));
-  }).catch(() => { if (!chartStop) clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Recent trades are unavailable right now."))); });
+  function loadTrades() {
+    const ac = new AbortController();
+    const msg = (text, retry) => clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, text, retry ? h("button", { class: "btn sm", type: "button", onclick: loadTrades }, icon("refresh"), "Try again") : null)));
+    msg("Loading recent trades…");
+    const slowT = setTimeout(() => msg("Still loading recent trades from GeckoTerminal. Busy coins can take up to a minute."), 8000);
+    const stopT = setTimeout(() => ac.abort(), 60000);
+    api.get(`market/robinhood/trades?address=${address}`, { signal: ac.signal }).then((r) => {
+      if (chartStop) return;
+      d.trades = r.trades || [];
+      if (d.trades.length) renderTab("activity");
+      else msg("No recent trades in the main pool.");
+    }).catch((e) => { if (!chartStop) msg(e.name === "AbortError" ? "Recent trades are taking too long to load." : "Recent trades are unavailable right now.", true); })
+      .finally(() => { clearTimeout(slowT); clearTimeout(stopT); });
+  }
+  loadTrades();
 
   // F21: the chart oracle's latest note for this coin, when Troya has written one
   const orcCard = h("div", { hidden: true });
@@ -183,11 +205,17 @@ export async function mount(view, { parts, go }) {
   view.classList.add("tk2");
   const offClass = () => view.classList.remove("tk2");
 
+  let chartSeq = 0;
   async function loadChart() {
-    clear(chartBox, h("div", { class: "tk-chart-msg" }, h("div", { class: "sk", style: { height: "300px", width: "100%" } })));
+    const my = ++chartSeq, ac = new AbortController();
+    const wait = h("span", { class: "tk-chart-wait fine muted" });
+    clear(chartBox, h("div", { class: "tk-chart-msg" }, h("div", { class: "sk", style: { height: "300px", width: "100%" } }), wait));
+    const slowT = setTimeout(() => { wait.textContent = "Still loading the price history from GeckoTerminal. Busy coins can take up to a minute."; }, 8000);
+    const stopT = setTimeout(() => ac.abort(), 60000);
     try {
-      const c = await api.get(`market/robinhood/candles?address=${address}&interval=${interval}`);
-      if (chartStop) return;
+      const c = await api.get(`market/robinhood/candles?address=${address}&interval=${interval}`, { signal: ac.signal });
+      clearTimeout(slowT); clearTimeout(stopT);
+      if (chartStop || my !== chartSeq) return;
       chartSrc.textContent = `${c.source} · ${c.interval} candles · priced in USD`;
       if (!c.candles?.length || c.candles.length < 2) {
         clear(chartBox, h("div", { class: "tk-chart-msg" }, h("b", {}, "No price history yet"), h("span", {}, pons && !pons.graduated ? "Not enough trades on the curve yet for a chart." : "Not enough swaps have been indexed for a chart.")));
@@ -217,7 +245,10 @@ export async function mount(view, { parts, go }) {
       }
       chart.timeScale().fitContent();
     } catch (e) {
-      clear(chartBox, h("div", { class: "tk-chart-msg" }, h("b", {}, "The chart could not load"), h("span", {}, e.message)));
+      clearTimeout(slowT); clearTimeout(stopT);
+      if (chartStop || my !== chartSeq) return;
+      clear(chartBox, h("div", { class: "tk-chart-msg" }, h("b", {}, e.name === "AbortError" ? "The chart is taking too long" : "The chart could not load"),
+        h("span", {}, e.name === "AbortError" ? "GeckoTerminal has not answered for a minute." : e.message), h("button", { class: "btn sm", type: "button", onclick: loadChart }, icon("refresh"), "Try again")));
     }
   }
   loadChart();
@@ -238,6 +269,12 @@ function socialRow(t) {
     a.append(label);
     return a;
   }));
+}
+
+const DEX = { "uniswap-v3": "Uniswap v3", "uniswap-v4": "Uniswap v4", "uniswap-v2": "Uniswap v2", "pons-v2": "Pons", pons: "Pons", metric: "Metric", ramses: "Ramses", kyberswap: "KyberSwap" };
+function dexName(id) {
+  const k = String(id || "").toLowerCase().replace(/-robinhood$/, "").replace(/-dex$/, "");
+  return DEX[k] || k.split("-").map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w)).join(" ");
 }
 
 function safeUrl(u) {

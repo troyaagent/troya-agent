@@ -66,12 +66,20 @@ export async function mount(view, ctx) {
     kpis, tabs, lanes));
 
   async function refresh() {
-    try { st.d = await api.get("/api/launch/board"); st.err = null; setBorn([...st.d.new, ...st.d.almost].map((x) => x.token), st.d.migrated.map((x) => x.token)); }
+    // an empty answer (the board still building after a restart) keeps what is on screen and says it is loading
+    try {
+      const d = await api.get("/api/launch/board");
+      if (!d?.new) throw new Error(st.d ? "Couldn't refresh the board just now." : "The board is still loading. It refreshes on its own.");
+      st.d = d; st.err = null;
+      setBorn([...d.new, ...d.almost].map((x) => x.token), d.migrated.map((x) => x.token));
+    }
     catch (e) { st.err = e.message; }
     if (alive) paint();
   }
 
-  const stat = (k, v) => h("span", { class: "hp-st" }, h("i", {}, k), h("b", {}, v));
+  const stat = (k, v, title) => h("span", { class: "hp-st", title: title || null }, h("i", {}, k), h("b", {}, v));
+  const taxOf = (bps) => Number((1 + (Number(bps) || 0) / 100).toFixed(2));
+  const taxTip = (bps) => `Total tax on every buy and sell: 1% Pons fee (0.7% to the creator, 0.3% to Pons)${bps ? ` + ${Number((bps / 100).toFixed(2))}% creator tax` : ", no creator tax"}`;
   // a coin card: identity and numbers on top (market cap on the right), the curve and the ways to trade along the bottom
   function card(c, lane) {
     const src = SOURCE[c.source];
@@ -125,13 +133,13 @@ export async function mount(view, ctx) {
           c.creatorX ? h("span", {}, `@${c.creatorX}`) : c.creator ? h("span", { class: "mono" }, short(c.creator)) : null),
         h("div", { class: "hp-stats" },
           stat("Holders", c.holders != null ? compact(c.holders, 0) : "–"), stat("Txns", c.txns24h != null ? compact(c.txns24h, 0) : "–"),
-          c.creatorTaxBps ? stat("Tax", `${c.creatorTaxBps / 100}%`) : null, c.initialBuyEth ? stat("Dev buy", `${c.initialBuyEth} ETH`) : null)),
+          stat("Tax", `${taxOf(c.creatorTaxBps)}%`, taxTip(c.creatorTaxBps)), c.initialBuyEth ? stat("Dev buy", `${c.initialBuyEth} ETH`) : null)),
       h("div", { class: "hp-side" },
         h("div", { class: "hp-mc" }, h("small", {}, "MC"), h("b", {}, usd(c.mcapUsd, { compact: true }))),
         h("div", { class: "hp-vol" }, h("small", {}, "Vol 24h"), h("span", {}, usd(c.volume24hUsd, { compact: true })))),
       h("div", { class: "hp-foot" },
         lane === "migrated" ? h("div", { class: "hp-grad" }, h("span", {}, "Graduated"), h("small", {}, c.liquidityUsd != null ? `Pool ${usd(c.liquidityUsd, { compact: true })}` : "Uniswap v4"))
-          : h("div", { class: "hp-bar", title: `${pct.toFixed(1)}% of the curve filled` }, h("i", { style: { width: `${pct}%` } }), h("span", {}, `${pct.toFixed(pct < 10 ? 1 : 0)}% bonded`, c.raisedEth != null ? ` · ${c.raisedEth.toFixed(c.raisedEth < 1 ? 3 : 2)} ETH` : "")),
+          : h("div", { class: "hp-bar", title: `${pct.toFixed(1)}% of the curve filled` }, h("i", { style: { width: `${pct}%` } }), h("span", {}, pct < 0.05 ? "Just started on the curve" : `${pct.toFixed(pct < 10 ? 1 : 0)}% bonded`, c.raisedEth != null && c.raisedEth >= 0.0005 ? ` · ${c.raisedEth.toFixed(c.raisedEth < 1 ? 3 : 2)} ETH` : "")),
         h("div", { class: "hp-act" },
           h("a", { class: "btn hp-buy", href: `#/swap?in=eth&out=${c.token}`, onclick: stop, title: "Buy on Troya, through the Gate" },
             h("img", { src: "/img/logo-3d-128.png", alt: "", width: 16, height: 16 }), "Buy"),

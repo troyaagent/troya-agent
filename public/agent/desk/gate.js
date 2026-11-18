@@ -6,12 +6,12 @@ import { coinSuggest, findCoin } from "/agent/js/coinsearch.js";
 
 const ADDR = /0x[0-9a-fA-F]{40}/;
 const EXAMPLE = "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC";   // NVDA (Robinhood stock token)
-const WORD = { passed: "Passed", caution: "Caution", failed: "Failed", untested: "Not tested yet", error: "Unavailable" };
+const WORD = { passed: "Passed", caution: "Caution", failed: "Failed", untested: "No buyers yet", error: "Unavailable" };
 const NOTE = {
   passed: "Every check passed at this moment. A snapshot, never a safe stamp: a coin can change after a check.",
   caution: "It can be bought, but something needs a look first. Read the line in amber.",
   failed: "At least one check failed, so Troya will not offer a buy. Read the line in red.",
-  untested: "There is no route to test yet, so nothing could be checked.",
+  untested: "Nobody has bought on the curve yet, so the test sell waits for the first buy.",
 };
 
 /* ---------- The Assay (F14): dev, holders, bundles, clusters, wash trades, funders ---------- */

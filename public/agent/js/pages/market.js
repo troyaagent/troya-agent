@@ -108,13 +108,18 @@ function robinhoodTab(box, go, query) {
       let rows = d.tokens || [];
       if (s?.coins?.length) {
         const by = new Map(rows.map((t) => [String(t.address).toLowerCase(), t]));
-        const first = s.coins.filter((c) => c.kind !== "major").map((c) => by.get(c.address) || { address: c.address, symbol: c.symbol, name: c.name, image: c.image, priceUsd: c.priceUsd, liquidityUsd: c.liquidityUsd, volume24hUsd: c.volume24hUsd, change24h: c.change24h, launchpad: c.launchpad, stock: c.kind === "stock" });
+        const first = s.coins.filter((c) => c.kind !== "major").map((c) => by.get(c.address) || { address: c.address, symbol: c.symbol, name: c.name, image: c.image, priceUsd: c.priceUsd, liquidityUsd: c.liquidityUsd, volume24hUsd: c.volume24hUsd, change24h: c.change24h, launchpad: c.launchpad, stock: c.kind === "stock", tradable: c.tradable });
         const seen = new Set(first.map((t) => String(t.address).toLowerCase()));
         rows = [...first, ...rows.filter((t) => !seen.has(String(t.address).toLowerCase()))];
         d.total = Math.max(d.total || 0, rows.length);
       }
       tbl.setRows(rows);
-      if (!state.q && state.offset === 0 && state.launchpad === "all") { const busy = [...rows].filter((t) => t.priceUsd != null && !t.copyOf && !t.washVolume).sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0)); if (busy.length) paintTop(busy); }
+      if (!state.q && state.offset === 0 && state.launchpad === "all") {
+        const top = state.cat === "all" && state.sort === "volume" && state.dir === "desc" ? d : await api.get("market/robinhood?cat=all&sort=volume&dir=desc&limit=12&tradable=1").catch(() => null);
+        if (id !== reqId) return;
+        const busy = (top?.tokens || rows).filter((t) => t.priceUsd != null && !t.copyOf && !t.washVolume).sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0));
+        if (busy.length) paintTop(busy);
+      }
       topBox.hidden = !!state.q;
       const hiddenTotal = d.hiddenTotal;
       untradable.textContent = state.showAll ? "Hide coins Troya cannot route" : `Show coins Troya cannot route yet${hiddenTotal ? ` (${compact(hiddenTotal, 0)})` : ""}`;
@@ -126,7 +131,7 @@ function robinhoodTab(box, go, query) {
         h("span", {}, `${from.toLocaleString()}–${to.toLocaleString()} of ${Number(d.total).toLocaleString()}`),
         h("button", { class: "btn sm", type: "button", disabled: to >= d.total, onclick: () => { state.offset += PAGE; load(); scrollTo(0, 0); } }, "Next"));
       clear(foot,
-        h("p", {}, `${Number(d.counts?.all ?? d.total).toLocaleString()} coins on the board`, d.volume24hUsd ? ` · 24h volume across tracked pools ${usd(d.volume24hUsd, { compact: true })}` : "", ` · ${updatedText(d.updatedAt)}.`),
+        h("p", {}, state.q ? `${rows.length} result${rows.length === 1 ? "" : "s"} for "${state.q}"` : `${Number(d.counts?.all ?? d.total).toLocaleString()} coins on the board`, d.volume24hUsd ? ` · 24h volume across tracked pools ${usd(d.volume24hUsd, { compact: true })}` : "", ` · ${updatedText(d.updatedAt)}.`),
         h("p", {}, "Pools and prices from GeckoTerminal, Pons curve state read on chain. Pools with almost no liquidity are left out, and volume that a pool's liquidity could not carry (wash trading) is not counted. Many coins copy popular symbols: check the address on robinhoodchain.blockscout.com before you buy."));
     } catch (e) {
       if (id !== reqId) return;
@@ -226,6 +231,8 @@ function perpsTab(box, go) {
 }
 
 /* ---------------- Spot ---------------- */
+// Unit's bridged assets on Hyperliquid spot, by their own name (the pair id "@142" is an internal index, not a name)
+const UNIT = { UBTC: "BTC", UETH: "ETH", USOL: "SOL", UFART: "Fartcoin", UPUMP: "PUMP", UENA: "ENA", UXPL: "XPL", UZEC: "ZEC" };
 function spotTab(box) {
   let data = [], q = "", sort = { key: "volumeUsd", dir: "desc" };
   const search = h("input", { class: "input search", type: "search", placeholder: "Search pair (HYPE, PURR…)", "aria-label": "Search spot pairs" });
@@ -233,7 +240,7 @@ function spotTab(box) {
   const tbl = table({
     sort, onSort: (k, d) => { sort = { key: k, dir: d }; render(); }, emptyText: "No pair matches.",
     cols: [
-      { key: "label", label: "Pair", align: "l", render: (p) => h("div", { class: "tok" }, coinIcon(`${p.base}_spot`), h("div", {}, h("b", {}, p.label), h("small", {}, p.canonical ? "canonical" : p.pair))) },
+      { key: "label", label: "Pair", align: "l", render: (p) => h("div", { class: "tok" }, coinIcon(`${p.base}_spot`), h("div", {}, h("b", {}, p.label), UNIT[p.base] ? h("small", {}, `Unit · bridged ${UNIT[p.base]}`) : p.base === "HYPE" ? h("small", {}, "Hyperliquid") : null)) },
       { key: "mark", label: "Price", sort: true, render: (p) => perpPrice(p.mark) },
       { key: "change24h", label: "24h", sort: true, render: (p) => pctEl(p.change24h) },
       { key: "volumeUsd", label: "24h volume", sort: true, render: (p) => usd(p.volumeUsd, { compact: true }) },

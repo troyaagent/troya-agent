@@ -70,7 +70,7 @@ export function price(v) { if (v == null || !isFinite(v)) return "–"; return M
 export function amount(v) { if (v == null || !isFinite(v)) return "–"; const a = Math.abs(v); return a >= 1 ? nf(a >= 1000 ? 2 : 4, 2).format(v) : tiny(v); }
 export function hype(v, d) { if (v == null || !isFinite(v)) return "–"; return (Math.abs(v) < 1 ? tiny(v) : compact(v, d ?? 2)) + " HYPE"; }
 export function eth(v, d) { if (v == null || !isFinite(v)) return "–"; return (Math.abs(v) < 1 ? tiny(v) : compact(v, d ?? 3)) + " ETH"; }
-export function pct(v, d = 2) { if (v == null || !isFinite(v)) return "–"; const a = Math.abs(v); return (v > 0 ? "+" : "") + (a >= 1000 ? compact(v, 1) : v.toFixed(a >= 100 ? 0 : d)) + "%"; }
+export function pct(v, d = 2) { if (v == null || !isFinite(v)) return "–"; const a = Math.abs(v); return (v > 0 ? "+" : "") + (a >= 1000 ? Math.round(v).toLocaleString("en-US") : v.toFixed(a >= 100 ? 0 : d)) + "%"; }
 export function pctEl(v) { return h("span", { class: `pct ${v == null ? "flat" : v > 0.0001 ? "up" : v < -0.0001 ? "down" : "flat"}` }, pct(v)); }
 export function short(a, n = 4) { return a ? `${a.slice(0, 2 + n)}…${a.slice(-n)}` : ""; }
 export function ago(ts) {
@@ -206,7 +206,9 @@ export function walletLogo(name, icon, size = 26) {
 // coins born through Troya (and $TROYA itself) wear the chrome horse in the corner of their logo, everywhere in the app
 const BORN = new Set(), GOLD = new Set();   // GOLD: born through Troya and graduated to its own pool
 try { const k = JSON.parse(localStorage.getItem("troya.born") || "{}"); for (const a of k.b || []) BORN.add(a); for (const a of k.g || []) GOLD.add(a); } catch {}
-export function setBorn(list, graduated = []) {
+// { all: true }: the list is the server's full one, so a coin that left it (a hidden team test) loses its horse here too
+export function setBorn(list, graduated = [], { all = false } = {}) {
+  if (all && Array.isArray(list)) { BORN.clear(); GOLD.clear(); }
   for (const a of list || []) if (ADDR.test(String(a))) BORN.add(String(a).toLowerCase());
   for (const a of graduated || []) if (ADDR.test(String(a))) { BORN.add(String(a).toLowerCase()); GOLD.add(String(a).toLowerCase()); }
   try { localStorage.setItem("troya.born", JSON.stringify({ b: [...BORN].slice(-400), g: [...GOLD].slice(-200) })); } catch {}
@@ -450,9 +452,12 @@ export function store(key, fallback) {
 
 /* ---------- per-page stylesheet ---------- */
 // Pages call useCss("market") to load /agent/css/market.css once.
+// A sheet that fails to load (a 502 during a deploy) is dropped and tried again, so the page never stays unstyled.
 const loadedCss = new Set();
-export function useCss(name) {
+export function useCss(name, tries = 0) {
   if (loadedCss.has(name)) return;
   loadedCss.add(name);
-  document.head.append(h("link", { rel: "stylesheet", href: `/agent/css/${name}.css` }));
+  const link = h("link", { rel: "stylesheet", href: `/agent/css/${name}.css${tries ? `?r=${tries}` : ""}` });
+  link.onerror = () => { loadedCss.delete(name); link.remove(); if (tries < 4) setTimeout(() => useCss(name, tries + 1), 1500 * (tries + 1)); };
+  document.head.append(link);
 }

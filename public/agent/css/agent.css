@@ -11,7 +11,7 @@
 
 /* ---------- chat ---------- */
 .ag-chat { display: flex; flex-direction: column; min-height: calc(100vh - 56px - 120px); }
-.ag-hero { padding: 64px 0 24px; border-top: 1px solid var(--line); margin-top: 28px; }
+.ag-hero { padding: 40px 0 24px; margin-top: 8px; }
 .ag-hero h1 { margin: 34px 0 6px; font-size: clamp(40px, 5vw, 60px); font-weight: 500; letter-spacing: -0.035em; line-height: 1; }
 .ag-hero p { margin: 0 0 26px; color: var(--fg-2); font-size: 15px; }
 .ag-suggest { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-width: 720px; }
@@ -66,7 +66,11 @@
 /* composer */
 .ag-dock { position: sticky; bottom: 0; padding: 14px 0 18px; background: linear-gradient(to bottom, rgba(2,4,5,0), var(--bg) 26%); margin-top: auto; }
 .ag-signbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 8px 8px 14px; border-radius: 9px 9px 0 0; border: 1px solid var(--line-2); border-bottom: 0; background: var(--bg-2); font-size: 12.5px; color: var(--fg-2); }
-.ag-signbar span { display: inline-flex; align-items: center; gap: 8px; }
+.ag-signbar > span { display: inline-flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.ag-signbar .btn { flex: none; white-space: nowrap; }
+.ag-sb-short { display: none; }
+@media (max-width: 560px) { .ag-sb-long { display: none; } .ag-sb-short { display: inline; } }
+@media (max-width: 860px) { .d-main .ag-dock { bottom: calc(60px + env(safe-area-inset-bottom)); } }
 .ag-signbar + .ag-composer .ag-box { border-top-left-radius: 0; border-top-right-radius: 0; }
 .ag-box { display: flex; align-items: flex-end; gap: 8px; padding: 10px 10px 10px 14px; border-radius: 11px; border: 1px solid var(--line-3); background: var(--bg-1); box-shadow: 0 10px 40px rgba(0,0,0,.4); }
 .ag-box:focus-within { border-color: rgba(95,211,239,.55); }
@@ -129,15 +133,17 @@
 
 @media (max-width: 720px) {
   .ag-suggest, .ag-grid2, .ag-grid3 { grid-template-columns: 1fr; }
-  .ag-hero { padding-top: 24px; }
+  .ag-hero { padding-top: 8px; margin-top: 0; }
+  .ag-hero h1 { margin-top: 18px; font-size: 38px; }
+  .ag-hero p { margin-bottom: 18px; }
+  .ag-card { min-height: 48px; }
   .ag-msg.user .ag-bubble { max-width: 90%; }
   .ag-signin { flex-direction: column; align-items: flex-start; }
-  .ag-dock { bottom: 56px; }
   .ag-meta .grow { display: none; }
 }
 
 /* chat header: title, memory note, Chats, New chat */
-.ag-head { display: flex; align-items: center; gap: 8px; max-width: 760px; margin: 0 auto 10px; padding: 4px 2px 10px; border-bottom: 1px solid var(--line); }
+.ag-head { display: flex; align-items: center; gap: 8px; width: 100%; margin: 0 0 10px; padding: 4px 2px 10px; border-bottom: 1px solid var(--line); }
 .ag-head-t { display: grid; gap: 2px; min-width: 0; margin-right: auto; font-size: 13.5px; font-weight: 500; color: var(--fg); }
 .ag-head-t small { font-size: 11.5px; font-weight: 400; color: var(--muted); }
 .ag-head .btn svg { width: 14px; height: 14px; }

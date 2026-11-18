@@ -45,6 +45,10 @@ export async function mount(view, ctx) {
   const nav = h("nav", { class: "ag-tabs", "aria-label": "Agent sections" }, TABS.map(([k, t]) => h("a", { href: k === "chat" ? "#/agent" : `#/agent/${k}`, ...(k === tab ? { "aria-current": "page" } : {}) }, t)));
   const body = h("div", { class: `ag-body ag-${tab}` });
   clear(view, h("div", { class: "ag-wrap" }, nav, body));
+  // a strip wider than the screen fades at the edge that still has tabs, and keeps the open tab in view
+  const edge = () => { nav.classList.toggle("more-r", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 4); nav.classList.toggle("more-l", nav.scrollLeft > 4); };
+  nav.addEventListener("scroll", edge, { passive: true });
+  requestAnimationFrame(() => { const on = nav.querySelector("[aria-current]"); if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2); edge(); });
   const page = { chat: mountChat, wallet: mountWallet, autopilot: mountAutopilot, sentry: mountSentryAuto, playbooks: mountPlaybooks }[tab];
   return page(body, ctx);
 }
@@ -112,7 +116,7 @@ function mountChat(box, ctx) {
   let usage = null;
   async function refreshMeta() {
     const signed = !!wallet.session;
-    clear(gateBar, signed ? null : h("div", { class: "ag-signbar" }, h("span", {}, wallet.address ? "Asking as a guest: answers and Gate checks. Sign in for tickets and your balances." : "Asking as a guest: answers and Gate checks, no wallet needed. Connect and sign in for tickets and your balances.", h("i", { class: "info", title: "Signing a message proves the wallet is yours. It costs nothing and sends nothing." }, "i")),
+    clear(gateBar, signed ? null : h("div", { class: "ag-signbar" }, h("span", {}, h("span", { class: "ag-sb-long" }, wallet.address ? "Asking as a guest: answers and Gate checks. Sign in for tickets and your balances." : "Asking as a guest: answers and Gate checks, no wallet needed. Connect and sign in for tickets and your balances."), h("span", { class: "ag-sb-short" }, "Guest mode: answers and Gate checks. Sign in for tickets."), h("i", { class: "info", title: "Signing a message proves the wallet is yours. It costs nothing and sends nothing." }, "i")),
       h("button", { class: "btn sm primary", type: "button", onclick: async () => { try { if (!wallet.address) await openConnect(); if (wallet.address) await signIn(); } catch (e) { toast(e.message, "error"); } } }, icon("wallet"), "Sign in")));
     if (signed && !usage) { try { usage = await api.get("assistant/usage"); } catch {} }
     clear(meta,

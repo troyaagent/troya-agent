@@ -7,11 +7,29 @@ import { api } from "../api.js";
 import { balanceOf, fromRaw, sendTx, waitReceipt, errText, journal } from "../chain.js";
 
 const TAXES = [0, 100, 200, 300, 400]; // V6 rule: creator tax 0–4%
+// launches sent but not recorded yet: kept in this browser until Troya has them (the fee splitter's salt rides along; the
+// server keeps its own copy too), and sent again on the next visit
+const PENDING = "troya.pendingLaunches";
+const pendingList = () => { try { return JSON.parse(localStorage.getItem(PENDING) || "[]"); } catch { return []; } };
+const savePending = (l) => { try { localStorage.setItem(PENDING, JSON.stringify(l.slice(-20))); } catch {} };
+export const hasPending = () => pendingList().length > 0;
+export async function recordPending() {
+  const left = [];
+  for (const p of pendingList()) {
+    try { await api.post("launch/record", p); }
+    catch (e) {
+      // "not on Robinhood Chain yet" and network trouble: try again later; a definite refusal is dropped
+      if (Date.now() - (p.at || 0) < 30 * 86400_000 && (!e.status || e.status === 404 || e.status >= 500)) left.push(p);
+    }
+  }
+  savePending(left);
+}
 const TOKEN_LAUNCHED = "0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607"; // TokenLaunched(address,address,address,address,uint256,uint256)
 
 export async function mount(view, ctx) {
   useCss("launch");
   let alive = true;
+  if (hasPending()) recordPending().catch(() => {});
   const st = {
     name: "", symbol: "", description: "", website: "", twitter: "", telegram: "", logoUrl: "",
     file: null, preview: null, logo: null, tax: 0, menu: null, menuErr: null, bal: null, busy: false, done: null, plan: null, planErr: null, rules: null,
@@ -31,7 +49,8 @@ export async function mount(view, ctx) {
   const inp = (key, attrs = {}) => {
     const el = h(attrs.textarea ? "textarea" : "input", { class: "input", value: st[key], rows: attrs.textarea ? 3 : null, ...attrs, textarea: null });
     if (attrs.textarea) el.value = st[key];
-    el.addEventListener("input", () => { st[key] = el.value; if (key === "symbol") { el.value = el.value.toUpperCase().replace(/\s/g, ""); st.symbol = el.value; } if (key === "logoUrl") { st.logo = null; } paintSide(); paintBtn(); });
+    // the ticker is letters and numbers only: a typed "$" or "!" would be written into the coin on chain for good
+    el.addEventListener("input", () => { st[key] = el.value; if (key === "symbol") { el.value = el.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); st.symbol = el.value; } if (key === "logoUrl") { st.logo = null; } paintSide(); paintBtn(); });
     return el;
   };
   const fileIn = h("input", { type: "file", accept: "image/png,image/jpeg,image/gif,image/webp", class: "sr", id: "lc-file" });
@@ -80,7 +99,7 @@ export async function mount(view, ctx) {
       h("h2", {}, "Identity"),
       h("div", { class: "lc-id" }, drop, fileIn,
         h("div", { class: "lc-id-f" },
-          h("label", { class: "field" }, h("span", {}, "Name"), inp("name", { maxlength: 64, placeholder: "Wooden Horse" })),
+          h("label", { class: "field" }, h("span", {}, "Name"), inp("name", { maxlength: 48, placeholder: "Wooden Horse" })),
           h("label", { class: "field" }, h("span", {}, "Symbol"), inp("symbol", { maxlength: 16, placeholder: "HORSE" })))),
       h("label", { class: "field" }, h("span", {}, "Logo link ", h("span", { class: "muted" }, "(optional, instead of uploading: ipfs:// or https://)")), inp("logoUrl", { maxlength: 512, placeholder: "ipfs://…" })),
       h("label", { class: "field" }, h("span", {}, "Description"), inp("description", { textarea: true, maxlength: 2048, placeholder: "What is this coin about?" }))),
@@ -96,10 +115,13 @@ export async function mount(view, ctx) {
       h("p", { class: "note" }, "Launch snipe protection is built into Pons: the first seconds after launch carry a tax that starts at 99% and halves every few blocks. Your own wallet is exempt, so you can buy right after launch from the Swap page at the normal fee.")),
     balNote, btn, status);
 
+  let menuAlert = null;
   function paintTax() {
     const max = st.menu?.maxCreatorTaxBps ?? 1000;
     clear(taxBox, TAXES.filter((t) => t <= max).map((t) => h("button", { type: "button", class: "chip", "aria-pressed": String(t === st.tax), onclick: () => { st.tax = t; paintTax(); paintSide(); refreshPlan(); } }, t ? `${t / 100}%` : "None")));
-    if (st.menuErr) taxBox.after(h("div", { class: "alert error", style: { marginTop: "8px" } }, st.menuErr));
+    // one alert, replaced on each repaint (each tax click used to add another copy)
+    menuAlert?.remove(); menuAlert = null;
+    if (st.menuErr) { menuAlert = h("div", { class: "alert error", style: { marginTop: "8px" } }, st.menuErr); taxBox.after(menuAlert); }
   }
 
   function paintSide() {
@@ -212,6 +234,8 @@ export async function mount(view, ctx) {
       if (!ok) return;
       st.busy = "Confirm in your wallet…"; paintBtn();
       const hash = await sendTx("robinhood", b);
+      const rec = { hash, creator: wallet.address, salt: p.salt || null, troyaBps: p.troyaBps || 0, at: Date.now() };
+      savePending([...pendingList(), rec]);
       clear(status, h("div", { class: "muted" }, "Submitted ", h("a", { class: "mono link", href: `https://robinhoodchain.blockscout.com/tx/${hash}`, target: "_blank", rel: "noopener" }, short(hash, 6)), " · waiting for Robinhood Chain to include the launch…"));
       st.busy = "Waiting for Robinhood Chain…"; paintBtn();
       const rc = await waitReceipt("robinhood", hash, { timeoutMs: 180_000 });
@@ -220,7 +244,8 @@ export async function mount(view, ctx) {
         const fromLog = rc.logs?.find((l) => l.address?.toLowerCase() === b.to.toLowerCase() && l.topics?.[0] === TOKEN_LAUNCHED)?.topics?.[1];
         const token = fromLog ? "0x" + fromLog.slice(26) : b.predicted?.token;
         journal({ kind: "launch", chain: "robinhood", hash, token, name: st.name.trim(), symbol: st.symbol.trim(), rationale: "Coin created from the Create coin page" });
-        api.post("launch/record", { hash, creator: wallet.address, salt: p.salt || null, troyaBps: p.troyaBps || 0 }).catch(() => {});
+        // recorded with a few retries (the node may not have the receipt yet); if it still fails, the next visit sends it
+        (async () => { for (const wait of [0, 4000, 12000]) { await new Promise((r) => setTimeout(r, wait)); if (await api.post("launch/record", rec).then(() => true, () => false)) { savePending(pendingList().filter((x) => x.hash !== hash)); return; } } })();
         st.done = { hash, token, url: token ? `https://ponsfamily.com/launchpad/${token.toLowerCase()}` : null };
         showDone();
         return;

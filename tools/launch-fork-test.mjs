@@ -256,8 +256,42 @@ await tx.wait();
 const rec = await L.recordWeb({ hash: tx.hash, owner: W.address, salt: p.salt, troyaBps: p.troyaBps });
 assert.equal(rec.launch.split, true); assert.equal(String(rec.launch.symbol).toUpperCase(), "WEBH");
 ok("web launch with a 2% tax: splitter at 370 bps (0.1% of volume), checked on chain and recorded");
-await assert.rejects(L.recordWeb({ hash: tx.hash, owner: W.address, salt: "0x" + "11".repeat(32), troyaBps: 370 }), /neither to its creator nor to a Troya splitter/);
-ok("a record with the wrong salt is refused");
+// the server kept the salt it planned: recording again (even with a wrong salt from the browser) gives the same record
+const reRec = await L.recordWeb({ hash: tx.hash, owner: W.address, salt: "0x" + "11".repeat(32), troyaBps: 370 });
+assert.equal(String(reRec.launch.salt).toLowerCase(), String(p.salt).toLowerCase());
+ok("recording the same web launch again is harmless and keeps the planned salt");
+// a lost record call: the browser never sent the salt, Troya still knows it from the plan
+const W2 = Wallet.createRandom().connect(provider);
+await fund(W2.address, 1);
+const p2 = await L.plan({ owner: W2.address, creatorTaxBps: 0, name: "Lost Salt", symbol: "LOSTS" });
+const b2 = await buildLaunchTx({ creator: W2.address, name: "Lost Salt", symbol: "LOSTS", logo: "https://troya.codes/img/logo-3d-hd.png", creatorTaxBps: 0, feeRecipient: p2.recipient });
+const tx2 = await W2.sendTransaction({ to: b2.to, data: b2.data, value: BigInt(b2.value), nonce: 0 });
+await tx2.wait();
+const rec2 = await L.recordWeb({ hash: tx2.hash, owner: W2.address });
+assert.equal(rec2.launch.split, true); assert.equal(String(rec2.launch.salt).toLowerCase(), String(p2.salt).toLowerCase());
+ok("a web launch recorded without its salt (the browser lost it) still gets the planned salt, so its fees stay claimable");
+// a fee recipient Troya never planned (not the creator, not a Troya splitter) is refused
+const W3 = Wallet.createRandom().connect(provider);
+await fund(W3.address, 1);
+const b3 = await buildLaunchTx({ creator: W3.address, name: "Odd Fee", symbol: "ODDF", logo: "https://troya.codes/img/logo-3d-hd.png", creatorTaxBps: 0, feeRecipient: Wallet.createRandom().address });
+const tx3 = await W3.sendTransaction({ to: b3.to, data: b3.data, value: BigInt(b3.value), nonce: 0 });
+await tx3.wait();
+await assert.rejects(L.recordWeb({ hash: tx3.hash, owner: W3.address, salt: "0x" + "11".repeat(32), troyaBps: 370 }), /neither to its creator nor to a Troya splitter/);
+ok("a launch whose creator fee goes to an address Troya never planned is refused");
+// a self-recipient launch by a non-holder skips Troya's fee, so it was not made on troya.codes: refused
+const W4 = Wallet.createRandom().connect(provider);
+await fund(W4.address, 1);
+const b4 = await buildLaunchTx({ creator: W4.address, name: "Elsewhere", symbol: "ELSW", logo: "https://troya.codes/img/logo-3d-hd.png", creatorTaxBps: 0, feeRecipient: W4.address });
+const tx4 = await W4.sendTransaction({ to: b4.to, data: b4.data, value: BigInt(b4.value), nonce: 0 });
+await tx4.wait();
+await assert.rejects(L.recordWeb({ hash: tx4.hash, owner: W4.address }), /skips Troya's fee splitter/);
+ok("a non-holder's launch that skips the splitter (made elsewhere) is not added to Troya Launches");
+// a copy of a stock token's company is refused even when launched straight on Pons and brought in
+const b5 = await buildLaunchTx({ creator: W4.address, name: "Tesla", symbol: "TSLQ", logo: "https://troya.codes/img/logo-3d-hd.png", creatorTaxBps: 0, feeRecipient: W4.address });
+const tx5 = await W4.sendTransaction({ to: b5.to, data: b5.data, value: BigInt(b5.value), nonce: 1 });
+await tx5.wait();
+await assert.rejects(L.recordWeb({ hash: tx5.hash, owner: W4.address }), /copies the Tesla stock token/);
+ok("a web record of a coin named after a stock's company is refused");
 
 /* ---------- F27 · Launch in Telegram: the bot's wizard, a photo, the preview and Confirm (non-holder N) ---------- */
 {
@@ -304,8 +338,8 @@ ok("a record with the wrong salt is refused");
   ok("Telegram: someone else's chat cannot press the Confirm button");
   await press(conf);
   let done = null;
-  for (let i = 0; i < 120 && !done; i++) { await new Promise((res) => setTimeout(res, 1000)); done = sent.slice().reverse().find((c) => c.method === "editMessageText" && /is live|Not launched/.test(c.body.text)); }
-  assert.ok(done, "the launch finished");
+  for (let i = 0; i < 120 && !done; i++) { await new Promise((res) => setTimeout(res, 1000)); done = sent.slice().reverse().find((c) => c.method === "editMessageText" && /is live|Not launched|still confirming/.test(c.body.text)); }
+  assert.ok(done, "the launch finished: " + JSON.stringify(sent.slice(-4).map((c) => [c.method, String(c.body?.text || "").slice(0, 160)])));
   console.log("   telegram:", done.body.text.replace(/\n+/g, " / "));
   assert.match(done.body.text, /\$TGH is live/); assert.match(done.body.text, /Initial buy of 0\.005 ETH done/);
   assert.match(done.body.reply_markup.inline_keyboard[0][0].url, /\/agent#\/token\/0x[0-9a-f]{40}$/);

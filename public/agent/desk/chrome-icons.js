@@ -32,6 +32,8 @@ const G = {
   start: `<path fill-rule="evenodd" d="M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19zM10 7.8v8.4l6.4-4.2z"/>`,
   docs: `<path fill-rule="evenodd" d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.6V8h4.4zM8 12v1.8h8V12zm0 4v1.8h6V16z"/>`,
   verify: `<path d="M12 2l8.2 3.1v6.6c0 5-3.5 9.2-8.2 10.6-4.7-1.4-8.2-5.6-8.2-10.6V5.1z"/>`,
+  rail: `<path d="M9.2 2h1.6L6.4 22H3.6z"/><path d="M13.2 2h1.6l5.6 20h-2.8z"/><rect x="8" y="5.6" width="8" height="1.8" rx=".6"/><rect x="6.6" y="10.9" width="10.8" height="2.2" rx=".7"/><rect x="5" y="16.6" width="14" height="2.6" rx=".8"/>`,
+  record: `<rect x="3.5" y="2" width="3" height="20" rx="1.2"/><path fill-rule="evenodd" d="M8 2h10.5a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8zm2.6 5v1.8h6.8V7zm0 4.2V13h6.8v-1.8zm0 4.2v1.8h4.4v-1.8z"/>`,
   flywheel: `<path d="M12 3a9 9 0 0 1 8.4 5.8h-2.6A6.6 6.6 0 0 0 5.4 12H3a9 9 0 0 1 9-9z"/><path d="M21 3.4V10h-6.6z"/><path d="M12 21a9 9 0 0 1-8.4-5.8h2.6A6.6 6.6 0 0 0 18.6 12H21a9 9 0 0 1-9 9z"/><path d="M3 20.6V14h6.6z"/>`,
   search: `<path fill-rule="evenodd" d="M10.5 3a7.5 7.5 0 0 1 6.1 11.8l4.6 4.6-2 2-4.6-4.6A7.5 7.5 0 1 1 10.5 3zm0 3a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z"/>`,
   spark: `<path d="M11 2l2.3 6.6 6.7 2.4-6.7 2.4L11 20l-2.3-6.6L2 11l6.7-2.4z"/><path d="M19 15.5l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/>`,

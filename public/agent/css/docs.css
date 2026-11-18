@@ -38,3 +38,14 @@
   .dc-dl { grid-template-columns: 1fr; gap: 2px 0; }
   .dc-dl dd { margin-bottom: 8px; }
 }
+/* phones: the contents as one scrolling row of chips that stays under the top bar */
+@media (max-width: 860px) {
+  .dc-toc { position: sticky; top: 60px; z-index: 5; flex-wrap: nowrap; gap: 6px; margin: 0 -16px; padding: 8px 16px; overflow-x: auto; scrollbar-width: none; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .dc-toc::-webkit-scrollbar { display: none; }
+  .dc-toc a { flex: none; padding: 7px 13px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--glass, var(--bg-2)); color: var(--fg-2); white-space: nowrap; }
+  .dc-toc a[aria-current] { color: var(--fg); border-color: rgba(142, 223, 245, .5); }
+  .dc-sec { scroll-margin-top: 124px; }
+}
+/* inline code and long addresses wrap instead of running off a phone screen */
+.dc-sec p code, .dc-sec li code, .dc-sec dd code { overflow-wrap: anywhere; }
+.dc-sec p, .dc-sec li { overflow-wrap: break-word; }

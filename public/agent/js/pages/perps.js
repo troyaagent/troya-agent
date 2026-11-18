@@ -101,7 +101,7 @@ export async function mount(view, ctx) {
   function renderHead() {
     const m = st.m;
     if (!m) return;
-    clear(mktBtn, coinIcon(m.label || m.coin, "pp-coin"), nameOf(m), icon("arrowRight"));
+    clear(mktBtn, coinIcon(m.coin, "pp-coin"), nameOf(m), icon("arrowRight"));
     mktBtn.lastChild.style.transform = "rotate(90deg)";
     pxEl.textContent = fmtPx(m.markPx);
     clear(chgEl, pctEl(m.change24h));
@@ -132,7 +132,7 @@ export async function mount(view, ctx) {
       sel = Math.min(sel, Math.max(0, rs.length - 1));
       clear(list, h("div", { class: "pp-pick-row pp-pick-hd" }, h("b", {}, "Market"), h("span", {}, "Price"), h("span", {}, "24h"), h("span", { class: "vol" }, "Volume")),
         rs.length ? rs.map((m, i) => h("button", { type: "button", class: `pp-pick-row ${i === sel ? "sel" : ""}`, onclick: () => choose(m) },
-          h("b", {}, coinIcon(m.label || m.coin, "sm"), m.dex ? m.label : `${m.coin}-PERP`, m.dex ? h("small", { class: "pp-xyz" }, "trade.xyz") : null, h("small", {}, `${m.maxLeverage}x`)), h("span", {}, fmtPx(m.markPx)), h("span", { class: m.change24h >= 0 ? "up" : "down" }, pct(m.change24h)), h("span", { class: "vol muted" }, usd(m.dayNtlVlm, { compact: true }))))
+          h("b", {}, coinIcon(m.coin, "sm"), m.dex ? m.label : `${m.coin}-PERP`, m.dex ? h("small", { class: "pp-xyz" }, "trade.xyz") : null, h("small", {}, `${m.maxLeverage}x`)), h("span", {}, fmtPx(m.markPx)), h("span", { class: m.change24h >= 0 ? "up" : "down" }, pct(m.change24h)), h("span", { class: "vol muted" }, usd(m.dayNtlVlm, { compact: true }))))
           : h("div", { class: "empty" }, "No market matches."));
     };
     q.addEventListener("input", () => { sel = 0; render(); });

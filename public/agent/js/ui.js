@@ -272,7 +272,7 @@ export function tokenIcon(t, size = "") {
   const net = String(t?.chain || "robinhood").toLowerCase();
   const other = net === "base" || net === "arbitrum" || net === "solana";
   const proxied = net === "solana" ? (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr) ? `/api/icon/token/${addr}?chain=solana` : null)
-    : ADDR.test(addr) ? `/api/icon/token/${addr.toLowerCase()}?${other ? `chain=${net}&` : ""}v=2` : null;   // v=2: stock logos replaced (18 Nov)
+    : ADDR.test(addr) ? `/api/icon/token/${addr.toLowerCase()}?${other ? `chain=${net}&` : ""}v=3` : null;   // v=3: all 203 stock logos replaced (18 Nov)
   const box = logoBox(`tok-ico ${size}`, mono(t?.symbol), [
     brand,
     !native && LOGOS.symbol[sym] && (sym === "WETH" || sym === "USDG") ? L + LOGOS.symbol[sym] : null,
@@ -300,7 +300,10 @@ export function tokenIcon(t, size = "") {
 // Hyperliquid market logo (perps, HIP-3 "dex:COIN", spot)
 export function coinIcon(coin, size = "") {
   const c = String(coin || "");
-  return logoBox(`tok-ico perp ${size}`, mono(c).slice(0, 1), [c ? `/api/icon/coin/${encodeURIComponent(c)}` : null]);
+  // brand logos first for the coins whose Hyperliquid glyph is dark on our dark tiles (ETH, UETH, SOL, HYPE …)
+  const base = c.replace(/^[a-z0-9]+:/, "").replace(/_spot$/, "").replace(/^U(?=(ETH|SOL)$)/, "").replace(/^W(?=ETH$)/, "");
+  const brand = LOGOS.symbol[base] && base !== "USDG" ? L + LOGOS.symbol[base] : null;
+  return logoBox(`tok-ico perp ${size}`, mono(c).slice(0, 1), [brand, c ? `/api/icon/coin/${encodeURIComponent(c)}?v=2` : null]);
 }
 
 /* ---------- sparkline ---------- */

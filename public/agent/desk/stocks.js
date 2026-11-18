@@ -63,7 +63,7 @@ export async function mount(view, ctx) {
     const tbl = h("div", { class: "sd-tbl" });
     const draw = () => clear(tbl, h("div", { class: "sd-row sd-hd" }, h("span", {}, "Stock"), h("span", {}, "Price"), h("span", {}, "24h"), h("span", {}, "Multiplier"), h("span", {}, "")),
       st.desk.assets.filter((a) => !st.q || a.symbol.toLowerCase().includes(st.q) || a.name.toLowerCase().includes(st.q)).slice(0, 120).map((a) => h("div", { class: "sd-row" },
-        h("span", { class: "sd-name" }, a.logo ? h("img", { src: `/api/stocks/logo/${a.address}?v=2`, alt: "", width: 22, height: 22, loading: "lazy", onerror: (e) => e.target.remove() }) : null, h("b", {}, a.symbol), h("small", {}, a.name)),
+        h("span", { class: "sd-name" }, a.logo ? h("img", { src: `/api/stocks/logo/${a.address}?v=3`, alt: "", width: 22, height: 22, loading: "lazy", onerror: (e) => e.target.remove() }) : null, h("b", {}, a.symbol), h("small", {}, a.name)),
         h("span", {}, a.priceUsd ? `$${tiny(a.priceUsd)}` : h("span", { class: "muted" }, "no pool")), h("span", {}, a.change24h != null ? pctEl(a.change24h) : "–"),
         h("span", { title: "Dividends are reinvested and splits multiply it: each token stands for this many shares" }, `${a.multiplier.toFixed(4)}×`, a.pendingMultiplier ? h("small", { class: "sd-pend" }, ` → ${a.pendingMultiplier.toFixed(4)}× soon`) : null),
         a.priceUsd ? h("a", { class: "btn sm", href: `#/swap?in=eth&out=${a.address}` }, "Buy") : h("span", {}))));

@@ -36,6 +36,9 @@ export async function register(r, ctx) {
   try { for (const [k, v] of Object.entries(JSON.parse(await fs.readFile(path.join(DIR, "index.json"), "utf8")))) index.set(k, v); } catch {}
   import("./market.mjs").then((m) => { marketMod = m; }).catch(() => {});
   import("./robinhood.mjs").then((m) => { for (const x of m.STOCKS || []) STOCK_LOGO.set(String(x.address).toLowerCase(), String(x.symbol).toUpperCase()); }).catch(() => {});
+  // every stock token on the stocks desk (203 on 18 Nov), not only the 63 in the market list; refreshed every 6 h
+  const deskStocks = () => import("./stocks.mjs").then((m) => m.stockDesk()).then((d) => { for (const x of d?.assets || []) if (x.address && x.symbol) STOCK_LOGO.set(String(x.address).toLowerCase(), String(x.symbol).toUpperCase()); }).catch(() => {});
+  setTimeout(deskStocks, 10_000).unref?.(); setInterval(deskStocks, 6 * 3600_000).unref?.();
   const stockFile = async (ticker) => { const f = path.join(PUBLIC_LOGOS, "stocks", `${String(ticker).replace(/[^A-Z0-9.]/g, "")}.png`); try { await fs.access(f); return f; } catch { return null; } };
 
   r.get("/api/icon/token/:address", async ({ params, query, res }) => {
@@ -55,9 +58,10 @@ export async function register(r, ctx) {
     const c = String(params.coin || "");
     if (!COIN_RE.test(c)) return sendErr(res, 400, "Not a market name");
     // HIP-3 stock perps ("xyz:TSLA") share the stock token's vetted logo
-    const tk = /^[a-z0-9]+:([A-Z][A-Z0-9.]{0,9})$/.exec(c)?.[1];
+    // ...and so do plain tickers (Lighter lists stocks as "SPY", "NVDA"); no Hyperliquid perp name clashes with a stock ticker
+    const tk = /^[a-z0-9]+:([A-Z][A-Z0-9.]{0,9})$/.exec(c)?.[1] || (/^[A-Z][A-Z0-9.]{0,9}$/.test(c) ? c : null);
     if (tk) { const f = await stockFile(tk); if (f) return sendFile(res, f); }
-    const file = await resolve(`c:${c}`, () => coinSources(c));
+    const file = await resolve(METAL[c] ? `cm:${c}` : `c:${c}`, () => coinSources(c));   // cm: a fresh key (XAU was cached as missing)
     return file ? sendFile(res, file) : sendErr(res, 404, "No logo for this market");
   }, { weight: 0.2, perMin: 3000 });
 }
@@ -95,10 +99,12 @@ async function tokenSources(a) {
   } catch {}
   return out;
 }
+// metals: Lighter's XAU / XAG are Hyperliquid's GOLD / SILVER
+const METAL = { XAU: "xyz:GOLD", XAG: "xyz:SILVER", XPT: "xyz:PLATINUM" };
 function coinSources(c) {
   const base = "https://app.hyperliquid.xyz/coins/";
   const u = (x) => `${base}${encodeURIComponent(x)}.svg`;
-  const list = [u(c)];
+  const list = METAL[c] ? [u(METAL[c]), u(c)] : [u(c)];
   const bare = c.replace(/^[a-z0-9]+:/, "");
   if (bare !== c) list.push(u(bare));                                          // xyz:TSLA → TSLA
   const spot = bare.endsWith("_spot");

@@ -139,26 +139,14 @@ async function logo(addr) {
   if (!/^0x[0-9a-f]{40}$/.test(a)) throw new HttpError(400, "Bad address.");
   if (logos.has(a)) return logos.get(a);
   // the vetted company logo shipped with the site (/img/logos/stocks/<TICKER>.png) wins, so every page shows the same one
+  // only the vetted logos: Robinhood's CDN returns the same feather for most stock tokens, which is worse than a letter
   const rh = await import("./robinhood.mjs").catch(() => null);
-  const tk = rh?.STOCKS?.find((x) => lc(x.address) === a)?.symbol;
-  if (tk) {
-    const own = await readFile(new URL(`../public/img/logos/stocks/${String(tk).replace(/[^A-Za-z0-9.]/g, "")}.png`, import.meta.url)).catch(() => null);
-    if (own) { logos.set(a, own); return own; }
-  }
-  const file = logoDir && join(logoDir, `${a}.png`);
-  let buf = file ? await readFile(file).catch(() => null) : null;
-  if (!buf) {
-    const desk = await stockDesk();
-    const x = desk.assets.find((s) => s.address === a);
-    if (!x?.logo || !/^https:\/\/cdn\.robinhood\.com\//.test(x.logo)) throw new HttpError(404, "No logo.");
-    const res = await fetch(x.logo, { signal: AbortSignal.timeout(10000) });
-    if (!res.ok || !/^image\//.test(res.headers.get("content-type") || "")) throw new HttpError(404, "No logo.");
-    buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > 200_000) throw new HttpError(404, "No logo.");
-    if (file) await writeFile(file, buf).catch(() => {});
-  }
-  logos.set(a, buf);
-  return buf;
+  const desk = await stockDesk().catch(() => null);
+  const tk = rh?.STOCKS?.find((x) => lc(x.address) === a)?.symbol || desk?.assets?.find((x) => lc(x.address) === a)?.symbol;
+  const own = tk ? await readFile(new URL(`../public/img/logos/stocks/${String(tk).replace(/[^A-Za-z0-9.]/g, "")}.png`, import.meta.url)).catch(() => null) : null;
+  if (!own) throw new HttpError(404, "No logo.");
+  logos.set(a, own);
+  return own;
 }
 
 export async function register(r, ctx) {

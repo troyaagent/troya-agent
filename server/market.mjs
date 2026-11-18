@@ -933,15 +933,25 @@ export async function searchCoins(q, limit = 12) {
   const hit = COIN_SEARCH.get(ql);
   if (hit && Date.now() - hit.t < 60_000) return { ...hit.v, coins: hit.v.coins.slice(0, limit) };
   const out = new Map();
-  const add = (c) => {
+  // one row per coin, numbers from the best source: the board and the stock list win; DexScreener only fills gaps, and
+  // among its pairs the deepest one gives price and change while volumes add up (a thin pair used to overwrite
+  // $TROYA's numbers with $3.74 of volume, and the palette disagreed with the token page)
+  const add = (c, src = "local") => {
     const a = lc(c.address); if (!a) return;
     const prev = out.get(a);
-    out.set(a, prev ? { ...prev, ...Object.fromEntries(Object.entries(c).filter(([, v]) => v != null)), image: prev.image || c.image || null, liquidityUsd: Math.max(prev.liquidityUsd || 0, c.liquidityUsd || 0) || null } : { ...c, address: a });
+    if (!prev) { out.set(a, { ...c, address: a, _src: src, _dsLiq: src === "ds" ? c.liquidityUsd || 0 : 0, _dsVol: src === "ds" ? c.volume24hUsd || 0 : 0 }); return; }
+    const fill = () => { for (const [k, v] of Object.entries(c)) if (v != null && prev[k] == null) prev[k] = v; };
+    if (prev._src !== "ds" || src !== "ds") { if (src !== "ds" && prev._src === "ds") { const keep = { ...prev }; Object.assign(prev, c, { _src: src }); for (const [k, v] of Object.entries(keep)) if (prev[k] == null && v != null) prev[k] = v; } else fill(); return; }
+    prev._dsVol += c.volume24hUsd || 0; prev.volume24hUsd = prev._dsVol;
+    if ((c.liquidityUsd || 0) > (prev._dsLiq || 0)) { prev._dsLiq = c.liquidityUsd || 0; Object.assign(prev, { priceUsd: c.priceUsd ?? prev.priceUsd, change24h: c.change24h ?? prev.change24h, liquidityUsd: c.liquidityUsd ?? prev.liquidityUsd }); }
+    fill();
   };
+  const stockRows = new Map(((await getStocks().catch(() => null))?.stocks || []).map((x) => [lc(x.address), x]));
   const hits = (sym, name) => { const s = String(sym || "").toLowerCase(), n = String(name || "").toLowerCase(); if (s.length > 20 || n.length > 60) return false; return s.startsWith(ql) || n.includes(ql); };
   for (const [address, symbol, name] of [["native", "ETH", "Ether"], [RH.weth, "WETH", "Wrapped Ether"], [RH.usdg, "USDG", "Global Dollar"], [CBBTC, "cbBTC", "Coinbase Wrapped BTC"]])
     if (hits(symbol, name)) add({ address, symbol, name, kind: "major" });
-  for (const s of STOCKS) if (hits(s.symbol, s.name)) add({ address: s.address, symbol: s.symbol, name: String(s.name || "").replace(/\s•\s*Robinhood Token$/, ""), kind: "stock", image: IMAGES.get(lc(s.address)) || null });
+  for (const s of STOCKS) if (hits(s.symbol, s.name)) { const r = stockRows.get(lc(s.address)) || {}; add({ address: s.address, symbol: s.symbol, name: String(s.name || "").replace(/\s•\s*Robinhood Token$/, ""), kind: "stock", image: IMAGES.get(lc(s.address)) || null,
+    priceUsd: r.priceUsd ?? null, liquidityUsd: r.liquidityUsd ?? null, volume24hUsd: r.volume24hUsd ?? null, change24h: r.change24h ?? null, tradable: r.tradable ?? true }); }
   for (const t of board.rows.values()) if (hits(t.symbol, t.name))
     add({ address: t.address, symbol: t.symbol, name: t.name, kind: t.stock ? "stock" : "coin", image: t.image || null, priceUsd: t.priceUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, change24h: t.change24h ?? null, launchpad: t.launchpad || null });
   try {
@@ -953,7 +963,8 @@ export async function searchCoins(q, limit = 12) {
       const a = lc(b.address);
       if (/^0x0{40}$/.test(a)) continue;                    // native ETH in v4 pools: the ETH row above covers it
       add({ address: a, symbol: sym, name, kind: STOCK_SET.has(a) ? "stock" : "coin", image: goodImg(p.info?.imageUrl), priceUsd: fnum(p.priceUsd), liquidityUsd: fnum(p.liquidity?.usd),
-        volume24hUsd: fnum(p.volume?.h24), change24h: fnum(p.priceChange?.h24), launchpad: padOfDex(`${p.dexId || "other"}${p.labels?.[0] ? "-" + p.labels[0] : ""}`) || null });
+        volume24hUsd: fnum(p.volume?.h24), change24h: fnum(p.priceChange?.h24), launchpad: padOfDex(`${p.dexId || "other"}${p.labels?.[0] ? "-" + p.labels[0] : ""}`) || null,
+        tradable: /^uniswap/.test(String(p.dexId || "")) || KYBER_ON || null }, "ds");
     }
   } catch { /* the local sources still answer */ }
   // a stock whose company name is the query ("tesla" → Tesla, TSLA) ranks with exact ticker matches
@@ -965,7 +976,7 @@ export async function searchCoins(q, limit = 12) {
   const stockCopy = (c) => c.kind === "coin" && [String(c.symbol).toLowerCase(), firstWord(c.name), String(c.name || "").toLowerCase().replace(/^x|fi$/g, "")].some((k) => stockKeys.has(k));
   const top = new Map();
   for (const c of coins) { const k = String(c.symbol).toLowerCase(); top.set(k, Math.max(top.get(k) || 0, c.liquidityUsd || 0, c.kind !== "coin" ? 1e9 : 0)); }
-  coins = coins.map((c) => ({ ...c, image: c.kind === "stock" ? `/api/stocks/logo/${c.address}?v=4` : c.image || null,
+  coins = coins.map(({ _src, _dsLiq, _dsVol, ...c }) => ({ ...c, image: c.kind === "stock" ? `/api/stocks/logo/${c.address}?v=4` : c.image || null,
     copy: stockCopy(c) || (c.kind === "coin" && (c.liquidityUsd || 0) < 25_000 && (top.get(String(c.symbol).toLowerCase()) || 0) > Math.max(5000, 20 * (c.liquidityUsd || 0))) }))
     .sort((x, y) => (x.copy === y.copy ? 0 : x.copy ? 1 : -1));   // copies last; the order is otherwise kept
   const v = { q: raw, coins, sources: ["Troya index", "Robinhood stock tokens", "DexScreener"], updatedAt: Date.now() };

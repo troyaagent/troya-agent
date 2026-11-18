@@ -156,7 +156,7 @@ await store.update("launch-prefs.json", {}, (m) => ({ ...m, [M.toLowerCase()]: {
 r = await L.fromX({ tweetId: "20", authorId: "333", text: "@Troyaagent launch Open Horse $OPENH", mediaUrl: IMG });
 assert.ok(r.launch?.token, r.reply);
 assert.equal(r.launch.split, true, "a non-holder's creator fee goes through a splitter");
-assert.match(r.reply, /Creator fee: 0\.6% yours, 0\.1% Troya/);
+assert.match(r.reply, /Creator fee: you keep 0\.6% of volume, Troya 0\.1%/);
 assert.ok(xLen(r.reply) <= 280, `reply fits a post (${xLen(r.reply)})`);
 li = await info(r.launch.token);
 assert.equal(getAddress(li.creatorFeeRecipient), getAddress(r.launch.recipient)); assert.equal(getAddress(li.deployer), awM.address);

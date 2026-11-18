@@ -351,7 +351,8 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   }
   if (ask.unclear || !ask.symbol || !ask.name) return { reply: "Not launched: Troya couldn't read the coin's name and ticker for sure. To fix: post it like this, image attached: @Troyaagent launch Wooden Horse $HORSE (add \"tax 2%\" for a creator tax, \"buy 0.01\" for an initial buy)" };
   const np = nameProblem(ask.name, ask.symbol, { team: admins().includes(lc(owner)) });
-  if (np) return { reply: `Not launched: ${np.replace(/\.$/, "")}. To fix: post again with another name or ticker. Nothing was spent.` };
+  // the reason once, as one clause ("… Pick another ticker." was repeated by the fix and capitalised mid-sentence)
+  if (np) { const why = np.replace(/\s*Pick another[^.]*\.?$/i, "").replace(/\.$/, ""); return { reply: `Not launched: ${/^[$A-Z]{2}/.test(why) ? why : why.charAt(0).toLowerCase() + why.slice(1)}. To fix: post again with another name or ticker. Nothing was spent.` }; }
   if (ask.taxBps > MAX_TAX_BPS) return { reply: `Not launched: the creator tax can be 4% at most (you asked for ${ask.taxBps / 100}%). To fix: post again with "tax 4%" or less. Nothing was spent.` };
   if (ask.buyEth > MAX_INITIAL_BUY_ETH) return { reply: `Not launched: the initial buy can be up to ${MAX_INITIAL_BUY_ETH} ETH (you asked for ${ask.buyEth}). To fix: post again with a smaller "buy". Nothing was spent.` };
   // the image is up to the poster (owner's rule, 17 Nov): no image attached → the coin launches without one
@@ -372,7 +373,7 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   const mcNote = mc ? `, MC ~$${mc >= 1e6 ? (mc / 1e6).toFixed(2) + "M" : mc >= 1e3 ? (mc / 1e3).toFixed(1) + "K" : mc.toFixed(0)}` : "";
   const buyNote = !ib ? "" : ib.executed ? ` Initial buy of ${ib.eth} ETH done.` : ` Initial buy not sent: ${String(ib.reasons?.[0] || "it was refused").slice(0, 70)}.`;
   const imgNote = logo ? "" : " No image was attached, so the coin has none.";
-  const feeNote = out.launch.split ? " Creator fee: 0.6% yours, 0.1% Troya." : " Creator fee: all yours.";
+  const feeNote = out.launch.split ? " Creator fee: you keep 0.6% of volume, Troya 0.1%." : " Creator fee: all yours.";
   // one link, to the coin's trading page on Troya (chart, Gate, Buy); no other venue in the reply
   return { launch: out.launch, reply: `$${ask.symbol} is live${mcNote}.${buyNote}${imgNote}${feeNote} CA ${ca} · Trade it on Troya: ${SITE().replace(/^https?:\/\//, "")}/agent#/token/${ca.toLowerCase()}` };
 }
@@ -434,8 +435,12 @@ export function guide(why) {
   // not enough ETH: say how much, where to send it and how to get ETH onto Robinhood Chain (owner, 18 Nov: guide everyone)
   if (/needs at least|not enough|insufficient|balance|top up|for the pons fee/i.test(w))
     return `Not launched: ${w.replace(/^The Agent Wallet/i, "your Agent Wallet").replace(/ on Robinhood Chain for the Pons fee and gas/i, " for the Pons fee")} (it is separate from your own wallet). To fix: press Add ETH at ${SITE().replace(/^https?:\/\//, "")}/agent#/agent/wallet, about 0.002 ETH, then post again. Nothing was spent.`.slice(0, 275);
-  const fix = /launches through Troya today|try again tomorrow/i.test(w) ? "try again tomorrow (UTC)"
-    : /cap|limit/i.test(w) ? "raise your Agent Wallet caps or post a smaller buy"
+  // the daily limit: said once, short, with what a holder gets (the full sentence was cut mid-bracket and repeated itself)
+  if (/launches through Troya today|launch from X a day|try again tomorrow/i.test(w)) {
+    const fromX = /from X a day/i.test(w);
+    return `Not launched: ${fromX ? "without 1M TROYA it's one launch from X a day, and you've used today's" : "you've already made 3 launches today, the most without 1M TROYA"}. To fix: try again tomorrow (UTC), or hold 1M TROYA for no daily limit. Nothing was spent.`;
+  }
+  const fix = /cap|limit/i.test(w) ? "raise your Agent Wallet caps or post a smaller buy"
     : /kill switch|paused/i.test(w) ? "launches are paused right now, try again later"
     : /pons would refuse|simulation/i.test(w) ? "check the name and ticker, then post again"
     : "check your setup, then post again";
@@ -498,7 +503,7 @@ export async function devStatus(token, devs, fromBlock = null) {
 
 /* ---------- the Hippodrome: every coin born through Troya ---------- */
 // $TROYA itself opens the Migrated column: the coin the whole desk is built around (launched on Pons, 15 Nov 2026).
-const ORIGIN = { token: "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", name: "Troya Agent", symbol: "TROYA", source: "origin", owner: "0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4", at: Date.parse("2026-11-15T12:00:00Z"), cto: true };
+const ORIGIN = { token: "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", name: "Troya Agent", symbol: "TROYA", source: "origin", owner: "0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4", at: Date.parse("2026-11-14T17:08:43Z"), cto: true };   // creation tx 0xf5e33fcd… on chain
 // DexScreener orders per coin: a paid token profile ("Dex Paid") and a community takeover ("CTO"), read every 10 minutes
 const dsOrders = new Map();
 async function dexOrders(token) {
@@ -583,7 +588,7 @@ export async function register(r, ctx) {
     return { holderMin: HOLDER_MIN, limits: LIMITS, maxCreatorTaxBps: MAX_TAX_BPS, troyaVolumePct: TROYA_VOLUME_BPS / 100, creatorFeePct: CREATOR_FEE_BPS / 100,
       holderTroyaPct: 0, splitter: factory ? { factory, live: true } : { live: false }, xLaunch: (await xLaunchMode()) === "live", tgLaunch: (await tgLaunchMode()) === "live",
       tgBot: process.env.TG_BOT_USERNAME || "TrojanTroya_bot",
-      text: `Free to launch. Troya takes 0.1% of trading volume out of the creator's 0.7% share of the Pons fee; holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA keep all of it. ${(await tgLaunchMode()) === "live" ? "X, Telegram and troya.codes are open to everyone" : "X and troya.codes are open to everyone; Telegram opens after its real-money test"}. Creator tax 0–4%. Without 1M $TROYA: ${LIMITS.perDay} launches a day, ${LIMITS.perDayX} of them from X; holders have no daily limit.` };
+      text: `Free to launch. Troya takes 0.1% of trading volume out of the creator's 0.7% share of the Pons fee; holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA keep all of it. ${(await tgLaunchMode()) === "live" ? "X, Telegram and troya.codes are open to everyone" : "X and troya.codes are open to everyone; Telegram opens after its real-money test"}. Creator tax 0–4%. Without 1M $TROYA: up to ${LIMITS.perDay} launches a day, at most ${LIMITS.perDayX} of them from X; holders have no daily limit.` };
   });
   r.post("/api/launch/plan", ({ body }) => plan({ owner: body?.creator, creatorTaxBps: body?.creatorTaxBps, name: body?.name, symbol: body?.symbol, source: "web" }), { perMin: 30 });
   r.post("/api/launch/record", async ({ req, body }) => recordWeb({ hash: body?.hash, owner: getSession(req)?.address || body?.creator || null, salt: body?.salt, troyaBps: body?.troyaBps }), { perMin: 20 });

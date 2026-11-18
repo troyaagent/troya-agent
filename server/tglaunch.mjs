@@ -87,7 +87,7 @@ async function preview(L, s) {
   const b = await agentBalance(s.wallet).catch(() => null);
   const need = b ? b.fee + s.buyEth + 0.0002 : 0;
   if (b && b.eth < need) {
-    const e = new Error(`your Agent Wallet holds ${b.eth.toFixed(5)} ETH; the launch fee${s.buyEth ? ` plus the ${s.buyEth} ETH buy` : ""} needs about ${need.toFixed(5)} ETH. Top it up (Agent → Wallet) and send /launch again`);
+    const e = new Error(`your Agent Wallet holds ${b.eth.toFixed(5)} ETH; the launch fee${s.buyEth ? ` plus the ${s.buyEth} ETH buy` : ""} needs about ${need.toFixed(5)} ETH. The Agent Wallet is separate from your own wallet: press Add ETH on its page (Agent → Wallet), then send /launch again`);
     e.fund = true; throw e;
   }
   const fee = p.split ? `you keep 0.6% of volume${s.taxBps ? ` plus your ${s.taxBps / 100}% tax` : ""}, Troya takes 0.1%` : `100% yours, to ${short(p.owner)}`;

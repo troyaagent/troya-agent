@@ -363,7 +363,7 @@ export async function fromX({ tweetId, authorId, text, mediaUrl }) {
   } catch (e) { return { reply: guide(String(e.message || "the launch failed")) }; }
   if (!out.ok) {
     if (out.why === "no-agent-wallet") return { reply: `Not launched: your wallet has no Agent Wallet yet. To fix: create one and add a little ETH on Robinhood Chain, then post again: ${DESK()}` };
-    if (out.why === "funds") return { reply: `Not launched: ${out.reasons?.[0] || "not enough ETH in the Agent Wallet"}. To fix: top up your Agent Wallet and post again. Nothing was spent: ${SITE().replace(/^https?:\/\//, "")}/agent#/agent/wallet` };
+    if (out.why === "funds") return { reply: `Not launched: ${out.reasons?.[0] || "not enough ETH in the Agent Wallet"}. To fix: your Agent Wallet is separate from your own wallet; press Add ETH at ${SITE().replace(/^https?:\/\//, "")}/agent#/agent/wallet, then post again. Nothing was spent.` };
     if (out.why === "no-token") return { reply: `Not launched: the launch transaction did not go through on Robinhood Chain. To fix: wait a minute and post again; check it here: ${DESK()}` };
     return { reply: guide((out.reasons || [])[0] || "the launch could not be sent") };
   }
@@ -433,7 +433,7 @@ export function guide(why) {
   const w = String(why).replace(/\.$/, "").replace(/0x[0-9a-fA-F]{40}/g, (a) => `${a.slice(0, 6)}…${a.slice(-4)}`).slice(0, 140);
   // not enough ETH: say how much, where to send it and how to get ETH onto Robinhood Chain (owner, 18 Nov: guide everyone)
   if (/needs at least|not enough|insufficient|balance|top up|for the pons fee/i.test(w))
-    return `Not launched: ${w.replace(/^The Agent Wallet/i, "your Agent Wallet").replace(/ on Robinhood Chain for the Pons fee and gas/i, " for the Pons fee")}. To fix: send it about 0.001 ETH on Robinhood Chain, then post again (bridge ETH in: ${SITE().replace(/^https?:\/\//, "")}/agent#/bridge). Nothing was spent.`.slice(0, 275);
+    return `Not launched: ${w.replace(/^The Agent Wallet/i, "your Agent Wallet").replace(/ on Robinhood Chain for the Pons fee and gas/i, " for the Pons fee")} (it is separate from your own wallet). To fix: press Add ETH at ${SITE().replace(/^https?:\/\//, "")}/agent#/agent/wallet, about 0.002 ETH, then post again. Nothing was spent.`.slice(0, 275);
   const fix = /launches through Troya today|try again tomorrow/i.test(w) ? "try again tomorrow (UTC)"
     : /cap|limit/i.test(w) ? "raise your Agent Wallet caps or post a smaller buy"
     : /kill switch|paused/i.test(w) ? "launches are paused right now, try again later"

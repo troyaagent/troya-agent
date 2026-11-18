@@ -23,6 +23,9 @@ const EXT = { "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "imag
 const TYPE = { png: "image/png", jpg: "image/jpeg", webp: "image/webp", gif: "image/gif", svg: "image/svg+xml", avif: "image/avif" };
 
 let DIR, PUBLIC_LOGOS, marketMod;
+// stock tokens show their company's logo, self-hosted in /img/logos/stocks/<TICKER>.png (vetted by hand, 18 Nov 2026):
+// the token indexes return the Robinhood feather for every stock, which made Tesla, Nvidia and the rest look the same
+const STOCK_LOGO = new Map();   // lower(address) → ticker
 const index = new Map();  // key → { t, file|null }
 const inflight = new Map();
 
@@ -32,6 +35,8 @@ export async function register(r, ctx) {
   await fs.mkdir(DIR, { recursive: true });
   try { for (const [k, v] of Object.entries(JSON.parse(await fs.readFile(path.join(DIR, "index.json"), "utf8")))) index.set(k, v); } catch {}
   import("./market.mjs").then((m) => { marketMod = m; }).catch(() => {});
+  import("./robinhood.mjs").then((m) => { for (const x of m.STOCKS || []) STOCK_LOGO.set(String(x.address).toLowerCase(), String(x.symbol).toUpperCase()); }).catch(() => {});
+  const stockFile = async (ticker) => { const f = path.join(PUBLIC_LOGOS, "stocks", `${String(ticker).replace(/[^A-Z0-9.]/g, "")}.png`); try { await fs.access(f); return f; } catch { return null; } };
 
   r.get("/api/icon/token/:address", async ({ params, query, res }) => {
     // ?chain=base|arbitrum|solana for tokens on the other chains Troya trades (Robinhood Chain when absent)
@@ -39,6 +44,7 @@ export async function register(r, ctx) {
     const raw = String(params.address || "");
     const a = chain === "solana" ? raw : raw.toLowerCase();
     if (chain === "solana" ? !SOL_RE.test(a) : !ADDR_RE.test(a)) return sendErr(res, 400, "Not a token address");
+    if (chain === "robinhood" && STOCK_LOGO.has(a)) { const f = await stockFile(STOCK_LOGO.get(a)); if (f) return sendFile(res, f); }
     if (chain === "robinhood" && KNOWN[a]) { try { await fs.access(path.join(PUBLIC_LOGOS, KNOWN[a])); return sendFile(res, path.join(PUBLIC_LOGOS, KNOWN[a])); } catch {} }
     if (chain !== "robinhood" && KNOWN_OTHER[`${chain}:${a.toLowerCase()}`]) { try { const f = path.join(PUBLIC_LOGOS, KNOWN_OTHER[`${chain}:${a.toLowerCase()}`]); await fs.access(f); return sendFile(res, f); } catch {} }
     const file = chain === "robinhood" ? await resolve(`r:${a}`, () => tokenSources(a)) : await resolve(`${chain}:${a}`, () => otherSources(chain, a));
@@ -48,6 +54,9 @@ export async function register(r, ctx) {
   r.get("/api/icon/coin/:coin", async ({ params, res }) => {
     const c = String(params.coin || "");
     if (!COIN_RE.test(c)) return sendErr(res, 400, "Not a market name");
+    // HIP-3 stock perps ("xyz:TSLA") share the stock token's vetted logo
+    const tk = /^[a-z0-9]+:([A-Z][A-Z0-9.]{0,9})$/.exec(c)?.[1];
+    if (tk) { const f = await stockFile(tk); if (f) return sendFile(res, f); }
     const file = await resolve(`c:${c}`, () => coinSources(c));
     return file ? sendFile(res, file) : sendErr(res, 404, "No logo for this market");
   }, { weight: 0.2, perMin: 3000 });

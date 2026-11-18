@@ -272,7 +272,7 @@ export function tokenIcon(t, size = "") {
   const net = String(t?.chain || "robinhood").toLowerCase();
   const other = net === "base" || net === "arbitrum" || net === "solana";
   const proxied = net === "solana" ? (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr) ? `/api/icon/token/${addr}?chain=solana` : null)
-    : ADDR.test(addr) ? `/api/icon/token/${addr.toLowerCase()}${other ? `?chain=${net}` : ""}` : null;
+    : ADDR.test(addr) ? `/api/icon/token/${addr.toLowerCase()}?${other ? `chain=${net}&` : ""}v=2` : null;   // v=2: stock logos replaced (18 Nov)
   const box = logoBox(`tok-ico ${size}`, mono(t?.symbol), [
     brand,
     !native && LOGOS.symbol[sym] && (sym === "WETH" || sym === "USDG") ? L + LOGOS.symbol[sym] : null,

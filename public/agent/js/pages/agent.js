@@ -2,7 +2,9 @@
 import { h, clear, icon, toast, modal, review, short, greeting, useCss, every, store, copyText, ago, num, usd, esc, chainLogo, tokenIcon, coinIcon } from "../ui.js";
 import { api, stream } from "../api.js";
 import { coinSuggest } from "../coinsearch.js";
-import { wallet, onWallet, signIn, openConnect } from "../wallet.js";
+import { wallet, onWallet, signIn, openConnect, signerFor } from "../wallet.js";
+import { waitReceipt, errText } from "../chain.js";
+import { parseEther } from "ethers";
 
 const TABS = [["chat", "Chat"], ["wallet", "Wallet"], ["autopilot", "Autopilot"], ["sentry", "Sentry Autopilot"], ["playbooks", "Playbooks"]];
 const autoPref = store("troya.autopilot", { on: false, playbooks: true, chat: false });
@@ -320,13 +322,37 @@ function mountWallet(box) {
       wAmt.value = String(v);
     } }, "Max");
     const wChain = h("select", { class: "select" }, h("option", { value: "robinhood" }, "Robinhood Chain"));
+    // one-signature top-up from the connected wallet: the step people miss ("my ETH is in my wallet, why does the launch fail?")
+    function fundRow(w) {
+      const amt = h("input", { class: "input ag-fund-in", type: "number", min: "0", step: "any", value: "0.002", "aria-label": "ETH to add to the Agent Wallet" });
+      const pick = (v) => h("button", { class: "chip", type: "button", onclick: () => { amt.value = v; } }, `${v} ETH`);
+      const go = h("button", { class: "btn primary", type: "button", onclick: async () => {
+        const v = Number(amt.value);
+        if (!(v > 0 && v <= 5)) return toast("Enter an amount between 0 and 5 ETH.", "error");
+        const ok = await review({ title: "Add ETH to your Agent Wallet", summary: "A plain ETH transfer on Robinhood Chain from your wallet to your Agent Wallet. You can withdraw it back any time.",
+          rows: [["From", short(wallet.address, 6)], ["To (Agent Wallet)", short(w.address, 6)], ["Amount", `${v} ETH`], ["Network", "Robinhood Chain"]], confirmLabel: "Continue in wallet" });
+        if (!ok) return;
+        go.disabled = true; go.textContent = "Waiting for your wallet…";
+        try {
+          const signer = await signerFor("robinhood");
+          const tx = await signer.sendTransaction({ to: w.address, value: parseEther(String(v)) });
+          go.textContent = "Confirming…";
+          const rc = await waitReceipt("robinhood", tx.hash, { timeoutMs: 180_000 });
+          if (rc?.status !== 1) throw new Error("The transfer failed on chain.");
+          toast(`Added ${v} ETH to your Agent Wallet.`, "ok", 6000);
+          render();
+        } catch (e) { toast(errText(e), "error", 7000); go.disabled = false; go.textContent = "Add ETH"; }
+      } }, icon("plus"), "Add ETH");
+      return h("div", { class: "ag-fund" }, h("div", { class: "faint" }, "Add ETH from your wallet"), h("div", { class: "row wrap" }, pick("0.002"), pick("0.005"), pick("0.01"), amt, go));
+    }
     clear(main,
       h("div", { class: "panel ag-panel ag2-hero" },
         h("div", { class: "ag-aw-h" },
           h("div", {}, h("div", { class: "faint" }, "Agent Wallet"), h("div", { class: "ag-addr mono" }, aw.address, h("button", { class: "icon-btn", type: "button", "aria-label": "Copy address", onclick: () => copyText(aw.address, "Address copied") }, icon("copy")))),
           h("div", { class: "row" }, h("span", { class: `badge-s ${aw.enabled ? "blue" : ""}` }, aw.enabled ? "On" : "Off"), toggle)),
         balBox,
-        h("p", { class: "note" }, "Fund it by sending ETH on Robinhood Chain to the address above. Keep it small: this is pocket money for the agent."),
+        fundRow(aw),
+        h("p", { class: "note" }, "The Agent Wallet is separate from your own wallet: launches from X and Telegram, and every agent trade, are paid from it. Add ETH here in one signature, or send ETH on Robinhood Chain to the address above. Keep it small: this is pocket money for the agent."),
         h("div", { class: "alert warn" }, "Custodial: the operator holds this key encrypted. Withdrawals only go to ", h("span", { class: "mono" }, short(wallet.address, 6)), ".")),
       h("div", { class: "ag-grid2" },
         h("div", { class: "panel ag-panel" }, h("h3", {}, "Caps"),

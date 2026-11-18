@@ -901,7 +901,7 @@ export async function searchCoins(q, limit = 12) {
   let coins = [...out.values()].sort((x, y) => rank(x) - rank(y) || kindRank(x) - kindRank(y) || (y.liquidityUsd || 0) - (x.liquidityUsd || 0));
   const top = new Map();
   for (const c of coins) { const k = String(c.symbol).toLowerCase(); top.set(k, Math.max(top.get(k) || 0, c.liquidityUsd || 0, c.kind !== "coin" ? 1e9 : 0)); }
-  coins = coins.map((c) => ({ ...c, image: c.image || (c.kind === "stock" ? `/api/stocks/logo/${c.address}` : null),
+  coins = coins.map((c) => ({ ...c, image: c.kind === "stock" ? `/api/stocks/logo/${c.address}?v=2` : c.image || null,
     copy: c.kind === "coin" && (c.liquidityUsd || 0) < 25_000 && (top.get(String(c.symbol).toLowerCase()) || 0) > Math.max(5000, 20 * (c.liquidityUsd || 0)) }));
   const v = { q: raw, coins, sources: ["Troya index", "Robinhood stock tokens", "DexScreener"], updatedAt: Date.now() };
   COIN_SEARCH.set(ql, { t: Date.now(), v });

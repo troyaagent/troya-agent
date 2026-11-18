@@ -138,6 +138,13 @@ async function logo(addr) {
   const a = lc(addr);
   if (!/^0x[0-9a-f]{40}$/.test(a)) throw new HttpError(400, "Bad address.");
   if (logos.has(a)) return logos.get(a);
+  // the vetted company logo shipped with the site (/img/logos/stocks/<TICKER>.png) wins, so every page shows the same one
+  const rh = await import("./robinhood.mjs").catch(() => null);
+  const tk = rh?.STOCKS?.find((x) => lc(x.address) === a)?.symbol;
+  if (tk) {
+    const own = await readFile(new URL(`../public/img/logos/stocks/${String(tk).replace(/[^A-Za-z0-9.]/g, "")}.png`, import.meta.url)).catch(() => null);
+    if (own) { logos.set(a, own); return own; }
+  }
   const file = logoDir && join(logoDir, `${a}.png`);
   let buf = file ? await readFile(file).catch(() => null) : null;
   if (!buf) {

@@ -154,3 +154,8 @@
 .ag-smart input { margin-top: 3px; }
 .ag-smart b { color: var(--fg); }
 .ag-span2 { grid-column: 1 / -1; margin: 0; }
+/* Add ETH from your wallet (Agent Wallet hero) */
+.ag-fund { display: grid; gap: 8px; margin: 14px 0 4px; padding: 14px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--accent, #8edff5) 30%, transparent); background: color-mix(in srgb, var(--accent, #8edff5) 6%, transparent); }
+.ag-fund .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ag-fund .ag-fund-in { width: 120px; }
+@media (max-width: 560px) { .ag-fund .ag-fund-in { flex: 1 1 100px; } .ag-fund .btn { flex: 1 1 100%; justify-content: center; } }

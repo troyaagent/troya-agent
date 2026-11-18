@@ -259,17 +259,19 @@ export async function mount(view) {
   /* ---------- burn campaign: small buybacks over time, each burned in full ---------- */
   const campBox = h("section", { class: "panel fw-auto fw-camp", hidden: true });
   autoBox.after(campBox);
+  // what the admin typed survives the 60-second repaint (18 Nov: a repaint put the defaults back and a $72 campaign started instead of $24)
+  const campDraft = { totalUsd: "72", minUsd: "1", maxUsd: "1", everyMinutes: "10", hours: "12" };
   async function paintCamp() {
     if (!wallet.session) { campBox.hidden = true; return; }
     let a, cg; try { [a, cg] = await Promise.all([api.get("flywheel/auto"), api.get("flywheel/auto/campaign")]); } catch { campBox.hidden = true; return; }
     campBox.hidden = false;
     const c = cg.campaign;
-    const inp = (k, v, label, step = "1") => { const el = h("input", { class: "input", type: "number", step, value: v }); el.dataset.k = k; return h("label", { class: "field" }, h("span", {}, label), el); };
-    const form = h("div", { class: "fw-auto-g" }, inp("totalUsd", 72, "Total to burn ($)"), inp("minUsd", 1, "Each buy from ($)", "0.5"), inp("maxUsd", 1, "Each buy up to ($)", "0.5"), inp("everyMinutes", 10, "One buy every (minutes)"), inp("hours", 12, "For (hours)"));
+    const inp = (k, label, step = "1") => { const el = h("input", { class: "input", type: "number", step, value: campDraft[k] }); el.dataset.k = k; return h("label", { class: "field" }, h("span", {}, label), el); };
+    const form = h("div", { class: "fw-auto-g" }, inp("totalUsd", "Total to burn ($)"), inp("minUsd", "Each buy from ($)", "0.5"), inp("maxUsd", "Each buy up to ($)", "0.5"), inp("everyMinutes", "One buy every (minutes)"), inp("hours", "For (hours)"));
     const val = () => Object.fromEntries([...form.querySelectorAll("input")].map((el) => [el.dataset.k, Number(el.value)]));
     const need = () => { const v = val(); return `${Math.round(v.hours * 60 / v.everyMinutes)} buys at most · about ${Math.round(v.totalUsd / ((v.minUsd + v.maxUsd) / 2))} buys to reach $${v.totalUsd} · ETH comes from the creator wallet (${fx(st.d.fees.creatorWalletEth)} ETH ≈ $${(st.d.fees.creatorWalletEth * (st.d.price.ethUsd || 0)).toFixed(0)} now)`; };
     const hint = h("p", { class: "fine fw-auto-ex" }, need());
-    form.addEventListener("input", () => { hint.textContent = need(); });
+    form.addEventListener("input", () => { for (const el of form.querySelectorAll("input")) campDraft[el.dataset.k] = el.value; hint.textContent = need(); });
     const pct = c ? Math.min(100, (c.spentUsd / c.totalUsd) * 100) : 0;
     clear(campBox,
       h("div", { class: "fw-auto-h" }, h("h3", {}, "Burn campaign"), h("span", { class: `dk-v ${c?.active ? "v-passed" : ""}` }, c?.active ? "Running" : "Off")),
@@ -291,7 +293,8 @@ export async function mount(view) {
         h("a", { class: "ulink", href: `https://robinhoodchain.blockscout.com/tx/${x.buy}`, target: "_blank", rel: "noopener" }, "buy"), " · ", h("a", { class: "ulink", href: `https://robinhoodchain.blockscout.com/tx/${x.burn}`, target: "_blank", rel: "noopener" }, "burn")))) : null);
   }
   paintAuto(); paintCamp();
-  const campTick = setInterval(() => { if (!document.hidden && alive) paintCamp(); }, 60_000);
+  // no repaint while the admin is typing in the box or a review dialog is open
+  const campTick = setInterval(() => { if (!document.hidden && alive && !campBox.contains(document.activeElement) && !document.querySelector("dialog[open], .modal, [role=dialog]")) paintCamp(); }, 60_000);
 
   const off = onWallet(() => { paint(); paintAuto(); paintCamp(); });
   await refresh();

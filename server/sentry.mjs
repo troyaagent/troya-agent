@@ -49,6 +49,9 @@ const NULL_ADDR = "0x0000000000000000000000000000000000000000";
 const QUOTES = new Set([NULL_ADDR, ADDR.weth.toLowerCase(), ADDR.usdg.toLowerCase()]);
 const POOL_FIRST_S = 300, POOL_RETRY_S = [15 * 60, 60 * 60];
 const coder = AbiCoder.defaultAbiCoder();
+// the full stock list (the stocks desk's 203, merged by market.mjs), loaded once without a circular import at start
+let marketIsStock = null;
+import("./market.mjs").then((m) => { marketIsStock = m.isStock || null; }).catch(() => {});
 const STOCKS = (() => { try { return new Set(JSON.parse(readFileSync(new URL("./data/robinhood-stocks.json", import.meta.url), "utf8")).stocks.map((x) => x.address.toLowerCase())); } catch { return new Set(); } })();
 
 let store, busy = false, lastPost = 0, lastWalletSave = 0;
@@ -366,7 +369,7 @@ async function scan(s) {
 // queued above) and tokenized stocks are skipped; a v4 pool's key is registered so the Gate can route through it at once.
 function notePool(s, token, item) {
   const t = token.toLowerCase();
-  if (s.seen[t] || STOCKS.has(t) || QUOTES.has(t)) return;
+  if (s.seen[t] || STOCKS.has(t) || QUOTES.has(t) || marketIsStock?.(t)) return;
   s.seen[t] = Date.now();
   s.queue.push({ token: t, due: Date.now() + POOL_FIRST_S * 1000, tries: 0, kind: "pool", ...item });
   bump(s, "pools");

@@ -16,6 +16,20 @@ const NET = "robinhood";
 
 const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
 const STOCK_SET = new Set(STOCKS.map((s) => String(s.address).toLowerCase()));
+// the bundled list holds 63 stock tokens; Robinhood's stocks desk lists every one (203 on 18 Nov): merge them in at start and
+// every 6 h, so search, the board, Gate checks and copycat guards all know Firefly, ONTO, CBRS and the rest are stocks
+async function syncStocks() {
+  const d = await import("./stocks.mjs").then((m) => m.stockDesk()).catch(() => null);
+  let added = 0;
+  for (const x of d?.assets || []) {
+    const a = String(x.address || "").toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(a) || STOCK_SET.has(a) || !x.symbol) continue;
+    STOCK_SET.add(a); STOCKS.push({ address: a, symbol: String(x.symbol), name: String(x.name || x.symbol), decimals: 18 }); added++;
+  }
+  if (added) console.log(`[market] ${added} more stock tokens from the stocks desk (${STOCK_SET.size} in all)`);
+}
+setTimeout(() => syncStocks().catch(() => {}), 20_000).unref?.();
+setInterval(() => syncStocks().catch(() => {}), 6 * 3600_000).unref?.();
 const SORTS = new Set(["volume", "mcap", "change", "liquidity", "newest", "price", "txns", "holders", "picks"]);
 const SORT_ALIAS = { age: "newest", new: "newest", marketcap: "mcap", cap: "mcap", fdv: "mcap", gainers: "change", vol: "volume" };
 export const LAUNCHPADS = {
@@ -439,6 +453,7 @@ async function blockscout(path) {
     throw e;
   }
 }
+export const isStock = (a) => STOCK_SET.has(String(a || "").toLowerCase());
 export const blockscoutApi = (p) => blockscout(p);   // shared rate-limited client (portfolio)
 export const hasBlockscout = () => !!BS_KEY && !bsDown();
 const LABEL = { "0x000000000000000000000000000000000000dead": "dead address (burned)", "0x0000000000000000000000000000000000000000": "zero address (burned)" };

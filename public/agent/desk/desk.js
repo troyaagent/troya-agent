@@ -366,7 +366,7 @@ function openAsk(prefill = "") {
     const px = (n) => (n == null || !(n > 0) ? null : `$${price(n)}`);
     if (coins.length && coinQ && q.replace(/^\$/, "").startsWith(coinQ.toLowerCase().slice(0, 2))) {
       const rows = coins.map((c) => ({ kind: "coin", coin: c, title: `${c.symbol}${c.name && c.name.toLowerCase() !== c.symbol.toLowerCase() ? ` · ${c.name}` : ""}`,
-        hint: [c.kind === "stock" ? "Robinhood stock token" : c.kind === "major" ? "Major" : c.launchpad ? padName(c.launchpad) : null, px(c.priceUsd), c.liquidityUsd ? `liq ${fmt(c.liquidityUsd)}` : null, c.copy ? "small copy of a bigger coin with this ticker" : null].filter(Boolean).join(" · "),
+        hint: [c.kind === "stock" ? "Robinhood stock token" : c.kind === "major" ? "Major" : c.launchpad ? padName(c.launchpad) : null, px(c.priceUsd), c.liquidityUsd ? `liq ${fmt(c.liquidityUsd)}` : null].filter(Boolean).join(" · "),
         target: c.address === "native" ? "#/swap" : `#/token/${c.address}` }));
       const t = coins[0];
       if (t && t.address !== "native") rows.splice(1, 0,
@@ -400,7 +400,7 @@ function openAsk(prefill = "") {
     let i = 0;
     clear(opts, secs.map(([label, rows]) => h("div", { class: "d-pal-sec" }, h("div", { class: "d-pal-h" }, label),
       rows.map((it) => { const idx = i++; return h("button", { class: `d-pal-row ${idx === sel ? "sel" : ""}`, type: "button", role: "option", "aria-selected": String(idx === sel), onclick: () => run(it), onmousemove: () => { if (sel !== idx) { sel = idx; render(); } } },
-        it.coin ? h("span", { class: "d-pal-ic coin" }, tokenIcon(it.coin)) : h("span", { class: `d-pal-ic ${it.kind}` }, si(it.icon || "desk")), h("span", { class: "d-pal-t" }, h("b", {}, it.title), h("small", { class: it.coin?.copy ? "warn" : null }, it.hint)), h("kbd", {}, "↵")); }))));
+        it.coin ? h("span", { class: "d-pal-ic coin" }, tokenIcon(it.coin)) : h("span", { class: `d-pal-ic ${it.kind}` }, si(it.icon || "desk")), h("span", { class: "d-pal-t" }, h("b", {}, it.title), h("small", {}, it.hint)), h("kbd", {}, "↵")); }))));
     opts.querySelector(".sel")?.scrollIntoView({ block: "nearest" });
   };
   input.addEventListener("input", () => { sel = 0; findCoins(); render(); });

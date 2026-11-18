@@ -117,7 +117,7 @@ function robinhoodTab(box, go, query) {
       if (!state.q && state.offset === 0 && state.launchpad === "all") {
         const top = state.cat === "all" && state.sort === "volume" && state.dir === "desc" ? d : await api.get("market/robinhood?cat=all&sort=volume&dir=desc&limit=12&tradable=1").catch(() => null);
         if (id !== reqId) return;
-        const busy = (top?.tokens || rows).filter((t) => t.priceUsd != null && !t.copyOf && !t.washVolume).sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0));
+        const busy = (top?.tokens || rows).filter((t) => t.priceUsd != null && !t.washVolume).sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0));
         if (busy.length) paintTop(busy);
       }
       topBox.hidden = !!state.q;

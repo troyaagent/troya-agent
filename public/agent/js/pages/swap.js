@@ -467,8 +467,7 @@ export async function mount(view, ctx) {
           const liq = (n) => (n >= 1e6 ? `$${num(n / 1e6, 1)}M liq.` : `$${num(n / 1e3, n >= 1e4 ? 0 : 1)}K liq.`);
           clear(list, ...items,
             ...hits.map((c) => row({ address: c.address, symbol: c.symbol, name: c.name, decimals: null, image: c.image },
-              c.copy ? h("span", { class: "badge-s warn", title: "A small coin borrowing the ticker of a bigger one. Check the address." }, "Copy?")
-                : c.kind === "stock" ? h("span", { class: "badge-s sw-pad" }, padLogo("stocks", 12), "Stock") : c.launchpad ? padBadge(c.launchpad) : h("span", { class: "badge-s" }, c.liquidityUsd ? liq(c.liquidityUsd) : "Coin"))),
+              c.kind === "stock" ? h("span", { class: "badge-s sw-pad" }, padLogo("stocks", 12), "Stock") : c.launchpad ? padBadge(c.launchpad) : h("span", { class: "badge-s" }, c.liquidityUsd ? liq(c.liquidityUsd) : "Coin"))),
             hits.length || items.length ? null : h("div", { class: "tp-load muted" }, "No match. Paste the token address instead."));
           return;
         }

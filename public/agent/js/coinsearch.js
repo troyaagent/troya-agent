@@ -72,8 +72,7 @@ export function coinSuggest(input, onPick, { limit = 7, majors = false, stocks =
       tokenIcon({ address: c.address === "native" ? "" : c.address, symbol: c.symbol, image: c.image, chain: "robinhood" }),
       h("span", { class: "cs-n" }, h("b", {}, c.symbol), h("small", {}, [c.name && c.name !== c.symbol ? c.name : null, c.address === "native" ? "Native" : short(c.address)].filter(Boolean).join(" · "))),
       h("span", { class: "cs-x" },
-        c.copy ? h("span", { class: "cs-tag warn", title: "A small coin borrowing the ticker of a bigger one. Check the address." }, "Copy?")
-          : c.kind === "stock" ? h("span", { class: "cs-tag" }, "Stock") : price(c.priceUsd) ? h("span", {}, price(c.priceUsd)) : null,
+        c.kind === "stock" ? h("span", { class: "cs-tag" }, "Stock") : price(c.priceUsd) ? h("span", {}, price(c.priceUsd)) : null,
         c.liquidityUsd ? h("small", {}, `liq ${money(c.liquidityUsd)}`) : c.launchpad ? h("small", {}, c.launchpad) : null)))
       : h("div", { class: "cs-empty" }, empty || "No coin matches. Paste its address instead."));
     if (!input.isConnected) return;

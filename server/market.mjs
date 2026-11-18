@@ -616,16 +616,7 @@ export async function getRobinhoodTokens(opts = {}) {
   if (Date.now() - board.updatedAt > 10 * 60_000) refreshBoard().catch(() => {});
   const ethUsd = await getEthUsd().catch(() => null);
   let all = [...board.rows.values()].filter((t) => !t.stock);
-  // copies: when several coins share a ticker, the one with the most holders (then the oldest) is the original; the others
-  // are marked copyOf and kept out of Trending, Troya picks and "Busiest today"
-  const bySym = new Map();
-  for (const t of all) { const k = String(t.symbol || "").toLowerCase(); if (!k) continue; if (!bySym.has(k)) bySym.set(k, []); bySym.get(k).push(t); }
-  const holderCount = (t) => HOLDERS.get(t.address)?.count ?? 0;   // (named apart from the module-level holdersOf)
-  for (const g of bySym.values()) {
-    if (g.length < 2) { g[0].copyOf = null; continue; }
-    const orig = [...g].sort((a, b) => (holderCount(b) - holderCount(a)) || ((a.createdAt || Infinity) - (b.createdAt || Infinity)))[0];
-    for (const t of g) t.copyOf = t === orig ? null : orig.address;
-  }
+  // every coin is listed alike, whatever its ticker (owner, 18 Nov: no "copy" marks, as on other launchers)
   if (o.q && ADDR_RE.test(o.q) && !board.rows.has(lc(o.q))) {
     const r = await getRobinhoodToken(o.q).catch(() => null);
     if (r?.token) all.push(r.token);
@@ -641,8 +632,8 @@ export async function getRobinhoodTokens(opts = {}) {
   // launched straight into a pool), Bonding (still on a Pons curve)
   const onCurve = (t) => t.poolDex === "pons-v2";
   const isNew = (t) => t.createdAt && Date.now() - t.createdAt < 72 * 3600_000 && !onCurve(t);
-  const isTrend = (t) => !t.copyOf && (t.volume24hUsd || 0) >= 1000 && (t.txns24h || 0) >= 20;
-  const picked = pickCoins(rows.filter((t) => !t.copyOf));
+  const isTrend = (t) => (t.volume24hUsd || 0) >= 1000 && (t.txns24h || 0) >= 20;
+  const picked = pickCoins(rows);
   const catCounts = { all: rows.length, picks: picked.length, trending: rows.filter(isTrend).length, new: rows.filter(isNew).length, bonding: rows.filter(onCurve).length };
   if (o.cat === "picks") rows = picked;
   else if (o.cat === "trending") rows = rows.filter(isTrend);
@@ -1012,14 +1003,7 @@ export async function searchCoins(q, limit = 12) {
   const firstWord = (n) => String(n || "").replace(/\s•.*$/, "").toLowerCase().split(/[\s,.]+/)[0];
   const rank = (c) => { const s = String(c.symbol).toLowerCase(), n = String(c.name || "").toLowerCase(); if (c.kind === "stock" && (n === ql || firstWord(n) === ql)) return 0; return s === ql ? 0 : s.startsWith(ql) ? 1 : n === ql || n.startsWith(ql) ? 2 : 3; };
   let coins = [...out.values()].sort((x, y) => rank(x) - rank(y) || kindRank(x) - kindRank(y) || (y.liquidityUsd || 0) - (x.liquidityUsd || 0));
-  // a coin named or ticketed like a stock token (TESLA, xTESLAFI, TSLA) is a copy of it
-  const stockKeys = new Set(STOCKS.flatMap((x) => [String(x.symbol).toLowerCase(), firstWord(x.name)]).filter((k) => k && k.length >= 3));
-  const stockCopy = (c) => c.kind === "coin" && [String(c.symbol).toLowerCase(), firstWord(c.name), String(c.name || "").toLowerCase().replace(/^x|fi$/g, "")].some((k) => stockKeys.has(k));
-  const top = new Map();
-  for (const c of coins) { const k = String(c.symbol).toLowerCase(); top.set(k, Math.max(top.get(k) || 0, c.liquidityUsd || 0, c.kind !== "coin" ? 1e9 : 0)); }
-  coins = coins.map(({ _src, _dsLiq, _dsVol, ...c }) => ({ ...c, image: c.kind === "stock" ? `/api/stocks/logo/${c.address}?v=4` : c.image || null,
-    copy: stockCopy(c) || (c.kind === "coin" && (c.liquidityUsd || 0) < 25_000 && (top.get(String(c.symbol).toLowerCase()) || 0) > Math.max(5000, 20 * (c.liquidityUsd || 0))) }))
-    .sort((x, y) => (x.copy === y.copy ? 0 : x.copy ? 1 : -1));   // copies last; the order is otherwise kept
+  coins = coins.map(({ _src, _dsLiq, _dsVol, ...c }) => ({ ...c, image: c.kind === "stock" ? `/api/stocks/logo/${c.address}?v=4` : c.image || null }));
   const v = { q: raw, coins, sources: ["Troya index", "Robinhood stock tokens", "DexScreener"], updatedAt: Date.now() };
   COIN_SEARCH.set(ql, { t: Date.now(), v });
   if (COIN_SEARCH.size > 500) COIN_SEARCH.delete(COIN_SEARCH.keys().next().value);

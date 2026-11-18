@@ -50,7 +50,11 @@
 .bb-ca b { font: 700 10px/1 var(--sans, system-ui); letter-spacing: .1em; text-transform: uppercase; }
 .bb-ca:hover { border-color: var(--accent); }
 
+/* the header never wraps or squeezes: the logo, Buy, Open app and the menu button keep their size */
+.nav-r > *, .pn-r > *, .logo, .pn-logo { flex: none; }
+.pill, .pn-pill, .bb-btn { white-space: nowrap; }
 @media (max-width: 860px) { .bb-btn .bb-t { display: none; } }
+@media (max-width: 760px) { .bb-soc { display: none; } }   /* Roadmap, Community, X, Telegram and GitHub sit in the menu */
 @media (max-width: 600px) {
   .bb-soc { display: none; }            /* the same three links sit in the menu */
   .nav-r > .ca, .pn-r > .pn-ca { display: none; }   /* the full CA with Copy sits in the Buy menu */

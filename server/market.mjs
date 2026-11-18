@@ -920,12 +920,18 @@ export async function searchCoins(q, limit = 12) {
         volume24hUsd: fnum(p.volume?.h24), change24h: fnum(p.priceChange?.h24), launchpad: padOfDex(`${p.dexId || "other"}${p.labels?.[0] ? "-" + p.labels[0] : ""}`) || null });
     }
   } catch { /* the local sources still answer */ }
-  const rank = (c) => { const s = String(c.symbol).toLowerCase(), n = String(c.name || "").toLowerCase(); return s === ql ? 0 : s.startsWith(ql) ? 1 : n === ql || n.startsWith(ql) ? 2 : 3; };
+  // a stock whose company name is the query ("tesla" → Tesla, TSLA) ranks with exact ticker matches
+  const firstWord = (n) => String(n || "").replace(/\s•.*$/, "").toLowerCase().split(/[\s,.]+/)[0];
+  const rank = (c) => { const s = String(c.symbol).toLowerCase(), n = String(c.name || "").toLowerCase(); if (c.kind === "stock" && (n === ql || firstWord(n) === ql)) return 0; return s === ql ? 0 : s.startsWith(ql) ? 1 : n === ql || n.startsWith(ql) ? 2 : 3; };
   let coins = [...out.values()].sort((x, y) => rank(x) - rank(y) || kindRank(x) - kindRank(y) || (y.liquidityUsd || 0) - (x.liquidityUsd || 0));
+  // a coin named or ticketed like a stock token (TESLA, xTESLAFI, TSLA) is a copy of it
+  const stockKeys = new Set(STOCKS.flatMap((x) => [String(x.symbol).toLowerCase(), firstWord(x.name)]).filter((k) => k && k.length >= 3));
+  const stockCopy = (c) => c.kind === "coin" && [String(c.symbol).toLowerCase(), firstWord(c.name), String(c.name || "").toLowerCase().replace(/^x|fi$/g, "")].some((k) => stockKeys.has(k));
   const top = new Map();
   for (const c of coins) { const k = String(c.symbol).toLowerCase(); top.set(k, Math.max(top.get(k) || 0, c.liquidityUsd || 0, c.kind !== "coin" ? 1e9 : 0)); }
   coins = coins.map((c) => ({ ...c, image: c.kind === "stock" ? `/api/stocks/logo/${c.address}?v=2` : c.image || null,
-    copy: c.kind === "coin" && (c.liquidityUsd || 0) < 25_000 && (top.get(String(c.symbol).toLowerCase()) || 0) > Math.max(5000, 20 * (c.liquidityUsd || 0)) }));
+    copy: stockCopy(c) || (c.kind === "coin" && (c.liquidityUsd || 0) < 25_000 && (top.get(String(c.symbol).toLowerCase()) || 0) > Math.max(5000, 20 * (c.liquidityUsd || 0))) }))
+    .sort((x, y) => (x.copy === y.copy ? 0 : x.copy ? 1 : -1));   // copies last; the order is otherwise kept
   const v = { q: raw, coins, sources: ["Troya index", "Robinhood stock tokens", "DexScreener"], updatedAt: Date.now() };
   COIN_SEARCH.set(ql, { t: Date.now(), v });
   if (COIN_SEARCH.size > 500) COIN_SEARCH.delete(COIN_SEARCH.keys().next().value);

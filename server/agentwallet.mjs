@@ -266,7 +266,21 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
       const pc = await checkAction(owner, { kind: "withdraw" });
       if (pc.reasons.some((x) => /kill switch/.test(x))) return await blocked(owner, kind, summary, pc.reasons, null, source, proposalId);
       const w = signer(r, owner, chain);
-      result = await send(owner, w, { to: getAddress(owner), value: parseUnits(String(amount), 18) }, summary);
+      // asking for the whole balance (typed, not Max) left nothing for the withdrawal's own gas and failed with
+      // "insufficient funds" (18 Nov): what does not fit is sent as everything less the gas, and the summary says so
+      let value = parseUnits(Number(amount).toFixed(18).replace(/\.?0+$/, ""), 18);
+      const bal = await w.provider.getBalance(w.address);
+      const fee = await w.provider.getFeeData().catch(() => ({}));
+      const gasPrice = fee.maxFeePerGas || fee.gasPrice || 100_000_000n;
+      const gasLimit = await w.provider.estimateGas({ from: w.address, to: getAddress(owner), value: 1n }).catch(() => 120_000n);
+      const reserve = gasLimit * gasPrice * 3n;
+      if (value + reserve > bal) {
+        if (bal <= reserve) throw new HttpError(400, `The Agent Wallet holds ${formatUnits(bal, 18)} ETH, too little to pay the gas of a withdrawal.`);
+        value = bal - reserve;
+        summary = `Withdraw ${formatUnits(value, 18)} ETH (everything less the gas) on Robinhood Chain to the owner wallet`;
+      }
+      result = await send(owner, w, { to: getAddress(owner), value }, summary);
+      result.amountEth = Number(formatUnits(value, 18));
       usd = 0; // withdrawals to the owner never count against trading caps
     } else throw new HttpError(400, `Unknown action kind "${String(kind).slice(0, 20)}".`);
   } catch (e) {

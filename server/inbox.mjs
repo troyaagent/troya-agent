@@ -85,7 +85,9 @@ async function onTelegramMessage(m) {
     const C = await import("./community.mjs").catch(() => null);
     if (C && await C.isReportsChat(m.chat.id).catch(() => false)) {
       const replyTo = m.reply_to_message;
-      const toDev = /^\/dev\b/i.test(m.text || "") || !/^\//.test(String(m.text || m.caption || "").trim());
+      // while a /launch is being set up here, its answers (name, ticker, image) go to the launch, not to the dev inbox
+      const launching = await import("./tglaunch.mjs").then((t) => t.inSession(m.chat.id)).catch(() => false);
+      const toDev = !launching && (/^\/dev\b/i.test(m.text || "") || !/^\//.test(String(m.text || m.caption || "").trim()));
       const photo = Array.isArray(m.photo) && m.photo.length ? m.photo[m.photo.length - 1].file_id : (m.document && /^image\//.test(m.document.mime_type || "") ? m.document.file_id : null);
       await store.append("owner-inbox.jsonl", { id: m.message_id, at: Date.now(), text: String(m.text || m.caption || "").slice(0, 4000), photo, reply: replyTo?.message_id || null, toDev }).catch(() => {});
       if (toDev) {

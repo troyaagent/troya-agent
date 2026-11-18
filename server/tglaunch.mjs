@@ -8,10 +8,13 @@ import { randomBytes } from "node:crypto";
 
 const SITE = (process.env.SITE_URL || "https://troya.codes").replace(/\/+$/, "");
 const BOT = process.env.TG_BOT_USERNAME || "TrojanTroya_bot";
-const SESSION_TTL = 15 * 60_000, CONFIRM_TTL = 90_000;
+const SESSION_TTL = 30 * 60_000, CONFIRM_TTL = 90_000;
+const LATE_WINDOW = 30 * 60_000;   // after a launch setup times out, the next answer is told so instead of going elsewhere
 const TAXES = [0, 100, 200, 300, 400];
 const BUYS = [0, 0.001, 0.005, 0.01, 0.05];
 const sessions = new Map();          // chat → { step, owner, name, symbol, logo, taxBps, buyEth, exp, card }
+/** a launch is being set up in this chat (its answers belong to the launch, not to the dev inbox) */
+export const inSession = (chat) => { const s = sessions.get(chat); return !!(s && s.exp + LATE_WINDOW > Date.now()); };
 const pend = new Map();              // id → { chat, act, ...; exp }
 const busy = new Set();              // chats with a launch in flight
 let store = null;
@@ -118,6 +121,12 @@ export async function handleMessage(m, tg, st) {
   const chat = m.chat.id;
   const s = sessions.get(chat);
   const live = s && s.exp > Date.now();
+  // an answer that comes after the setup timed out (a name or ticker sent much later): say so, plainly, once
+  if (!isCmd && s && !live && s.exp + LATE_WINDOW > Date.now() && m.chat.type === "private" && !text.startsWith("/")) {
+    sessions.delete(chat);
+    await tg("sendMessage", { chat_id: chat, text: "That launch setup timed out (30 minutes without an answer), so nothing was launched. Send /launch to start again." }).catch(() => {});
+    return true;
+  }
   if (!isCmd && !live) return false;
   if (m.chat.type !== "private") {
     if (!isCmd) return false;

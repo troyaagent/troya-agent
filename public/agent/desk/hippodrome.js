@@ -64,8 +64,8 @@ export async function mount(view, ctx) {
   const tabs = h("div", { class: "hp-tabs", role: "tablist" });
   // a slim header row so the three lanes and Create coin lead the page (owner, 18 Nov)
   clear(view, h("div", { class: "dk hp" },
-    h("header", { class: "hp-top" },
-      h("div", { class: "hp-top-l" }, h("h1", {}, "Troya Launches"), kpis),
+    h("header", { class: "hp-pagetop" },
+      h("div", { class: "hp-pagetop-l" }, h("h1", {}, "Troya Launches"), kpis),
       h("a", { class: "btn primary hp-create", href: "#/create" }, icon("plus"), "Create coin")),
     tabs, lanes));
 
@@ -136,23 +136,21 @@ export async function mount(view, ctx) {
     copy.innerHTML = COPY_ICON;
     return h("article", { class: `hp-card${fresh ? " fresh" : ""}`, tabindex: "0", role: "link", "aria-label": `${c.symbol} ${c.name}`, onclick: go, onkeydown: (e) => { if (e.key === "Enter") go(); } },
       h("div", { class: "hp-ava" }, tokenIcon({ address: c.token, symbol: c.symbol, image: c.image }, "xl")),
+      h("div", { class: "hp-top" }, h("b", { class: "hp-sym" }, c.symbol || short(c.token)), h("span", { class: "hp-name" }, c.name || ""), copy),
       h("div", { class: "hp-body" },
-        h("div", { class: "hp-top" }, h("b", { class: "hp-sym" }, c.symbol || short(c.token)), h("span", { class: "hp-name" }, c.name || ""), copy),
-        tags.length ? h("div", { class: "hp-tags" }, tags) : null,
-        socials ? h("div", { class: "hp-tags hp-soc-row" }, socials) : null,
+        tags.length || socials ? h("div", { class: "hp-tags" }, tags, socials) : null,
         h("div", { class: "hp-meta" },
           src ? h("span", { class: "hp-src", title: `Launched from ${src[0]}` }, svg(src[1], "hp-src-ic")) : null,
           c.at ? h("span", {}, ago(c.at)) : null,
-          c.creator ? h("span", { class: "mono" }, short(c.creator)) : null),
-        h("div", { class: "hp-stats" },
+          c.creator ? h("span", { class: "mono" }, short(c.creator)) : null,
           stat("Holders", c.holders != null ? compact(c.holders, 0) : "–"), stat("Txns", c.txns24h != null ? compact(c.txns24h, 0) : "–"),
           stat("Tax", `${taxOf(c.creatorTaxBps)}%`, taxTip(c.creatorTaxBps)), c.initialBuyEth ? stat("Dev buy", `${c.initialBuyEth} ETH`) : null)),
       h("div", { class: "hp-side" },
-        h("div", { class: "hp-mc" }, h("small", {}, "MC"), h("b", {}, usd(c.mcapUsd, { compact: true }))),
-        h("div", { class: "hp-vol" }, h("small", {}, "Vol 24h"), h("span", {}, usd(c.volume24hUsd, { compact: true })))),
+        h("span", { class: "hp-vol", title: "Volume, last 24 hours" }, h("small", {}, "V"), h("span", {}, usd(c.volume24hUsd, { compact: true }))),
+        h("span", { class: "hp-mc", title: "Market cap" }, h("small", {}, "MC"), h("b", {}, usd(c.mcapUsd, { compact: true })))),
       h("div", { class: "hp-foot" },
         lane === "migrated" ? h("div", { class: "hp-grad" }, h("span", {}, "Graduated"), h("small", {}, c.liquidityUsd != null ? `Pool ${usd(c.liquidityUsd, { compact: true })}` : "Uniswap v4"))
-          : h("div", { class: "hp-bar", title: `${pct.toFixed(1)}% of the curve filled` }, h("i", { style: { width: `${pct}%` } }), h("span", {}, pct < 0.05 ? "Just started on the curve" : `${pct.toFixed(pct < 10 ? 1 : 0)}% bonded`, c.raisedEth != null && c.raisedEth >= 0.0005 ? ` · ${c.raisedEth.toFixed(c.raisedEth < 1 ? 3 : 2)} ETH` : "")),
+          : h("div", { class: "hp-bar", title: `${pct.toFixed(1)}% of the curve filled` }, h("i", { style: { width: `${pct}%` } }), h("span", {}, pct < 0.05 ? "Just started" : `${pct.toFixed(pct < 10 ? 1 : 0)}% bonded`, c.raisedEth != null && c.raisedEth >= 0.0005 ? ` · ${c.raisedEth.toFixed(c.raisedEth < 1 ? 3 : 2)} ETH` : "")),
         h("div", { class: "hp-act" },
           h("a", { class: "btn hp-buy", href: `#/swap?in=eth&out=${c.token}`, onclick: stop, title: "Buy on Troya, through the Gate" },
             h("img", { src: "/img/logo-3d-128.png", alt: "", width: 16, height: 16 }), "Buy"),

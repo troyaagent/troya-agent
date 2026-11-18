@@ -143,6 +143,10 @@ const FIELDS = { "tweet.fields": "author_id,conversation_id,created_at,reference
 
 /** One mention of @Troyaagent, from the stream or the poll → the log entry (or null when it is not ours to answer). */
 const HELP_Q = /\b(launch|wallet|agent|token|coin|ticker|tax|buy|sell|fee|claim|bridge|eth|how|where|why|what|help|error|fail)\b|ローンチ|ウォレット|トークン|エージェント|購入|売却|どこ|どう|なぜ|cara|bagaimana|dimana|kenapa|gagal|dompet/i;
+// "let's connect", "let us talk about working together", collab and promo pitches under our posts: not answered on X
+// (owner, 18 Nov); a pitch that also carries a complaint or a question about Troya still gets its answer
+const PITCH = /\b(?:let'?s|lets|let\s+us)\s+(?:connect|talk|chat|collab(?:orate)?|work|partner|discuss|link\s+up)\b|\bwork(?:ing)?\s+together\b|\bcollab(?:oration|orate|s)?\b|\bpartnership\b|\bpromot(?:e|ion|ing)\b|\b(?:dm|inbox|pm)\s+(?:me|us)\b|\bcheck\s+(?:your|my)\s+dms?\b|\bconnect\s+with\s+(?:you|us)\b|\bopen\s+to\s+(?:collab|work|partner)/i;
+const ISSUE = /\b(?:fail(?:ed|s|ing)?|error|bug|broken|stuck|lost|missing|scam|rug|not\s+working|doesn'?t\s+work|can'?t|cannot|refund|how|why|where)\b/i;
 async function handleMention(t, { users, media, bot, m, L }) {
   if (!t?.id || handled.has(t.id)) return null;
   handled.add(t.id);
@@ -190,6 +194,7 @@ async function handleMention(t, { users, media, bot, m, L }) {
   }
   if (m === "off") entry.why = "AI replies are off";
   else if (!text || text.length < 3) entry.why = "nothing to answer";
+  else if (PITCH.test(text) && !ISSUE.test(text)) entry.why = "a connect or collab pitch: not answered";
   // people learning to launch or trade ask several questions in a row: guide them (owner, 18 Nov), still capped
   else if (recent >= (HELP_Q.test(text) ? 12 : 6)) entry.why = `${recent} answers to this account in 6 hours`;
   else {

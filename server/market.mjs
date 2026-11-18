@@ -734,7 +734,9 @@ export async function getRobinhoodTrades(address) {
   const a = lc(address);
   const pool = board.rows.get(a)?.pool || (await getRobinhoodToken(a)).token?.pool;
   if (!pool) return { trades: [], pool: null };
-  return memo(`rh:trades:${pool}`, 60_000, async () => {
+  // stale-while-revalidate: the last trades answer at once while a fresh read waits in the GeckoTerminal queue
+  const last = LAST.get(`t:${pool}`);
+  const fresh = memo(`rh:trades:${pool}`, 60_000, async () => {
     const t = await gecko(`pools/${pool}/trades`, { hi: true });
     const trades = (t.data || []).slice(0, 50).map((x) => {
       const v = x.attributes || {};
@@ -742,9 +744,14 @@ export async function getRobinhoodTrades(address) {
       return { t: Date.parse(v.block_timestamp || "") || null, side: buy ? "buy" : "sell", trader: v.tx_from_address, tx: v.tx_hash, usd: fnum(v.volume_in_usd),
         tokens: fnum(buy ? v.to_token_amount : v.from_token_amount), quote: fnum(buy ? v.from_token_amount : v.to_token_amount) };
     });
-    return { trades, pool, source: "GeckoTerminal", updatedAt: Date.now() };
+    const v = { trades, pool, source: "GeckoTerminal", updatedAt: Date.now() };
+    LAST.set(`t:${pool}`, v); if (LAST.size > 400) LAST.delete(LAST.keys().next().value);
+    return v;
   });
+  if (last) { fresh.catch(() => {}); return last; }
+  return fresh;
 }
+const LAST = new Map();   // last good trades / candles per pool, served while a refresh is queued
 
 // candles for a Robinhood token's main pool, in USD: [{time(sec), open, high, low, close, volume}]
 const GT_TF = { "5m": ["minute", 5], "15m": ["minute", 15], "1h": ["hour", 1], "4h": ["hour", 4], "1d": ["day", 1] };
@@ -753,7 +760,8 @@ export async function getRobinhoodCandles(address, interval = "1h", { bg = false
   if (!ADDR_RE.test(String(address || ""))) throw httpErr(400, "That is not a valid token address.");
   const iv = GT_TF[interval] ? interval : "1h";
   const a = lc(address);
-  return memo(`rh:candles:${a}:${iv}`, iv === "5m" || iv === "15m" ? 2 * 60_000 : 5 * 60_000, async () => {
+  const lastC = bg ? null : LAST.get(`c:${a}:${iv}`);
+  const freshC = memo(`rh:candles:${a}:${iv}`, iv === "5m" || iv === "15m" ? 2 * 60_000 : 5 * 60_000, async () => {
     let pool = board.rows.get(a)?.pool;
     if (!pool) pool = (await getRobinhoodToken(a)).token?.pool;
     if (!pool) throw httpErr(404, "No pool to chart for this token yet.");
@@ -761,8 +769,12 @@ export async function getRobinhoodCandles(address, interval = "1h", { bg = false
     const d = await gecko(`pools/${pool}/ohlcv/${tf}?aggregate=${agg}&limit=300&currency=usd&token=${a}`, { hi: !bg });
     const c = (d?.data?.attributes?.ohlcv_list || []).map((x) => ({ time: Number(x[0]), open: fnum(x[1]), high: fnum(x[2]), low: fnum(x[3]), close: fnum(x[4]), volume: fnum(x[5]) }))
       .filter((x) => x.close != null).sort((x, y) => x.time - y.time);
-    return { candles: c, interval: iv, source: "GeckoTerminal", unit: "USD", pool };
+    const v = { candles: c, interval: iv, source: "GeckoTerminal", unit: "USD", pool, updatedAt: Date.now() };
+    if (c.length) { LAST.set(`c:${a}:${iv}`, v); if (LAST.size > 400) LAST.delete(LAST.keys().next().value); }
+    return v;
   });
+  if (lastC) { freshC.catch(() => {}); return lastC; }
+  return freshC;
 }
 
 /* ---------------- tokenized stocks ---------------- */

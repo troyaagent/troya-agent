@@ -43,7 +43,7 @@ function cfg() {
 
 /* ---------- Coinbase's facilitator wants a short-lived JWT per call (the same claims as @coinbase/cdp-sdk) ---------- */
 const b64url = (b) => Buffer.from(b).toString("base64url");
-function cdpJwt(method, url) {
+export function cdpJwt(method, url) {
   const id = process.env.CDP_API_KEY_ID, secret = String(process.env.CDP_API_KEY_SECRET || "").replace(/\\n/g, "\n");
   if (!id || !secret) return null;
   const u = new URL(url), now = Math.floor(Date.now() / 1000);

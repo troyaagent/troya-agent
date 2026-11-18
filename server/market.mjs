@@ -985,7 +985,7 @@ export async function getSignals() {
 const COIN_SEARCH = new Map();
 const kindRank = (c) => (c.kind === "major" ? 0 : c.kind === "stock" ? 1 : 2);
 export async function searchCoins(q, limit = 12) {
-  const raw = String(q || "").trim().replace(/^\$/, "").slice(0, 40);
+  const raw = String(q || "").trim().replace(/^\$/, "").slice(0, 42);   // 42: a full 0x address must fit (it was cut to 40 and found nothing)
   limit = Math.max(1, Math.min(30, Number(limit) || 12));
   if (!raw) return { q: "", coins: [] };
   if (ADDR_RE.test(raw)) {

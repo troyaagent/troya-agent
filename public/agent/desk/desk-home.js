@@ -316,7 +316,7 @@ export async function mount(view, { go, ask: askDrawer }) {
     if (!lastSignals.length) { clear(sigBody, h("p", { class: "muted" }, "Nothing crosses the thresholds right now.")); return; }
     clear(sigBody, list.map((s) => h("div", { class: `sig ${s.kind}` },
       h("span", { class: "sig-k" }, { funding: "Funding", move: "Move", volume: "Volume", new: "New" }[s.kind] || s.kind),
-      h("div", { class: "sig-t" }, h("b", { class: "tok-link" }, s.coin ? coinIcon(s.coin, "sm") : s.address ? tokenIcon({ symbol: s.symbol, address: s.address, image: s.image }, "sm") : null, s.title), h("span", {}, s.detail)),
+      h("div", { class: "sig-t" }, h("b", { class: "tok-link" }, s.coin ? coinIcon(s.coin, "sm") : s.address ? tokenIcon({ symbol: s.symbol || String(s.title || "").match(/\$?([A-Za-z0-9]{2,12})/)?.[1], address: s.address, image: s.image }, "sm") : null, String(s.title || "").replace(/\b[a-z0-9]+:(?=[A-Z])/g, "")), h("span", {}, s.detail)),
       h("div", { class: "sig-a" },
         h("button", { class: "link", type: "button", onclick: () => watch(s) }, "Watch"),
         h("button", { class: "link", type: "button", onclick: () => ask(`${s.title}. ${s.detail} What does this mean and is there a trade here inside my limits?`) }, "Ask"),

@@ -620,9 +620,23 @@ export async function getRobinhoodTokens(opts = {}) {
 }
 
 // getRobinhoodToken(address) → {token, pons, links, sources}  (fast: board row or DexScreener + Pons read on chain)
+// the hub tokens (WETH, USDG) are left out of the coin board on purpose; their pages get a known profile at once instead
+// of the slow board / DexScreener / GeckoTerminal search (it took 20-76 s and ended in "not on the board")
+async function hubToken(a) {
+  const ethUsd = await getEthUsd().catch(() => null);
+  const usdg = a === lc(RH.usdg);
+  const token = { address: a, symbol: usdg ? "USDG" : "WETH", name: usdg ? "Global Dollar" : "Wrapped Ether", decimals: usdg ? 6 : 18, hub: true,
+    priceUsd: usdg ? 1 : ethUsd, priceEth: usdg ? (ethUsd ? 1 / ethUsd : null) : 1, launchpad: "other", tradable: true, pools: [],
+    image: usdg ? "/img/logos/usdg.png" : "/img/logos/eth-color.svg",
+    description: usdg ? "Global Dollar (USDG), the Paxos-issued dollar stablecoin used as a base pair across Robinhood Chain. Its issuer can freeze and pause it."
+      : "Wrapped Ether (WETH): ETH as a token, always 1:1 with ETH, used by pools on Robinhood Chain.", website: usdg ? "https://www.paxos.com/usdg" : null };
+  return { token, pons: null, ethUsd, links: { pons: null, dexscreener: `https://dexscreener.com/robinhood/${a}`, geckoterminal: `https://www.geckoterminal.com/robinhood/tokens/${a}`, explorer: `https://robinhoodchain.blockscout.com/token/${a}` },
+    sources: ["Known token"], updatedAt: Date.now() };
+}
 export async function getRobinhoodToken(address) {
   if (!ADDR_RE.test(String(address || ""))) throw httpErr(400, "That is not a valid token address.");
   const a = lc(address);
+  if (a === lc(RH.usdg) || a === lc(RH.weth)) return memo(`rh:hub:${a}`, 60_000, () => hubToken(a));
   return memo(`rh:token:${a}`, 30_000, async () => {
     const ethUsd = await getEthUsd().catch(() => null);
     const [ds, ps, prof] = await Promise.allSettled([dsPairs([a]).then((x) => dsRows(x, ethUsd).get(a) || null), ponsState(a), ponsProfile(a)]);
@@ -647,6 +661,7 @@ export async function getRobinhoodToken(address) {
     }
     if (!row && !pons) throw httpErr(404, "This token is not on the Robinhood Chain board yet (no pool on GeckoTerminal or DexScreener, and not a Pons launch).");
     const token = row ? { ...row } : { address: a, name: "", symbol: "", launchpad: "pons", tradable: true, pools: [] };
+    if (!token.stock) { const sd = await Promise.race([import("./stocks.mjs").then((m) => m.stockDesk()).catch(() => null), new Promise((r) => setTimeout(() => r(null), 1500))]); if (sd?.assets?.some((x) => lc(x.address) === a)) token.stock = true; }
     { const hd = HOLDERS.get(a); if (hd?.count != null) { token.holders = hd.count; token.top10Pct = hd.top10; } }
     if (pons) { token.launchpad = "pons"; token.tradable = true; }
     if (curveLive && token.priceUsd == null) {

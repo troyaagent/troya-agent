@@ -154,26 +154,27 @@ async function flushDs(chain) {
 async function resolve(key, sourcesFn) {
   const hit = index.get(key);
   const now = Date.now();
-  if (hit && now - hit.t < (hit.file ? POS_TTL : NEG_TTL)) {
+  // a miss caused by an upstream error (timeout, 5xx) is retried after 10 minutes, a real "no image" after 6 h
+  if (hit && now - hit.t < (hit.file ? POS_TTL : hit.err ? 10 * 60_000 : NEG_TTL)) {
     if (!hit.file) return null;
     const f = path.join(DIR, hit.file);
     try { await fs.access(f); return f; } catch {}
   }
   if (inflight.has(key)) return inflight.get(key);
   const p = (async () => {
-    let file = null;
+    let file = null, err = false;
     try {
       for (const url of withIpfsMirrors(await sourcesFn())) {
-        const got = await download(url).catch(() => null);
+        const got = await download(url).catch(() => { err = true; return null; });
         if (!got) continue;
         file = `${key.replace(/[^a-zA-Z0-9]/g, "_")}.${got.ext}`;
         await fs.writeFile(path.join(DIR, file), got.buf);
         break;
       }
-    } catch {}
+    } catch { err = true; }
     // keep an old file if the refresh failed
     if (!file && hit?.file) { try { await fs.access(path.join(DIR, hit.file)); file = hit.file; } catch {} }
-    index.set(key, { t: Date.now(), file });
+    index.set(key, file ? { t: Date.now(), file } : { t: Date.now(), file: null, ...(err ? { err: true } : {}) });
     saveIndex();
     return file ? path.join(DIR, file) : null;
   })().finally(() => inflight.delete(key));
@@ -232,7 +233,7 @@ async function download(raw, hops = 0) {
   if (!addrs.length || addrs.some((x) => privateIp(x.address))) return null;
   const res = await fetch(url, { headers: UA, redirect: "manual", signal: AbortSignal.timeout(10000) });
   if (res.status >= 300 && res.status < 400 && res.headers.get("location") && hops < 3) return download(new URL(res.headers.get("location"), url).href, hops + 1);
-  if (!res.ok) return null;
+  if (!res.ok) { if (res.status >= 500 || res.status === 429) throw new Error(`upstream ${res.status}`); return null; }   // an outage, not "no image"
   const ct = String(res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
   const len = Number(res.headers.get("content-length") || 0);
   if (len > MAX_BYTES) return null;

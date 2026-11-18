@@ -31,9 +31,9 @@
       const s = c.steps || {};
       return `<tr><td>${when(c.startedAt)}</td>
         <td>${s.claim ? `${ethf(s.claim.eth)} ${tx(s.claim.hash, "tx")}` : '<span class="rec-na">–</span>'}</td>
-        <td>${s.buyback ? `${ethf(s.buyback.ethIn)} → ${big(s.buyback.troyaOut)} ${tx(s.buyback.hash, "tx")}` : '<span class="rec-na">–</span>'}</td>
-        <td>${s.burn ? `${big(s.burn.troya)} ${tx(s.burn.hash, "tx")}` : '<span class="rec-na">–</span>'}</td>
-        <td>${s.lock ? `${ethf(s.lock.eth)} + ${big(s.lock.troya)} · #${esc(s.lock.tokenId)} ${tx(s.lock.hash, "tx")}` : '<span class="rec-na">–</span>'}</td></tr>`;
+        <td>${s.buyback ? `${ethf(s.buyback.ethIn)} → ${big(s.buyback.troyaOut)} $TROYA ${tx(s.buyback.hash, "tx")}` : '<span class="rec-na">–</span>'}</td>
+        <td>${s.burn ? `${big(s.burn.troya)} $TROYA ${tx(s.burn.hash, "tx")}` : '<span class="rec-na">–</span>'}</td>
+        <td>${s.lock ? `${ethf(s.lock.eth)} + ${big(s.lock.troya)} $TROYA · #${esc(s.lock.tokenId)} ${tx(s.lock.hash, "tx")}` : '<span class="rec-na">–</span>'}</td></tr>`;
     }).join("");
   }
   function locked(d) {
@@ -47,8 +47,12 @@
   function burns(d) {
     const el = $("[data-fw-burns]");
     $("[data-fw-burnlead]").textContent = `${big(d.burned.byCreator)} $TROYA burned by the creator wallet so far, ${d.burned.viaBurn > 0 ? "with the token's burn(), which takes it out of the total supply" : "sent to 0x…dEaD"}.`;
-    el.innerHTML = d.burned.burns.length ? d.burned.burns.map((b) => `<tr><td>${n(b.block)}</td><td>${big(b.troya)} $TROYA</td><td>${tx(b.hash, short(b.hash))}</td></tr>`).join("")
+    const row = (b) => `<tr><td>${n(b.block)}</td><td>${big(b.troya)} $TROYA</td><td>${tx(b.hash, short(b.hash))}</td></tr>`;
+    const all = d.burned.burns || [], FIRST = 10;
+    el.innerHTML = all.length ? all.slice(0, FIRST).map(row).join("")
+      + (all.length > FIRST ? `<tr class="rec-more"><td colspan="3"><button type="button" class="btn-line" data-fw-more>Show all ${all.length} burns</button></td></tr>` : "")
       : '<tr><td colspan="3" class="rec-empty">No burns yet.</td></tr>';
+    el.querySelector("[data-fw-more]")?.addEventListener("click", () => { el.innerHTML = all.map(row).join(""); });
     const a = (addr, t) => `<a class="ulink" href="${AD}${esc(addr)}" target="_blank" rel="noopener">${t} ${short(addr)}</a>`;
     $("[data-fw-contracts]").innerHTML = `Addresses: ${a(d.token, "$TROYA")} · ${a(d.creator, "creator wallet")} · ${a(d.escrow, "Pons fee escrow")} · ${a(d.positionManager, "Uniswap v4 PositionManager")}.`;
   }

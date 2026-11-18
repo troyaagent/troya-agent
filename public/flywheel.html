@@ -50,7 +50,7 @@
     <canvas class="rain" data-rain aria-hidden="true"></canvas>
     <span class="eyebrow"><i class="dot"></i>$TROYA flywheel</span>
     <h1 id="ph" class="words" data-words>The flywheel</h1>
-    <p class="lead rv">Creator fees on $TROYA buy $TROYA back, burn it, and lock liquidity in the pool where nobody can remove it. Every cycle is signed by the creator wallet, and every number on this page is read back from the chain.</p>
+    <p class="lead rv">A flywheel cycle takes a share of the creator fees on $TROYA, buys $TROYA back, burns part of it and locks the rest as liquidity nobody can remove. The burn campaign of 17 Nov 2026 has ended and no cycle is running now. Every cycle and every number on this page is read back from the chain.</p>
   </section>
 
   <section class="ip" aria-labelledby="st-h">
@@ -66,12 +66,12 @@
     <div class="eyebrow-line"><span>01 / One cycle</span></div>
     <div class="split" style="margin-bottom:40px">
       <h2 id="how-h" class="h2 words" data-words>Four signatures</h2>
-      <p class="lead rv">The creator wallet signs each step in its own browser wallet. Troya builds the transactions and checks them; it holds no key and moves nothing.</p>
+      <p class="lead rv">Each step is signed by the creator wallet: by hand in its own browser wallet, or by the automatic mode, which keeps the creator key encrypted on the server and can sign only these four calls. Troya builds and checks every transaction, and each one is read back from the chain.</p>
     </div>
-    <div class="steps">
+    <div class="steps four">
       <article class="step rv"><span class="n">01</span><h3>Claim</h3><p>The creator's share of every $TROYA trade (70% of the 1% Pons fee plus the 1.9% creator tax) is credited to the creator wallet in the Pons fee escrow. The cycle claims it.</p></article>
       <article class="step rv"><span class="n">02</span><h3>Buy back</h3><p>Part of the ETH buys $TROYA in its pool, through Troya Gate first: route, price impact, a simulated swap and a test sell.</p></article>
-      <article class="step rv"><span class="n">03</span><h3>Burn</h3><p>The bought $TROYA is burned with the token's own burn(): the total supply goes down, on chain, for good.</p></article>
+      <article class="step rv"><span class="n">03</span><h3>Burn</h3><p>Part of the bought $TROYA is burned with the token's own burn(): the total supply goes down, on chain, for good.</p></article>
       <article class="step rv"><span class="n">04</span><h3>Lock liquidity</h3><p>The rest goes into the $TROYA pool as a full-range Uniswap v4 position minted straight to 0x…dEaD. No one holds that NFT, so no one can ever take the liquidity out.</p></article>
     </div>
   </section>

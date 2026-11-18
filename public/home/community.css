@@ -4,7 +4,7 @@
 .cm-kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .cm-kinds label { position: relative; cursor: pointer; }
 .cm-kinds input { position: absolute; opacity: 0; pointer-events: none; }
-.cm-kinds span { display: grid; gap: 6px; height: 100%; padding: 16px 18px; border-radius: 16px; border: 1px solid var(--line-2); background: var(--panel); transition: border-color .25s, background .25s, transform .3s; }
+.cm-kinds span { display: grid; gap: 6px; align-content: start; height: 100%; padding: 16px 18px; border-radius: 16px; border: 1px solid var(--line-2); background: var(--panel); transition: border-color .25s, background .25s, transform .3s; }
 .cm-kinds b { font: 700 15px/1.1 var(--sans); }
 .cm-kinds small { font: 400 13px/1.4 var(--sans); color: var(--muted); }
 .cm-kinds label:hover span { transform: translateY(-1px); border-color: var(--line-3); }
@@ -64,4 +64,11 @@
   .cm-row { grid-template-columns: 1fr; }
   .cm-links li { flex-direction: column; align-items: flex-start; }
   .cm-copy code { text-align: left; }
+}
+
+/* bot commands keep their real lowercase spelling (users type them) */
+.step h3.cmd-h { text-transform: none; font-family: var(--mono); letter-spacing: 0; }
+@media (max-width: 860px) {
+  .cm-field textarea, .cm-field input { font-size: 16px; }   /* iPhone Safari zooms on focus below 16px */
+  .cm-send, .cm-actions .cm-tg { width: 100%; justify-content: center; }
 }

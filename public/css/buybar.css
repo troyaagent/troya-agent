@@ -46,7 +46,7 @@
 .bb-ca { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; width: 100%; margin-top: 6px; padding: 10px 12px; border-radius: 12px; cursor: pointer;
   border: 1px dashed var(--line-2, var(--line)); background: none; color: inherit; text-align: left; }
 .bb-ca span { font: 700 10px/1 var(--sans, system-ui); letter-spacing: .12em; color: var(--accent); }
-.bb-ca code { font: 400 11px/1.35 var(--mono, ui-monospace, monospace); word-break: break-all; opacity: .85; }
+.bb-ca code { font: 400 11px/1.35 var(--mono, ui-monospace, monospace); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; opacity: .85; }
 .bb-ca b { font: 700 10px/1 var(--sans, system-ui); letter-spacing: .1em; text-transform: uppercase; }
 .bb-ca:hover { border-color: var(--accent); }
 

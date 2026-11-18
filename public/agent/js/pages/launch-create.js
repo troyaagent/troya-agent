@@ -223,7 +223,7 @@ export async function mount(view, ctx) {
           ["Curve", `graduates at ${num(b.config.graduationEth, 2)} ETH raised`],
           ["Trading fee", p.split ? "1% (you earn 0.6% of volume, Troya 0.1%)" : "1% (you earn 0.7% of volume)"],
           ["Creator tax", b.creatorTaxBps ? `${b.creatorTaxBps / 100}%, all to you` : "None"],
-          ["Fee recipient", p.split ? h("span", {}, "Troya fee splitter ", h("span", { class: "mono" }, short(p.recipient)), ` → ${(100 - p.troyaBps / 100).toFixed(2)}% to you`) : `${short(wallet.address)} (you)`],
+          ["Fee recipient", p.split ? h("span", {}, "Troya fee splitter ", h("span", { class: "mono" }, short(p.recipient)), ": pays you 0.6% of volume", b.creatorTaxBps ? " plus all your tax" : "", ", Troya 0.1%") : `${short(wallet.address)} (you)`],
           ["Launch fee", `${tiny(fromRaw(b.launchFeeWei))} ETH`],
           ["You send", `${tiny(fromRaw(b.value))} ETH + network fee`],
         ],

@@ -98,7 +98,7 @@ function walletMenu() {
 function openSettings() {
   const p = prefs.get();
   const slip = h("input", { class: "input", type: "number", min: "0.1", max: "20", step: "0.1", value: p.slippage, style: { width: "90px" } });
-  const lang = h("select", { class: "select" }, [["auto", "Same as my message"], ["en", "English"], ["id", "Bahasa Indonesia"]].map(([v, t]) => h("option", { value: v, selected: p.lang === v }, t)));
+  const lang = h("select", { class: "select" }, [["auto", "Same as my message"], ["en", "English"]].map(([v, t]) => h("option", { value: v, selected: p.lang === v }, t)));
   const m = modal({ title: "Settings", body: h("div", { style: { display: "grid", gap: "14px" } },
     h("label", { class: "field" }, h("span", {}, "Default swap slippage (%)"), slip),
     h("label", { class: "field" }, h("span", {}, "Assistant reply language"), lang),

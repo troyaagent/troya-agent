@@ -154,7 +154,7 @@ function mountChat(box, ctx) {
     try {
       const guest = !wallet.session;
       const prior = guest ? guestLog.get().slice(-8) : undefined;
-      await stream("assistant/stream", { message: text, lang: ctx.prefs.get().lang, slippage: ctx.prefs.get().slippage, ...(guest ? { history: prior } : {}) }, (type, data) => {
+      await stream("assistant/stream", { message: text, lang: ctx.prefs.get().lang === "en" ? "en" : "auto", slippage: ctx.prefs.get().slippage, ...(guest ? { history: prior } : {}) }, (type, data) => {
         if (type === "status") status.lastChild.textContent = data.text;
         else if (type === "tool") tools.append(h("span", { class: `ag-tool ${data.ok ? "" : "bad"}` }, icon(data.ok ? "check" : "close"), data.name));
         else if (type === "text") { acc += data.delta; body.innerHTML = md(acc); el.scrollIntoView({ block: "end" }); }

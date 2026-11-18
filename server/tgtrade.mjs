@@ -95,6 +95,20 @@ async function walletText(owner) {
 }
 
 // the trade card: the Agent Wallet's own Gate on a 0.01 ETH buy, the curve, what you hold, and the buttons
+// what each trade here really moved (the Agent Wallet's balances read before and after), per wallet and coin, so the card
+// can show the result of a trade and the running profit or loss (owner, 18 Nov: "informasi keuntungan kerugian")
+const LEDGER = "tg-trades.json";
+async function balOf(addr, token) {
+  const b = await getBalances(addr, [token]);
+  const t = b.balances.find((x) => x.address !== "native" && x.address.toLowerCase() === token.toLowerCase());
+  return { eth: Number(b.balances.find((x) => x.address === "native")?.amount || 0), tok: t ? Number(t.amount) : 0 };
+}
+async function ledgerOf(owner, token) {
+  if (!STORE) return null;
+  const l = (await STORE.readJson(LEDGER, [])).filter((x) => x.owner === owner.toLowerCase() && x.token === token.toLowerCase());
+  if (!l.length) return null;
+  return { spent: l.reduce((a, x) => a + (x.ethIn || 0), 0), back: l.reduce((a, x) => a + (x.ethOut || 0), 0), trades: l.length };
+}
 // a coin this wallet launched through Troya (its creator may buy it while the curve is empty)
 async function launchedBy(owner, token) {
   if (!STORE) return null;
@@ -121,6 +135,20 @@ async function card(chat, owner, token) {
   lines.push(`<code>${token}</code>`);
   lines.push(`\nAgent Wallet: ${eth ? fnum(Number(eth.amount)) : "–"} ETH${heldN > 0 ? ` · holds ${fnum(heldN)} $${esc(sym)}` : ""}`);
   if (mine) lines.push("<b>Your coin.</b> You launched it through Troya, so its empty curve does not lock your buy; every other Gate check still applies.");
+  // your trades of this coin here: ETH out, ETH back, what you still hold (valued at a sell quote), profit or loss
+  const led = await ledgerOf(owner, token).catch(() => null);
+  if (led) {
+    const worth = heldN > 0 ? await quoteSwap({ tokenIn: token, tokenOut: "ETH", amountIn: heldN, slippagePct: 5 }).then((x) => Number(x.amountOut) || 0).catch(() => 0) : 0;
+    const pnl = led.back + worth - led.spent, pct = led.spent > 0 ? (pnl / led.spent) * 100 : 0;
+    lines.push(`Your trades here: ${fnum(led.spent)} ETH in, ${fnum(led.back)} ETH back${heldN > 0 ? `, holding ~${fnum(worth)} ETH` : ""} · <b>${pnl >= 0 ? "+" : "−"}${fnum(Math.abs(pnl))} ETH (${pnl >= 0 ? "+" : "−"}${Math.abs(pct).toFixed(1)}%)</b>`);
+  }
+  let feeEth = 0;
+  if (mine) {
+    const f = await import("./launch.mjs").then((L) => L.creatorFees(owner)).catch(() => null);
+    const c = f?.coins?.find((x) => String(x.token).toLowerCase() === token.toLowerCase());
+    feeEth = c ? Number(c.yoursEth) || 0 : 0;
+    lines.push(`Creator fees waiting for you: <b>${feeEth > 0 ? fnum(feeEth) : "0"} ETH</b>${feeEth > 0 ? " (claim them on the Creator desk with your own wallet)" : " (0.7% of every trade's volume, claimable on the Creator desk)"}`);
+  }
   if (canBuy && (!eth || Number(eth.amount) < Number(BUYS[0]) * 1.05)) lines.push("Top up first: /wallet shows your Agent Wallet address.");
   lines.push(canBuy ? `Pick an amount, then confirm. Slippage ${slipFor(chat, "buy")}%. The Gate runs again before it sends.` : "Buying is locked while a check fails.");
   const rows = [];
@@ -134,6 +162,7 @@ async function card(chat, owner, token) {
   const cur = slip.get(String(chat));
   rows.push(SLIPS.map((s) => ({ text: `${cur === s ? "✓ " : ""}Slip ${s}%`, callback_data: issue({ ...base, step: "slip", slip: s }, PICK_TTL) })));
   rows.push([{ text: "Refresh", callback_data: issue({ ...base, step: "refresh" }, PICK_TTL) }, { text: "Full check in Troya", url: `${SITE}/agent#/swap?in=eth&out=${token}` }]);
+  if (mine) rows.push([{ text: feeEth > 0 ? `Claim ${fnum(feeEth)} ETH on Creator desk` : "Creator desk", url: `${SITE}/agent#/creator` }]);
   rows.push([{ text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${token}` }, { text: "Chart", url: `${SITE}/agent#/token/${token}` }]);
   return { text: lines.join("\n"), markup: { inline_keyboard: rows } };
 }
@@ -233,6 +262,8 @@ export async function handleCallback(cq, tg) {
         params = { tokenIn: p.token, tokenOut: "ETH", amountIn: Number(trunc(formatUnits((BigInt(h.raw) * BigInt(p.pct)) / 100n, h.decimals))), slippagePct: slipFor(p.chat, "sell") };
       }
       if (!(params.amountIn > 0)) throw new Error("Nothing to sell.");
+      const awx = await getAgentWallet(p.owner);
+      const before = await balOf(awx.address, p.token).catch(() => null);
       const r = await executeForUser(p.owner, { kind: "swap", params, rationale: `Telegram: confirmed ${p.act} in private chat`, source: "telegram" });
       let out;
       if (r.blocked) out = `<b>Not sent.</b> ${esc(r.summary)}\n${r.reasons.map((x) => "· " + esc(String(x).slice(0, 160))).join("\n")}`;
@@ -241,6 +272,19 @@ export async function handleCallback(cq, tg) {
         const steps = r.result?.steps || [], last = steps[steps.length - 1] || {};
         const st = last.status === "confirmed" ? "Done" : last.status === "reverted" ? "Reverted on chain" : "Sent, waiting for the chain";
         out = `<b>${st}.</b> ${esc(r.summary)}${last.hash ? `\n<a href="${SCAN}/tx/${last.hash}">${short(last.hash)}</a>` : ""}`;
+        // the real result, from the Agent Wallet's balances (a buy costs exactly its amount; a sale's ETH is what arrived)
+        if (last.status === "confirmed" && before) {
+          const after = await balOf(awx.address, p.token).catch(() => null);
+          if (after) {
+            const ethIn = p.act === "buy" ? Number(params.amountIn) : 0;
+            const ethOut = p.act === "sell" ? Math.max(0, after.eth - before.eth) : 0;
+            const tok = after.tok - before.tok;
+            out += p.act === "buy" ? `\nGot ${fnum(Math.abs(tok))} $${esc(p.sym)} for ${fnum(ethIn)} ETH.` : `\nSold ${fnum(Math.abs(tok))} $${esc(p.sym)} for ${fnum(ethOut)} ETH.`;
+            if (STORE) await STORE.update(LEDGER, [], (l) => [...l, { owner: p.owner.toLowerCase(), token: p.token.toLowerCase(), side: p.act, ethIn, ethOut, tok, hash: last.hash || null, at: Date.now() }].slice(-5000)).catch(() => {});
+            const led = await ledgerOf(p.owner, p.token).catch(() => null);
+            if (led && after.tok <= 0) { const pnl = led.back - led.spent; out += `\nAll sold. Result: <b>${pnl >= 0 ? "+" : "−"}${fnum(Math.abs(pnl))} ETH (${pnl >= 0 ? "+" : "−"}${led.spent > 0 ? Math.abs((pnl / led.spent) * 100).toFixed(1) : "0.0"}%)</b> over ${led.trades} trades.`; }
+          }
+        }
       }
       const again = { inline_keyboard: [[{ text: "Refresh", callback_data: issue({ ...p, step: "refresh" }, PICK_TTL) }, { text: "Journal in Troya", url: `${SITE}/agent#/agent/wallet` }]] };
       await edit(out, again);

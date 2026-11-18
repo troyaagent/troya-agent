@@ -12,6 +12,7 @@
 !/mcp/
 !/cli/
 !/rail/
+!/acp/
 !/contracts/
 /contracts/lib/
 /contracts/out/

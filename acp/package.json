@@ -1,0 +1,12 @@
+{
+  "name": "troya-acp-seller",
+  "private": true,
+  "type": "module",
+  "description": "Troya Gate as a Virtuals ACP seller agent: other agents hire it, pay in USDC through ACP escrow, get the signed Gate check",
+  "scripts": { "start": "node seller.mjs" },
+  "dependencies": {
+    "@virtuals-protocol/acp-node-v2": "0.1.15",
+    "@account-kit/infra": "^4.84.1",
+    "viem": "^2.47.0"
+  }
+}

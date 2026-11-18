@@ -17,7 +17,7 @@
 //   POST /api/gate/v1/admin/settings        admins: { enabled, priceUsdg, freePerDay, holderFreePerDay, anonPerDay }
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
+import { randomBytes, createCipheriv, createDecipheriv, timingSafeEqual } from "node:crypto";
 import { Wallet, verifyMessage, getAddress, isAddress, keccak256, toUtf8Bytes } from "ethers";
 import { HttpError } from "./api.mjs";
 import { getSession } from "./auth.mjs";
@@ -181,6 +181,18 @@ async function runCheck(token, { amountEth, from, withAssay }) {
   return { attested, hash, signature: await w.signMessage(attestMessage(hash)), attestor: w.address };
 }
 
+/** The same fresh, signed check for callers that are paid elsewhere: x402 (USDC on Base, settled only after the check
+ *  ran) and Virtuals ACP (the buyer's USDC sits in ACP's escrow). via names where it was paid, for the totals. */
+export async function signedCheck(token, { amountEth, withAssay = true, via = "x402" } = {}) {
+  if (!isAddress(String(token || ""))) throw new HttpError(400, "That is not a token address on Robinhood Chain.");
+  const out = await runCheck(token, { amountEth, withAssay });
+  const k = via === "acp" ? "acp" : "x402";
+  await store.update(FILE, {}, (d) => { d.stats ||= { checks: 0, free: 0, paid: 0, deposits: 0, usdg: 0 }; d.stats.checks++; d.stats[k] = (d.stats[k] || 0) + 1; return d; }).catch(() => {});
+  return out;
+}
+const LOCAL = /^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/;
+const keyOk = (got) => { const k = process.env.GATE_INTERNAL_KEY || ""; const g = String(got || ""); return k.length >= 24 && g.length === k.length && timingSafeEqual(Buffer.from(g), Buffer.from(k)); };
+
 /** A paid check for callers that are already identified (the tool registry: API token or session, else the IP). */
 export async function paidCheck({ address, ip, token, amountEth, assay = true }) {
   if (!isAddress(String(token || ""))) throw new HttpError(400, "That is not a token address on Robinhood Chain.");
@@ -254,6 +266,14 @@ export async function register(r, ctx) {
       return { ...out, paid: { ...paid, wallet: id.address ? getAddress(id.address) : null, via: id.via } };
     } catch (e) { await refund().catch(() => {}); throw e.status ? e : new HttpError(502, `The check could not run: ${e.message}`); }
   }, { weight: 4, perMin: 60 });
+
+  // the Virtuals ACP seller (acp/seller.mjs, same server): the job is paid in ACP's escrow, so no free tier and no
+  // credit here. Only from this machine and only with GATE_INTERNAL_KEY; anything else gets a plain 404.
+  r.get("/api/gate/v1/internal/check/:token", async ({ req, params, query, ip }) => {
+    if (!LOCAL.test(ip) || !keyOk(req.headers["x-internal-key"])) throw new HttpError(404, "Not found");
+    try { return await signedCheck(params.token, { amountEth: query.amountEth, withAssay: query.assay !== "0", via: "acp" }); }
+    catch (e) { throw e.status ? e : new HttpError(502, `The check could not run: ${e.message}`); }
+  }, { weight: 1 });
 
   r.get("/api/gate/v1/credits/:address", async ({ params }) => {
     if (!isAddress(params.address)) throw new HttpError(400, "That is not a wallet address.");

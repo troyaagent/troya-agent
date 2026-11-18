@@ -35,6 +35,17 @@ Troya's attestor. This folder is the seller program. It runs on the Troya server
    attested result, its hash, the signature and the attestor address.
 4. If the check cannot run after three tries, the submission says so and asks the buyer to reject the job. A rejected job returns the escrow to the buyer.
 
+## First job per wallet and chain
+
+Virtuals turns each agent wallet into a smart wallet (an EIP-7702 authorization to `0x77021100bD87b7008E5E1989d0eB38555d0d0000`)
+the first time it acts on a chain. With the signer policy "Virtuals Only" that one authorization needs a manual approval:
+the SDK logs `Manual approval required. Approve at: https://app.virtuals.io/wallet/approve-transaction?id=…` and waits
+5 minutes. The owner opens the link and clicks Sign Authorization. After that, jobs on that chain run without approvals.
+Done for Troya Gate on Base on 19 Nov 2026 (first job 83003 completed, 0.009 USDC received after the ACP fee).
+Robinhood Chain still needs its one approval at the first job there.
+
+`test-buyer.mjs` runs that end-to-end test from the "Troya Test Buyer" agent (`~/.config/troya/acp-buyer.env`).
+
 ## Run it
 
 ```bash

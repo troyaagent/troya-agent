@@ -25,7 +25,7 @@ async function build() {
     store ? store.readJson("sentry.json", {}).catch(() => ({})) : {},
   ]);
   const commits = (recent || []).map((c) => ({
-    title: String(c.commit?.message || "").split("\n")[0].slice(0, 160),
+    title: ((t) => (t.length > 140 ? t.slice(0, 140).replace(/[\s,;:(]+\S*$/, "") + "…" : t))(String(c.commit?.message || "").split("\n")[0]),
     at: Date.parse(c.commit?.committer?.date || c.commit?.author?.date || "") || null,
     url: c.html_url || null,
   })).filter((c) => c.title && c.at);

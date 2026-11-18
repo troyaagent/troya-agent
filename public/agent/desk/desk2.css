@@ -1164,8 +1164,10 @@ body { touch-action: manipulation; }
 .hp-tag.fire { color: #6fd39a; border-color: rgba(111, 211, 154, .45); background: rgba(111, 211, 154, .1); }
 .hp-tag.fire.all { color: #f5c84a; border-color: rgba(245, 200, 74, .5); background: rgba(245, 200, 74, .1); }
 .hp-tag.fire svg { fill: currentColor; }
-.hp-tag.horse { padding: 0 5px; border-color: rgba(142, 223, 245, .5); background: rgba(142, 223, 245, .1); }
-.hp-tag.horse img { width: 15px; height: 15px; object-fit: contain; filter: drop-shadow(0 0 2px rgba(142, 223, 245, .5)); }
+/* the dev holds $TROYA: the bare Troya horse in baby blue, no pill around it (owner, 18 Nov) */
+.hp-tag.horse { padding: 0; border: 0; background: none; height: 22px; }
+.hp-horse-ic { display: block; width: 20px; height: 20px; background: #89cff0; -webkit-mask: url(/img/logo.svg) center / contain no-repeat; mask: url(/img/logo.svg) center / contain no-repeat; }
+html[data-theme="light"] .hp-horse-ic { background: #3d9fd6; }
 .hp-tag.gold { color: #f2c26b; border-color: rgba(242, 194, 107, .45); }
 .hp-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .hp-sym { font-size: 17px; letter-spacing: .01em; white-space: nowrap; }

@@ -114,7 +114,7 @@ export async function mount(view, ctx) {
     // the dev holds 1M $TROYA: the Troya horse
     if (c.devHolder) {
       const amt = c.devTroya >= 1e6 ? `${(c.devTroya / 1e6).toFixed(2).replace(/\.?0+$/, "")}M` : compact(c.devTroya || 0, 0);
-      tags.push(tipOn(h("span", { class: "hp-tag horse ic" }, h("img", { src: "/img/logo-3d-128.png", alt: "" })), "Dev holds $TROYA",
+      tags.push(tipOn(h("span", { class: "hp-tag horse" }, h("i", { class: "hp-horse-ic" })), "Dev holds $TROYA",
         `The creator holds ${amt} $TROYA${c.keepsAll ? " and keeps the whole creator fee on this coin" : ""}.`, "blue"));
     }
     const go = () => { location.hash = `#/token/${c.token.toLowerCase()}`; };

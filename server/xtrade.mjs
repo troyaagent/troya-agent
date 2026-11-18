@@ -1,8 +1,9 @@
 // V6 F29 · Trade on X: buy or sell a coin by posting to @Troyaagent; the poster's Agent Wallet trades through Troya Gate.
 //   @Troyaagent buy 0.01 $TICKER          @Troyaagent buy 0.01 ETH of 0x…          @Troyaagent buy $TICKER for 0.01 ETH
 //   @Troyaagent sell 50% $TICKER          @Troyaagent sell all 0x…                 @Troyaagent sell half of $TICKER
-// Rules (owner, 17 Nov: holders first):
-//   · mode in x-state.json "trade": off / test (admin wallets) / holders (1,000,000 $TROYA) / live (everyone)
+// Rules (owner, 18 Nov): everyone may buy and sell $TROYA from X, a way in to holding it; holders of 1,000,000 $TROYA
+// may trade any coin. "$TROYA" always means the official contract (copies share the ticker).
+//   · mode in x-state.json "trade": off / test (admin wallets) / holders (1,000,000 $TROYA only) / live (the rule above)
 //   · the X account is linked to a wallet, "Trade from X" is switched on for it, and it has an Agent Wallet
 //   · every trade is a normal Agent Wallet swap: Troya Gate, the wallet's caps, its policy and kill switch
 //   · buys from 0.0005 to MAX_BUY_ETH a post; a $TICKER several coins share is refused (post the address);
@@ -13,6 +14,7 @@ import { isAddress, getAddress, Interface } from "ethers";
 
 export const MAX_BUY_ETH = Number(process.env.X_TRADE_MAX_ETH || 0.5);
 export const MIN_BUY_ETH = 0.0005;
+export const TROYA_CA = String(process.env.TROYA_CA || "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074").toLowerCase();
 export const PER_DAY = 30;
 let store = null;
 
@@ -105,12 +107,19 @@ export async function fromX({ tweetId, authorId, text }) {
 
   // the coin: a contract address, or a ticker only one coin uses
   const tools = await import("./tools.mjs");
-  const isCa = isAddress(ask.token);
-  const t = await tools.resolveToken(ask.token).catch(() => null);
+  const isTroya = /^\$troya$/i.test(ask.token);
+  const isCa = isAddress(ask.token) || isTroya;
+  const t = await tools.resolveToken(isTroya ? TROYA_CA : ask.token).catch(() => null);
   if (!t || t.native) return { reply: notTraded(`Troya couldn't find ${isCa ? "that contract" : ask.token} on Robinhood Chain`, "post the coin's contract address") };
   if (!isCa && (t.sameSymbol || 1) > 1) return { reply: notTraded(`${t.sameSymbol} coins use ${ask.token}`, "post the coin's contract address instead of the ticker") };
   if (!isCa && lc(t.symbol) !== lc(ask.token.replace(/^\$/, ""))) return { reply: notTraded(`Troya found no coin called ${ask.token}`, "post the coin's contract address") };
   const ca = getAddress(t.address);
+  // live: without 1M $TROYA, Trade on X is for $TROYA itself; any other coin needs 1M (or the app)
+  if (mode === "live" && lc(ca) !== TROYA_CA) {
+    const hd = await isHolder(owner);
+    if (hd === null) return { reply: notTraded("Troya couldn't read your TROYA balance just now", "post again in a minute") };
+    if (!hd) return { reply: notTraded("without 1M TROYA, Trade on X is for TROYA itself", `hold 1M TROYA (wallet plus Agent Wallet) to trade any coin from X, or trade this one on troya.codes: ${SITE()}/agent#/swap?out=${lc(ca)}`) };
+  }
   const { tokenMeta, rpc } = await import("./robinhood.mjs");
   const meta = await tokenMeta(ca).catch(() => ({ symbol: t.symbol, decimals: 18 }));
   const sym = String(meta.symbol || t.symbol || "coin").replace(/[^A-Za-z0-9]/g, "").slice(0, 16) || "coin";

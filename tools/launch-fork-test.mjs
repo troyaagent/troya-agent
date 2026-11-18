@@ -305,6 +305,16 @@ ok(`F28 Creator desk, split coin: it said ${pc.yoursEth.toFixed(8)} ETH was wait
   await store.update("launch-prefs.json", {}, (m) => ({ ...m, [M.toLowerCase()]: { ...(m[M.toLowerCase()] || {}), trade: true } }));
   x = await X.fromX({ tweetId: "t8", authorId: "333", text: `@Troyaagent buy 0.002 ${CA}` }); assert.match(x.reply, /holders of 1M TROYA first/); tradeFix(x.reply);
   ok("Trade on X, holders mode: a wallet without 1M $TROYA is told it opens to holders first");
+  // live (owner, 18 Nov): $TROYA for everyone, any coin for holders of 1M $TROYA; "$TROYA" is the official contract
+  await store.update("x-state.json", {}, (st) => ({ ...st, trade: "live" }));
+  x = await X.fromX({ tweetId: "t9", authorId: "333", text: `@Troyaagent buy 0.002 ${CA}` });
+  assert.match(x.reply, /without 1M TROYA, Trade on X is for TROYA itself/); tradeFix(x.reply); assert.match(x.reply, /swap\?out=0x[0-9a-f]{40}/);
+  x = await X.fromX({ tweetId: "t10", authorId: "333", text: "@Troyaagent buy 0.0005 $TROYA" });
+  assert.ok(!/for TROYA itself|couldn't find|coins use/.test(x.reply || ""), x.reply);
+  console.log("   non-holder $TROYA:", x.reply);
+  x = await X.fromX({ tweetId: "t11", authorId: "111", text: `@Troyaagent buy 0.001 ${CA}` });
+  assert.ok(x.trade?.executed, x.reply);
+  ok("Trade on X, live: a non-holder may trade $TROYA (the ticker means the official contract), any other coin needs 1M $TROYA; a holder trades any coin");
 }
 
 /* ---------- a web launch (the creator's own wallet) recorded after a check on chain ---------- */

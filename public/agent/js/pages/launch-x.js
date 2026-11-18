@@ -137,8 +137,8 @@ export async function mount(view, ctx) {
     const p = st.prefs;
     const mode = p?.xTradeMode || "off";
     const status = { off: "Opens after its real-money test. You can switch it on now.", test: "In its real-money test: only Troya's own wallets can trade from X right now.",
-      holders: "Open to holders of 1,000,000 $TROYA first.", live: "Open to everyone." }[mode];
-    const BUY = "@Troyaagent buy 0.01 $TICKER", SELL = "@Troyaagent sell 50% $TICKER";
+      holders: "Open to holders of 1,000,000 $TROYA first.", live: "Open to everyone for $TROYA; holders of 1,000,000 $TROYA can trade any coin." }[mode];
+    const BUY = "@Troyaagent buy 0.01 $TROYA", SELL = "@Troyaagent sell 50% $TROYA";
     const ex = (t) => h("div", { class: "lx-tweet" }, h("span", { class: "mono" }, t), h("button", { class: "link", type: "button", onclick: () => copyText(t, "Copied") }, "Copy"));
     return h("section", { class: "panel lx-panel" },
       h("h2", {}, "Trade from X"),
@@ -147,7 +147,8 @@ export async function mount(view, ctx) {
       h("ul", { class: "lx-rules" },
         h("li", {}, "Also: \"buy 0.01 ETH of 0x…\", \"sell all $TICKER\", \"sell half of 0x…\". The post has to start with buy or sell; a question is never a trade."),
         h("li", {}, "Every trade runs through Troya Gate and your Agent Wallet caps, like a trade in the app. Buys from 0.0005 to 0.5 ETH a post."),
-        h("li", {}, "When several coins share a ticker, Troya asks for the contract address instead of guessing."),
+        h("li", {}, "Everyone can buy and sell $TROYA this way. With 1,000,000 $TROYA (wallet plus Agent Wallet) you can trade any coin on Robinhood Chain from X."),
+        h("li", {}, "$TROYA always means the official contract. For other coins, when several share a ticker, Troya asks for the contract address instead of guessing."),
         h("li", {}, "The ETH from a sale stays in your Agent Wallet. Troya replies in seconds with what it did, or with what to fix."),
         h("li", {}, "Uses the same linked X account and Agent Wallet as Launch from X.")),
       p ? h("button", { class: `btn${p.trade ? "" : " primary"}`, type: "button", disabled: !!st.busy || !wallet.session, onclick: run(p.trade ? "Switching off…" : "Switching on…", () => api.post("launch/prefs", { trade: !p.trade })) },
@@ -163,7 +164,7 @@ export async function mount(view, ctx) {
       h("span", { style: { display: "inline-flex", gap: "6px" } }, ["off", "test", "live"].map((m) => h("button", { class: `btn${m === mode ? " primary" : ""}`, type: "button", disabled: !!st.busy || m === mode,
         onclick: run("Saving…", () => api.post("x/launch", { launch: m })) }, m[0].toUpperCase() + m.slice(1))))));
     const xm = p.xTradeMode || "off";
-    const xl = { off: "Off: buy/sell posts get a not-open-yet reply.", test: "Test: only admin wallets can trade from X.", holders: "Holders: wallets with 1M $TROYA can trade from X.", live: "Live: everyone who switched it on can trade from X." }[xm];
+    const xl = { off: "Off: buy/sell posts get a not-open-yet reply.", test: "Test: only admin wallets can trade from X.", holders: "Holders: wallets with 1M $TROYA can trade from X.", live: "Live: everyone can trade $TROYA from X; holders of 1M $TROYA can trade any coin." }[xm];
     card.append(h("div", { class: "lx-coin" }, h("b", {}, "Trade on X"), h("span", { class: "muted" }, xl),
       h("span", { style: { display: "inline-flex", gap: "6px", flexWrap: "wrap" } }, ["off", "test", "holders", "live"].map((m) => h("button", { class: `btn${m === xm ? " primary" : ""}`, type: "button", disabled: !!st.busy || m === xm,
         onclick: run("Saving…", () => api.post("x/trade", { trade: m })) }, m[0].toUpperCase() + m.slice(1))))));

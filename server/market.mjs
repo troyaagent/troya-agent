@@ -214,7 +214,8 @@ export async function getHypeUsd() {
 }
 
 /* ---------------- Robinhood Chain board (GeckoTerminal) ---------------- */
-const HUBS = new Set([lc(RH.weth), lc(RH.usdg), "0x0000000000000000000000000000000000000000"]);
+const CBBTC = "0xcec185eb182c47d1ba1efc84e6959e18cd620be4";   // Coinbase Wrapped BTC: a major, kept off the coin board and launch lists
+const HUBS = new Set([lc(RH.weth), lc(RH.usdg), CBBTC, "0x0000000000000000000000000000000000000000"]);
 const board = { rows: new Map(), updatedAt: 0, refreshing: null, error: null, volumeUsd: 0, cursor: 0 };
 // The board is saved to data/board.json and read back at boot: a full pass takes minutes at GeckoTerminal's pace, so a
 // restart (or a 429 spell) would otherwise leave the Market with only the first page or nothing at all.
@@ -257,7 +258,7 @@ function poolRow(p, inc) {
     name: String(tok.name || baseSym).replace(/\s•\s*Robinhood Token$/, ""), symbol: tok.symbol || baseSym, image: goodImg(tok.image_url),
     priceUsd: fnum(a.base_token_price_usd), priceEth: fnum(a.base_token_price_native_currency),
     change24h: fnum(a.price_change_percentage?.h24), change1h: fnum(a.price_change_percentage?.h1),
-    volumeUsd: fnum(a.volume_usd?.h24) || 0, liquidityUsd: fnum(a.reserve_in_usd), mcapUsd: fnum(a.market_cap_usd) ?? fnum(a.fdv_usd), fdvUsd: fnum(a.fdv_usd),
+    volumeUsd: fnum(a.volume_usd?.h24) || 0, liquidityUsd: fnum(a.reserve_in_usd), mcapUsd: fnum(a.market_cap_usd) || fnum(a.fdv_usd) || null, fdvUsd: fnum(a.fdv_usd),
     buys: tx.buys || 0, sells: tx.sells || 0, createdAt: Date.parse(a.pool_created_at || "") || null,
   };
 }
@@ -451,7 +452,11 @@ export async function topHolders(a) {
       const tag = ad.metadata?.tags?.find((t) => t.tagType === "name")?.name;
       return { address: ad.hash, pct: supply ? (Number(x.value) / supply) * 100 : null, balance: Number(x.value) / 10 ** dec, contract: !!ad.is_contract, label: LABEL[h] || ad.name || tag || null };
     });
-    return { count: tok?.holders_count != null ? Number(tok.holders_count) : null, top10: items.slice(0, 10).reduce((s, x) => s + (x.pct || 0), 0), holders: items };
+    // "top 10" means wallets: pools, curves, lockers, the v4 PoolManager and burn addresses hold coins but are not holders
+    const NOT_WALLET = /pool|locker|pair|curve|router|vault|escrow|manager|bonding|burn/i;
+    for (const x of items) x.wallet = !(LABEL[lc(x.address)] || lc(x.address) === "0x8366a39cc670b4001a1121b8f6a443a643e40951" || (x.contract && NOT_WALLET.test(String(x.label || ""))));
+    const top10 = items.filter((x) => x.wallet).slice(0, 10).reduce((s, x) => s + (x.pct || 0), 0);
+    return { count: tok?.holders_count != null ? Number(tok.holders_count) : null, top10, top10Of: "wallets (pools, lockers and burn addresses left out)", holders: items };
   });
 }
 export async function fetchHolders(a, { hi = false } = {}) {
@@ -539,7 +544,7 @@ function publish(map, { full = false } = {}) {
   for (const [a, t] of board.rows) if (!next.has(a) && now - (t.seenAt || 0) < keep) next.set(a, t);
   board.rows = next;
   board.updatedAt = now;
-  board.volumeUsd = [...next.values()].reduce((s, t) => s + (t.volume24hUsd || 0), 0);
+  board.volumeUsd = [...next.values()].filter((t) => !t.stock).reduce((s, t) => s + (t.volume24hUsd || 0), 0);
   saveBoard();
 }
 let boardTimer = null;
@@ -586,10 +591,10 @@ export async function getRobinhoodTokens(opts = {}) {
   // are marked copyOf and kept out of Trending, Troya picks and "Busiest today"
   const bySym = new Map();
   for (const t of all) { const k = String(t.symbol || "").toLowerCase(); if (!k) continue; if (!bySym.has(k)) bySym.set(k, []); bySym.get(k).push(t); }
-  const holdersOf = (t) => HOLDERS.get(t.address)?.count ?? 0;
+  const holderCount = (t) => HOLDERS.get(t.address)?.count ?? 0;   // (named apart from the module-level holdersOf)
   for (const g of bySym.values()) {
     if (g.length < 2) { g[0].copyOf = null; continue; }
-    const orig = [...g].sort((a, b) => (holdersOf(b) - holdersOf(a)) || ((a.createdAt || Infinity) - (b.createdAt || Infinity)))[0];
+    const orig = [...g].sort((a, b) => (holderCount(b) - holderCount(a)) || ((a.createdAt || Infinity) - (b.createdAt || Infinity)))[0];
     for (const t of g) t.copyOf = t === orig ? null : orig.address;
   }
   if (o.q && ADDR_RE.test(o.q) && !board.rows.has(lc(o.q))) {
@@ -657,7 +662,7 @@ export async function getRobinhoodToken(address) {
     const ethUsd = await getEthUsd().catch(() => null);
     const [ds, ps, prof] = await Promise.allSettled([dsPairs([a]).then((x) => dsRows(x, ethUsd).get(a) || null), ponsState(a), ponsProfile(a)]);
     let row = board.rows.get(a) ? clean(board.rows.get(a)) : null;
-    if (!HOLDERS.has(a)) await Promise.race([fetchHolders(a, { hi: true }).catch(() => null), new Promise((r) => setTimeout(r, 4000))]);
+    { const hh = HOLDERS.get(a); if (!hh || Date.now() - (hh.at || 0) > 15 * 60_000) await Promise.race([fetchHolders(a, { hi: true }).catch(() => null), new Promise((r) => setTimeout(r, 4000))]); }
     const dsr = ds.status === "fulfilled" ? ds.value : null;
     const pons = ps.status === "fulfilled" && ps.value ? ponsPublic(ps.value) : null;
     // a Pons token still on its curve trades on the curve; a stray DEX pair thinner than the curve (e.g. a $0.40 dust
@@ -852,7 +857,7 @@ export async function getBrief() {
       const top = e.tokens[0];
       const gain = [...e.tokens].filter((t) => t.change24h != null && (t.volume24hUsd || 0) >= 20_000 && (t.liquidityUsd || 0) >= 20_000).sort((a, b) => b.change24h - a.change24h)[0];
       let text = `Robinhood Chain: ${top.symbol} leads 24h volume with ${fmtUsd(top.volume24hUsd || 0)} traded${top.change24h != null ? ` (${fmtPct(top.change24h)})` : ""}`;
-      if (e.volume24hUsd) text += `, out of ${fmtUsd(e.volume24hUsd)} across tracked pools`;
+      if (e.volume24hUsd) text += `, out of ${fmtUsd(e.volume24hUsd)} across coins on the board`;
       text += gain && gain.address !== top.address ? `; ${gain.symbol} is the strongest gainer among liquid coins at ${fmtPct(gain.change24h)}.` : ".";
       items.push({ text, refs: [{ address: top.address, label: top.symbol }, ...(gain ? [{ address: gain.address, label: gain.symbol }] : [])] });
     }
@@ -885,7 +890,7 @@ export async function getSignals() {
     if (gainR.status === "fulfilled") {
       for (const t of gainR.value.tokens) {
         if ((t.volume24hUsd || 0) >= 25_000 && (t.liquidityUsd || 0) >= 15_000 && t.change24h != null && t.change24h >= 50) {
-          out.push({ id: `v:${t.address}`, kind: "volume", address: t.address, value: Math.min(t.change24h, 5000) / 10, title: `${t.symbol} ${fmtPct(t.change24h)} on Robinhood Chain`,
+          out.push({ id: `v:${t.address}`, kind: "volume", address: t.address, symbol: t.symbol, image: t.image || null, value: Math.min(t.change24h, 5000) / 10, title: `${t.symbol} ${fmtPct(t.change24h)} on Robinhood Chain`,
             detail: `${fmtUsd(t.volume24hUsd)} traded in 24h on ${LAUNCHPADS[t.launchpad] || t.launchpad}.` });
         }
       }
@@ -894,7 +899,7 @@ export async function getSignals() {
       const hourAgo = Date.now() - 3600_000;
       for (const t of newR.value.tokens) {
         if (t.createdAt && t.createdAt >= hourAgo && (t.volume24hUsd || 0) >= 2_000) {
-          out.push({ id: `n:${t.address}`, kind: "new", address: t.address, value: t.volume24hUsd, title: `New on ${LAUNCHPADS[t.launchpad] || t.launchpad}: ${t.symbol}`,
+          out.push({ id: `n:${t.address}`, kind: "new", address: t.address, symbol: t.symbol, image: t.image || null, value: t.volume24hUsd, title: `New on ${LAUNCHPADS[t.launchpad] || t.launchpad}: ${t.symbol}`,
             detail: `Launched ${Math.max(1, Math.round((Date.now() - t.createdAt) / 60000))} min ago, ${fmtUsd(t.volume24hUsd)} traded so far.` });
         }
       }
@@ -933,8 +938,8 @@ export async function searchCoins(q, limit = 12) {
     const prev = out.get(a);
     out.set(a, prev ? { ...prev, ...Object.fromEntries(Object.entries(c).filter(([, v]) => v != null)), image: prev.image || c.image || null, liquidityUsd: Math.max(prev.liquidityUsd || 0, c.liquidityUsd || 0) || null } : { ...c, address: a });
   };
-  const hits = (sym, name) => String(sym || "").toLowerCase().includes(ql) || String(name || "").toLowerCase().includes(ql);
-  for (const [address, symbol, name] of [["native", "ETH", "Ether"], [RH.weth, "WETH", "Wrapped Ether"], [RH.usdg, "USDG", "Global Dollar"]])
+  const hits = (sym, name) => { const s = String(sym || "").toLowerCase(), n = String(name || "").toLowerCase(); if (s.length > 20 || n.length > 60) return false; return s.startsWith(ql) || n.includes(ql); };
+  for (const [address, symbol, name] of [["native", "ETH", "Ether"], [RH.weth, "WETH", "Wrapped Ether"], [RH.usdg, "USDG", "Global Dollar"], [CBBTC, "cbBTC", "Coinbase Wrapped BTC"]])
     if (hits(symbol, name)) add({ address, symbol, name, kind: "major" });
   for (const s of STOCKS) if (hits(s.symbol, s.name)) add({ address: s.address, symbol: s.symbol, name: String(s.name || "").replace(/\s•\s*Robinhood Token$/, ""), kind: "stock", image: IMAGES.get(lc(s.address)) || null });
   for (const t of board.rows.values()) if (hits(t.symbol, t.name))
@@ -975,7 +980,12 @@ export async function register(r) {
     const a = lc(query.address);
     if (!ADDR_RE.test(a)) throw httpErr(400, "That is not a valid token address.");
     const t = BS_KEY && !bsDown() ? await topHolders(a).catch(() => null) : null;
-    if (t) return { ...t, source: "Blockscout" };
+    if (t) {
+      // one number everywhere: the stats line and the Holders tab read the same count
+      HOLDERS.set(a, { count: t.count, top10: t.top10 != null ? +t.top10.toFixed(2) : null, at: Date.now() });
+      const row = board.rows.get(a); if (row) { row.holders = t.count; row.top10Pct = t.top10; }
+      return { ...t, source: "Blockscout" };
+    }
     // Blockscout paused or failing: the count and the top-10 share from GeckoTerminal, without the per-wallet list
     const g = await geckoHolders(a).catch(() => null);
     if (!g || g.count == null) throw httpErr(503, "Holder data is unavailable right now. Try again in a few minutes.");

@@ -66,7 +66,7 @@ export async function register(r, ctx) {
       const coin = await resolve(`c:${c}`, () => coinSources(c));
       return sendFile(res, coin || await stockFile(c));
     }
-    const file = await resolve(METAL[c] ? `cm:${c}` : `c:${c}`, () => coinSources(c));   // cm: a fresh key (XAU was cached as missing)
+    const file = await resolve(aliasOf(c) ? `ca:${c}` : `c:${c}`, () => coinSources(c));   // ca: a fresh key for aliased names (they were cached as missing)
     return file ? sendFile(res, file) : sendErr(res, 404, "No logo for this market");
   }, { weight: 0.2, perMin: 3000 });
 }
@@ -104,12 +104,15 @@ async function tokenSources(a) {
   } catch {}
   return out;
 }
-// metals: Lighter's XAU / XAG are Hyperliquid's GOLD / SILVER
-const METAL = { XAU: "xyz:GOLD", XAG: "xyz:SILVER", XPT: "xyz:PLATINUM" };
+// names Hyperliquid draws under another market id: Lighter's metals, wrapped spot tokens, pre-IPO and commodity perps
+const METAL = { XAU: "xyz:GOLD", XAG: "xyz:SILVER", XPT: "xyz:PLATINUM", XAUT0: "xyz:GOLD",
+  COPPER: "flx:COPPER", OPENAI: "vntl:OPENAI", ANTHROPIC: "vntl:ANTHROPIC", SOXL: "xyz:SOXL",
+  UFART: "FARTCOIN", FXRP: "XRP", HPENGU: "PENGU", WMNT: "MNT", UUUSPX: "SPX", XMRN: "XMR", UBTC: "BTC", UZEC: "ZEC", UENA: "ENA", UXPL: "XPL", UPUMP: "PUMP" };
+const aliasOf = (c) => METAL[c] || METAL[String(c).replace(/^[a-z0-9]+:/, "").replace(/_spot$/, "")] || null;
 function coinSources(c) {
   const base = "https://app.hyperliquid.xyz/coins/";
   const u = (x) => `${base}${encodeURIComponent(x)}.svg`;
-  const list = METAL[c] ? [u(METAL[c]), u(c)] : [u(c)];
+  const list = aliasOf(c) ? [u(aliasOf(c)), u(c)] : [u(c)];
   const bare = c.replace(/^[a-z0-9]+:/, "");
   if (bare !== c) list.push(u(bare));                                          // xyz:TSLA → TSLA
   const spot = bare.endsWith("_spot");

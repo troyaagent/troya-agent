@@ -320,7 +320,8 @@ body { touch-action: manipulation; }
 .lg-step { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 16px; padding: 20px 22px 20px 0; border-bottom: 1px solid var(--line); }
 .lg-step:nth-child(even) { padding-left: 22px; border-left: 1px solid var(--line); }
 .lg-n { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font: 600 15px/1 var(--mono); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
-.lg-step b { display: block; font: 650 17px/1.25 var(--sans); }
+.lg-step > div > b { display: block; font: 650 17px/1.25 var(--sans); }
+.lg-step > div > span b { color: var(--fg); font-weight: 600; }
 .lg-step > div > span { display: block; margin-top: 6px; font: 400 14px/1.55 var(--sans); color: var(--muted); }
 .lg-step .lg-n { display: grid; place-items: center; margin: 0; font: 600 15px/1 var(--mono); color: var(--accent); }
 .lg-cta { margin: 22px 0 0; }

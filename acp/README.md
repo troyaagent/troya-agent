@@ -6,7 +6,8 @@ Troya's attestor. This folder is the seller program. It runs on the Troya server
 
 ## The offering (as registered on app.virtuals.io)
 
-- **Name:** Troya Gate check
+- **Agent:** Troya Gate (agent wallet `0x1731a0D264A4fd6aB6702bD849Aa6A13533c7E6C` on Base)
+- **Job name:** `troyaGateCheck`
 - **Price:** 0.01 USDC per job
 - **SLA:** 5 minutes
 - **Description:** A fresh pre-trade safety check for any token on Robinhood Chain (chain 4663), run at your trade
@@ -39,14 +40,15 @@ Troya's attestor. This folder is the seller program. It runs on the Troya server
 ```bash
 cd acp && npm install --omit=dev
 set -a; . ../acp.env; set +a; node seller.mjs
+# on the Troya server it runs as the systemd service troya-acp (EnvironmentFile=/srv/troya/acp.env)
 ```
 
 `acp.env` (never committed):
 
 ```
 ACP_WALLET_ADDRESS=0x…        # the agent wallet on its app.virtuals.io page
-ACP_WALLET_ID=…               # Signers tab
-ACP_SIGNER_KEY=…              # Signers tab → Add Signer → Copy Key
+ACP_WALLET_ID=…               # Wallet tab → Signers → EVM Wallet ID
+ACP_SIGNER_KEY=…              # Wallet tab → Add Key → Generate Key Pair → copy the private key (policy: Virtuals-only)
 ACP_BUILDER_CODE=bc-…         # optional, Settings tab
 ACP_PRICE_USDC=0.01
 GATE_INTERNAL_KEY=…           # the same value as in the server's .env

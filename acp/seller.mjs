@@ -71,7 +71,7 @@ async function once(session, what, fn) {
 }
 
 const agent = await AcpAgent.create({
-  provider: await PrivyAlchemyEvmProviderAdapter.create({
+  evmProvider: await PrivyAlchemyEvmProviderAdapter.create({      // 0.1.15 names it evmProvider (the README still says provider)
     walletAddress: env.ACP_WALLET_ADDRESS, walletId: env.ACP_WALLET_ID, signerPrivateKey: env.ACP_SIGNER_KEY,
     chains: [base], ...(env.ACP_BUILDER_CODE ? { builderCode: env.ACP_BUILDER_CODE } : {}),
   }),

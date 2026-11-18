@@ -140,6 +140,7 @@ const handled = new Set();           // post ids answered by this process: the s
 const FIELDS = { "tweet.fields": "author_id,conversation_id,created_at,referenced_tweets,lang,attachments", expansions: "author_id,attachments.media_keys", "user.fields": "username,name", "media.fields": "url,type" };
 
 /** One mention of @Troyaagent, from the stream or the poll → the log entry (or null when it is not ours to answer). */
+const HELP_Q = /\b(launch|wallet|agent|token|coin|ticker|tax|buy|sell|fee|claim|bridge|eth|how|where|why|what|help|error|fail)\b|ローンチ|ウォレット|トークン|エージェント|購入|売却|どこ|どう|なぜ|cara|bagaimana|dimana|kenapa|gagal|dompet/i;
 async function handleMention(t, { users, media, bot, m, L }) {
   if (!t?.id || handled.has(t.id)) return null;
   handled.add(t.id);
@@ -167,7 +168,8 @@ async function handleMention(t, { users, media, bot, m, L }) {
   }
   if (m === "off") entry.why = "AI replies are off";
   else if (!text || text.length < 3) entry.why = "nothing to answer";
-  else if (recent >= 3) entry.why = "3 answers to this account in 6 hours";
+  // people learning to launch or trade ask several questions in a row: guide them (owner, 18 Nov), still capped
+  else if (recent >= (HELP_Q.test(text) ? 12 : 6)) entry.why = `${recent} answers to this account in 6 hours`;
   else {
     const reply = await compose(u.username || "someone", text).catch((e) => { entry.why = e.message; return null; });
     if (reply) {

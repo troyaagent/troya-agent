@@ -302,7 +302,7 @@ async function measure(token, { deep = true } = {}) {
   }
   if (ps && ps.snipeBps > 0n) flag("amber", "snipe", "Snipe tax active", `A ${(Number(ps.snipeBps) / 100).toFixed(1)}% launch snipe tax still applies to buys.`);
 
-  if (hist.partial || b0 == null) flags.unshift({ level: "amber", key: "partial", title: "Partial history", detail: `This coin has more than ${MAX_TRANSFERS.toLocaleString("en-US")} transfers or no readable birth, so only the most recent ${tr.length.toLocaleString("en-US")} were measured: dev and launch numbers may be incomplete.` });
+  if (hist.partial || b0 == null) flags.unshift({ level: "amber", key: "partial", title: "Partial history", detail: `Only the most recent ${tr.length.toLocaleString("en-US")} transfers were read (the coin has more, or no readable birth): dev and launch numbers may be incomplete.` });
   const view = (a, v) => ({ wallet: a, pct: pct(v, supply), label: label(a) });
   return {
     token: t, symbol, status: "done", at: Date.now(), deep,

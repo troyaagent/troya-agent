@@ -16,7 +16,7 @@ export async function mount(view, ctx) {
   const st = { prefs: null, aw: null, bal: null, mine: null, err: null, busy: false, factory: null, held: {} };
   const body = h("div", { class: "lx" });
   clear(view,
-    h("a", { class: "lc-back link", href: "#/launch" }, "← Launchpad"),
+    h("a", { class: "lc-back link", href: "#/create" }, "← Create coin"),
     h("header", { class: "page-head lc-head" }, h("h1", {}, "Launch from X"),
       h("p", {}, "Post on X and the coin goes live on Pons from your Agent Wallet. Open to everyone: one launch a day, or as many as you like with 1,000,000 $TROYA, which also keeps the whole creator fee for you. ", h("a", { class: "link", href: "/launch-on-x", target: "_blank", rel: "noopener" }, "Read the full guide"))),
     body);
@@ -86,7 +86,7 @@ export async function mount(view, ctx) {
           ready ? h("div", { class: "alert ok" }, "Ready. Post the launch on X with the image attached.") : null),
         h("aside", { class: "panel lx-panel" },
           h("h2", {}, "Post it like this"),
-          h("div", { class: "lx-tweet" }, h("span", { class: "mono" }, EXAMPLE), h("button", { class: "link", type: "button", onclick: () => copyText(EXAMPLE, "Copied") }, "Copy")),
+          h("div", { class: "lx-tweet" }, h("span", { class: "mono" }, EXAMPLE), h("button", { class: "btn sm", type: "button", onclick: () => copyText(EXAMPLE, "Copied") }, icon("copy"), "Copy")),
           h("p", { class: "muted" }, "Attach the coin's image to the post. That alone is a clean launch: 0% tax and no initial buy. Add \"tax 2%\" for a creator tax and \"buy 0.01\" for an initial buy, only if you want them."),
           h("ul", { class: "lx-rules" },
             h("li", {}, "Attach the image: square (1:1) works best, since every site shows coin logos in a square or circle and crops other shapes to the middle. PNG or JPEG; GIFs turn into video on X and don't work. Without an image, the coin launches with none, for good."),

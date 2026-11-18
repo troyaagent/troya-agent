@@ -33,7 +33,8 @@ const VENUES = [
 export async function mount(view, ctx) {
   useCss("perps");
   let alive = true;
-  const st = { d: null, err: null, lane: ctx?.query?.lane && LANES.some((l) => l.key === ctx.query.lane) ? ctx.query.lane : "new", menu: false };
+  const asked = ctx?.query?.lane && LANES.some((l) => l.key === ctx.query.lane);
+  const st = { d: null, err: null, lane: asked ? ctx.query.lane : "new", menu: false, chosen: !!asked };
   const kpis = h("div", { class: "hp-kpis" });
   const lanes = h("div", { class: "hp-lanes" });
   const tabs = h("div", { class: "hp-tabs", role: "tablist" });
@@ -112,7 +113,9 @@ export async function mount(view, ctx) {
       h("div", { class: "hp-kpi" }, h("small", {}, "Born through Troya"), h("b", {}, String(d.counts.born))),
       h("div", { class: "hp-kpi" }, h("small", {}, "Graduated"), h("b", {}, String(d.counts.graduated))),
       h("div", { class: "hp-kpi" }, h("small", {}, "Volume 24h"), h("b", {}, usd(vol, { compact: true }))));
-    clear(tabs, LANES.map((l) => h("button", { class: `hp-tab ${l.tone}`, type: "button", role: "tab", "aria-selected": String(st.lane === l.key), onclick: () => { st.lane = l.key; paint(); } },
+    // phones show one lane at a time: until the visitor picks one, open the first lane that has coins in it
+    if (!st.chosen && !d[st.lane]?.length) { const first = LANES.find((l) => d[l.key]?.length); if (first) st.lane = first.key; }
+    clear(tabs, LANES.map((l) => h("button", { class: `hp-tab ${l.tone}`, type: "button", role: "tab", "aria-selected": String(st.lane === l.key), onclick: () => { st.lane = l.key; st.chosen = true; paint(); } },
       h("i", {}), l.title, h("small", {}, String(d[l.key].length)))));
     clear(lanes, LANES.map((l) => h("section", { class: `panel hp-lane ${l.tone}${st.lane === l.key ? " on" : ""}`, "aria-label": l.title },
       h("header", {}, h("i", { class: "hp-dot" }), h("b", {}, l.title), h("span", { class: "hp-count" }, String(d[l.key].length)), h("small", {}, l.hint)),

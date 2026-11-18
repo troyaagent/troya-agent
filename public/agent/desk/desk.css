@@ -68,9 +68,9 @@ body.desk { display: block; min-height: 100vh; background: var(--bg); }
 .d-right > * { flex: none; }
 .d-connect { background: var(--fg); color: #0a0a0a; border-color: var(--fg); font-weight: 500; }
 .d-connect:hover { background: #fff; border-color: #fff; }
-.d-main { flex: 1; width: 100%; max-width: 1320px; margin: 0 auto; padding: 0 32px 72px; }
+.d-main { flex: 1; width: 100%; max-width: 1320px; margin: 0 auto; padding: 0 32px 104px; }
 .d-main.wide { max-width: none; padding: 0 16px 40px; }
-.d-foot { max-width: 1320px; padding-left: 32px; padding-right: 32px; }
+.d-foot { max-width: 1320px; padding-left: 32px; padding-right: 190px; }
 
 /* the agent drawer */
 .d-drawer { position: fixed; z-index: 90; right: 0; top: 0; bottom: 0; width: var(--drawer); display: flex; flex-direction: column; background: #0a0a0a; border-left: 1px solid var(--line-2);

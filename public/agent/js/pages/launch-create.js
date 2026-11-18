@@ -23,7 +23,7 @@ export async function mount(view, ctx) {
   const side = h("aside", { class: "lc-side" });
   const wrap = h("div", { class: "lc-grid" }, form, side);
   clear(view,
-    h("a", { class: "lc-back link", href: "#/launch" }, "← Launchpad"),
+    h("a", { class: "lc-back link", href: "#/create" }, "← Create coin"),
     h("header", { class: "page-head lc-head" }, h("h1", {}, "Create coin"), headP),
     wrap);
 
@@ -67,7 +67,7 @@ export async function mount(view, ctx) {
     paintDrop(); paintSide(); paintBtn();
   }
   function paintDrop() {
-    clear(drop, st.preview ? h("img", { src: st.preview, alt: "Coin image preview" }) : h("span", { class: "lc-drop-empty" }, icon("plus"), h("b", {}, "Add an image"), h("small", {}, "PNG, JPEG, GIF or WebP · square works best")));
+    clear(drop, st.preview ? h("img", { src: st.preview, alt: "Coin image preview" }) : h("span", { class: "lc-drop-empty" }, icon("plus"), h("b", {}, "Add an image"), h("small", {}, "PNG, JPEG, GIF or WebP"), h("small", {}, "Square works best")));
   }
 
   const taxBox = h("div", { class: "chips" });

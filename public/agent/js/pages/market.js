@@ -61,7 +61,8 @@ function robinhoodTab(box, go, query) {
   const pager = h("div", { class: "pager" });
   const notice = h("div");
   const tbl = table({
-    sort: { key: "volume", dir: "desc" },
+    // Troya picks keep their own order, so no column claims to sort them
+    sort: state.sort === "picks" ? null : { key: "volume", dir: "desc" },
     onSort: (key, dir) => { state.sort = key; state.dir = dir; state.offset = 0; load(); },
     onRow: (t) => go(`#/token/${t.address}`),
     emptyText: "No token matches.",
@@ -150,10 +151,10 @@ function stocksTab(box, go) {
     onRow: (t) => go(`#/token/${t.address}`),
     emptyText: "No stock matches.",
     cols: [
-      { key: "symbol", label: "Stock", align: "l", render: (t) => h("div", { class: "tok" }, tokenIcon(t), h("div", { style: { minWidth: 0 } }, h("b", {}, t.symbol, !t.tradable ? h("span", { class: "pad-tag warn", title: "No Uniswap pool Troya can route through yet." }, "not routed") : null), h("small", {}, t.name))) },
+      { key: "symbol", label: "Stock", align: "l", render: (t) => h("div", { class: "tok" }, tokenIcon(t), h("div", { style: { minWidth: 0 } }, h("b", {}, t.symbol, !t.tradable ? h("span", { class: "pad-tag warn", title: "No Uniswap pool Troya can route through yet." }, "not routed") : null), h("small", {}, h("span", { class: "tok-nm" }, t.name)))) },
       { key: "priceUsd", label: "Price", sort: true, render: (t) => priceCell(t.priceEth, t.priceUsd) },
       { key: "change24h", label: "24h", sort: true, render: (t) => pctEl(t.change24h) },
-      { key: "volume24hUsd", label: "24h volume", sort: true, render: (t) => usd(t.volume24hUsd, { compact: true }) },
+      { key: "volume24hUsd", label: "24h volume", sort: true, render: (t) => usd(t.volume24hUsd, { compact: true }), hide: NARROW },
       { key: "liquidityUsd", label: "Liquidity", sort: true, render: (t) => usd(t.liquidityUsd, { compact: true }), hide: NARROW },
     ],
   });
@@ -196,7 +197,7 @@ function perpsTab(box, go) {
       { key: "mark", label: "Mark", sort: true, render: (m) => perpPrice(m.mark) },
       { key: "change24h", label: "24h", sort: true, render: (m) => pctEl(m.change24h) },
       { key: "fundingHrPct", label: "Funding / hr", sort: true, render: (m) => h("span", { class: m.fundingHrPct > 0 ? "" : "down" }, fmtFunding(m.fundingHrPct)) },
-      { key: "fundingApr", label: "Annualized", sort: true, render: (m) => fmtApr(m.fundingApr), hide: NARROW },
+      { key: "fundingApr", label: "Annualized", sort: true, render: (m) => h("span", { class: m.fundingApr < 0 ? "down" : "" }, fmtApr(m.fundingApr)), hide: NARROW },
       { key: "oiUsd", label: "Open interest", sort: true, render: (m) => usd(m.oiUsd, { compact: true }), hide: NARROW },
       { key: "volumeUsd", label: "24h volume", sort: true, render: (m) => usd(m.volumeUsd, { compact: true }) },
     ],

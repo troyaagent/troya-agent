@@ -62,7 +62,9 @@
   .mk-filters .chip { flex: none; }
   .mk-panel .tok small { max-width: 110px; }
   .mk-panel .tbl { font-size: 12.5px; }
-  .mk-top .seg { max-width: 100%; overflow-x: auto; }
+  .mk-top .seg { max-width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .mk-top .seg button { justify-content: center; }
+  .mk2-cats { overflow-x: auto; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
 }
 @media (max-width: 720px) {
   .tk-chart-bar .fine { display: none; }

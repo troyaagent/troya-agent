@@ -30,8 +30,8 @@ export async function mount(view, ctx) {
   const state = { tab: TABS[ctx.query.tab] ? ctx.query.tab : "trending", pad: "all", q: "", rows: [], total: 0 };
   let reqId = 0;
 
-  const head = pageHead("All launches", "Every new coin on Robinhood Chain, whichever launchpad minted it: Pons, Clanker, Bankr, Virtuals and more. Coins born through Troya are in Troya Launches.", {
-    act: h("a", { class: "btn primary", href: "#/create" }, icon("rocket"), "Create coin"),
+  const head = pageHead("All launches", "Every coin on Robinhood Chain, whichever launchpad minted it: Pons, Clanker, Bankr, Virtuals and more. Coins born through Troya are in Troya Launches.", {
+    act: h("a", { class: "btn primary", href: "#/create" }, icon("plus"), "Create coin"),
   });
   const tabEl = tabs(Object.entries(TABS).map(([value, t]) => ({ value, label: t.label })), state.tab, (v) => { state.tab = v; reset(); });
   const search = h("input", { class: "input search", type: "search", placeholder: "Search symbol, name or address", "aria-label": "Search launches" });

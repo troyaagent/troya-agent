@@ -38,7 +38,7 @@
 .lc-done-act { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 6px 0; }
 @media (max-width: 960px) {
   .lc-grid { grid-template-columns: minmax(0, 1fr); }
-  .lc-side { position: static; order: -1; }
+  .lc-side { position: static; }
   .lc-links { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 520px) { .lc-id { grid-template-columns: 1fr; } }
@@ -63,6 +63,5 @@
   .lx-step > .btn, .lx-step > a.btn, .lx-step > button { grid-column: 2; justify-self: start; }
   .lx-coin { grid-template-columns: 1fr; gap: 4px; }
 }
-.lx-tweet > .link { flex: none; white-space: nowrap; }
 .lx-sell { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 4px; }
 .lx-sell > span { margin-right: auto; font-size: 12.5px; }

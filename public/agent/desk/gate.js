@@ -107,7 +107,7 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
           h("b", {}, r.symbol ? `$${r.symbol}` : short(a)), h("span", {}, [r.name, short(a)].filter(Boolean).join(" · "))),
         h("div", { class: "dk-gate-v" },
           h("span", { class: `dk-v v-${r.verdict}` }, WORD[r.verdict] || r.verdict),
-          h("span", { class: "fine" }, `${tally}${r.checkedAt ? ` · ${ago(r.checkedAt)}` : ""}`))),
+          h("span", { class: "fine" }, `${tally}${r.checkedAt ? ` · checked ${Date.now() - r.checkedAt < 60_000 ? "just now" : `${ago(r.checkedAt)} ago`}` : ""}`))),
       example ? h("p", { class: "fine dk-gate-ex" }, "Live example: NVDA, a Robinhood stock token. Paste any coin above to check it.") : null,
       h("ol", { class: "dk-checks" }, r.checks.map((c) => h("li", { class: `c-${c.status}` },
         h("span", { class: "dk-ck" }, c.status === "pass" ? icon("check") : c.status === "fail" ? icon("close") : h("b", {}, c.status === "warn" ? "!" : "–")),
@@ -121,7 +121,7 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
         failed ? null : h("a", { class: "btn sm dk-fomo", href: `https://fomo.family/tokens/robinhood/${a}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/fomo.png", alt: "", width: 18, height: 18 }), "Buy on Fomo"),
         h("a", { class: "btn sm", href: `#/token/${a}` }, "Token page"),
         ask ? h("button", { class: "btn sm", type: "button", onclick: () => ask(`Is this token safe? ${a}`) }, icon("spark"), "Ask Troya") : null,
-        h("a", { class: "btn sm ghost", href: `/badge?ca=${a}`, target: "_blank", rel: "noopener" }, "Get the badge")));
+        h("a", { class: "btn sm", href: `/badge?ca=${a}`, target: "_blank", rel: "noopener" }, icon("shield"), "Get the badge")));
   }
 
   runBtn.addEventListener("click", () => run(input.value));

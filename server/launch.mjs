@@ -520,7 +520,10 @@ let boardMemo = null;
 async function bornRecords() {
   const l = await store.readJson("launches.json", []);
   const seen = new Set(), out = [];
-  for (const x of [ORIGIN, ...l.slice().reverse()]) { const k = lc(x.token); if (!x.token || seen.has(k)) continue; seen.add(k); out.push(x); }
+  // the team's own test launches (a ticker with "test", from an admin wallet) stay off the public board and badges;
+  // their creator still sees them in the Creator desk
+  const teamTest = (x) => x !== ORIGIN && /test/i.test(String(x.symbol || "")) && admins().includes(lc(x.owner));
+  for (const x of [ORIGIN, ...l.slice().reverse()]) { const k = lc(x.token); if (!x.token || seen.has(k) || teamTest(x)) continue; seen.add(k); out.push(x); }
   return out;
 }
 async function boardItem(rec, handles) {
@@ -578,7 +581,7 @@ export async function register(r, ctx) {
     return { holderMin: HOLDER_MIN, limits: LIMITS, maxCreatorTaxBps: MAX_TAX_BPS, troyaVolumePct: TROYA_VOLUME_BPS / 100, creatorFeePct: CREATOR_FEE_BPS / 100,
       holderTroyaPct: 0, splitter: factory ? { factory, live: true } : { live: false }, xLaunch: (await xLaunchMode()) === "live", tgLaunch: (await tgLaunchMode()) === "live",
       tgBot: process.env.TG_BOT_USERNAME || "TrojanTroya_bot",
-      text: `Free to launch. Troya takes 0.1% of trading volume out of the creator's 0.7% share of the Pons fee; holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA keep all of it. X, Telegram and troya.codes are open to everyone. Creator tax 0–4%. Without 1M $TROYA: ${LIMITS.perDay} launches a day, ${LIMITS.perDayX} of them from X; holders have no daily limit.` };
+      text: `Free to launch. Troya takes 0.1% of trading volume out of the creator's 0.7% share of the Pons fee; holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA keep all of it. ${(await tgLaunchMode()) === "live" ? "X, Telegram and troya.codes are open to everyone" : "X and troya.codes are open to everyone; Telegram opens after its real-money test"}. Creator tax 0–4%. Without 1M $TROYA: ${LIMITS.perDay} launches a day, ${LIMITS.perDayX} of them from X; holders have no daily limit.` };
   });
   r.post("/api/launch/plan", ({ body }) => plan({ owner: body?.creator, creatorTaxBps: body?.creatorTaxBps, name: body?.name, symbol: body?.symbol, source: "web" }), { perMin: 30 });
   r.post("/api/launch/record", async ({ req, body }) => recordWeb({ hash: body?.hash, owner: getSession(req)?.address || body?.creator || null, salt: body?.salt, troyaBps: body?.troyaBps }), { perMin: 20 });

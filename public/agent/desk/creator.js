@@ -64,14 +64,14 @@ export async function mount(view) {
     ];
     const act = c.split
       ? h("button", { class: `btn${yours > 0 ? " primary" : ""}`, type: "button", disabled: busy || !(c.txs?.length), onclick: () => claim(c.txs, `Claim $${c.symbol || "coin"} creator fees`, yours) }, yours > 0 ? "Claim" : "Nothing yet")
-      : h("span", { class: "cr-in" }, yours > 0 ? "In the wallet claim above" : "Nothing yet");
+      : yours > 0 ? h("span", { class: "cr-in" }, "In the wallet claim above") : h("button", { class: "btn", type: "button", disabled: true }, "Nothing yet");
     return h("article", { class: "panel cr-coin" },
       h("a", { class: "cr-ava", href: `#/token/${c.token}`, "aria-label": `Open $${c.symbol || "coin"}` }, tokenIcon({ address: c.token, symbol: c.symbol, image: c.logo }, "xl")),
       h("div", { class: "cr-main" },
         h("div", { class: "cr-name" }, h("a", { href: `#/token/${c.token}` }, h("b", {}, c.symbol ? `$${c.symbol}` : short(c.token))), h("span", {}, c.name || ""), c.at ? h("small", {}, ago(c.at)) : null),
         h("div", { class: "cr-chips" }, chips),
         c.graduated ? h("p", { class: "cr-note" }, "Its Uniswap pool's fees reach the Pons escrow when Pons sweeps them, then show up here.") : null),
-      h("div", { class: "cr-amt" }, h("b", {}, eth(yours)), h("small", {}, inUsd(yours) || "waiting for you")),
+      h("div", { class: "cr-amt" }, h("b", {}, eth(yours)), h("small", {}, inUsd(yours) || (yours > 0 ? "waiting for you" : "nothing to claim yet"))),
       act);
   }
 
@@ -110,7 +110,7 @@ export async function mount(view) {
         h("div", {},
           h("b", {}, "Paid to your own wallet"),
           h("p", { class: "cr-note" }, "Coins launched while holding 1,000,000 $TROYA send the whole creator fee to your wallet through the Pons fee escrow. One claim pays out everything the escrow holds for you, these coins and any other.")),
-        h("div", { class: "cr-amt" }, h("b", {}, eth(holderEth)), h("small", {}, inUsd(holderEth) || "waiting for you")),
+        h("div", { class: "cr-amt" }, h("b", {}, eth(holderEth)), h("small", {}, inUsd(holderEth) || (holderEth > 0 ? "waiting for you" : "nothing to claim yet"))),
         h("button", { class: `btn${holderEth > 0 ? " primary" : ""}`, type: "button", disabled: busy || !(data.escrow?.txs?.length), onclick: () => claim(data.escrow.txs, "Claim to your wallet", holderEth) }, holderEth > 0 ? "Claim to wallet" : "Nothing yet")) : null,
       h("h2", { class: "cr-sec" }, "Your coins"),
       h("div", { class: "cr-list" }, coins.map(coinRow)),

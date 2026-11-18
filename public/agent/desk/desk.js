@@ -88,7 +88,7 @@ export function go(hash) { if (location.hash === hash) route(); else location.ha
 
 // the sidebar item for a path: longest matching href (token pages sit under Market, assistant under Chat)
 function activeItem(path) {
-  const p = path.replace(/^token\b/, "market").replace(/^assistant\b/, "agent");
+  const p = path.replace(/^token\b/, "market").replace(/^assistant\b/, "agent").replace(/^launch\/(create|x)\b/, "create");
   let best = null;
   for (const it of FLAT) {
     if (!it.href.startsWith("#/")) continue;

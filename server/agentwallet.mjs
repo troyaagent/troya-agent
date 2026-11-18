@@ -4,7 +4,7 @@
 // TROYA_NO_BROADCAST=1 stops right before sending (tests / staging).
 import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
-import { Wallet, JsonRpcProvider, parseUnits, formatUnits, getAddress } from "ethers";
+import { Wallet, JsonRpcProvider, Interface, parseUnits, formatUnits, getAddress } from "ethers";
 import { requireSession, makeChallenge, consumeChallenge } from "./auth.mjs";
 import { HttpError } from "./api.mjs";
 import { checkAction, recordUsage, getPolicy, operatorPolicy } from "./policy.mjs";
@@ -105,6 +105,41 @@ async function send(owner, w, tx, label) {
   return { broadcast: true, hash: sent.hash, status: receipt ? (receipt.status === 1 ? "confirmed" : "reverted") : "pending", label };
 }
 
+// the creator's first buy of a coin it is launching (owner, 18 Nov: on GMGN the dev showed after the snipers): the launch and
+// the buy leave together with nonces n and n+1, so the buy is sequenced right behind the launch, before any bot reacting to
+// the new coin. The curve's address is known before launch (Pons places it by the launch salt) and the creator is exempt
+// from the launch snipe tax. The buy's gas is set by hand: its curve does not exist yet, so it cannot be estimated.
+const CURVE_BUY = new Interface(["function buy(uint256 quoteIn,uint256 minTokensOut,address recipient) payable returns (uint256 tokensOut)"]);
+const FIRST_BUY_GAS = 300_000n;   // a Pons curve buy used 91,252 gas on 18 Nov
+async function sendLaunchAndBuy(owner, w, launchTx, buyTx, labels) {
+  if (NO_BROADCAST) return [await send(owner, w, launchTx, labels[0]), null];
+  const a = lcs(w.address);
+  let first, second = null;
+  try {
+    const onChain = Number(BigInt(await w.provider.send("eth_getTransactionCount", [w.address, "pending"])));
+    const mine = NEXT_NONCE.get(a);
+    const nonce = Math.max(onChain, mine && Date.now() - mine.at < 120_000 ? mine.n : 0);
+    NEXT_NONCE.set(a, { n: nonce + 1, at: Date.now() });
+    first = await w.sendTransaction({ ...launchTx, nonce });
+    try {
+      NEXT_NONCE.set(a, { n: nonce + 2, at: Date.now() });
+      second = await w.sendTransaction({ ...buyTx, nonce: nonce + 1, gasLimit: FIRST_BUY_GAS });
+    } catch (e) { NEXT_NONCE.delete(a); console.warn("[launch] the first buy was not sent:", String(e.shortMessage || e.message).slice(0, 160)); }
+  } catch (e) { NEXT_NONCE.delete(a); throw e; }
+  const done = async (sent, tx, label) => {
+    if (!sent) return null;
+    const receipt = await sent.wait(1, 90_000).catch(() => null);
+    if (receipt?.status === 1) {
+      const fee = (receipt.gasUsed || 0n) * (receipt.gasPrice || receipt.effectiveGasPrice || 0n);
+      import("./gas.mjs").then((g) => g.refundGas(owner, w.address, fee)).catch(() => {});
+    }
+    return { broadcast: true, hash: sent.hash, status: receipt ? (receipt.status === 1 ? "confirmed" : "reverted") : "pending", label, block: receipt?.blockNumber ?? null };
+  };
+  const l = await done(first, launchTx, labels[0]);
+  const b = await done(second, buyTx, labels[1]);
+  return [l, b];
+}
+
 /**
  * Execute an action with the owner's Agent Wallet.
  * kind: "swap" {tokenIn, tokenOut, amountIn, slippagePct} | "perp" {coin, side, sizeUsd, leverage, tpPx, slPx, reduceOnly}
@@ -202,17 +237,26 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
       // creator fee goes where launch.mjs plan() says (the owner's own wallet, or a Troya fee splitter), caps and kill switch apply
       const { buildLaunchTx } = await import("./robinhood.mjs");
       const w = signer(r, owner, "robinhood");
-      summary = `Launch $${String(params.symbol || "").slice(0, 16)} on Pons`;
+      const firstBuy = Math.max(0, Number(params.initialBuyEth) || 0);
+      summary = `Launch $${String(params.symbol || "").slice(0, 16)} on Pons${firstBuy ? ` with a ${firstBuy} ETH first buy` : ""}`;
       const tx = await buildLaunchTx({ creator: w.address, feeRecipient: params.feeRecipient || owner, name: params.name, symbol: params.symbol, logo: params.logo || "", description: params.description || "", twitter: params.twitter || "", website: params.website || "", telegram: params.telegram || "", creatorTaxBps: Math.max(0, Math.min(400, Math.round(Number(params.creatorTaxBps) || 0))) });
-      usd = (Number(tx.value) / 1e18) * ep;
+      usd = (Number(tx.value) / 1e18 + firstBuy) * ep;
       const pc = await checkAction(owner, { kind: "launch", usd });
       const cap = await capCheck(owner, r, usd);
       const reasons = [...pc.reasons, ...cap];
       if (!tx.enoughBalance) reasons.push(`The Agent Wallet ${w.address} needs at least ${(Number(tx.launchFeeWei) / 1e18 + 0.0001).toFixed(4)} ETH on Robinhood Chain for the Pons fee and gas.`);
       else if (!tx.simulation.ok) reasons.push(`Pons would refuse this launch: ${tx.simulation.error || "the simulation failed"}.`);
       if (reasons.length) return await blocked(owner, kind, summary, reasons, null, source, proposalId);
-      const sent = await send(owner, w, { to: tx.to, data: tx.data, value: BigInt(tx.value) }, summary);
-      result = { ...sent, token: tx.predicted?.token || null, curve: tx.predicted?.curve || null, ponsUrl: tx.predicted?.ponsUrl || null, feeRecipient: params.feeRecipient || owner, launchFeeWei: tx.launchFeeWei };
+      const launchTx = { to: tx.to, data: tx.data, value: BigInt(tx.value) };
+      let sent, buy = null;
+      const curve = tx.predicted?.curve || null;
+      if (firstBuy > 0 && curve && BigInt(tx.balanceWei || 0) > BigInt(tx.value) + parseUnits(String(firstBuy), 18)) {
+        const wei = parseUnits(firstBuy.toFixed(18).replace(/\.?0+$/, ""), 18);
+        [sent, buy] = await sendLaunchAndBuy(owner, w, launchTx, { to: curve, data: CURVE_BUY.encodeFunctionData("buy", [wei, 0n, w.address]), value: wei },
+          [summary, `First buy ${firstBuy} ETH of $${String(params.symbol || "").slice(0, 16)}`]);
+      } else sent = await send(owner, w, launchTx, summary);
+      result = { ...sent, token: tx.predicted?.token || null, curve, ponsUrl: tx.predicted?.ponsUrl || null, feeRecipient: params.feeRecipient || owner, launchFeeWei: tx.launchFeeWei,
+        firstBuy: firstBuy > 0 ? (buy ? { eth: firstBuy, hash: buy.hash, status: buy.status, block: buy.block, launchBlock: sent?.block ?? null } : { eth: firstBuy, hash: null, status: "not-sent" }) : null };
     } else if (kind === "withdraw" || kind === "send") {
       const chain = "robinhood";
       const amount = Number(params.amount);

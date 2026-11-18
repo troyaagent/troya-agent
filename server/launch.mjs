@@ -293,7 +293,7 @@ async function launchPlanned(p, { owner, name, symbol, logo, creatorTaxBps = 0, 
   const out = await aw.executeForUser(owner, {
     kind: "launch", source,
     rationale: `Launch requested on ${source}${ref ? ` (${ref})` : ""}`,
-    params: { name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim(), logo, description, twitter, creatorTaxBps: p.creatorTaxBps, feeRecipient: p.recipient },
+    params: { name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim(), logo, description, twitter, creatorTaxBps: p.creatorTaxBps, feeRecipient: p.recipient, initialBuyEth: buyEth },
   });
   if (!out.executed) return { ok: false, why: out.blocked ? "blocked" : "not-sent", reasons: out.reasons || [], result: out.result || null, plan: p };
   const hash = out.result?.hash || null;
@@ -310,8 +310,12 @@ async function launchPlanned(p, { owner, name, symbol, logo, creatorTaxBps = 0, 
   if (!token) { settleLater(hash, r); return { ok: false, why: "pending", hash, launch: r, plan: p }; }
   await addRecord(r);
   if (token && buyEth > 0) {
+    // the buy went out right behind the launch (the dev's buy is the coin's first trade); only when it was not sent or
+    // reverted does the old way run: a separate buy through the Gate, once the coin is on chain
+    const fb = out.result?.firstBuy;
+    if (fb?.hash && fb.status !== "reverted") r.initialBuy = { eth: buyEth, executed: true, hash: fb.hash, pending: fb.status === "pending", first: true, reasons: [] };
     // recorded first: the Agent Wallet may set aside the empty-curve check only for a coin it launched through Troya
-    r.initialBuy = await initialBuy({ owner, token, buyEth, source, launchedAt: Date.now() });
+    else r.initialBuy = await initialBuy({ owner, token, buyEth, source, launchedAt: Date.now() });
     lap(t0, `initial buy ${r.initialBuy.executed ? "done" : "not sent"}`);
     await store.update("launches.json", [], (l) => { const x = l.find((y) => lc(y.token) === lc(token)); if (x) x.initialBuy = r.initialBuy; return l; });
   }

@@ -169,6 +169,16 @@ const held = BigInt(erc.decodeFunctionResult("balanceOf", await provider.call({ 
 assert.ok(held > 0n, "the Agent Wallet holds the new coin");
 assert.match(r.reply, /Initial buy of 0.01 ETH done/);
 ok(`launch with an initial buy: $BUYH, the Agent Wallet bought ${(Number(held) / 1e18).toLocaleString("en-US")} tokens for 0.01 ETH`);
+// the dev's buy left right behind the launch (nonce n+1, sent before the launch was waited for): the coin's first trade
+assert.equal(r.launch.initialBuy.first, true, JSON.stringify(r.launch.initialBuy));
+{
+  const lr = await provider.getTransactionReceipt(r.launch.tx), br = await provider.getTransactionReceipt(r.launch.initialBuy.hash);
+  const lt = await provider.getTransaction(r.launch.tx), bt = await provider.getTransaction(r.launch.initialBuy.hash);
+  assert.equal(bt.nonce, lt.nonce + 1, "the buy took the very next nonce after the launch");
+  assert.ok(br.blockNumber - lr.blockNumber <= 1, `the buy landed in block ${br.blockNumber}, the launch in ${lr.blockNumber}`);
+  assert.equal(br.status, 1);
+  ok(`the dev's first buy is the coin's first trade: nonce ${bt.nonce} right after the launch's ${lt.nonce}, block ${br.blockNumber} vs ${lr.blockNumber}`);
+}
 const buyhToken = r.launch.token;
 
 /* ---------- Launch on X is open to everyone (owner, 18 Nov): a non-holder once a day, through a splitter; holders without a limit ---------- */

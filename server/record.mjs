@@ -91,6 +91,7 @@ export async function noteBorn({ token, symbol, at = Date.now(), source = null }
   const c = { token: lc(token), symbol: symbol || null, at, post: null, source, kind: "born", status: "watching", via: Date.now() - at < LIVE_LAG ? "live" : "pending-candles" };
   d.calls[k] = c;
   await save();                       // on the ledger at once; the first price follows (a read can take a few seconds)
+  import("./seal.mjs").then((m) => m.seal("record-born", c.token, c, source)).catch(() => {});
   if (c.via === "live") { await sample(c).catch(() => {}); await save(); }
 }
 export async function noteCall({ token, symbol, at = Date.now(), post = null, source = null }) {
@@ -100,6 +101,7 @@ export async function noteCall({ token, symbol, at = Date.now(), post = null, so
   if (d.calls[k]) return;
   const c = { token: k, symbol: symbol || null, at, post, source, status: "watching", via: Date.now() - at < LIVE_LAG ? "live" : "pending-candles" };
   d.calls[k] = c;
+  import("./seal.mjs").then((m) => m.seal("record-call", k, c, source)).catch(() => {});
   if (c.via === "live") await sample(c).catch(() => {});
   await save();
 }
@@ -116,6 +118,7 @@ async function tick() {
       const k = lc(tok);
       if (!tok || !at || d.calls[k]) return;
       d.calls[k] = { token: k, symbol: null, at, post: null, source: null, status: "watching", via: now - at > LIVE_LAG ? "pending-candles" : "live", ...extra };
+      import("./seal.mjs").then((m) => m.seal("record-call", k, d.calls[k], "sentry")).catch(() => {});
     };
     for (const r of s.recent || []) if (r.posted) add(r.token, r.at || now, { symbol: r.symbol || null, post: r.post || null, source: r.source || null });
     // older posts Sentry still remembers (token → time posted), beyond the last 200 results it keeps in full

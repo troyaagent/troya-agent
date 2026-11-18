@@ -45,7 +45,12 @@ async function masterKey() {
   try { const k = await readFile(f); if (k.length === 32) return k; } catch {}
   const k = randomBytes(32); await writeFile(f, k, { mode: 0o600 }); return k;
 }
+let attestorP = null;                        // one creation at a time (two parallel first calls must not make two keys)
 async function getAttestor() {
+  if (attestor) return attestor;
+  return (attestorP ||= makeAttestor().finally(() => { attestorP = null; }));
+}
+async function makeAttestor() {
   if (attestor) return attestor;
   const f = join(dir, "gate-attestor.json");
   try {
@@ -178,6 +183,7 @@ async function runCheck(token, { amountEth, from, withAssay }) {
   };
   const json = JSON.stringify(attested), hash = keccak256(toUtf8Bytes(json));
   const w = await getAttestor();
+  import("./seal.mjs").then((m) => m.seal("gate", attested.token, hash, `${v} at ${amt} ETH`)).catch(() => {});   // V7 F35: every check gets a receipt
   return { attested, hash, signature: await w.signMessage(attestMessage(hash)), attestor: w.address };
 }
 

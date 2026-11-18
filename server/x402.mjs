@@ -285,6 +285,7 @@ export async function register(r, ctx) {
       return d;
     }).catch(() => {});
     console.log(`[x402] paid check ${token} by ${s.payer || payer} tx ${s.transaction} (${pnet.name})`);
+    import("./seal.mjs").then((m) => m.seal("x402-payment", s.payer || payer, { network: want.network, tx: s.transaction, token: lc(token), result: out.hash }, s.transaction)).catch(() => {});
     send(res, 200, { ...out, paid: { by: "x402", network: want.network, payer: s.payer || payer, transaction: s.transaction, explorer: pnet.scan + s.transaction, amountUsdc: c.price } },
       { ...EXPOSE, "payment-response": b64(s) });
   }, { weight: 4, perMin: 60 });

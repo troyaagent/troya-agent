@@ -170,13 +170,27 @@ export async function dsPairs(addrs) {
 }
 // best DexScreener pair per base token (deepest liquidity) → board-style row
 export function dsRows(pairs, ethUsd) {
-  const best = new Map();
+  const best = new Map(), all = new Map();
   for (const p of pairs || []) {
     const a = lc(p.baseToken?.address);
     if (!a) continue;
     const cur = best.get(a);
     if (!cur || (p.liquidity?.usd || 0) > (cur.liquidity?.usd || 0)) best.set(a, p);
+    if (!all.has(a)) all.set(a, []);
+    all.get(a).push(p);
   }
+  // price and change come from the deepest pool; volume, liquidity and trades add up over the token's real pools
+  // (stock tokens trade in several pools, so one pool showed 2-6x too little); dust pools and fabricated volume left out
+  const sumOf = (a) => {
+    let vol = 0, liq = 0, buys = 0, sells = 0, n = 0;
+    for (const p of all.get(a) || []) {
+      const l = p.liquidity?.usd || 0, v = p.volume?.h24 || 0, tx = p.txns?.h24 || {}, t = (tx.buys || 0) + (tx.sells || 0);
+      if (l < 500) continue;
+      if (!STOCK_SET.has(a) && v > 10_000 && (t === 0 || v / t > 50_000)) continue;
+      vol += v; liq += l; buys += tx.buys || 0; sells += tx.sells || 0; n++;
+    }
+    return n ? { vol, liq, buys, sells, n } : null;
+  };
   const rows = new Map();
   for (const [a, p] of best) {
     const dex = `${p.dexId || "other"}${p.labels?.[0] ? "-" + p.labels[0] : ""}`;
@@ -186,10 +200,10 @@ export function dsRows(pairs, ethUsd) {
     rows.set(a, {
       address: a, name: String(p.baseToken?.name || "").replace(/\s•\s*Robinhood Token$/, ""), symbol: sym(p.baseToken?.symbol), image: goodImg(p.info?.imageUrl),
       priceUsd, priceEth: priceUsd && ethUsd ? priceUsd / ethUsd : null, change24h: fnum(p.priceChange?.h24), change1h: fnum(p.priceChange?.h1),
-      volume24hUsd: fnum(p.volume?.h24), volume24hEth: ethUsd && p.volume?.h24 != null ? p.volume.h24 / ethUsd : null,
-      liquidityUsd: fnum(p.liquidity?.usd), liquidityEth: ethUsd && p.liquidity?.usd != null ? p.liquidity.usd / ethUsd : null,
+      volume24hUsd: sumOf(a)?.vol ?? fnum(p.volume?.h24), volume24hEth: ethUsd ? (sumOf(a)?.vol ?? fnum(p.volume?.h24) ?? 0) / ethUsd : null,
+      liquidityUsd: sumOf(a)?.liq ?? fnum(p.liquidity?.usd), liquidityEth: ethUsd ? (sumOf(a)?.liq ?? fnum(p.liquidity?.usd) ?? 0) / ethUsd : null,
       mcapUsd: fnum(p.marketCap) ?? fnum(p.fdv), mcapEth: ethUsd && (p.marketCap ?? p.fdv) ? (p.marketCap ?? p.fdv) / ethUsd : null,
-      buys24h: tx.buys ?? null, sells24h: tx.sells ?? null, txns24h: tx.buys != null ? (tx.buys || 0) + (tx.sells || 0) : null,
+      buys24h: sumOf(a)?.buys ?? tx.buys ?? null, sells24h: sumOf(a)?.sells ?? tx.sells ?? null, txns24h: sumOf(a) ? sumOf(a).buys + sumOf(a).sells : tx.buys != null ? (tx.buys || 0) + (tx.sells || 0) : null,
       createdAt: fnum(p.pairCreatedAt), pool: lc(p.pairAddress), poolDex: dex, quoteSymbol: p.quoteToken?.symbol || null,
       pools: [{ pool: lc(p.pairAddress), dex, quoteSymbol: p.quoteToken?.symbol || null, liquidityUsd: fnum(p.liquidity?.usd), volumeUsd: fnum(p.volume?.h24) }],
       launchpad: padOfDex(dex), tradable: /^uniswap-(v3|v4)$/.test(dex) || KYBER_ON, stock: STOCK_SET.has(a),

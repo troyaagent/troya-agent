@@ -37,7 +37,8 @@ const MODULES = [
   "./gateapi.mjs",     // F23: Gate for every agent, a fresh signed Gate check as an API, paid per check in USDG
   "./ringradar.mjs",   // V7 F31 Ring Radar: Pons launch forensics (snipe-tax exemptions, bundle buys, reused bundlers, decoys)
   "./seal.mjs",
-  "./quantum.mjs",     // V7 F36 Quantum-Ready: key exposure for wallets and tokens, NIST + drand randomness        // V7 F35 Seal: signed, hash-chained receipts (ECDSA + ML-DSA) for every Troya decision, anchored daily on Robinhood Chain
+  "./quantum.mjs",
+  "./council.mjs",     // V7 F33 Council: three reasons not to buy + a bull/bear/risk debate on Troya's own facts, sealed     // V7 F36 Quantum-Ready: key exposure for wallets and tokens, NIST + drand randomness        // V7 F35 Seal: signed, hash-chained receipts (ECDSA + ML-DSA) for every Troya decision, anchored daily on Robinhood Chain
   "./x402.mjs",        // F23+: the same Gate check over x402 v2, $0.01 USDC on Base per call, listed in x402 directories (off until X402_ENABLED=1)
   "./portfolio.mjs",   // every token a wallet holds (Blockscout), priced, with PnL from its own trades
   "./registry.mjs",    // F24: agent registry, agents file signed calls on Robinhood Chain coins and earn a public reputation

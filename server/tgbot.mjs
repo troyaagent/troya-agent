@@ -42,6 +42,8 @@ Or just write it: "long ETH $20 at 3x" gets you a ticket to confirm.
 <b>Check</b>
 /gate 0x… · Troya Gate token check
 /assay 0x… · The Assay: dev, holders, bundles, wash trades
+/ring 0x… · Ring Radar: a rigged Pons launch? (exempt wallets, bundles, decoys)
+/council 0x… · three reasons not to buy, then a bull/bear/risk debate on Troya's data
 /price NVDA · live price (a symbol or a 0x address)
 /gas · live gas cost of a swap, approval or send
 /sentry · the latest launches through the Gate
@@ -108,6 +110,22 @@ async function assayText(a, waitMs = 25000) {
   if (d.status === "running") return "The Assay is still reading this coin's history. Ask again in a minute.";
   if (d.status !== "done") return null;
   return m.assayLines(d).map((l) => esc(l)).join("\n");
+}
+// V7: Ring Radar (F31) and Council (F33) in Telegram
+async function ringCmd(arg) {
+  const a = (String(arg || "").match(/0x[0-9a-fA-F]{40}/) || [])[0];
+  if (!a) return "Usage: /ring 0x… (a Pons coin on Robinhood Chain)";
+  const r = await (await import("./ringradar.mjs")).ringCheck(a).catch((e) => ({ verdict: "unknown", reasons: [e.message] }));
+  const head = r.verdict === "red" ? "🔴 Red" : r.verdict === "amber" ? "🟠 Amber" : r.verdict === "clear" ? "Clear" : "Unknown";
+  return `<b>Ring Radar</b> · ${r.symbol ? "$" + esc(r.symbol) : ""} <code>${a}</code>\n<b>${head}</b>\n${(r.reasons || []).slice(0, 5).map((x) => "• " + esc(x)).join("\n")}\n<i>Read from the launch transaction and the first seconds of trading.</i>`;
+}
+async function councilCmd(arg) {
+  const a = (String(arg || "").match(/0x[0-9a-fA-F]{40}/) || [])[0];
+  if (!a) return "Usage: /council 0x… (a coin on Robinhood Chain)";
+  const m = await import("./council.mjs");
+  const c = await m.council(a).catch((e) => null);
+  if (!c) return "The Council could not sit on this coin right now. Try again in a minute.";
+  return `<b>Troya Council</b> · <code>${a}</code>\n${esc(m.councilText(c))}`;
 }
 async function assayCmd(arg) {
   const a = (String(arg || "").match(/0x[0-9a-fA-F]{40}/) || [])[0];
@@ -472,7 +490,7 @@ export async function handleBotMessage(m, tg, me) {
   const [, cmdRaw, at, arg = ""] = cm;
   if (at && me?.username && at.toLowerCase() !== me.username.toLowerCase()) return;
   const cmd = cmdRaw.toLowerCase();
-  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "rules", "sentry", "badge", "perks", "reports", "flywheel"].includes(cmd)) return;
+  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "rules", "sentry", "badge", "perks", "reports", "flywheel"].includes(cmd)) return;
   // one answer per person every 3 s keeps the group readable
   const who = `${chatId}:${m.from?.id}`;
   if (Date.now() - (lastReply.get(who) || 0) < 3000) return;
@@ -526,6 +544,8 @@ Nobody from Troya DMs first or asks for a seed phrase or private key.` });
     else if (cmd === "price" || cmd === "p") { text = await price(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else if (cmd === "gas") text = await gasText();
     else if (cmd === "assay") { text = await assayCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
+    else if (cmd === "ring") { text = await ringCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
+    else if (cmd === "council") { text = await councilCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else { text = await gate(arg); if (coinOf(arg) && !/no contract|Usage/i.test(text)) markup = coinKb(coinOf(arg)); }
   } catch (e) { text = `Could not read that right now (${esc(String(e.message || e).slice(0, 80))}). Try again in a moment.`; }
   await tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true }, ...(markup ? { reply_markup: markup } : {}) });

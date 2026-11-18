@@ -11,7 +11,7 @@
 //   ACP_SIGNER_KEY       the signer private key (Signers tab → Add Signer → Copy Key)
 //   ACP_BUILDER_CODE     optional, bc-… from the Settings tab  ACP_PRICE_USDC     default 0.01
 //   GATE_INTERNAL_KEY    the same value as in the server's .env  TROYA_URL        default http://127.0.0.1:9270
-import { AcpAgent, PrivyAlchemyEvmProviderAdapter, AssetToken } from "@virtuals-protocol/acp-node-v2";
+import { AcpAgent, PrivyAlchemyEvmProviderAdapter, AssetToken, robinhood } from "@virtuals-protocol/acp-node-v2";
 import { base } from "@account-kit/infra";
 
 const env = process.env;
@@ -73,7 +73,8 @@ async function once(session, what, fn) {
 const agent = await AcpAgent.create({
   evmProvider: await PrivyAlchemyEvmProviderAdapter.create({      // 0.1.15 names it evmProvider (the README still says provider)
     walletAddress: env.ACP_WALLET_ADDRESS, walletId: env.ACP_WALLET_ID, signerPrivateKey: env.ACP_SIGNER_KEY,
-    chains: [base], ...(env.ACP_BUILDER_CODE ? { builderCode: env.ACP_BUILDER_CODE } : {}),
+    // Base (paid in USDC) and Robinhood Chain (ACP's stablecoin there is USDG); gas is sponsored by ACP on both
+    chains: [base, robinhood], ...(env.ACP_BUILDER_CODE ? { builderCode: env.ACP_BUILDER_CODE } : {}),
   }),
 });
 
@@ -88,7 +89,7 @@ agent.on("entry", async (session, entry) => {
         return;
       }
       await session.setBudget(AssetToken.usdc(PRICE, session.chainId));
-      console.log(`[acp] job ${session.jobId}: ${ask.token} at ${ask.amountEth} ETH, budget ${PRICE} USDC`);
+      console.log(`[acp] job ${session.jobId} on chain ${session.chainId}: ${ask.token} at ${ask.amountEth} ETH, budget ${PRICE} ${session.chainId === robinhood.id ? "USDG" : "USDC"}`);
     });
   }
   // 2) funded → run the check and submit it
@@ -111,5 +112,5 @@ agent.on("entry", async (session, entry) => {
   if (entry.kind === "system" && /job\.(completed|rejected|expired)/.test(entry.event?.type || "")) console.log(`[acp] job ${session.jobId} ${entry.event.type}`);
 });
 
-await agent.start(() => console.log(`[acp] Troya Gate seller online as ${env.ACP_WALLET_ADDRESS}, ${PRICE} USDC a check, checks from ${TROYA}`));
+await agent.start(() => console.log(`[acp] Troya Gate seller online as ${env.ACP_WALLET_ADDRESS} on Base (USDC) and Robinhood Chain (USDG), ${PRICE} a check, checks from ${TROYA}`));
 for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, async () => { await agent.stop().catch(() => {}); process.exit(0); });

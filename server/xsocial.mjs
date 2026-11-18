@@ -91,7 +91,8 @@ function login(req, res, purpose, back) {
   const state = b64u(randomBytes(18)), verifier = b64u(randomBytes(48));
   pending.set(state, { purpose, address, verifier, home, exp: Date.now() + 10 * 60_000 });
   for (const [k, v] of pending) if (v.exp < Date.now()) pending.delete(k);
-  const scope = purpose === "bot" ? "tweet.read tweet.write users.read offline.access" : "tweet.read users.read";
+  // media.write: team posts can carry an image (18 Nov); the bot is reconnected once to grant it
+  const scope = purpose === "bot" ? "tweet.read tweet.write users.read media.write offline.access" : "tweet.read users.read";
   const q = new URLSearchParams({ response_type: "code", client_id: process.env.X_CLIENT_ID, redirect_uri: REDIRECT, scope, state, code_challenge: b64u(createHash("sha256").update(verifier).digest()), code_challenge_method: "S256" });
   return redirect(res, `https://x.com/i/oauth2/authorize?${q}`);
 }
@@ -330,12 +331,25 @@ export async function postReply(text, inReplyTo) {
   return id;
 }
 /** A post the team wrote (an approved update, not composed by the model), posted as @Troyaagent inside the daily X budget and logged. */
-export async function postTweet(text) {
+/** An image for a team post (X API v2 media upload; needs the media.write scope) → its media id. */
+export async function uploadImage(buf, type = "image/jpeg") {
+  const bot = await botTokens();
+  if (!bot?.access) throw new Error("Troya is not connected to X.");
+  const fd = new FormData();
+  fd.append("media", new Blob([buf], { type }), type === "image/png" ? "image.png" : "image.jpg");
+  fd.append("media_category", "tweet_image");
+  const r = await fetch(API + "/2/media/upload", { method: "POST", headers: { authorization: `Bearer ${bot.access}` }, body: fd, signal: AbortSignal.timeout(60_000) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !(j?.data?.id || j?.media_id_string)) throw new Error(`X media upload answered ${r.status}: ${j?.detail || j?.title || j?.errors?.[0]?.message || "error"}`);
+  return String(j.data?.id || j.media_id_string);
+}
+export async function postTweet(text, { mediaIds = [], replyTo = null } = {}) {
   const bot = await botTokens();
   if (!bot?.access) throw new Error("Troya is not connected to X.");
   if (!(await spend("posts"))) throw new Error("Today's X post cap is reached.");
   text = oneCashtag(text);
-  const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: String(text) } });
+  const body = { text: String(text), ...(mediaIds.length ? { media: { media_ids: mediaIds.map(String) } } : {}), ...(replyTo ? { reply: { in_reply_to_tweet_id: String(replyTo) } } : {}) };
+  const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body });
   const id = p?.data?.id || p?.id || null;      // X accepted it (xApi throws otherwise), even when no id comes back
   await store.update("x-log.json", [], (l) => [...l, { id: id || "post", at: Date.now(), author: "(team post)", text: "", status: "posted", reply: String(text), replyId: id, manual: true }].slice(-300));
   return id;

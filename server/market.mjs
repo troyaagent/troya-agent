@@ -622,12 +622,43 @@ function cleanOpts(opts = {}) {
   return { sort, dir, launchpad, q, offset, limit, tradable, cat };
 }
 const SORT_KEY = { volume: "volume24hUsd", mcap: "mcapUsd", change: "change24h", liquidity: "liquidityUsd", newest: "createdAt", price: "priceUsd", txns: "txns24h", holders: "holders" };
+// Real backing (20 Nov 2026). A pool's "liquidity" counts both sides at the pool's own price, so a coin minted with a
+// made-up price shows millions of liquidity and market cap while the pool holds a few dollars of real money (same-ticker
+// PONS / CASHCAT / AI / USDG pools born 19 Nov: $35M "liquidity" on about $8k of USDG). The quote side from DexScreener
+// (liquidity.usd - liquidity.base x priceUsd) is what a seller can actually take out. A young or barely held coin whose
+// market cap is over 2000x that money is sorted after the rest. Names stay free and nothing is labelled (owner, 18 Nov).
+const BACKED = new Map();   // address -> real quote-side USD across its DexScreener pairs (null = unknown)
+let backedRun = 0;
+async function refreshBacked() {
+  if (Date.now() - backedRun < 5 * 60_000) return;
+  backedRun = Date.now();
+  const rows = [...board.rows.values()].filter((t) => !t.stock);
+  const top = (k) => [...rows].sort((a, b) => (b[k] || 0) - (a[k] || 0)).slice(0, 60).map((t) => t.address);
+  const young = rows.filter((t) => t.createdAt && Date.now() - t.createdAt < 7 * 86400_000).map((t) => t.address);
+  const addrs = [...new Set([...top("mcapUsd"), ...top("liquidityUsd"), ...young])].slice(0, 210);
+  const pairs = await dsPairs(addrs).catch(() => []);
+  if (!pairs.length) return;
+  const sum = new Map();
+  for (const p of pairs) {
+    const a = lc(p.baseToken?.address), L = p.liquidity || {};
+    if (!a || !(Number(L.usd) > 0) || L.base == null) continue;
+    sum.set(a, (sum.get(a) || 0) + Math.max(0, Number(L.usd) - Number(L.base) * (Number(p.priceUsd) || 0)));
+  }
+  for (const a of addrs) BACKED.set(a, sum.has(a) ? sum.get(a) : null);
+}
+const unbacked = (t) => {
+  const real = BACKED.get(t.address), cap = Number(t.mcapUsd) || 0;
+  if (real == null || cap < 100_000 || cap <= real * 2000) return false;
+  const holders = holdersOf(t.address)?.count;
+  return (t.createdAt && Date.now() - t.createdAt < 7 * 86400_000) || (holders != null && holders < 1000);
+};
 
 // getRobinhoodTokens({q, launchpad, sort, dir, offset, limit, tradable}) → {tokens,total,counts,updatedAt,stale,ethUsd,source,...}
 export async function getRobinhoodTokens(opts = {}) {
   const o = cleanOpts(opts);
   await ensureBoard();
   if (Date.now() - board.updatedAt > 10 * 60_000) refreshBoard().catch(() => {});
+  refreshBacked().catch(() => {});
   const ethUsd = await getEthUsd().catch(() => null);
   let all = [...board.rows.values()].filter((t) => !t.stock);
   // every coin is listed alike, whatever its ticker (owner, 18 Nov: no "copy" marks, as on other launchers)
@@ -658,6 +689,8 @@ export async function getRobinhoodTokens(opts = {}) {
   const sgn = o.dir === "asc" ? 1 : -1;
   if (k === "holders") for (const t of rows) t.holders = HOLDERS.get(t.address)?.count ?? null;
   if (o.sort !== "picks") rows = [...rows].sort((a, b) => {
+    const ua = unbacked(a), ub = unbacked(b);
+    if (ua !== ub) return ua ? 1 : -1;
     const x = a[k], y = b[k];
     if (x == null && y == null) return 0;
     if (x == null) return 1;

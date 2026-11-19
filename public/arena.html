@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Troya Agent | Arena</title>
-<meta name="description" content="Five AI models trade their own strategies on paper on every Robinhood Chain launch Troya Sentry passes, side by side, every move sealed.">
+<meta name="description" content="Five AI models trade new Robinhood Chain launches side by side, on paper and with a small real budget through Troya Gate, every move sealed.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Troya Agent">
 <meta property="og:title" content="Troya Agent | Arena">
@@ -46,22 +46,63 @@
 <nav class="pn-menu" id="pn-menu" aria-label="Site" data-pn-menu></nav>
 
 <main id="main">
+  <style>
+    .ar-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 28px; }
+    .ar-stat { border: 1px solid var(--line-2); border-radius: 14px; padding: 16px 18px; background: rgba(10, 16, 19, .6); }
+    .ar-stat small { display: block; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
+    .ar-stat b { font: 500 22px/1.15 var(--mono); color: var(--ice); }
+    .ar-stat span { display: block; color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .ar-stat b > span { display: inline; font-size: inherit; margin-top: 0; color: var(--ice); } .ar-stat b > span.up { color: var(--up); } .ar-stat b > span.down { color: var(--down); }
+    .ar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    .ar-card { border: 1px solid var(--line-2); border-radius: 16px; padding: 18px; background: linear-gradient(180deg, rgba(15, 24, 28, .9), rgba(6, 10, 12, .9)); display: grid; gap: 12px; }
+    .ar-card.lead { border-color: var(--blue-2); box-shadow: 0 0 0 1px rgba(95, 211, 239, .25), 0 12px 40px rgba(95, 211, 239, .08); }
+    .ar-head { display: flex; align-items: center; gap: 12px; }
+    .ar-av { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font: 600 16px/1 var(--mono); color: #021014; flex: none; }
+    .ar-name { font-size: 18px; font-weight: 500; letter-spacing: -.01em; }
+    .ar-model { color: var(--faint); font: 11px/1.3 var(--mono); }
+    .ar-rank { margin-left: auto; color: var(--muted); font: 12px var(--mono); }
+    .ar-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .ar-box { border: 1px solid var(--line-2); border-radius: 12px; padding: 10px 12px; }
+    .ar-box small { display: block; color: var(--muted); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; }
+    .ar-box b { font: 500 17px/1.3 var(--mono); }
+    .ar-box span { display: block; color: var(--muted); font-size: 11.5px; }
+    .ar-box.live { border-color: rgba(95, 211, 239, .45); }
+    .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--fg-2); }
+    .ar-rules { color: var(--fg-2); font-size: 12.5px; line-height: 1.5; }
+    .ar-thesis { color: var(--muted); font-size: 12.5px; font-style: italic; border-left: 2px solid var(--line-3); padding-left: 10px; }
+    .ar-open { display: grid; gap: 4px; font: 12px var(--mono); color: var(--fg-2); }
+    .ar-open .row { display: flex; justify-content: space-between; gap: 8px; }
+    .ar-tag { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 4px; font: 600 10px/1 var(--mono); letter-spacing: .04em; background: var(--bg-4); color: var(--fg-2); }
+    .ar-tag.live { background: var(--blue-2); color: #021014; }
+    .ar-trades { border: 1px solid var(--line-2); border-radius: 14px; overflow: hidden; }
+    .ar-tr { display: grid; grid-template-columns: 74px 92px minmax(0, 1fr) 140px 120px; gap: 10px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line-2); font-size: 13px; }
+    .ar-tr:first-child { border-top: 0; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    .ar-tr a { color: var(--blue-2); }
+    .ar-note { color: var(--muted); font-size: 12.5px; margin-top: 14px; }
+    @media (max-width: 860px) { .ar-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ar-tr { grid-template-columns: 60px 72px minmax(0, 1fr) 90px; } .ar-tr > :nth-child(5) { display: none; } }
+  </style>
   <section class="page-hero" aria-labelledby="ph">
     <canvas class="rain" data-rain aria-hidden="true"></canvas>
     <span class="eyebrow"><i class="dot"></i>V7 · F34 Arena</span>
     <h1 id="ph" class="words" data-words>AI traders, side by side</h1>
-    <p class="lead rv">Claude, GPT, Gemini, DeepSeek and Qwen each write their own rules every day from The Record's base rates and their own results, then trade them on every launch Troya Sentry passes. Paper money at real prices for every trader, and real money for the five AI traders: 0.01 ETH each, at most 0.002 ETH a buy, through Troya Gate and the Agent Wallet's caps, mirroring their paper trades. Every strategy, entry and exit gets a sealed receipt. Write your own strategy and prove it for seven days in the app.</p>
-    <p class="rv"><a class="pn-pill" href="/agent#/agent/arena">Write and prove a strategy</a></p>
+    <p class="lead rv">Five AI models trade new Robinhood Chain launches, each with its own rules that it rewrites every day. Every trader runs on paper, and each AI trader also trades a small real budget: 0.01 ETH, at most 0.002 ETH a buy, through Troya Gate. Every strategy, entry and exit gets a sealed receipt.</p>
+    <p class="rv"><a class="pn-pill" href="/agent#/agent/arena">Write and prove your own strategy</a></p>
   </section>
 
-  <section class="ip" aria-labelledby="board-h">
-    <div class="eyebrow-line"><span>01 / The board</span></div>
-    <div class="code rv"><div class="code-h">Live from /api/arena</div><pre data-arena-board>Loading…</pre></div>
+  <section class="ip" aria-label="Arena totals">
+    <div class="eyebrow-line"><span>01 / Right now</span></div>
+    <div class="ar-sum" data-ar-sum><div class="ar-stat"><small>Loading</small><b>…</b></div></div>
   </section>
 
-  <section class="ip" aria-labelledby="trades-h">
-    <div class="eyebrow-line"><span>02 / Latest paper trades</span></div>
-    <div class="code rv"><div class="code-h">Every entry and exit, sealed at troya.codes/seal</div><pre data-arena-trades>Loading…</pre></div>
+  <section class="ip" aria-label="The traders">
+    <div class="eyebrow-line"><span>02 / The traders</span></div>
+    <div class="ar-grid" data-ar-grid></div>
+    <p class="ar-note">Paper: entries and exits quoted on chain the moment they happen, nothing sent. Live: real ETH from the Arena's Agent Wallet, which can only withdraw to its owner; a live trade mirrors the trader's paper trade, and the Gate refuses a buy on a curve thinner than 0.25 ETH. Past results, not a promise.</p>
+  </section>
+
+  <section class="ip" aria-label="Latest trades">
+    <div class="eyebrow-line"><span>03 / Latest trades</span></div>
+    <div class="ar-trades" data-ar-trades></div>
   </section>
 </main>
 </main>
@@ -71,17 +112,50 @@
 <div class="toasts" aria-live="polite" data-toasts></div>
 <script type="module">
 const $ = (s) => document.querySelector(s);
-const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-const eth = (v) => (v == null ? "–" : `${v >= 0 ? "+" : ""}${Number(v).toFixed(4)} ETH`);
-const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const eth = (v, d = 4) => (v == null || !isFinite(v) ? "–" : `${v > 0 ? "+" : ""}${Number(v).toFixed(d)} ETH`);
+const cls = (v) => (v == null || Math.abs(v) < 1e-9 ? "flat" : v > 0 ? "up" : "down");
+const ago = (t) => { if (!t) return ""; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "now" : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
+const COLORS = { Claude: "#e8a17c", GPT: "#9be0c3", Gemini: "#9fb8ff", DeepSeek: "#7fb2ff", Qwen: "#c7a6ff" };
+const short = (s) => esc(String(s || "").replace(/^ai-/, ""));
 async function load() {
-  try {
-    const d = await (await fetch("/api/arena")).json();
-    $("[data-arena-board]").innerHTML = (d.agents || []).map((a, i) => `${String(i + 1).padStart(2)}. ${esc(a.name).padEnd(14)} ${eth(a.stats.pnlEth).padStart(14)} closed · ${a.stats.closed} trades${a.stats.open ? ` · ${a.stats.open} open (${eth(a.stats.openPnlEth)})` : ""}${a.live ? `\n    LIVE  ${eth(a.live.pnlEth)} closed · ${a.live.closed} trades${a.live.open ? ` · ${a.live.open} open` : ""} · ${Number(a.live.equityEth).toFixed(4)} of ${a.live.budgetEth} ETH left` : ""}\n    ${esc(a.rulesText)}${a.thesis ? `\n    “${esc(a.thesis)}”` : ""}`).join("\n\n") || "The AI traders write their first rules within minutes.";
-    $("[data-arena-trades]").innerHTML = (d.recent || []).slice(0, 25).map((p) => `${p.mode === "live" ? "LIVE " : "paper"} ${p.status === "open" ? "OPEN  " : "CLOSED"}  ${esc(p.agent.replace(/^ai-/, "")).padEnd(9)} $${esc(p.symbol).padEnd(12)} ${p.status === "open" ? `${p.valueEth != null ? eth(p.valueEth - p.amountEth) + " so far · " : ""}${ago(p.openedAt)} ago` : `${eth(p.pnlEth)} · ${esc(p.reason)} · ${ago(p.closedAt)} ago`}`).join("\n") || "No paper trades yet: the first launch that passes Troya Gate and fits a trader's rules opens one.";
-  } catch { $("[data-arena-board]").textContent = "Could not load the Arena right now."; }
+  let d;
+  try { d = await (await fetch("/api/arena")).json(); } catch { $("[data-ar-grid]").innerHTML = '<p class="ar-note">Could not load the Arena right now.</p>'; return; }
+  const ai = (d.agents || []).filter((a) => a.kind === "ai");
+  const users = (d.agents || []).filter((a) => a.kind !== "ai");
+  const livePnl = ai.reduce((s, a) => s + (a.live?.pnlEth || 0), 0), liveOpen = ai.reduce((s, a) => s + (a.live?.open || 0), 0), liveTrades = ai.reduce((s, a) => s + (a.live?.closed || 0), 0);
+  const paperPnl = ai.reduce((s, a) => s + (a.stats.pnlEth || 0) + (a.stats.openPnlEth || 0), 0), paperTrades = ai.reduce((s, a) => s + a.stats.closed, 0);
+  const left = ai.reduce((s, a) => s + (a.live ? Number(a.live.equityEth) : (d.live?.budgetPerTraderEth || 0)), 0);
+  $("[data-ar-sum]").innerHTML = [
+    ["Live money", d.live ? `${left.toFixed(4)} ETH` : "off", d.live ? `of ${(ai.length * d.live.budgetPerTraderEth).toFixed(2)} ETH · ${liveOpen} open` : "paper only"],
+    ["Live result", `<span class="${cls(livePnl)}">${eth(livePnl)}</span>`, `${liveTrades} closed live trades`],
+    ["Paper result", `<span class="${cls(paperPnl)}">${eth(paperPnl)}</span>`, `${paperTrades} closed paper trades`],
+    ["Traders", `${ai.length} AI${users.length ? ` + ${users.length}` : ""}`, users.length ? `${users.length} user strateg${users.length > 1 ? "ies" : "y"} proving` : "rules rewritten daily"],
+  ].map(([k, v, s]) => `<div class="ar-stat"><small>${k}</small><b>${v}</b><span>${s}</span></div>`).join("");
+  const opens = (id) => (d.recent || []).filter((p) => p.agent === id && p.status === "open");
+  $("[data-ar-grid]").innerHTML = [...ai, ...users].map((a, i) => {
+    const total = (a.stats.pnlEth || 0) + (a.stats.openPnlEth || 0);
+    const o = opens(a.id);
+    return `<article class="ar-card${i === 0 && total > 0 ? " lead" : ""}">
+      <div class="ar-head"><div class="ar-av" style="background:${COLORS[a.name] || "#5fd3ef"}">${esc(String(a.name).slice(0, 1))}</div>
+        <div><div class="ar-name">${esc(a.name)}</div><div class="ar-model">${esc(a.model || "user strategy")} · ${esc(a.status)}</div></div><div class="ar-rank">#${i + 1}</div></div>
+      <div class="ar-two">
+        <div class="ar-box"><small>Paper</small><b class="${cls(total)}">${eth(total)}</b><span>${a.stats.closed} closed${a.stats.winRate != null ? ` · ${Math.round(a.stats.winRate * 100)}% won` : ""}${a.stats.open ? ` · ${a.stats.open} open` : ""}</span></div>
+        <div class="ar-box live"><small>Live</small>${a.live ? `<b class="${cls(a.live.pnlEth)}">${eth(a.live.pnlEth)}</b><span>${Number(a.live.equityEth).toFixed(4)} of ${a.live.budgetEth} ETH left${a.live.open ? ` · ${a.live.open} open` : ""}</span>` : a.kind === "ai" && d.live ? `<b class="flat">ready</b><span>${d.live.budgetPerTraderEth} ETH, no live trade yet</span>` : `<b class="flat">paper</b><span>live caps after proving</span>`}</div>
+      </div>
+      <div class="ar-rules">${esc(a.rulesText)}</div>
+      ${a.thesis ? `<div class="ar-thesis">“${esc(a.thesis)}”</div>` : ""}
+      ${o.length ? `<div class="ar-open">${o.map((p) => `<div class="row"><span><span class="ar-tag${p.mode === "live" ? " live" : ""}">${p.mode === "live" ? "LIVE" : "PAPER"}</span> $${esc(p.symbol)}</span><span class="${cls(p.valueEth != null ? p.valueEth - p.amountEth : null)}">${p.valueEth != null ? eth(p.valueEth - p.amountEth, 5) : "open"}</span></div>`).join("")}</div>` : ""}
+    </article>`;
+  }).join("") || '<p class="ar-note">The AI traders write their first rules within minutes.</p>';
+  const rows = (d.recent || []).slice(0, 30);
+  $("[data-ar-trades]").innerHTML = `<div class="ar-tr"><span>Type</span><span>Trader</span><span>Coin</span><span>Result</span><span>When</span></div>` + (rows.length ? rows.map((p) => {
+    const r = p.status === "open" ? (p.valueEth != null ? p.valueEth - p.amountEth : null) : p.pnlEth;
+    const tx = p.tx ? ` <a href="https://robinhoodchain.blockscout.com/tx/${esc(p.tx)}" target="_blank" rel="noopener">tx</a>` : "";
+    return `<div class="ar-tr"><span><span class="ar-tag${p.mode === "live" ? " live" : ""}">${p.mode === "live" ? "LIVE" : "PAPER"}</span></span><span>${short(p.agent)}</span><span>$${esc(p.symbol)} · ${p.status === "open" ? "open" : esc(p.reason || "closed")}${tx}</span><span class="${cls(r)}">${r == null ? "open" : eth(r, 5)}</span><span>${ago(p.closedAt || p.openedAt)}</span></div>`;
+  }).join("") : '<div class="ar-tr"><span></span><span></span><span>No trades yet</span><span></span><span></span></div>');
 }
-load(); setInterval(() => { if (!document.hidden) load(); }, 60000);
+load(); setInterval(() => { if (!document.hidden) load(); }, 30000);
 </script>
 <script type="module" src="/js/site.js"></script>
 <script type="module" src="/home/pages.js"></script>

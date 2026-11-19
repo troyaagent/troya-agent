@@ -33,15 +33,31 @@ const live = new Map();          // token → { supply, devs:Set, top:Set, follo
 async function chain() { return (R ||= await import("./robinhood.mjs")); }
 
 /* ---------- who holds what ---------- */
+async function onChainCandidates(owner) {
+  const d = await store.readJson(FILE, {});
+  const prev = (d.guards?.[lc(owner)]?.coins || []).map((c) => c.token);
+  const oaths = Object.keys((await store.readJson("oath.json", {})).oaths || {});
+  const recent = ((await store.readJson("sentry.json", {})).recent || []).slice(0, 40).map((x) => lc(x.token));
+  return [...new Set([...prev, ...oaths, ...recent].map(lc))].filter((t) => !SKIP.has(t)).slice(0, 38);
+}
+
 async function holdingsOf(owner) {
   const p = await import("./portfolio.mjs");
+  const m = await import("./market.mjs");
+  const blind = !m.hasBlockscout();                                 // Blockscout paused or missing: read on chain
   const aw = await (await import("./agentwallet.mjs")).getAgentWallet(owner).catch(() => null);
   const wallets = [owner, aw?.address].filter((w) => w && isAddress(w)).map(lc);
   const { ADDR } = await chain();
   SKIP.add(lc(ADDR.weth));
   const out = new Map();
   for (const w of wallets) {
-    const list = await p.walletTokens(w).catch(() => []);
+    let list = blind ? [] : await p.walletTokens(w).catch(() => []);
+    if (!list.length) {
+      const { getBalances } = await chain();
+      const b = await getBalances(w, await onChainCandidates(owner)).catch(() => null);
+      list = (b?.balances || []).filter((x) => x.address !== "native" && Number(x.amount) > 0 && !SKIP.has(lc(x.address)))
+        .map((x) => ({ address: lc(x.address), symbol: x.symbol, decimals: x.decimals, raw: x.raw, amount: Number(x.amount), rate: null, stock: false }));
+    }
     for (const t of list) {
       if (t.stock || SKIP.has(t.address) || !(Number(t.amount) > 0)) continue;
       const usd = t.rate != null ? Number(t.amount) * t.rate : null;
@@ -80,11 +96,12 @@ async function setupCoin(token, st) {
       c.graduated = !!ps.graduated;
       if (!ps.graduated && ps.realQuote != null) { c.curveQuote.push({ at: Date.now(), q: Number(ps.realQuote) }); c.curveQuote = c.curveQuote.filter((x) => Date.now() - x.at < 20 * 60_000); }
     }
-    const oath = await (await import("./oath.mjs")).oathOf(t).catch(() => null);
-    for (const w of oath?.pledge?.wallets || []) c.devs.add(lc(w));
-    c.oathBroken = oath?.status === "broken";
     c.devAt = Date.now();
   }
+  // the Oath every minute (a store read): a broken pledge has to reach holders at once, not at the next half-hour refresh
+  const oath = await (await import("./oath.mjs")).oathOf(t).catch(() => null);
+  for (const w of oath?.pledge?.wallets || []) c.devs.add(lc(w));
+  c.oathBroken = oath?.status === "broken";
   if (Date.now() - c.topAt > TOP_MS) {
     const th = await (await import("./market.mjs")).topHolders(t).catch(() => null);
     c.top = new Set((th?.holders || []).filter((h) => h.wallet).slice(0, 10).map((h) => lc(h.address)));

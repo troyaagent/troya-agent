@@ -102,10 +102,10 @@ async function appTick() {
     for (const [code, v] of Object.entries(d.snap)) if (!seen.has(code) && !v.removedAt) { v.removedAt = now; if (!first) d.events.unshift({ at: now, code, name: v.name, kind: "removed", tradable: false }); }
     d.baselineAt ||= now;
     d.events = d.events.slice(0, 300);
-    // match up to 25 entries a round to their contract on Robinhood Chain (Blockscout credits are shared)
+    // match up to 10 entries a round (unmatched ones again after a week) to their contract on Robinhood Chain (Blockscout credits are shared)
     const { blockscoutApi, hasBlockscout } = await import("./market.mjs");
     if (hasBlockscout()) {
-      const todo = Object.entries(d.snap).filter(([c, v]) => !v.removedAt && !MAJORS.has(c.toUpperCase()) && (!d.match[c] || (d.match[c].address == null && now - d.match[c].at > 86_400_000))).slice(0, 25);
+      const todo = Object.entries(d.snap).filter(([c, v]) => !v.removedAt && !MAJORS.has(c.toUpperCase()) && (!d.match[c] || (d.match[c].address == null && now - d.match[c].at > 7 * 86_400_000))).slice(0, 10);
       for (const [code, v] of todo) {
         const r = await blockscoutApi(`/search?q=${encodeURIComponent(code)}`).catch(() => null);
         if (!r) break;

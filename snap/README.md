@@ -10,6 +10,7 @@ Only `from`, `to`, `data` and `value` of the transaction are sent; the Snap sign
 ```sh
 npm install
 npm run build      # dist/bundle.js, shasum written into snap.manifest.json
+npm test           # runs dist/bundle.js against real Robinhood Chain transactions (asks troya.codes)
 npm run serve      # local install in MetaMask Flask: snap id local:http://localhost:8080
 ```
 

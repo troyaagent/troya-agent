@@ -266,11 +266,37 @@ async function ensureRule() {
   if ((r.data || []).some((x) => x.value === value)) return;
   await appApi("/2/tweets/search/stream/rules", { method: "POST", body: { add: [{ value, tag: "troya-mentions" }] } });
 }
+// V8 F41 X Tracker: the accounts users track ride on this stream as extra rules ("troya-tracker-N"), each rule well under
+// X's 512-character limit. A post that matched only tracker rules goes to server/xtracker.mjs, never to the reply bot.
+export async function setTrackerRules(handles) {
+  if (!process.env.X_BEARER_TOKEN) return;
+  const want = [];
+  let cur = [];
+  for (const h of handles.filter((x) => /^[a-z0-9_]{1,15}$/i.test(x))) {
+    const next = [...cur, `from:${h}`];
+    if (`(${next.join(" OR ")}) -is:retweet`.length > 480) { want.push(cur); cur = [`from:${h}`]; } else cur = next;
+  }
+  if (cur.length) want.push(cur);
+  const values = want.map((g) => `(${g.join(" OR ")}) -is:retweet`);
+  const r = await appApi("/2/tweets/search/stream/rules");
+  const old = (r.data || []).filter((x) => String(x.tag || "").startsWith("troya-tracker"));
+  const stale = old.filter((x) => !values.includes(x.value)).map((x) => x.id);
+  const add = values.filter((v) => !old.some((x) => x.value === v)).map((value, i) => ({ value, tag: `troya-tracker-${Date.now().toString(36)}-${i}` }));
+  if (stale.length) await appApi("/2/tweets/search/stream/rules", { method: "POST", body: { delete: { ids: stale } } });
+  if (add.length) await appApi("/2/tweets/search/stream/rules", { method: "POST", body: { add } });
+  if (stale.length || add.length) console.log(`[x] tracker rules: ${values.length} rule(s) for ${handles.length} account(s)`);
+}
 let queue = Promise.resolve();
 async function onStreamPost(j) {
   const t = j.data;
   stream.posts++;
   await spend("reads", 1);
+  const tags = (j.matching_rules || []).map((x) => String(x.tag || ""));
+  if (tags.length && tags.every((x) => x.startsWith("troya-tracker"))) {
+    const author = (j.includes?.users || []).find((u) => u.id === t.author_id) || null;
+    await import("./xtracker.mjs").then((m) => m.onTrackedPost(t, author)).catch((e) => console.warn("[xtracker] post", e.message));
+    return;
+  }
   const bot = await botTokens().catch(() => null);
   if (!bot) return;
   const users = new Map((j.includes?.users || []).map((u) => [u.id, u]));

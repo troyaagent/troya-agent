@@ -15,7 +15,7 @@ export async function mount(view) {
     h("p", { class: "muted" }, "Hold $TROYA, climb the tiers. Every tier unlocks things that work today: Watchfire pins that alert you the moment a dump pattern starts, more Gate checks a day, and from 1,000,000 $TROYA the holder perks. Counted across your signed-in wallet and its Agent Wallet.")), body);
   let stop = false;
   async function load() {
-    const [t, pins] = await Promise.all([api.get("/api/treasury").catch(() => null), wallet.session ? api.get("/api/treasury/pins").catch(() => null) : null]);
+    const [t, pins, xt] = await Promise.all([api.get("/api/treasury").catch(() => null), wallet.session ? api.get("/api/treasury/pins").catch(() => null) : null, wallet.session ? api.get("/api/xtracker/me").catch(() => null) : null]);
     if (stop) return;
     if (!t) { clear(body, h("div", { class: "panel" }, h("div", { class: "empty" }, "The Treasury is unavailable right now."))); return; }
     const you = t.you;
@@ -46,9 +46,19 @@ export async function mount(view) {
         h("div", {}, h("a", { class: "link mono", href: `#/token/${p.token}` }, short(p.token, 6)), h("div", { class: "fine muted" }, p.state ? `Watchfire: ${p.state.level}${p.state.why?.[0] ? ` · ${p.state.why[0]}` : ""}` : "Reading…")),
         h("button", { class: "btn sm", type: "button", onclick: async () => { try { await api.post("/api/treasury/pins", { token: p.token, on: false }); load(); } catch (e) { toast(e.message, "error"); } } }, "Unpin")))) :
         h("p", { class: "fine muted ts-pad" }, wallet.session ? "No pins yet. Pin a coin here, or from the Watchfire panel on any coin page." : "Sign in to pin coins."));
+    const xIn = h("input", { class: "wt-in", type: "text", placeholder: "@handle on X", "aria-label": "X account to track" });
+    const xBox = h("section", { class: "panel" }, h("div", { class: "panel-h" }, h("h2", {}, "X Tracker"), h("span", { class: "fine muted" }, xt ? `${xt.tracking.length} of ${xt.max}` : "")),
+      h("p", { class: "fine muted ts-pad" }, "Track callers, devs and KOLs on X. The moment one of them posts a Robinhood Chain contract, Troya runs the Gate on it and sends you the post, the coin and the verdict, in your inbox and on Telegram."),
+      wallet.session ? h("div", { class: "wt-row ts-pad" }, xIn, h("button", { class: "btn sm primary", type: "button", onclick: async () => {
+        try { await api.post("/api/xtracker", { handle: xIn.value.trim(), on: true }); toast("Tracking.", "ok"); xIn.value = ""; load(); } catch (e) { toast(e.message, "error"); }
+      } }, "Track")) : null,
+      xt?.tracking?.length ? h("ul", { class: "sc-list" }, xt.tracking.map((hd) => h("li", {}, h("div", {}, h("a", { class: "link", href: `https://x.com/${hd}`, target: "_blank", rel: "noopener nofollow" }, `@${hd}`)),
+        h("button", { class: "btn sm", type: "button", onclick: async () => { try { await api.post("/api/xtracker", { handle: hd, on: false }); load(); } catch (e) { toast(e.message, "error"); } } }, "Untrack")))) :
+        h("p", { class: "fine muted ts-pad" }, wallet.session ? "No accounts yet. Track one here, or with the Track button next to any post on a coin page." : "Sign in to track accounts."),
+      xt?.hits?.length ? h("div", { class: "ts-pad" }, h("b", {}, "Latest hits"), h("ul", { class: "sc-list" }, xt.hits.slice(0, 8).map((x) => h("li", {}, h("div", {}, h("a", { class: "link", href: `#/token/${x.token}` }, `$${x.symbol}`), h("div", { class: "fine muted" }, `@${x.handle} · Gate: ${x.verdict}`)))))) : null);
     const pro = h("section", { class: "panel ts-pro" }, h("div", { class: "panel-h" }, h("h2", {}, "Pro"), h("span", { class: "fine muted" }, "$TROYA or a stablecoin")),
       h("p", { class: "ts-pad" }, t.pro?.note || "Pro plans are listed here with their prices."));
-    clear(body, yourCard, tiers, pinBox, pro);
+    clear(body, yourCard, tiers, pinBox, xBox, pro);
   }
   load();
   return () => { stop = true; };

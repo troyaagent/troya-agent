@@ -229,7 +229,11 @@ export function renderCallouts(box, data, address, symbol, reload) {
         h("div", { class: "wt-call-b" },
           h("div", {}, h("a", { class: "link", href: `https://x.com/${p.author.handle}/status/${p.id}`, target: "_blank", rel: "noopener nofollow" }, `@${p.author.handle || "?"}`), h("span", { class: "fine muted" }, ` · ${compact(p.author.followers || 0, 1)} followers${p.at ? ` · ${agoTxt(p.at)} ago` : ""}`)),
           h("p", {}, p.text)),
-        h("div", { class: "wt-call-r" }, h("small", {}, "Likes"), h("span", {}, compact(p.likes || 0, 1)))))) : h("div", { class: "empty" }, "No posts on X mention this contract lately.")),
+        h("div", { class: "wt-call-r" }, h("small", {}, "Likes"), h("span", {}, compact(p.likes || 0, 1)),
+          p.author.handle ? h("button", { class: "btn sm wt-track", type: "button", title: `Get a ping (inbox and Telegram) when @${p.author.handle} posts a Robinhood Chain contract, with the Gate verdict`, onclick: async (e) => {
+            if (!wallet.session) return toast("Sign in to track accounts on X.", "warn");
+            try { const r = await api.post("/api/xtracker", { handle: p.author.handle, on: true }); e.target.textContent = "Tracking"; e.target.disabled = true; toast(`Tracking @${p.author.handle} (${r.tracking.length} of ${r.max}).`, "ok"); } catch (err) { toast(err.message, "error"); }
+          } }, "Track") : null)))) : h("div", { class: "empty" }, "No posts on X mention this contract lately.")),
     h("p", { class: "fine" }, "Posts on X are written by their authors, not by Troya. Check a coin with the Gate before you act on anyone's call.")));
 }
 // the callers' avatars on the chart, at the time and price of each call (an HTML layer over the chart)

@@ -7,6 +7,7 @@ import { wallet, onWallet, openConnect, restore, disconnect, signIn, CHAINS, cha
 import { api } from "/agent/js/api.js";
 import { chromeIcon } from "./chrome-icons.js";
 import { mountGuide } from "./guide.js";
+import "/agent/js/herald-ref.js";      // V8 F42 Herald: keeps a ?ref= code from the link, sends it once after sign-in
 
 const SITE = window.SITE || {};
 
@@ -15,6 +16,7 @@ const SI = {
   arena: "M4 20l6-6M14 4l6 6-9 9-3-3 9-9M4 14l6 6M15 9l-2-2",
   aegis: "M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6l7-3zM9 12l2 2 4-4",
   scepter: "M12 9v12M8 5l2 3h4l2-3-2.5 1L12 3l-1.5 3zM10 13h4",
+  treasury: "M4 10h16v10H4zM2 10l10-6 10 6M8 14v3M12 14v3M16 14v3",
   spot: "M4 19h16M7 15l3-3 3 2 5-6M17 8h2v2",
   lighter: "M13 2 4 14h7l-1 8 9-12h-7l1-8z",
   stocks: "M4 20V10m6 10V4m6 16v-7m6 7V8",
@@ -64,7 +66,7 @@ export function si(name, cls = "") {
 export const GROUPS = [
   [null, [["Desk", "#/", "desk"]]],
   ["Trade", [["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Lighter perps", "#/lighter", "lighter"], ["Stock desk", "#/stocks", "stocks"], ["Liquidity desk", "#/liquidity", "liquidity"], ["Bridge", "#/bridge", "bridge"]]],
-  ["Discover", [["Gate a coin", "#/gate", "gate"], ["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["Create coin", "#/create", "create"], ["Creator desk", "#/creator", "creator"], ["All launches", "#/launch", "launch"], ["Leaderboard", "#/leaderboard", "leaderboard"], ["Agent registry", "#/registry", "agent"]]],
+  ["Discover", [["Gate a coin", "#/gate", "gate"], ["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["Create coin", "#/create", "create"], ["Creator desk", "#/creator", "creator"], ["All launches", "#/launch", "launch"], ["Leaderboard", "#/leaderboard", "leaderboard"], ["Herald", "#/herald", "herald"], ["Treasury", "#/treasury", "treasury"], ["Agent registry", "#/registry", "agent"]]],
   ["Agent", [["Chat", "#/agent", "chat"], ["Scepter", "#/agent/scepter", "scepter"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Sentry Autopilot", "#/agent/sentry", "sentry"], ["Aegis", "#/agent/aegis", "aegis"], ["Arena", "#/agent/arena", "arena"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Audited rail", "#/rail", "rail"]]],
   ["You", [["Portfolio", "#/portfolio", "portfolio"], ["Inbox", "#/portfolio/inbox", "inbox"], ["History", "#/portfolio/history", "history"], ["Social", "#/social", "social"]]],
   ["Help", [["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Is it safe?", "/safety", "verify"], ["Verify", "/verify", "verify"], ["The Record", "/record", "record"], ["$TROYA flywheel", "#/flywheel", "flywheel"]]],
@@ -74,6 +76,7 @@ const FLAT = GROUPS.flatMap(([g, items]) => items.map(([t, href, ic]) => ({ g, t
 const ROUTES = {
   "": "home", market: "market", token: "token", swap: "swap", perps: "perps", launch: "launchpad",
   bridge: "bridge", agent: "agent", assistant: "agent", portfolio: "portfolio", docs: "docs", start: "start", leaderboard: "leaderboard", gate: "gate", spot: "spot", lighter: "lighter", stocks: "stocks", liquidity: "liquidity", flywheel: "flywheel", social: "social", registry: "registry", rail: "rail", "troya-launches": "hippodrome", hippodrome: "hippodrome", create: "create", creator: "creator",
+  herald: "herald", treasury: "treasury",                    // V8 F42: /agent/js/pages/herald.js
 };
 const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js" };
 export const prefs = store("troya.prefs", { slippage: 1, density: "comfortable", motion: "system", lang: "auto" });

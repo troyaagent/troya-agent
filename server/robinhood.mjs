@@ -103,6 +103,27 @@ async function forward(chain, payload, { noRetry = false, timeoutMs = Number(pro
 }
 /** rpc(chain, method, params) → result; throws RpcError on a JSON-RPC error (e.g. a revert). */
 export async function rpc(chain, method, params = [], opts = {}) {
+  // Our paid node first (owner, 20 Nov 2026). A log read that named the free official RPC for its wide ranges goes to
+  // Chainstack in pieces of 9,000 blocks (its limit is 10,000); only if Chainstack cannot serve it does the named RPC
+  // take the whole range, so the official RPC's rate limit (429) stops touching the flywheel, Sentry or the buy bot.
+  if (method === "eth_getLogs" && opts.only && chain === "robinhood" && params?.[0] && !params[0].blockHash) {
+    const q = params[0];
+    const hexNum = (v) => (typeof v === "string" && /^0x[0-9a-f]+$/i.test(v) ? parseInt(v, 16) : null);
+    const from = hexNum(q.fromBlock), to = hexNum(q.toBlock);
+    if (from != null && to != null && to >= from && to - from <= 300_000) {
+      const { only, ...rest } = opts;
+      try {
+        const out = [];
+        for (let a = from; a <= to; a += 9_000) {
+          const b = Math.min(to, a + 8_999);
+          const r = await forward(chain, { jsonrpc: "2.0", id: 1, method, params: [{ ...q, fromBlock: "0x" + a.toString(16), toBlock: "0x" + b.toString(16) }] }, rest);
+          if (r?.error) throw new RpcError(r.error.message || "RPC error", r.error.code, r.error.data);
+          out.push(...(r?.result || []));
+        }
+        return out;
+      } catch { /* the named RPC below takes the whole range */ }
+    }
+  }
   const r = await forward(chain, { jsonrpc: "2.0", id: 1, method, params }, { noRetry: method === "eth_sendRawTransaction", ...opts });
   if (r?.error) throw new RpcError(r.error.message || "RPC error", r.error.code, r.error.data);
   return r?.result;

@@ -1507,3 +1507,21 @@ div.wt-foot { display: flex; align-items: center; }
 .ch-mine { margin-top: 14px; }
 .ch-mine h4 { margin: 0 0 4px; font-size: 13px; }
 @media (max-width: 640px) { .ch-row { flex-direction: column; align-items: stretch; } .ch-act { justify-content: flex-end; } }
+
+/* ---------- War Table stage 2: callouts, X, avatars on the chart ---------- */
+.wt-calls { padding-top: 12px; }
+.wt-call-form { display: grid; gap: 8px; padding: 0 14px 12px; border-bottom: 1px solid var(--line); }
+.wt-call-in { width: 100%; resize: vertical; min-height: 54px; }
+.wt-call-form .wt-row { margin: 0; justify-content: space-between; align-items: center; }
+.wt-call-list { list-style: none; margin: 0; padding: 6px 14px; display: grid; }
+.wt-call-list li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line); }
+.wt-call-list li:first-child { border-top: 0; }
+.wt-call-b p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--fg-2); overflow-wrap: anywhere; }
+.wt-call-r { display: grid; justify-items: end; gap: 2px; font: 600 13px/1.2 var(--mono); }
+.wt-call-r small { font: 500 10px/1 var(--sans); color: var(--muted); }
+.wt-av { width: 34px; height: 34px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--bg-2); border: 1px solid var(--line-2); font: 700 11px/1 var(--mono); color: var(--fg-2); object-fit: cover; }
+.wt-x { border-top: 1px solid var(--line); margin-top: 6px; }
+.wt-x-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 12px 14px 0; }
+.wt-av-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.wt-av.sm { position: absolute; width: 22px; height: 22px; transform: translate(-50%, -50%); font-size: 8.5px; border: 2px solid #8edff5; box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: auto; }
+.wt-x .wt-call-list, .wt-calls > .wt-call-list { max-height: 560px; overflow: auto; }

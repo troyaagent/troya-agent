@@ -3,7 +3,7 @@
 import { h, clear, useCss, icon, tokenIcon, padLogo, tiny, price, usd, compact, pctEl, short, ago, copyText, tabs, seg, emptyState } from "../ui.js";
 import { api, cached } from "../api.js";
 import { padName, ethAmount, ageText } from "../marketlib.js";
-import { startBoard, watchfirePanel, tradePanel, renderTrades, renderEarly, chartMarks, tagEl } from "./wartable.js";
+import { startBoard, watchfirePanel, tradePanel, renderTrades, renderEarly, chartMarks, tagEl, renderCallouts, calloutLayer } from "./wartable.js";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 const lc = (x) => String(x || "").toLowerCase();
@@ -55,14 +55,16 @@ export async function mount(view, { parts, go }) {
     h("a", { class: "btn primary", href: `#/swap?out=${address}` }, icon("swap"), "Buy with Troya Swap"),
     h("a", { class: "btn", href: `#/gate/${address}` }, icon("shield"), "Run the Gate"),
     h("a", { class: "btn", href: `#/agent?q=${encodeURIComponent(`Give me a read on ${t.symbol} (${address}) on Robinhood Chain: liquidity, contract risk and recent flow.`)}` }, icon("spark"), "Ask about it"),
-    h("button", { class: "btn", type: "button", onclick: () => copyText(address, "Address copied") }, icon("copy"), "Copy address"));
+    h("button", { class: "btn", type: "button", onclick: () => copyText(address, "Address copied") }, icon("copy"), "Copy address"),
+    // V8 F42 Herald: share cards (Gate verdict + Watchfire) with the viewer's referral link, drawn in the browser
+    h("button", { class: "btn", type: "button", onclick: () => import("../sharecard.js").then((m) => m.openShare({ address, symbol: t.symbol, stock: !!(t.stock || t.hub) })).catch((e) => console.error(e)) }, icon("ext"), "Share"));
 
   // chart
   const chartBox = h("div", { class: "tk-chart" });
   let interval = "1h";
   const ivSeg = seg(["5m", "15m", "1h", "4h", "1d"], interval, (v) => { interval = v; loadChart(); });
   const IV_SECS = { "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400 };
-  let candleSeries = null, candleTimes = [], board = null;
+  let candleSeries = null, candleTimes = [], board = null, calls = null, placeCalls = null;
   const applyMarks = () => { try { candleSeries?.setMarkers(chartMarks(board, candleTimes, IV_SECS[interval] || 3600)); } catch { /* chart gone */ } };
   const chartSrc = h("span", { class: "fine" });
   const chartPanel = h("section", { class: "panel" }, h("div", { class: "tk-chart-bar" }, ivSeg, chartSrc), chartBox);
@@ -131,7 +133,9 @@ export async function mount(view, { parts, go }) {
     h("p", { class: "fine", style: { margin: 0 } }, `Data: ${d.sources.join(" + ")}. This page is information, not a safety check. Ask the agent for a contract health read before trading.`));
 
   // activity / holders tabs (only where a source serves them)
-  const tabList = [{ value: "trades", label: "Trades" }, { value: "holders", label: "Holders" }, { value: "early", label: "Early buyers" }, { value: "activity", label: "Activity (USD)" }];
+  const tabList = [{ value: "trades", label: "Trades" }, { value: "callouts", label: "Callouts and X" }, { value: "holders", label: "Holders" }, { value: "early", label: "Early buyers" }, { value: "activity", label: "Activity (USD)" }];
+  // V8 F41 stage 2: callouts (stamped at the price of the moment, graded at 24 h) and posts on X about this contract
+  const loadCalls = async () => { try { calls = await api.get(`/api/callouts/${address}`); placeCalls?.(); if (curTab === "callouts") renderTab("callouts"); } catch { /* next round */ } };
   const tabBody = h("div", {}, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Reading this coin's trades…")));
   let curTab = "trades", tradeFilter = "all";
   const tabsEl = tabs(tabList, "trades", (v) => renderTab(v));
@@ -139,6 +143,7 @@ export async function mount(view, { parts, go }) {
     curTab = v;
     if (v === "trades") { renderTrades(tabBody, board, tradeFilter, (f) => { tradeFilter = f; renderTab("trades"); }, t.symbol); return; }
     if (v === "early") { renderEarly(tabBody, board); return; }
+    if (v === "callouts") { if (!calls) { clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Loading callouts and posts on X…"))); loadCalls(); return; } renderCallouts(tabBody, calls, address, t.symbol, loadCalls); return; }
     if (v === "activity") {
       if (!d.trades) { clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Loading recent trades…"))); return; }
       clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" },
@@ -214,6 +219,8 @@ export async function mount(view, { parts, go }) {
   clear(view, back, head, actions,
     h("div", { class: "tk-grid" }, h("div", {}, chartPanel, tabsEl ? h("div", { class: "tk-tabs" }, tabsEl, tabBody) : null), h("div", { class: "tk-side" }, tradeCard, gateCard, wfCard, orcCard, stats, info)));
   renderTab("trades");
+  if (!t.stock && !t.hub) { loadCalls(); }
+  const callsT = setInterval(() => { if (!document.hidden && !t.stock && !t.hub) loadCalls(); }, 60_000);
   const stopBoard = t.stock || t.hub ? () => {} : startBoard(address, (b) => {
     board = b; wfCard.update(b);
     if (curTab === "trades" || curTab === "early") renderTab(curTab);
@@ -257,6 +264,7 @@ export async function mount(view, { parts, go }) {
       const rows = c.candles.filter((x) => !seen.has(x.time) && seen.add(x.time)).sort((a, b) => a.time - b.time);
       candles.setData(rows.map((x) => ({ time: x.time, open: x.open, high: x.high, low: x.low, close: x.close })));
       candleSeries = candles; candleTimes = rows.map((x) => x.time); applyMarks();
+      placeCalls = calloutLayer(chartBox, chart, candles, () => (calls?.callouts || []).filter((c) => c.at / 1000 >= (candleTimes[0] || 0)));
       if (rows.some((x) => x.volume != null)) {
         const vol = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, color: "rgba(95,211,239,.25)", lastValueVisible: false, priceLineVisible: false });
         chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
@@ -271,7 +279,7 @@ export async function mount(view, { parts, go }) {
     }
   }
   loadChart();
-  return () => { chartStop = true; stopBoard(); offClass(); try { chart?.remove(); } catch {} ro?.disconnect(); };
+  return () => { chartStop = true; stopBoard(); clearInterval(callsT); offClass(); try { chart?.remove(); } catch {} ro?.disconnect(); };
 }
 
 // the coin's own accounts, as buttons (X, Telegram, website, Discord); nothing when the coin lists none

@@ -178,4 +178,59 @@ export function chartMarks(b, times, ivSecs) {
   return marks.sort((a, c) => a.time - c.time).filter((m) => { const k = `${m.time}${m.text}`; if (seen.has(k)) return false; seen.add(k); return true; });
 }
 
+/* ---------- stage 2: callouts (graded at 24 h) and posts on X that mention the coin ---------- */
+const initials = (c) => (c.caller.handle ? c.caller.handle.slice(0, 2) : c.caller.address.slice(2, 4)).toUpperCase();
+const pctSpan = (v) => (v == null ? h("span", { class: "muted" }, "–") : h("span", { class: v >= 0 ? "up" : "down" }, `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`));
+const agoTxt = (ms) => { const s = Math.max(0, Math.round((Date.now() - ms) / 1000)); return secs(s); };
+export function renderCallouts(box, data, address, symbol, reload) {
+  const text = h("textarea", { class: "input wt-call-in", rows: "2", maxlength: "280", placeholder: `Your thesis on $${symbol}, in a sentence. It is stamped with the price now and graded in public at 24 hours.` });
+  const send = h("button", { class: "btn sm primary", type: "button", onclick: async () => {
+    if (!wallet.session) return toast("Sign in to make a callout.", "warn");
+    send.disabled = true;
+    try { await api.post("/api/callouts", { token: address, text: text.value }); text.value = ""; toast("Callout stamped. It is graded at 24 hours.", "ok"); reload(); }
+    catch (e) { toast(e.message, "error"); }
+    send.disabled = false;
+  } }, "Callout");
+  const calls = data?.callouts || [];
+  const x = data?.x || { posts: [] };
+  clear(box, h("div", { class: "panel mk-panel wt-panel wt-calls" },
+    h("div", { class: "wt-call-form" }, h("b", {}, "Make a callout"), text, h("div", { class: "wt-row" }, h("span", { class: "fine muted" }, wallet.session ? "At most 5 a day. Your X shows when your wallet linked X." : "Sign in to make a callout."), send)),
+    calls.length ? h("ul", { class: "wt-call-list" }, calls.map((c) => h("li", {},
+      c.caller.avatar ? h("img", { class: "wt-av", src: c.caller.avatar, alt: "", width: 34, height: 34, referrerpolicy: "no-referrer" }) : h("span", { class: "wt-av" }, initials(c)),
+      h("div", { class: "wt-call-b" },
+        h("div", {}, c.caller.handle ? h("a", { class: "link", href: `https://x.com/${c.caller.handle}`, target: "_blank", rel: "noopener nofollow" }, `@${c.caller.handle}`) : h("a", { class: "link mono", href: `https://robinhoodchain.blockscout.com/address/${c.caller.address}`, target: "_blank", rel: "noopener" }, short(c.caller.address, 4)),
+          h("span", { class: "fine muted" }, ` · ${agoTxt(c.at)} ago · MC at call ${c.mcapUsd ? `$${compact(c.mcapUsd, 1)}` : "–"}`)),
+        h("p", {}, c.text)),
+      h("div", { class: "wt-call-r" }, c.graded ? [h("small", {}, "24 h"), pctSpan(c.graded.pct)] : [h("small", {}, "Since call"), pctSpan(c.nowPct)]))))
+      : h("div", { class: "empty" }, "No callouts yet. Be the first: your call is stamped now and graded in public."),
+    h("div", { class: "wt-x" }, h("div", { class: "wt-x-h" }, h("b", {}, "On X"), h("span", { class: "fine muted" }, x.off ? "X search is off" : x.capped ? "Today's X searches are used up; showing the last read" : "Posts that mention this contract, refreshed every 15 minutes")),
+      (x.posts || []).length ? h("ul", { class: "wt-call-list" }, x.posts.map((p) => h("li", {},
+        p.author.avatar ? h("img", { class: "wt-av", src: p.author.avatar, alt: "", width: 34, height: 34, referrerpolicy: "no-referrer" }) : h("span", { class: "wt-av" }, (p.author.handle || "x").slice(0, 2).toUpperCase()),
+        h("div", { class: "wt-call-b" },
+          h("div", {}, h("a", { class: "link", href: `https://x.com/${p.author.handle}/status/${p.id}`, target: "_blank", rel: "noopener nofollow" }, `@${p.author.handle || "?"}`), h("span", { class: "fine muted" }, ` · ${compact(p.author.followers || 0, 1)} followers${p.at ? ` · ${agoTxt(p.at)} ago` : ""}`)),
+          h("p", {}, p.text)),
+        h("div", { class: "wt-call-r" }, h("small", {}, "Likes"), h("span", {}, compact(p.likes || 0, 1)))))) : h("div", { class: "empty" }, "No posts on X mention this contract lately.")),
+    h("p", { class: "fine" }, "Posts on X are written by their authors, not by Troya. Check a coin with the Gate before you act on anyone's call.")));
+}
+// the callers' avatars on the chart, at the time and price of each call (an HTML layer over the chart)
+export function calloutLayer(chartBox, chart, series, getCalls) {
+  const layer = h("div", { class: "wt-av-layer", "aria-hidden": "true" });
+  chartBox.style.position = "relative";
+  chartBox.append(layer);
+  const place = () => {
+    const calls = getCalls() || [];
+    clear(layer, calls.slice(0, 30).map((c) => {
+      const x = chart.timeScale().timeToCoordinate(Math.floor(c.at / 1000));
+      const y = series.priceToCoordinate(c.priceUsd);
+      if (x == null || y == null || x < 0 || y < 0) return null;
+      const el = c.caller.avatar ? h("img", { class: "wt-av sm", src: c.caller.avatar, alt: "", referrerpolicy: "no-referrer", title: `${c.caller.handle ? "@" + c.caller.handle : short(c.caller.address, 4)}: ${c.text}` }) : h("span", { class: "wt-av sm", title: c.text }, initials(c));
+      el.style.left = `${x}px`; el.style.top = `${y}px`;
+      return el;
+    }).filter(Boolean));
+  };
+  chart.timeScale().subscribeVisibleTimeRangeChange(place);
+  place();
+  return place;
+}
+
 export { icon };

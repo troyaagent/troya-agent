@@ -155,6 +155,11 @@ async function scanCoin(token, st, raise) {
   if (c.oathBroken) await raise("oath-broken", "red", "The dev broke its Oath (troya.codes/oath)", null);
   const ring = (await import("./ringradar.mjs")).ringFlags(token);
   if (ring[0]?.level === "red") await raise("ring", "amber", `${ring[0].title}: ${ring[0].detail}`, null);
+  // V8 F39 Watchfire reads every transfer of this coin live: a fire (coins gathered into one wallet, a 5%+ sale) is red,
+  // fast selling is amber
+  const wf = (await import("./watchfire.mjs").catch(() => null))?.watchfireState(token);
+  if (wf?.level === "fire" && wf.lastFire) await raise("watchfire", "red", `Watchfire: ${wf.lastFire.detail}`, null);
+  else if (wf?.level === "red" && wf.why?.[0]) await raise("watchfire-selling", "amber", `Watchfire: ${wf.why[0]}`, null);
   // the sell test, every five minutes
   if (Date.now() - c.sell.at > SELLTEST_MS && st.testRaw) {
     c.sell.at = Date.now();

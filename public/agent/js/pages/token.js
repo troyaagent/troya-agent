@@ -1,7 +1,9 @@
-// Token detail (#/token/<address>): price, chart, stats, holders, trades, links.
+// Token detail (#/token/<address>): price, chart, stats, holders, trades, links. Since V8 F41 it is the War Table:
+// Watchfire's live board (labelled trades, early buyers, holder tags), instant trades and chart marks (wartable.js).
 import { h, clear, useCss, icon, tokenIcon, padLogo, tiny, price, usd, compact, pctEl, short, ago, copyText, tabs, seg, emptyState } from "../ui.js";
 import { api, cached } from "../api.js";
 import { padName, ethAmount, ageText } from "../marketlib.js";
+import { startBoard, watchfirePanel, tradePanel, renderTrades, renderEarly, chartMarks, tagEl } from "./wartable.js";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 const lc = (x) => String(x || "").toLowerCase();
@@ -58,7 +60,10 @@ export async function mount(view, { parts, go }) {
   // chart
   const chartBox = h("div", { class: "tk-chart" });
   let interval = "1h";
-  const ivSeg = seg(["15m", "1h", "4h", "1d"], interval, (v) => { interval = v; loadChart(); });
+  const ivSeg = seg(["5m", "15m", "1h", "4h", "1d"], interval, (v) => { interval = v; loadChart(); });
+  const IV_SECS = { "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400 };
+  let candleSeries = null, candleTimes = [], board = null;
+  const applyMarks = () => { try { candleSeries?.setMarkers(chartMarks(board, candleTimes, IV_SECS[interval] || 3600)); } catch { /* chart gone */ } };
   const chartSrc = h("span", { class: "fine" });
   const chartPanel = h("section", { class: "panel" }, h("div", { class: "tk-chart-bar" }, ivSeg, chartSrc), chartBox);
 
@@ -126,11 +131,16 @@ export async function mount(view, { parts, go }) {
     h("p", { class: "fine", style: { margin: 0 } }, `Data: ${d.sources.join(" + ")}. This page is information, not a safety check. Ask the agent for a contract health read before trading.`));
 
   // activity / holders tabs (only where a source serves them)
-  const tabList = [{ value: "activity", label: "Activity" }, { value: "holders", label: "Holders" }];
-  const tabBody = h("div", {}, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Loading recent trades…")));
-  const tabsEl = tabs(tabList, "activity", (v) => renderTab(v));
+  const tabList = [{ value: "trades", label: "Trades" }, { value: "holders", label: "Holders" }, { value: "early", label: "Early buyers" }, { value: "activity", label: "Activity (USD)" }];
+  const tabBody = h("div", {}, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Reading this coin's trades…")));
+  let curTab = "trades", tradeFilter = "all";
+  const tabsEl = tabs(tabList, "trades", (v) => renderTab(v));
   function renderTab(v) {
+    curTab = v;
+    if (v === "trades") { renderTrades(tabBody, board, tradeFilter, (f) => { tradeFilter = f; renderTab("trades"); }, t.symbol); return; }
+    if (v === "early") { renderEarly(tabBody, board); return; }
     if (v === "activity") {
+      if (!d.trades) { clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Loading recent trades…"))); return; }
       clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" },
         h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Time"), h("th", { class: "l" }, "Side"), h("th", {}, "USD"), h("th", {}, t.symbol), h("th", { class: "l" }, "Trader"))),
         h("tbody", {}, d.trades.map((x) => h("tr", {},
@@ -160,7 +170,8 @@ export async function mount(view, { parts, go }) {
         h("tbody", {}, d.holders.map((x, i) => h("tr", {},
           h("td", { class: "l rank" }, i + 1),
           h("td", { class: "l mono" }, h("a", { class: "link", href: `https://robinhoodchain.blockscout.com/address/${x.address}`, target: "_blank", rel: "noopener" }, short(x.address, 5)),
-            x.isCreator ? h("span", { class: "pad-tag warn" }, "dev / creator") : null, x.label ? h("span", { class: "pad-tag" }, x.label) : x.contract ? h("span", { class: "pad-tag" }, "contract") : null),
+            x.isCreator ? h("span", { class: "pad-tag warn" }, "dev / creator") : null, x.label ? h("span", { class: "pad-tag" }, x.label) : x.contract ? h("span", { class: "pad-tag" }, "contract") : null,
+            ...((board?.holders || []).find((y) => lc(y.wallet) === lc(x.address))?.tags || []).filter((k) => k !== "whale").map(tagEl)),
           h("td", {}, x.balance != null ? compact(x.balance, 2) : "–"),
           h("td", {}, x.pct != null ? `${x.pct.toFixed(2)}%` : "–", h("span", { class: "tk-bar", style: { width: `${Math.max(2, ((x.pct || 0) / max) * 60)}px` } })))))))),
         h("p", { class: "fine" }, `The ${d.holders.length} largest of ${d.holdersCount != null ? d.holdersCount.toLocaleString("en-US") : "all"} holders, from ${d.holdersSource || "Blockscout"}. Pools, lockers and the dead address are labelled; they are not people.`));
@@ -168,15 +179,13 @@ export async function mount(view, { parts, go }) {
   }
   function loadTrades() {
     const ac = new AbortController();
-    const msg = (text, retry) => clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, text, retry ? h("button", { class: "btn sm", type: "button", onclick: loadTrades }, icon("refresh"), "Try again") : null)));
-    msg("Loading recent trades…");
+    const msg = (text, retry) => { if (curTab === "activity") clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, text, retry ? h("button", { class: "btn sm", type: "button", onclick: loadTrades }, icon("refresh"), "Try again") : null))); };
     const slowT = setTimeout(() => msg("Still loading recent trades from GeckoTerminal. Busy coins can take up to a minute."), 8000);
     const stopT = setTimeout(() => ac.abort(), 60000);
     api.get(`market/robinhood/trades?address=${address}`, { signal: ac.signal }).then((r) => {
       if (chartStop) return;
       d.trades = r.trades || [];
-      if (d.trades.length) renderTab("activity");
-      else msg("No recent trades in the main pool.");
+      if (curTab === "activity") renderTab("activity");
     }).catch((e) => { if (!chartStop) msg(e.name === "AbortError" ? "Recent trades are taking too long to load." : "Recent trades are unavailable right now.", true); })
       .finally(() => { clearTimeout(slowT); clearTimeout(stopT); });
   }
@@ -200,8 +209,17 @@ export async function mount(view, { parts, go }) {
     ctxNote = `Troya's chart note (${lean}, graded in public 24 h later): ${n.text}`; tell();
   }).catch(() => {});
 
+  const wfCard = watchfirePanel();
+  const tradeCard = t.tradable || pons ? tradePanel(t, address) : null;
   clear(view, back, head, actions,
-    h("div", { class: "tk-grid" }, h("div", {}, chartPanel, tabsEl ? h("div", { class: "tk-tabs" }, tabsEl, tabBody) : null), h("div", { class: "tk-side" }, gateCard, orcCard, stats, info)));
+    h("div", { class: "tk-grid" }, h("div", {}, chartPanel, tabsEl ? h("div", { class: "tk-tabs" }, tabsEl, tabBody) : null), h("div", { class: "tk-side" }, tradeCard, gateCard, wfCard, orcCard, stats, info)));
+  renderTab("trades");
+  const stopBoard = t.stock || t.hub ? () => {} : startBoard(address, (b) => {
+    board = b; wfCard.update(b);
+    if (curTab === "trades" || curTab === "early") renderTab(curTab);
+    applyMarks();
+  });
+  if (t.stock || t.hub) { wfCard.update({ level: "clear", why: ["Stock tokens and core tokens are not memecoins; Watchfire watches coins from launchpads and pools."] }); renderTab("activity"); }
   view.classList.add("tk2");
   const offClass = () => view.classList.remove("tk2");
 
@@ -238,6 +256,7 @@ export async function mount(view, { parts, go }) {
       const seen = new Set();
       const rows = c.candles.filter((x) => !seen.has(x.time) && seen.add(x.time)).sort((a, b) => a.time - b.time);
       candles.setData(rows.map((x) => ({ time: x.time, open: x.open, high: x.high, low: x.low, close: x.close })));
+      candleSeries = candles; candleTimes = rows.map((x) => x.time); applyMarks();
       if (rows.some((x) => x.volume != null)) {
         const vol = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, color: "rgba(95,211,239,.25)", lastValueVisible: false, priceLineVisible: false });
         chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
@@ -252,7 +271,7 @@ export async function mount(view, { parts, go }) {
     }
   }
   loadChart();
-  return () => { chartStop = true; offClass(); try { chart?.remove(); } catch {} ro?.disconnect(); };
+  return () => { chartStop = true; stopBoard(); offClass(); try { chart?.remove(); } catch {} ro?.disconnect(); };
 }
 
 // the coin's own accounts, as buttons (X, Telegram, website, Discord); nothing when the coin lists none

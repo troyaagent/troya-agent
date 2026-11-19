@@ -43,7 +43,8 @@ const fires = [];                                       // recent fires, newest 
 function blank(token) {
   return { token, symbol: null, decimals: 18, supply: 0, venues: new Set([lc(ADDR.poolManager)]), routers: new Set(), bal: new Map(), via: new Map(),
     events: [], p2p: [], seen: new Set(), lastBlock: 0, loading: null, ready: false, until: 0, reasons: new Set(), level: "clear", why: [],
-    fireAt: 0, fireKind: null, redAt: 0, lastFire: null, headBlock: 0 };
+    fireAt: 0, fireKind: null, redAt: 0, lastFire: null, headBlock: 0,
+    launchBlock: 0, dev: new Set(), insiders: new Set(), snipers: new Set(), bundlers: new Set(), ring: new Set(), early: [], trades: [] };
 }
 const amountOf = (st, h) => Number(BigInt(h) / 10n ** BigInt(Math.max(0, st.decimals - 6))) / 1e6;
 async function call(to, data) { return rpc("robinhood", "eth_call", [{ to, data }, "latest"], { timeoutMs: 12_000 }); }
@@ -79,6 +80,10 @@ async function load(st) {
   for (const p of row?.pools || []) if (isAddress(String(p.pool || ""))) st.venues.add(lc(p.pool));
   const head = Number(BigInt(await rpc("robinhood", "eth_blockNumber", [])));
   const launch = await import("./ringradar.mjs").then((m) => m.findLaunchTx(t)).catch(() => null);
+  st.launchBlock = launch?.block || 0;
+  const rr = launch ? await import("./ringradar.mjs").then((m) => m.ringCheck(t, launch)).catch(() => null) : null;
+  if (rr?.launch?.deployer) st.dev.add(lc(rr.launch.deployer));
+  for (const w of rr?.exemptions?.wallets || []) if (!st.dev.has(lc(w))) st.insiders.add(lc(w));
   const from = Math.max(launch?.block || 0, head - HISTORY_BLOCKS);
   st.fullHistory = !!(launch?.block && launch.block >= head - HISTORY_BLOCKS);
   const logs = await getLogs([getAddress(t)], from, head);
@@ -106,6 +111,7 @@ function ingest(st, logs, { history = false } = {}) {
       if (V.has(m.to) && !V.has(m.from) && moves.some((x) => x.to === m.from && !V.has(x.from) && x.from !== ZERO)) st.routers.add(m.from);
       if (V.has(m.from) && !V.has(m.to) && moves.some((x) => x.from === m.to && !V.has(x.to) && x.to !== ZERO)) st.routers.add(m.to);
     }
+    const buyersInTx = new Set();
     for (const m of moves) {
       // seeding the curve or pool at launch moves (nearly) the whole supply: not a trade
       const seed = st.supply > 0 && m.a >= 0.9 * st.supply;
@@ -117,17 +123,24 @@ function ingest(st, logs, { history = false } = {}) {
       if (V.has(m.to) && !V.has(m.from)) {
         const via = moves.find((x) => x.to === m.from && !V.has(x.from) && x.from !== ZERO);
         st.events.push({ block, tx, kind: "sell", wallet: via ? via.from : m.from, a: m.a, router: via ? m.from : null });
+        st.trades.push({ block, tx, kind: "sell", wallet: via ? via.from : m.from, a: m.a, router: via ? m.from : null });
       } else if (V.has(m.from) && !V.has(m.to) && m.to !== ZERO) {
         const fwd = moves.find((x) => x.from === m.to && !V.has(x.to) && x.to !== ZERO);
         const wallet = fwd ? fwd.to : m.to;
         st.events.push({ block, tx, kind: "buy", wallet, a: m.a, router: fwd ? m.to : null });
+        st.trades.push({ block, tx, kind: "buy", wallet, a: m.a, router: fwd ? m.to : null });
         if (!st.via.has(wallet)) st.via.set(wallet, fwd ? m.to : "direct");
+        buyersInTx.add(wallet);
+        if (st.launchBlock && block <= st.launchBlock + 120) st.snipers.add(wallet);            // the first ~12 seconds
+        if (st.early.length < 60 && !st.early.some((e) => e.wallet === wallet)) st.early.push({ wallet, block, a: m.a, router: fwd ? m.to : null });
       } else if (m.from !== ZERO && m.to !== ZERO && m.to !== DEAD && !R.has(m.from) && !R.has(m.to) && !V.has(m.from) && !V.has(m.to)) {
         st.p2p.push({ block, tx, from: m.from, to: m.to, a: m.a });
       }
     }
+    if (buyersInTx.size >= 3) for (const w of buyersInTx) st.bundlers.add(w);              // one tx buying for 3+ wallets
     if (!history) evaluate(st, block);
   }
+  if (st.trades.length > 600) st.trades = st.trades.slice(-300);
   // keep the last ~10 minutes of signals
   const keep = (st.lastBlock || 0) - 600 / BLOCK_S;
   if (st.events.length > 5_000) st.events = st.events.filter((e) => e.block >= keep);
@@ -149,7 +162,7 @@ function evaluate(st, B) {
   const g = new Map();
   for (const e of st.p2p) if (e.block > since(RULES.gatherSecs) && e.block <= B) { const r = g.get(e.to) || { senders: new Set(), a: 0, tx: e.tx }; r.senders.add(e.from); r.a += e.a; g.set(e.to, r); }
   const gather = [...g.entries()].sort((a, b) => b[1].senders.size - a[1].senders.size)[0];
-  if (gather && gather[1].senders.size >= RULES.gatherSenders) { level = "fire"; kind = "gather"; detail = `${gather[1].senders.size} wallets sent ${pctOf(gather[1].a, st.supply)}% of the supply to ${short(gather[0])} within ${RULES.gatherSecs} s`; }
+  if (gather && gather[1].senders.size >= RULES.gatherSenders) { for (const w of gather[1].senders) st.ring.add(w); st.ring.add(gather[0]); level = "fire"; kind = "gather"; detail = `${gather[1].senders.size} wallets sent ${pctOf(gather[1].a, st.supply)}% of the supply to ${short(gather[0])} within ${RULES.gatherSecs} s`; }
   // whale: one sale of a big slice of the supply
   const bigSell = st.events.filter((e) => e.kind === "sell" && e.block > since(10) && e.block <= B && st.supply > 0 && (100 * e.a) / st.supply >= RULES.whalePct).sort((a, b) => b.a - a.a)[0];
   if (!kind && bigSell) { level = "fire"; kind = "whale"; detail = `one wallet sold ${pctOf(bigSell.a, st.supply)}% of the supply in one trade`; }
@@ -198,6 +211,39 @@ function onFire(st, kind, detail, block) {
   store?.update("watchfire.json", {}, (s) => { s.fires = [f, ...(s.fires || [])].slice(0, 300); return s; }).catch(() => {});
 }
 
+/* ---------- War Table: labelled trades, early buyers and holders for one coin ---------- */
+function tagsOf(st, w) {
+  const t = [];
+  if (st.dev.has(w)) t.push("dev");
+  if (st.insiders.has(w)) t.push("insider");
+  if (st.snipers.has(w)) t.push("sniper");
+  if (st.bundlers.has(w)) t.push("bundler");
+  if (st.ring.has(w)) t.push("ring");
+  const b = st.bal.get(w) || 0;
+  if (st.supply > 0 && b / st.supply >= 0.01) t.push("whale");
+  const v = st.via.get(w);
+  if (v && v !== "direct") t.push("bot");
+  return t;
+}
+export function board(token) {
+  const st = W.get(lc(token));
+  if (!st?.ready) return null;
+  const head = Math.max(st.headBlock, st.lastBlock);
+  const ago = (b) => Math.max(0, Math.round((head - b) * BLOCK_S));
+  const pct = (a) => (st.supply > 0 ? +((100 * a) / st.supply).toFixed(3) : null);
+  const trades = st.trades.slice(-150).reverse().map((e) => ({ kind: e.kind, wallet: getAddress(e.wallet), pct: pct(e.a), tokens: +e.a.toFixed(2), secsAgo: ago(e.block), tx: e.tx, via: e.router ? getAddress(e.router) : null, tags: tagsOf(st, e.wallet) }));
+  const early = st.early.map((e) => {
+    const now = Math.max(0, st.bal.get(e.wallet) || 0);
+    return { wallet: getAddress(e.wallet), secsAfterLaunch: st.launchBlock ? Math.round((e.block - st.launchBlock) * BLOCK_S) : null, boughtPct: pct(e.a), nowPct: pct(now),
+      status: now <= e.a * 0.02 ? "sold all" : now < e.a * 0.9 ? "sold part" : now > e.a * 1.1 ? "bought more" : "holding", tags: tagsOf(st, e.wallet) };
+  });
+  const hs = holders(st).slice(0, 50).map(([w, v]) => ({ wallet: getAddress(w), pct: pct(v), tags: tagsOf(st, w), via: st.via.get(w) && st.via.get(w) !== "direct" ? getAddress(st.via.get(w)) : null }));
+  const counts = {}; for (const k of ["dev", "insider", "sniper", "bundler", "ring", "whale", "bot"]) counts[k] = 0;
+  for (const w of new Set([...st.trades.map((e) => e.wallet), ...st.early.map((e) => e.wallet)])) for (const k of tagsOf(st, w)) counts[k]++;
+  return { token: getAddress(st.token), symbol: st.symbol, level: st.level, why: st.why, metrics: st.metrics, lastFire: st.lastFire, fullHistory: !!st.fullHistory,
+    trades, early, holders: hs, counts, devs: [...st.dev].map((w) => getAddress(w)), at: Date.now() };
+}
+
 /* ---------- which coins are watched ---------- */
 export function watch(token, reason = "ask") {
   const t = lc(token);
@@ -213,11 +259,17 @@ export function watchfireState(token) {
   const st = W.get(lc(token));
   return st?.ready ? { level: st.level, why: st.why, lastFire: st.lastFire } : null;
 }
+const MAX_WATCH = 150;
 async function syncArena() {
   const d = await store.readJson("arena.json", {}).catch(() => ({}));
   const open = new Set((d.positions || []).filter((p) => p.status === "open").map((p) => lc(p.token)));
   for (const t of open) watch(t, "arena");
+  // the coins Aegis guards for users: their holders get Watchfire's alerts through Aegis
+  const ag = await store.readJson("aegis.json", {}).catch(() => ({}));
+  const guarded = new Set(Object.keys(ag.coins || {}).map(lc).filter((t) => isAddress(t)));
+  for (const t of guarded) if (W.size < MAX_WATCH || W.has(t)) watch(t, "aegis");
   for (const [t, st] of W) {
+    if (!guarded.has(t)) st.reasons.delete("aegis");
     if (!open.has(t)) st.reasons.delete("arena");
     if (st.reasons.has("ask") && Date.now() > st.until) st.reasons.delete("ask");
     if (!st.reasons.size && !st.loading) W.delete(t);
@@ -332,6 +384,12 @@ export async function register(r, ctx) {
       watching: [...st.reasons], live: !!(ws && ws.readyState === 1 && subId), rules: RULES, fullHistory: !!st.fullHistory,
       note: `Watchfire reads patterns, not proof. It cannot sell ahead of a dump inside one block.${st.fullHistory ? "" : " This coin is older than 6 hours: holder figures cover the transfers of the last 6 hours only."}` };
   }, { weight: 2, perMin: 30 });
+  r.get("/api/watchfire/:token/board", async ({ params }) => {
+    if (!isAddress(String(params.token || ""))) throw new HttpError(400, "That is not a token address.");
+    const st = watch(params.token, "ask");
+    if (st?.loading) await Promise.race([st.loading, new Promise((res) => setTimeout(res, 20_000))]);
+    return board(params.token) || { token: getAddress(params.token), level: "loading", trades: [], early: [], holders: [], counts: {} };
+  }, { weight: 2, perMin: 60 });
   r.get("/api/watchfire", async () => ({ name: "Troya Watchfire", live: !!(ws && ws.readyState === 1 && subId),
     watching: [...W.values()].filter((s) => s.ready).map((s) => ({ token: getAddress(s.token), symbol: s.symbol, level: s.level, why: s.why.slice(0, 2), reasons: [...s.reasons] })),
     fires: fires.slice(0, 30) }), { weight: 1 });

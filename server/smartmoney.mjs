@@ -75,6 +75,7 @@ async function build({ max = 40 } = {}) {
       try {
         const e = await earlyBuyers(t, from, to);
         d.coins[t] = { symbol: c.symbol, outcome, at: c.at, buyers: [...e.buyers.keys()].slice(0, 400), pons: e.pons };
+        await new Promise((ok) => setTimeout(ok, 500));                      // gentle on the public RPCs
       } catch (err) { console.warn("[smart]", c.symbol, err.message); done--; break; }
     }
     // score

@@ -165,3 +165,15 @@
 .ag-fund .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ag-fund .ag-fund-in { width: 120px; }
 @media (max-width: 560px) { .ag-fund .ag-fund-in { flex: 1 1 100px; } .ag-fund .btn { flex: 1 1 100%; justify-content: center; } }
+
+/* phones (19 Nov, reported in the group): nothing in the Agent pages may push a panel wider than the screen. The long
+   Agent Wallet address did, and every card after it ran off the right edge. Grid and flex children may now shrink. */
+.ag-col > *, .ag-panel > *, .ag-aw-h > *, .ag-fund > * { min-width: 0; }
+.ag-addr { flex-wrap: wrap; overflow-wrap: anywhere; }
+.ag-fund-picks .chip { flex: 0 0 auto; }
+@media (max-width: 560px) {
+  .ag-bal.stats { grid-template-columns: 1fr; }
+  .ag-bal .stat { border-left: 0; border-top: 1px solid var(--line); }
+  .ag-bal .stat:first-child { border-top: 0; }
+  .ag-fund .ag-fund-in { flex: 1 1 100%; width: auto; }
+}

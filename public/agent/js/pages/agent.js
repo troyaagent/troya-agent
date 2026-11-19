@@ -2,7 +2,7 @@
 import { h, clear, icon, toast, modal, review, short, greeting, useCss, every, store, copyText, ago, num, usd, esc, chainLogo, tokenIcon, coinIcon } from "../ui.js";
 import { api, stream } from "../api.js";
 import { coinSuggest } from "../coinsearch.js";
-import { wallet, onWallet, signIn, openConnect, signerFor } from "../wallet.js";
+import { wallet, onWallet, signIn, openConnect, signerFor, reader } from "../wallet.js";
 import { waitReceipt, errText } from "../chain.js";
 import { parseEther } from "ethers";
 
@@ -330,6 +330,15 @@ function mountWallet(box) {
     function fundRow(w) {
       const amt = h("input", { class: "input ag-fund-in", type: "number", min: "0", step: "any", value: "0.002", "aria-label": "ETH to add to the Agent Wallet" });
       const pick = (v) => h("button", { class: "chip", type: "button", onclick: () => { amt.value = v; } }, `${v} ETH`);
+      // Max: everything the connected wallet holds on Robinhood Chain, less 0.0003 ETH for the transfer's own gas, cut to 6 decimals
+      const max = h("button", { class: "chip", type: "button", onclick: async () => {
+        try {
+          const wei = await reader("robinhood").getBalance(wallet.address);
+          const v = Math.floor((Number(wei) / 1e18 - 0.0003) * 1e6) / 1e6;
+          if (!(v > 0)) return toast("Not enough ETH on Robinhood Chain in your wallet (keep a little for gas).", "");
+          amt.value = String(v);
+        } catch (e) { toast(errText(e), "error"); }
+      } }, "Max");
       const go = h("button", { class: "btn primary", type: "button", onclick: async () => {
         const v = Number(amt.value);
         if (!(v > 0 && v <= 5)) return toast("Enter an amount between 0 and 5 ETH.", "error");
@@ -347,7 +356,7 @@ function mountWallet(box) {
           render();
         } catch (e) { toast(errText(e), "error", 7000); go.disabled = false; go.textContent = "Add ETH"; }
       } }, icon("plus"), "Add ETH");
-      return h("div", { class: "ag-fund" }, h("div", { class: "faint" }, "Add ETH from your wallet"), h("div", { class: "row wrap" }, pick("0.002"), pick("0.005"), pick("0.01"), amt, go));
+      return h("div", { class: "ag-fund" }, h("div", { class: "faint" }, "Add ETH from your wallet"), h("div", { class: "row wrap ag-fund-picks" }, pick("0.002"), pick("0.005"), pick("0.01"), max), h("div", { class: "row wrap" }, amt, go));
     }
     clear(main,
       h("div", { class: "panel ag-panel ag2-hero" },

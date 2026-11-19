@@ -57,7 +57,7 @@ async function traceInner(txHash) {
   walk(r?.result);
   return found;
 }
-async function findLaunchTx(token) {
+export async function findLaunchTx(token) {
   // the TokenLaunched log carries the coin as topic 1; search back in 30k-block steps (the official RPC's range) up to ~2 days
   const head = Number(BigInt(await rpc("robinhood", "eth_blockNumber", [])));
   const pad = zeroPadValue(token, 32);

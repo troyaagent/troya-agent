@@ -46,6 +46,7 @@ Or just write it: "long ETH $20 at 3x" gets you a ticket to confirm.
 /council 0x… · three reasons not to buy, then a bull/bear/risk debate on Troya's data
 /oath 0x… · the dev's Oath for a coin: kept or broken
 /aegis 0x… · what Aegis caught on a coin (dev and whale sells, sell test)
+/smart · wallets that keep buying winners early · /smart 0x… for one coin
 /price NVDA · live price (a symbol or a 0x address)
 /gas · live gas cost of a swap, approval or send
 /sentry · the latest launches through the Gate
@@ -128,6 +129,18 @@ async function councilCmd(arg) {
   const c = await m.council(a).catch((e) => null);
   if (!c) return "The Council could not sit on this coin right now. Try again in a minute.";
   return `<b>Troya Council</b> · <code>${a}</code>\n${esc(m.councilText(c))}`;
+}
+async function smartCmd(arg) {
+  const m = await import("./smartmoney.mjs");
+  const a = (String(arg || "").match(/0x[0-9a-fA-F]{40}/) || [])[0];
+  if (a) {
+    const v = await m.smartIn(a).catch(() => null);
+    if (!v) return "Could not read this coin right now.";
+    return `<b>Smart money</b> · <code>${a}</code>\n${esc(v.summary || v.note || "")}${(v.smart || []).slice(0, 5).map((w) => `\n• #${w.rank} ${w.wallet.slice(0, 6)}…${w.wallet.slice(-4)} · ${w.wins}W/${w.losses}L · in at ${w.secondsIn}s`).join("")}`;
+  }
+  const r = await fetch("http://127.0.0.1:" + (process.env.PORT || 9270) + "/api/radar/smart").then((x) => x.json()).catch(() => null);
+  if (!r?.wallets?.length) return "The smart-wallet board is still being built from The Record.";
+  return `<b>Smart money on Robinhood Chain</b>\nWallets that bought early in coins that reached 2x, scored on ${r.coinsGraded} graded Sentry calls (base rate ${Math.round(r.baseRate * 100)}%).\n${r.wallets.slice(0, 8).map((w) => `#${w.rank} <code>${w.wallet}</code> · ${w.wins}W/${w.losses}L${w.cluster ? ` · cluster of ${w.cluster}` : ""}`).join("\n")}\nPast results, not a promise. /smart 0x… checks a coin.`;
 }
 async function aegisCmd(arg) {
   const a = (String(arg || "").match(/0x[0-9a-fA-F]{40}/) || [])[0];
@@ -509,7 +522,7 @@ export async function handleBotMessage(m, tg, me) {
   const [, cmdRaw, at, arg = ""] = cm;
   if (at && me?.username && at.toLowerCase() !== me.username.toLowerCase()) return;
   const cmd = cmdRaw.toLowerCase();
-  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "oath", "aegis", "rules", "sentry", "badge", "perks", "reports", "flywheel"].includes(cmd)) return;
+  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "oath", "aegis", "smart", "rules", "sentry", "badge", "perks", "reports", "flywheel"].includes(cmd)) return;
   // one answer per person every 3 s keeps the group readable
   const who = `${chatId}:${m.from?.id}`;
   if (Date.now() - (lastReply.get(who) || 0) < 3000) return;
@@ -567,6 +580,7 @@ Nobody from Troya DMs first or asks for a seed phrase or private key.` });
     else if (cmd === "council") { text = await councilCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else if (cmd === "oath") { text = await oathCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else if (cmd === "aegis") { text = await aegisCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
+    else if (cmd === "smart") { text = await smartCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else { text = await gate(arg); if (coinOf(arg) && !/no contract|Usage/i.test(text)) markup = coinKb(coinOf(arg)); }
   } catch (e) { text = `Could not read that right now (${esc(String(e.message || e).slice(0, 80))}). Try again in a moment.`; }
   await tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true }, ...(markup ? { reply_markup: markup } : {}) });

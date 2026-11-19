@@ -13,14 +13,15 @@ const pctTxt = (x) => (x == null ? "unknown" : `${(+x).toFixed(1)}%`);
 
 async function facts(token) {
   const t = getAddress(token);
-  const [{ gateCheck }, { verdict }, assayM, ringM, qM, recM] = await Promise.all([
-    import("./robinhood.mjs"), import("./sentry.mjs"), import("./assay.mjs"), import("./ringradar.mjs"), import("./quantum.mjs"), import("./record.mjs")]);
-  const [g, a, ring, q, rec] = await Promise.all([
+  const [{ gateCheck }, { verdict }, assayM, ringM, qM, recM, smM] = await Promise.all([
+    import("./robinhood.mjs"), import("./sentry.mjs"), import("./assay.mjs"), import("./ringradar.mjs"), import("./quantum.mjs"), import("./record.mjs"), import("./smartmoney.mjs")]);
+  const [g, a, ring, q, rec, sm] = await Promise.all([
     gateCheck({ tokenIn: "ETH", tokenOut: t, amountIn: "0.01", slippageBps: 100 }).catch(() => null),
     assayM.assay(t, { deep: false, waitMs: 12000 }).catch(() => null),
     ringM.ringCheck(t).catch(() => null),
     qM.tokenExposure(t).catch(() => null),
     recM.recordView({ limit: 1 }).catch(() => null),
+    smM.smartIn(t).catch(() => null),
   ]);
   const F = [];
   const add = (id, text, kind = "fact") => F.push({ id, kind, text });
@@ -40,6 +41,7 @@ async function facts(token) {
     (ring.reasons || []).slice(0, 4).forEach((r, i) => add(`R${i + 1}`, `Ring Radar: ${r}`));
   }
   if (q) add("Q0", `Quantum-Ready: ${q.summary}`);
+  if (sm?.summary) add("M0", `Smart money: ${sm.summary}${sm.baseRate != null ? ` (base rate of early buyers: ${Math.round(sm.baseRate * 100)}% of graded coins reached 2x)` : ""}`);
   const st = rec?.stats;
   if (st?.graded) {
     add("S0", `Base rate from The Record: of ${st.graded} coins Troya Sentry called and graded after 24 hours, ${Math.round((st.winRate || 0) * 100)}% were higher; the median 24 h change was ${st.median24h != null ? (st.median24h * 100).toFixed(0) + "%" : "unknown"}`);

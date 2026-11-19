@@ -3,7 +3,7 @@
 import { h, clear, useCss, icon, tokenIcon, padLogo, tiny, price, usd, compact, pctEl, short, ago, copyText, tabs, seg, emptyState } from "../ui.js";
 import { api, cached } from "../api.js";
 import { padName, ethAmount, ageText } from "../marketlib.js";
-import { startBoard, watchfirePanel, tradePanel, renderTrades, renderEarly, chartMarks, tagEl, renderCallouts, calloutLayer } from "./wartable.js";
+import { startBoard, watchfirePanel, tradePanel, renderTrades, renderEarly, chartMarks, tagEl, renderCallouts, calloutLayer, tributePanel } from "./wartable.js";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 const lc = (x) => String(x || "").toLowerCase();
@@ -215,9 +215,10 @@ export async function mount(view, { parts, go }) {
   }).catch(() => {});
 
   const wfCard = watchfirePanel();
+  const trCard = t.stock || t.hub ? null : tributePanel(address);
   const tradeCard = t.tradable || pons ? tradePanel(t, address) : null;
   clear(view, back, head, actions,
-    h("div", { class: "tk-grid" }, h("div", {}, chartPanel, tabsEl ? h("div", { class: "tk-tabs" }, tabsEl, tabBody) : null), h("div", { class: "tk-side" }, tradeCard, gateCard, wfCard, orcCard, stats, info)));
+    h("div", { class: "tk-grid" }, h("div", {}, chartPanel, tabsEl ? h("div", { class: "tk-tabs" }, tabsEl, tabBody) : null), h("div", { class: "tk-side" }, tradeCard, gateCard, wfCard, trCard, orcCard, stats, info)));
   renderTab("trades");
   if (!t.stock && !t.hub) { loadCalls(); }
   const callsT = setInterval(() => { if (!document.hidden && !t.stock && !t.hub) loadCalls(); }, 60_000);

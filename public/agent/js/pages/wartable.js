@@ -70,6 +70,26 @@ export function watchfirePanel() {
   return el;
 }
 
+/* ---------- V8 F40 Tribute panel: is this coin's revenue, rewards or market cap real ---------- */
+const TV = { clear: ["Real", "Nothing fake found in its income, backing or volume."], caution: ["Caution", "Something about its income, backing or volume needs a look."], fake: ["Fake", "Its revenue, market cap or volume is not what it claims."], unknown: ["Unknown", "Could not finish the check right now."], loading: ["Checking", "Tracing who pays its holders, what backs its market cap and how real its volume is."] };
+export function tributePanel(address) {
+  const badge = h("span", { class: "wt-lvl l-loading" }, "Checking");
+  const sub = h("p", { class: "fine muted wt-sub" }, TV.loading[1]);
+  const why = h("ul", { class: "wt-why" });
+  const el = h("section", { class: "panel wt-wf wt-tr" },
+    h("div", { class: "panel-h" }, h("h2", {}, "Tribute"), h("span", { class: "fine muted" }, "Is the revenue real?")),
+    h("div", { class: "wt-wf-b" }, badge, sub), why,
+    h("p", { class: "fine muted wt-foot" }, "Traces who paid the holders in the last 12 days and with whose money, what real ETH or USDG backs the market cap, and whether the volume is scripted. Asked for by the community."));
+  const map = { clear: "clear", caution: "amber", fake: "fire", unknown: "loading" };
+  api.get(`/api/tribute/${address}`).then((r) => {
+    const k = TV[r?.verdict] ? r.verdict : "unknown";
+    badge.className = `wt-lvl l-${map[k]}`; badge.textContent = TV[k][0];
+    sub.textContent = TV[k][1];
+    clear(why, (r?.reasons || []).slice(0, 4).map((x) => h("li", {}, x)));
+  }).catch(() => { badge.className = "wt-lvl l-loading"; badge.textContent = TV.unknown[0]; sub.textContent = TV.unknown[1]; });
+  return el;
+}
+
 /* ---------- instant trade: Agent Wallet (Gate + caps, server side), else Troya Swap with the amount filled in ---------- */
 export function tradePanel(t, address) {
   const st = { aw: null, bal: 0, eth: null, armed: null, armT: null, busy: false };

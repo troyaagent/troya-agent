@@ -48,10 +48,12 @@ export async function mount(view, ctx) {
     h("p", { class: "fine lt-legal" }, "Stock tokens are issued by Robinhood Assets (Jersey) Limited and are not offered to US persons. Data from Robinhood's stock token API, DexScreener and Morpho Blue on chain. Not financial advice.")));
 
   const opts = (xs) => xs.map(([value, label]) => ({ value, label }));
-  const paintTabs = () => clear(tabs, seg(opts([["stocks", "Stocks"], ["actions", "Dividends & splits"], ["baskets", "Baskets"], ["borrow", "Borrow"]]), st.tab, (v) => { st.tab = v; history.replaceState(null, "", `#/stocks/${v}`); paint(); }));
+  const paintTabs = () => clear(tabs, seg(opts([["stocks", "Stocks"], ["gaps", "Vs real share"], ["actions", "Dividends & splits"], ["baskets", "Baskets"], ["borrow", "Borrow"]]), st.tab, (v) => { st.tab = v; history.replaceState(null, "", `#/stocks/${v}`); paint(); }));
   async function load() {
-    try { st.desk = await api.get("stocks/desk"); } catch (e) { st.err = e.message; }
-    try { st.loans = await api.get(`stocks/loans${wallet.address ? `?address=${wallet.address}` : ""}`); } catch {}
+    // the desk and the loans load side by side (the loans read Morpho on chain and are the slower of the two)
+    const [d, l] = await Promise.allSettled([api.get("stocks/desk"), api.get(`stocks/loans${wallet.address ? `?address=${wallet.address}` : ""}`)]);
+    if (d.status === "fulfilled") st.desk = d.value; else st.err = d.reason?.message || "The stock desk is not answering.";
+    if (l.status === "fulfilled") st.loans = l.value;
     if (wallet.session) { const w = await api.get("watches").catch(() => null); if (w) st.alerts = new Set(w.items.filter((x) => x.type === "loan_guard" && x.status !== "done").map((x) => x.params.marketId)); }
     if (alive) paint();
   }
@@ -60,7 +62,7 @@ export async function mount(view, ctx) {
   function paint() {
     paintTabs();
     if (!st.desk) return clear(body, st.err ? h("div", { class: "alert error" }, st.err) : h("div", { class: "sk", style: { height: "360px" } }));
-    ({ stocks, actions, baskets, borrow })[st.tab]?.();
+    ({ stocks, gaps, actions, baskets, borrow })[st.tab]?.();
   }
 
   /* ---------- stocks ---------- */
@@ -83,6 +85,38 @@ export async function mount(view, ctx) {
     };
     draw();
     clear(body, h("div", { class: "panel sd-panel" }, h("div", { class: "sd-ph" }, h("h3", {}, "Stocks"), count), h("p", { class: "fine" }, st.desk.note), qIn, tbl));
+  }
+
+  /* ---------- V7 F37 Robinhood Radar: the token against the real share ---------- */
+  function gaps() {
+    const SESSION = { open: "US market open", "pre-market": "Pre-market", "after-hours": "After-hours", overnight: "US market closed (overnight)", weekend: "US market closed (weekend)" };
+    if (!st.gaps) {
+      clear(body, h("div", { class: "sk", style: { height: "360px" } }));
+      api.get("radar/stocks").then((g) => { st.gaps = g; if (alive && st.tab === "gaps") gaps(); }).catch((e) => { if (alive && st.tab === "gaps") clear(body, h("div", { class: "alert error" }, e.message)); });
+      return;
+    }
+    const g = st.gaps;
+    const thinBox = h("input", { type: "checkbox", checked: !st.showThin });
+    const tbl = h("div", { class: "sd-tbl" });
+    const draw = () => {
+      const rows = g.rows.filter((r) => r.gapPct != null && (st.showThin || !r.thin));
+      clear(tbl, h("div", { class: "sd-row sd-hd" }, h("span", {}, "Stock"), h("span", {}, "Token, per share"), h("span", {}, "Real share"), h("span", {}, "Gap"), h("span", {}, "")),
+        rows.length ? null : h("p", { class: "muted sd-none" }, "No pool deep enough right now."),
+        rows.map((r) => h("div", { class: "sd-row" },
+          h("span", { class: "sd-name" }, stockIcon(r), h("b", {}, r.symbol), h("small", {}, `${r.thin ? "thin pool · " : ""}${r.liquidityUsd != null ? `$${compact(r.liquidityUsd)} liquidity` : ""}`)),
+          h("span", {}, `$${price(r.perShareUsd)}`),
+          h("span", { title: r.shareBasis || "" }, r.sharePriceUsd != null ? `$${price(r.sharePriceUsd)}` : "–", r.shareBasis === "extended hours" ? h("small", { class: "muted" }, " ext.") : null),
+          h("span", {}, pctEl(r.gapPct)),
+          h("a", { class: "btn sm", href: `#/swap?in=eth&out=${r.address}` }, r.gapPct < 0 ? "Buy" : "Trade"))));
+    };
+    thinBox.addEventListener("change", () => { st.showThin = !thinBox.checked; draw(); });
+    draw();
+    const top = g.notable.length ? h("p", {}, h("b", {}, "Notable now: "), g.notable.map((n) => `${n.symbol} ${n.gapPct > 0 ? "+" : ""}${n.gapPct}%`).join(" · ")) : null;
+    clear(body, h("div", { class: "panel sd-panel" },
+      h("div", { class: "sd-ph" }, h("h3", {}, "Token vs real share"), h("span", { class: "sd-count" }, SESSION[g.session] || "")),
+      h("p", { class: "fine" }, "Stock tokens trade around the clock, the shares only in US market hours. A token below the real share is cheaper than the stock, above it costs more; overnight and on weekends the pool is pricing where it thinks the next open will be."),
+      top, h("label", { class: "row fine" }, thinBox, "Hide thin pools (under $50k liquidity)"), tbl,
+      h("p", { class: "fine" }, g.how), h("p", { class: "fine" }, g.source)));
   }
 
   /* ---------- dividends & splits ---------- */

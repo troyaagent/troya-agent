@@ -219,6 +219,48 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
         result = await hl.hlPlaceOrder({ privateKey: w.privateKey, coin: meta.coin, isBuy: params.side !== "short", size: usd / mark, leverage: lev, slippage: 0.01,
           tp: Number(params.tpPx) || undefined, sl: Number(params.slPx) || undefined, reduceOnly: !!params.reduceOnly });
       }
+    } else if (kind === "perp_funded") {
+      // Perps end to end (asked in the group, 15–16 Nov 2026): when the owner's Hyperliquid account is short of margin, the
+      // Agent Wallet funds the shortfall (ETH on Robinhood Chain → USDC on the owner's own Hyperliquid account, one LI.FI
+      // route) and the order opens by itself the moment the USDC lands (pendingTick below). That order runs through
+      // executeForUser("perp"), so the Gate, the caps and the kill switch all apply again at that moment.
+      const hl = await mod("hl");
+      const lev = Math.max(1, Math.round(Number(params.leverage) || 1));
+      const sizeUsd = Number(params.sizeUsd) || 0;
+      if (!(sizeUsd > 0)) throw new HttpError(400, "Enter a size above zero.");
+      const sim = await simulatePerp({ coin: params.coin, side: params.side, sizeUsd });
+      gate = await gatePerp(sim, { leverage: lev, address: owner });
+      const side = params.side === "short" ? "short" : "long";
+      const order = { coin: sim.coin, side, sizeUsd, leverage: lev, slPx: Number(params.slPx) || null, tpPx: Number(params.tpPx) || null };
+      summary = `${side === "short" ? "Short" : "Long"} ${sim.coin} $${sizeUsd} at ${lev}x, funding Hyperliquid first`;
+      const pc = await checkAction(owner, { kind: "perp", usd: sizeUsd, leverage: lev, market: sim.coin });
+      const cap = await capCheck(owner, r, sizeUsd);
+      const reasons = [...pc.reasons, ...cap, ...(gate.pass ? [] : gate.checks.filter((c) => c.status === "fail").map((c) => `${c.name}: ${c.detail}`))];
+      const agents = await hl.hlInfo({ type: "extraAgents", user: lcs(owner) }).catch(() => null);
+      if (Array.isArray(agents) && !agents.some((a) => lcs(a.address) === lcs(r.address) && (!a.validUntil || a.validUntil > Date.now()))) reasons.push("Approve your Agent Wallet on Hyperliquid once first (Troya → Agent → Hyperliquid trading).");
+      if (reasons.length) return await blocked(owner, kind, summary, reasons, gate, source, proposalId);
+      const st = await hl.hlUserState(getAddress(owner));
+      const needUsd = (sizeUsd / lev) * 1.05 + 0.5;                        // the margin, plus a little for fees and the price moving
+      const shortUsd = needUsd - (Number(st.withdrawable) || 0);
+      if (shortUsd <= 0) return await executeForUser(owner, { kind: "perp", params: order, rationale: rationale || "Enough margin already: opened without funding", source, proposalId });
+      if (!(ep > 0)) throw new HttpError(502, "No ETH price right now. Try again in a minute.");
+      const fundUsd = Math.max(HL_MIN_FUND_USD, shortUsd * 1.04);           // Hyperliquid refuses deposits under 5 USDC
+      const amountEth = Math.ceil((fundUsd / ep) * 1e6) / 1e6;
+      const w = signer(r, owner, "robinhood");
+      const wei = parseUnits(amountEth.toFixed(6), 18);
+      const bal = await w.provider.getBalance(w.address);
+      if (bal < wei + parseUnits("0.0002", 18)) return await blocked(owner, kind, summary, [`The Agent Wallet needs about ${(amountEth + 0.0002).toFixed(5)} ETH on Robinhood Chain to add ${fundUsd.toFixed(2)} USDC of margin; it holds ${Number(formatUnits(bal, 18)).toFixed(5)} ETH.`], gate, source, proposalId);
+      const q = await hlFundQuote({ address: w.address, amountWei: wei, toAddress: owner });
+      if (lcs(q.toAddress) !== lcs(owner)) throw new HttpError(502, "The route would not deliver to the owner.");
+      const usdc = Number(formatUnits(q.toAmount, q.toDecimals));
+      const sent = await send(owner, w, { to: q.tx.to, data: q.tx.data, value: BigInt(q.tx.value), gasLimit: (BigInt(q.tx.gasLimit) * 13n) / 10n }, `Fund Hyperliquid: ${amountEth} ETH → about ${usdc.toFixed(2)} USDC for the ${sim.coin} order`);
+      if (sent?.broadcast !== false) {
+        const job = { id: randomBytes(5).toString("hex"), owner: lcs(owner), order, needUsd: (sizeUsd / lev) * 1.02, fundTx: sent?.hash || null, at: Date.now(), source };
+        await store.update(PENDING, [], (l) => [...l.filter((x) => Date.now() - x.at < PENDING_TTL * 2), job]);
+      }
+      result = { ...sent, route: q.tool, fundedEth: amountEth, usdcEstimate: usdc, usdcMin: Number(formatUnits(q.toAmountMin, q.toDecimals)), pending: true,
+        note: "The order opens by itself as soon as the USDC lands on Hyperliquid, usually within a minute or two. You get a message when it does." };
+      usd = 0;                                                              // the perp counts against the caps when it opens
     } else if (kind === "hl_fund") {
       // ETH from the Agent Wallet → USDC on the OWNER's Hyperliquid account (the account it trades as an approved agent)
       const amount = Number(params.amount);
@@ -301,9 +343,46 @@ async function blocked(owner, kind, summary, reasons, gate, source, proposalId) 
   return { executed: false, blocked: true, summary, reasons, gate };
 }
 
+/* ---------- perps end to end: open the order once the funding lands ---------- */
+const PENDING = "perp-pending.json", PENDING_TTL = 20 * 60_000, HL_MIN_FUND_USD = 6;
+let pendingBusy = false;
+async function pendingTick() {
+  if (pendingBusy || !store) return;
+  const list = await store.readJson(PENDING, []);
+  if (!list.length) return;
+  pendingBusy = true;
+  try {
+    const hl = await mod("hl");
+    const { addInbox } = await import("./inbox.mjs");
+    const drop = async (id) => store.update(PENDING, [], (l) => l.filter((x) => x.id !== id));
+    for (const j of list) {
+      const st = await hl.hlUserState(getAddress(j.owner)).catch(() => null);
+      const free = Number(st?.withdrawable) || 0;
+      const what = `${j.order.side === "short" ? "Short" : "Long"} ${j.order.coin} $${j.order.sizeUsd} at ${j.order.leverage}x`;
+      if (st && free >= j.needUsd) {
+        await drop(j.id);                                                   // never twice, even if the order below throws
+        try {
+          const x = await executeForUser(j.owner, { kind: "perp", params: j.order, rationale: "Opened by itself once the Hyperliquid funding landed", source: j.source || "app" });
+          const res = x.result || {};
+          const err = Array.isArray(res.response) ? res.response.find((y) => y?.error)?.error : null;
+          const fill = Array.isArray(res.response) ? res.response.find((y) => y?.filled)?.filled : null;
+          if (x.blocked) await addInbox(j.owner, { kind: "perp", title: `${what}: not opened`, body: `The USDC landed on Hyperliquid, but the order stopped at the last check: ${(x.reasons || []).join(" ")} The USDC stays on your Hyperliquid account.` });
+          else if (err) await addInbox(j.owner, { kind: "perp", title: `${what}: Hyperliquid refused it`, body: `${String(err).slice(0, 200)} The USDC stays on your Hyperliquid account.` });
+          else await addInbox(j.owner, { kind: "perp", title: `${what}: opened`, body: `The USDC landed on Hyperliquid and the order went through the Gate and your caps${fill ? `: filled ${fill.totalSz} at ${fill.avgPx}` : ""}.` });
+        } catch (e) { await addInbox(j.owner, { kind: "perp", title: `${what}: not opened`, body: `${e.message} The USDC stays on your Hyperliquid account.` }).catch(() => {}); }
+      } else if (Date.now() - j.at > PENDING_TTL) {
+        await drop(j.id);
+        await addInbox(j.owner, { kind: "perp", title: `${what}: not opened`, body: `The Hyperliquid funding had not landed after 20 minutes, so the order was not opened. Check the funding transaction${j.fundTx ? ` ${j.fundTx}` : ""} and open the order again once the USDC is there.` }).catch(() => {});
+      }
+    }
+  } catch (e) { console.warn("[agent-wallet] perp pending:", e.message); }
+  finally { pendingBusy = false; }
+}
+
 export async function register(r, ctx) {
   store = ctx.store;
   master = await loadMaster(ctx.dataDir);
+  setInterval(() => pendingTick().catch(() => {}), 15_000).unref?.();
 
   r.get("/api/agent-wallet", async ({ req }) => pub(await rec(requireSession(req).address)));
 
@@ -361,7 +440,7 @@ export async function register(r, ctx) {
       return executeForUser(s.address, { kind: p.kind, params: p.params, rationale: p.rationale || "Approved proposal", source: body.source === "autopilot" ? "autopilot" : "app", proposalId: p.id });
     }
     const kind = String(body.kind || "");
-    if (!["swap", "perp", "close", "withdraw", "hl_fund"].includes(kind)) throw new HttpError(400, "Unknown action.");
+    if (!["swap", "perp", "perp_funded", "close", "withdraw", "hl_fund"].includes(kind)) throw new HttpError(400, "Unknown action.");
     return executeForUser(s.address, { kind, params: body.params || {}, rationale: String(body.rationale || "Requested in the app").slice(0, 300), source: "app" });
   });
 

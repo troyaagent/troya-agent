@@ -380,6 +380,16 @@ export const TOOLS = [
       const gate = await gatePerp(sim, { leverage: lev, address: ctx.address });
       const params = { kind: "perp", coin: sim.coin, side: a.side === "short" ? "short" : "long", sizeUsd: Number(a.sizeUsd), leverage: lev, tpPx: n(a.tpPx), slPx: n(a.slPx) };
       if (!gate.pass) return { ok: false, gate, simulation: sim };
+      // perps end to end: short of free margin on Hyperliquid → the confirmation funds the shortfall from the Agent Wallet
+      // (ETH on Robinhood Chain → USDC) and the order opens by itself once it lands
+      const hlst = ctx.address ? await (await import("./hl.mjs")).hlUserState(ctx.address).catch(() => null) : null;
+      const margin = params.sizeUsd / lev;
+      if (hlst && (Number(hlst.withdrawable) || 0) < margin * 1.02) {
+        const fp = { ...params, kind: "perp_funded" };
+        return { ok: true, gate, simulation: sim, fundsFirst: true, freeMarginUsd: Number(hlst.withdrawable) || 0, marginUsd: +margin.toFixed(2),
+          note: "Your Hyperliquid account is short of margin: executing this funds the missing USDC (at least 6 USDC) from your Agent Wallet's ETH on Robinhood Chain, then opens the order by itself as soon as it lands.",
+          ...issueConfirmation(ctx.address, "perp_funded", fp, `Fund Hyperliquid, then ${params.side} ${sim.coin} $${params.sizeUsd} at ${lev}x`) };
+      }
       return { ok: true, gate, simulation: sim, ...issueConfirmation(ctx.address, "perp", params, `${params.side} ${sim.coin} $${params.sizeUsd} at ${lev}x`) };
     } },
   { name: "prepare_close_position", tier: "prepare", description: "Close all or part of an open Hyperliquid position on your account (reduce-only market order), then return a one-time confirmationId (120 s) for execute_intent.", schema: S({ coin: str("Perp with an open position, e.g. ETH"), sizePct: numS("Percent of the position to close (default 100)") }, ["coin"]),

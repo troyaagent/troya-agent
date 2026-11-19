@@ -350,6 +350,21 @@ export async function register(r) {
     return postExchange(payload);
   }, { weight: 3, perMin: 120, maxBody: 32 * 1024 });
 
+  // perps end to end on the Perps page (asked in the group, 15–16 Nov 2026): a funding quote sized by the margin that is
+  // missing, ETH on Robinhood Chain → USDC on the same address on Hyperliquid (at least 6 USDC: Hyperliquid's minimum is 5)
+  r.get("/api/hl/fund-quote", async ({ query }) => {
+    if (!isAddress(query.address || "")) throw new HlError(400, "Pass ?address=0x…");
+    const want = Number(query.usd);
+    if (!(want > 0) || want > 100000) throw new HlError(400, "Pass ?usd= with the USDC you need.");
+    const [{ ethUsd }, { hlFundQuote }] = await Promise.all([import("./tools.mjs"), import("./robinhood.mjs")]);
+    const ep = await ethUsd();
+    if (!(ep > 0)) throw new HlError(502, "No ETH price right now. Try again in a minute.");
+    const fundUsd = Math.max(6, want * 1.04);
+    const amountEth = Math.ceil((fundUsd / ep) * 1e6) / 1e6;
+    const q = await hlFundQuote({ address: getAddress(query.address), amountWei: (BigInt(Math.round(amountEth * 1e6)) * 10n ** 12n).toString() });
+    return { ...q, fundUsd: +fundUsd.toFixed(2), amountEth };
+  }, { weight: 2, perMin: 30 });
+
   // which trading keys (agents) this account has approved on Hyperliquid
   r.get("/api/hl/agents", async ({ query }) => {
     if (!isAddress(query.address || "")) throw new HlError(400, "Pass ?address=0x…");

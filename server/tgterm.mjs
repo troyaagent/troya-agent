@@ -63,13 +63,20 @@ async function perpCard(base, { coin, side, sizeUsd, leverage, slPx, tpPx }) {
   const rows = [];
   const blockers = [];
   if (ok === false) blockers.push("Approve your Agent Wallet on Hyperliquid once: Troya → Agent → Hyperliquid trading → Approve on Hyperliquid.");
-  if (acct < margin * 1.02) blockers.push(`Not enough free USDC on Hyperliquid for about ${usd(margin)} of margin. Fund it from Robinhood Chain: /fund 0.01`);
+  const short = acct < margin * 1.02;
+  // perps end to end: short of margin, but approved and the Gate passed → one button funds it and opens the order on arrival
+  const canFundOpen = short && ok !== false && gate.pass;
+  if (short && !canFundOpen) blockers.push(`Not enough free USDC on Hyperliquid for about ${usd(margin)} of margin. Fund it from Robinhood Chain: /fund 0.01`);
   if (blockers.length) lines.push(...blockers.map((b) => "· " + esc(b)));
+  if (canFundOpen) {
+    lines.push(`\nYour Hyperliquid account is short of margin. <b>Fund &amp; open</b> sends the missing USDC from your Agent Wallet's ETH on Robinhood Chain (at least 6 USDC, Hyperliquid's minimum), then opens this order by itself the moment it lands, usually within a minute or two. Confirm within 60 seconds.`);
+    rows.push([{ text: "Fund & open", callback_data: issue({ ...base, step: "confirm", kind: "perp_funded", params: { coin: sim.coin, side, sizeUsd, leverage, slPx: slPx || null, tpPx: tpPx || null }, label: `Fund Hyperliquid and ${side} ${sim.coin} ${usd(sizeUsd)} at ${leverage}x` }, CONFIRM_TTL) }, { text: "Cancel", callback_data: issue({ ...base, step: "cancel" }, PICK_TTL) }]);
+  }
   if (gate.pass && !blockers.length) {
     lines.push("Confirm within 60 seconds. The Gate and your caps run again before it sends.");
     rows.push([{ text: "Confirm", callback_data: issue({ ...base, step: "confirm", kind: "perp", params: { coin: sim.coin, side, sizeUsd, leverage, slPx: slPx || null, tpPx: tpPx || null }, label: `${side === "short" ? "Short" : "Long"} ${sim.coin} ${usd(sizeUsd)} at ${leverage}x` }, CONFIRM_TTL) }, { text: "Cancel", callback_data: issue({ ...base, step: "cancel" }, PICK_TTL) }]);
   }
-  if (acct < margin * 1.02) rows.push([{ text: "Fund 0.01 ETH", callback_data: issue({ ...base, step: "fundcard", amount: 0.01 }, PICK_TTL) }]);
+  if (short && !canFundOpen) rows.push([{ text: "Fund 0.01 ETH", callback_data: issue({ ...base, step: "fundcard", amount: 0.01 }, PICK_TTL) }]);
   if (ok === false) rows.push(appBtn("/agent#/agent/wallet", "Approve in Troya"));
   return { text: lines.join("\n"), markup: { inline_keyboard: rows } };
 }
@@ -272,10 +279,10 @@ export async function handleCallback(cq, tg) {
           const err = Array.isArray(res.response) ? res.response.find((x) => x?.error)?.error : null;
           if (err) out = `<b>Hyperliquid refused it:</b> ${esc(String(err).slice(0, 200))}`;
           else if (fill) out = `<b>Done.</b> ${esc(r.summary)}\nFilled ${fill.totalSz} at ${px(Number(fill.avgPx))}`;
-          else if (res.hash) out = `<b>Sent.</b> ${esc(r.summary)}${res.usdcEstimate ? `\nAbout ${Number(res.usdcEstimate).toFixed(2)} USDC on its way to your Hyperliquid account.` : ""}\n<a href="${SCAN}/tx/${res.hash}">${short(res.hash)}</a>`;
+          else if (res.hash) out = `<b>Sent.</b> ${esc(r.summary)}${res.usdcEstimate ? `\nAbout ${Number(res.usdcEstimate).toFixed(2)} USDC on its way to your Hyperliquid account.` : ""}${res.pending ? "\nThe order opens by itself as soon as it lands. You get a message here when it does." : ""}\n<a href="${SCAN}/tx/${res.hash}">${short(res.hash)}</a>`;
           else out = `<b>Done.</b> ${esc(r.summary)}`;
         }
-        const next = p.kind === "perp" || p.kind === "close" || p.kind === "hl_fund" ? { inline_keyboard: [[{ text: "Positions", callback_data: issue({ ...base, step: "positions" }, PICK_TTL) }, { text: "Journal in Troya", url: `${SITE}/agent#/agent/wallet` }]] } : { inline_keyboard: [[{ text: "Journal in Troya", url: `${SITE}/agent#/agent/wallet` }]] };
+        const next = p.kind === "perp" || p.kind === "perp_funded" || p.kind === "close" || p.kind === "hl_fund" ? { inline_keyboard: [[{ text: "Positions", callback_data: issue({ ...base, step: "positions" }, PICK_TTL) }, { text: "Journal in Troya", url: `${SITE}/agent#/agent/wallet` }]] } : { inline_keyboard: [[{ text: "Journal in Troya", url: `${SITE}/agent#/agent/wallet` }]] };
         await edit(out, next);
       } finally { busy.delete(p.chat); }
       return true;

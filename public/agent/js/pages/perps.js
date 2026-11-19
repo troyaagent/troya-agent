@@ -3,6 +3,7 @@ import { h, clear, icon, pageHead, table, review, toast, modal, num, fixed, usd,
 import { api } from "../api.js";
 import { wallet, onWallet, openConnect, ensureChain } from "../wallet.js";
 import { getTradingKey, tradingKeyStatus, approveTradingKey, revokeTradingKey, placeOrder, cancelOrder, sendToDex } from "../hl.js";
+import { sendTx } from "../chain.js";
 // F16: trade.xyz markets (stocks, indices, metals) sit beside the Hyperliquid perps; their margin is a separate balance
 const nameOf = (m) => (m?.dex ? `${m.label} · trade.xyz` : `${m?.coin}-PERP`);
 
@@ -420,11 +421,20 @@ export async function mount(view, ctx) {
     else if (st.key.state !== "approved") {
       btn = h("button", { class: "btn big blue", type: "button", onclick: enableTrading }, st.key.state === "expired" ? "Re-enable trading" : "Enable trading");
       keyNote = h("p", { class: "pp-key", style: { margin: 0 } }, "One wallet signature approves a ", h("b", {}, "trade-only key"), " kept in this browser. It can place and cancel Hyperliquid orders but ", h("b", {}, "cannot withdraw"), ". You can revoke it any time.");
+    } else if (st.funding) {
+      btn = h("button", { class: "btn big", type: "button", disabled: true }, "Waiting for the USDC on Hyperliquid…");
+      keyNote = h("p", { class: "pp-key", style: { margin: 0 } }, "Funding sent ", h("a", { class: "mono link", href: `https://robinhoodchain.blockscout.com/tx/${st.funding.hash}`, target: "_blank", rel: "noopener" }, short(st.funding.hash, 6)), ". The order goes out from this page the moment it lands, usually within a minute or two. Keep the page open.");
     } else {
       const ready = g.state === "pass" || g.state === "warn";
-      btn = h("button", { class: `btn big ${st.side === "long" ? "blue" : "danger"}`, type: "button", ...(ready ? {} : { disabled: true }), onclick: submit },
-        g.state === "wait" ? "Enter a size" : ready ? `${st.side === "long" ? "Long" : "Short"} ${m.coin}` : "Blocked by Troya Gate");
-      keyNote = h("p", { class: "pp-key", style: { margin: 0 } }, `Trading key ${short(st.key.key.address)} active. `, h("button", { class: "link", type: "button", onclick: revoke }, "Revoke"));
+      // perps end to end: margin is the only check in the way → fund the missing USDC from Robinhood Chain, then open
+      const onlyMargin = g.state === "fail" && !m.dex && !reduceIn.checked && !!st.user && g.items.filter((i) => i.state === "fail").every((i) => i.label === "Margin");
+      btn = onlyMargin
+        ? h("button", { class: `btn big ${st.side === "long" ? "blue" : "danger"}`, type: "button", onclick: fundAndOpen }, `Fund & ${st.side === "long" ? "long" : "short"} ${m.coin}`)
+        : h("button", { class: `btn big ${st.side === "long" ? "blue" : "danger"}`, type: "button", ...(ready ? {} : { disabled: true }), onclick: submit },
+          g.state === "wait" ? "Enter a size" : ready ? `${st.side === "long" ? "Long" : "Short"} ${m.coin}` : "Blocked by Troya Gate");
+      keyNote = onlyMargin
+        ? h("p", { class: "pp-key", style: { margin: 0 } }, `Your Hyperliquid account has ${usd(freeOf(m))} free and this order needs about ${usd(c.margin)}. One transaction on Robinhood Chain sends the missing USDC (at least 6), then the order opens by itself when it lands.`)
+        : h("p", { class: "pp-key", style: { margin: 0 } }, `Trading key ${short(st.key.key.address)} active. `, h("button", { class: "link", type: "button", onclick: revoke }, "Revoke"));
     }
     const leftToday = st.limits.dailyLeftUsd != null ? `Left today ${usd(st.limits.dailyLeftUsd, { compact: true })} · ` : "";
     let xyzBox = null;
@@ -510,6 +520,50 @@ export async function mount(view, ctx) {
       setTimeout(loadUser, 800);
       renderTicket();
     } catch (e) { toast(e.message, "error", 7000); }
+  }
+
+  // Fund & open: ETH on Robinhood Chain → USDC on this address on Hyperliquid (one LI.FI transaction), then the order
+  async function fundAndOpen() {
+    const m = st.m, c = calc();
+    const free = freeOf(m), missing = c.margin * 1.05 + 0.5 - free;
+    if (!(missing > 0)) return submit();
+    let q;
+    try { q = await api.get(`hl/fund-quote?${new URLSearchParams({ address: wallet.address, usd: missing.toFixed(2) })}`); }
+    catch (e) { toast(`No funding route right now: ${e.message}`, "error", 6000); return; }
+    const usdc = Number(q.toAmount) / 10 ** q.toDecimals, usdcMin = Number(q.toAmountMin) / 10 ** q.toDecimals;
+    const what = `${st.side === "long" ? "Long" : "Short"} ${num(c.coinSize, m.szDecimals)} ${m.coin} · ${usd(c.usdSize)} at ${c.lev}x`;
+    const ok = await review({ title: `Fund Hyperliquid, then ${st.side} ${m.coin}-PERP`, confirmLabel: "Fund in wallet", danger: st.side === "short",
+      summary: `One transaction on Robinhood Chain sends about ${usd(usdc)} USDC to your Hyperliquid account. The order is placed from this page the moment it lands.`,
+      rows: [["You send", `${q.amountEth} ETH on Robinhood Chain`], ["Lands on Hyperliquid (est.)", `${usdc.toFixed(2)} USDC (min ${usdcMin.toFixed(2)})`], ["Route", `${q.tool} via LI.FI`], ["Route fees", usd(q.feeUsd + q.gasUsd)],
+        ["Then", what], ["Margin", usd(c.margin)], st.type === "limit" ? ["Limit price", fmtPx(c.limitPx)] : ["Type", "Market (IOC, 1% max slippage)"]],
+      warn: "The funding goes through a third-party route and cannot be reversed. Keep this page open until the order is placed; if you leave, the USDC still lands on your Hyperliquid account and you can place the order later." });
+    if (!ok) return;
+    const order = { coin: m.coin, isBuy: c.isBuy, size: c.coinSize, limitPx: st.type === "limit" ? c.limitPx : null, lev: c.lev, tp: c.tp, sl: c.sl, need: c.margin, side: st.side, type: st.type, usdSize: c.usdSize };
+    try {
+      const hash = await sendTx("robinhood", { to: q.tx.to, data: q.tx.data, value: q.tx.value, gasLimit: (BigInt(q.tx.gasLimit) * 13n) / 10n });
+      api.post("journal", { kind: "bridge", summary: `Fund Hyperliquid for a ${order.coin} order: ${q.amountEth} ETH → about ${usdc.toFixed(2)} USDC`, data: { hash, route: q.tool, via: "Perps · Fund & open" } }).catch(() => {});
+      st.funding = { hash, at: Date.now() };
+      toast("Funding sent. The order goes out as soon as the USDC lands.", "ok", 6000);
+      renderTicket();
+      while (alive && Date.now() - st.funding.at < 10 * 60_000) {
+        await new Promise((r) => setTimeout(r, 5000));
+        await loadUser().catch(() => {});
+        if (freeOf(st.markets.find((x) => x.coin === order.coin) || st.m) >= order.need * 1.01) break;
+      }
+      const mk = st.markets.find((x) => x.coin === order.coin) || st.m;
+      const landed = freeOf(mk) >= order.need * 1.01;
+      st.funding = null;
+      if (!alive) return;
+      if (!landed) { toast("The USDC has not landed yet. It will reach your Hyperliquid account; place the order once it shows as free margin.", "", 9000); renderTicket(); return; }
+      const r = await placeOrder({ owner: wallet.address, market: mk, isBuy: order.isBuy, size: order.size, limitPx: order.limitPx, leverage: order.lev, tp: order.tp, sl: order.sl });
+      const failed = /error/.test(r.text) && !/filled|resting/.test(r.text);
+      toast(`${order.coin}: ${r.text || "sent"}`, failed ? "error" : "ok", 7000);
+      api.post("journal", { kind: "perp_order", summary: `${order.side === "long" ? "Long" : "Short"} ${num(r.size, mk.szDecimals)} ${order.coin} @ ${order.type === "market" ? "market" : fmtPx(r.px)} · ${r.text} (after funding)`,
+        data: { coin: order.coin, side: order.side, type: order.type, size: r.size, px: r.px, leverage: order.lev, tp: order.tp, sl: order.sl, result: r.text, via: "own wallet trading key · Fund & open", fundTx: hash } }).catch(() => {});
+      if (!failed) sizeIn.value = "";
+      setTimeout(loadUser, 800);
+      renderTicket();
+    } catch (e) { st.funding = null; toast(e.shortMessage || e.message, "error", 7000); if (alive) renderTicket(); }
   }
 
   async function closePosition(p) {

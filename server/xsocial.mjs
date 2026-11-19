@@ -416,6 +416,27 @@ export async function pinnedPost() {
 }
 
 // Project check (projectcheck.mjs): one public profile read, inside the daily "users" budget
+// V8 F41 War Table: recent posts on X that mention a coin's contract address (app-only bearer, the "search" budget).
+// Cached 15 minutes per query, so a busy coin page costs one search per quarter hour at most.
+const searchMemo = new Map();
+export async function searchRecent(query, max = 20) {
+  const q = String(query || "").slice(0, 200);
+  if (!q || !process.env.X_BEARER_TOKEN) return null;
+  const hit = searchMemo.get(q);
+  if (hit && Date.now() - hit.at < 15 * 60_000) return hit.v;
+  if (!(await spend("search"))) return hit?.v || { posts: [], capped: true };
+  const params = new URLSearchParams({ query: `${q} -is:retweet`, max_results: String(Math.max(10, Math.min(50, max))), "tweet.fields": "created_at,public_metrics,author_id", expansions: "author_id", "user.fields": "username,name,profile_image_url,public_metrics,verified" });
+  const r = await fetch(`${API}/2/tweets/search/recent?${params}`, { headers: { authorization: `Bearer ${process.env.X_BEARER_TOKEN}` }, signal: AbortSignal.timeout(15000) }).catch(() => null);
+  const j = r ? await r.json().catch(() => ({})) : {};
+  if (!r?.ok) return hit?.v || { posts: [], error: `X answered ${r?.status || "nothing"}` };
+  const users = new Map((j.includes?.users || []).map((u) => [u.id, u]));
+  const v = { posts: (j.data || []).map((t) => { const u = users.get(t.author_id) || {}; return { id: t.id, text: String(t.text || "").slice(0, 500), at: Date.parse(t.created_at || "") || null,
+    likes: t.public_metrics?.like_count || 0, reposts: t.public_metrics?.retweet_count || 0, author: { handle: u.username || null, name: u.name || null, avatar: u.profile_image_url || null, followers: u.public_metrics?.followers_count || 0, verified: !!u.verified } }; }), at: Date.now() };
+  searchMemo.set(q, { at: Date.now(), v });
+  if (searchMemo.size > 500) searchMemo.delete(searchMemo.keys().next().value);
+  return v;
+}
+
 export async function userProfile(username) {
   const bot = await botTokens();
   if (!bot?.access || !/^[A-Za-z0-9_]{1,15}$/.test(String(username || "")) || !(await spend("users"))) return null;

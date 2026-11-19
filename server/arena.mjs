@@ -109,6 +109,74 @@ async function aiDaily(d) {
   }
 }
 
+
+/* ---------- live money (ARENA_LIVE=1): the AI traders mirror their paper trades with real ETH ----------
+   One Agent Wallet, owned by the operator's own wallet (ARENA_LIVE_OWNER), holds the arena's money: it can only ever
+   withdraw back to that wallet, and every buy and sell goes through Troya Gate and the wallet's caps (executeForUser).
+   Each AI trader has its own budget inside it (ARENA_LIVE_BUDGET_ETH, 0.01 ETH by default): a buy is at most
+   ARENA_LIVE_BUY_ETH and never more than what the trader has left after its open positions and realized losses.
+   Live positions follow their paper twin: opened on the same launch, closed when the paper one closes. */
+const LIVE = () => process.env.ARENA_LIVE === "1" && isAddr(process.env.ARENA_LIVE_OWNER);
+const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(String(a || ""));
+const LIVE_BUDGET = () => Number(process.env.ARENA_LIVE_BUDGET_ETH || 0.01);
+const LIVE_BUY = () => Number(process.env.ARENA_LIVE_BUY_ETH || 0.002);
+
+function liveEquity(d, agentId) {
+  const ps = (d.positions || []).filter((p) => p.agent === agentId && p.mode === "live");
+  const open = ps.filter((p) => p.status === "open").reduce((s, p) => s + p.amountEth, 0);
+  const realized = ps.filter((p) => p.status === "closed").reduce((s, p) => s + (p.pnlEth || 0), 0);
+  return LIVE_BUDGET() + realized - open;
+}
+
+async function walletTokenRaw(addr, token) {
+  const { getBalances } = await import("./robinhood.mjs");
+  const b = await getBalances(addr, [token]).catch(() => null);
+  const h = b?.balances?.find((x) => x.address !== "native" && x.address.toLowerCase() === token.toLowerCase());
+  const eth = b?.balances?.find((x) => x.address === "native");
+  return { raw: h ? BigInt(h.raw) : 0n, decimals: h?.decimals ?? 18, eth: eth ? Number(eth.amount) : NaN };
+}
+
+async function openLive(d, ag, paper) {
+  if (!LIVE() || ag.kind !== "ai") return null;
+  const owner = process.env.ARENA_LIVE_OWNER;
+  const aw = await (await import("./agentwallet.mjs")).getAgentWallet(owner).catch(() => null);
+  if (!aw?.address || !aw.enabled) return null;
+  const size = Math.min(paper.amountEth, LIVE_BUY(), liveEquity(d, ag.id));
+  if (!(size >= 0.0005)) return null;
+  const before = await walletTokenRaw(aw.address, paper.token);
+  const amountIn = size.toFixed(6);
+  const ex = await (await import("./agentwallet.mjs")).executeForUser(owner, { kind: "swap", params: { tokenIn: "ETH", tokenOut: paper.token, amountIn, slippagePct: 3 }, rationale: `Arena ${ag.name}: ${rulesText(cleanRules(ag.rules)).slice(0, 160)}`, source: "arena" }).catch((e) => ({ executed: false, reasons: [e.message] }));
+  if (!ex.executed) { console.log(`[arena] live ${ag.name} skipped $${paper.symbol}: ${(ex.reasons || []).join(" ").slice(0, 120)}`); return null; }
+  let after = before;
+  for (let i = 0; i < 6; i++) { after = await walletTokenRaw(aw.address, paper.token); if (after.raw > before.raw) break; await new Promise((r) => setTimeout(r, 2500)); }
+  const got = after.raw - before.raw;
+  const pos = { id: randomBytes(6).toString("hex"), agent: ag.id, mode: "live", twin: paper.id, token: paper.token, symbol: paper.symbol, amountEth: Number(amountIn), tokensRaw: got.toString(), decimals: after.decimals,
+    tokens: Number(got) / 10 ** after.decimals, openedAt: Date.now(), rules: paper.rules, status: "open", txBuy: (ex.result?.steps || []).at(-1)?.hash || null };
+  import("./seal.mjs").then((s) => s.seal("arena-live-open", pos.token, { agent: ag.id, ...pos }, `${ag.name} bought $${pos.symbol} with ${amountIn} ETH`)).catch(() => {});
+  console.log(`[arena] live ${ag.name} bought $${pos.symbol} for ${amountIn} ETH`);
+  return pos;
+}
+
+async function closeLive(pos, why) {
+  const owner = process.env.ARENA_LIVE_OWNER;
+  const aw = await (await import("./agentwallet.mjs")).getAgentWallet(owner).catch(() => null);
+  if (!aw?.address) return false;
+  const have = await walletTokenRaw(aw.address, pos.token);
+  const raw = BigInt(pos.tokensRaw || 0) < have.raw ? BigInt(pos.tokensRaw || 0) : have.raw;
+  if (raw <= 0n) { Object.assign(pos, { status: "closed", closedAt: Date.now(), reason: "nothing left to sell", exitValueEth: 0, pnlEth: -pos.amountEth }); return true; }
+  const amountIn = (Number(raw) / 10 ** (pos.decimals ?? 18) * 0.9999).toPrecision(12).replace(/\.?0+$/, "");
+  const ethBefore = have.eth;
+  const ex = await (await import("./agentwallet.mjs")).executeForUser(owner, { kind: "swap", params: { tokenIn: pos.token, tokenOut: "ETH", amountIn, slippagePct: 8 }, rationale: `Arena exit (${why}) on $${pos.symbol}`, source: "arena" }).catch((e) => ({ executed: false, reasons: [e.message] }));
+  if (!ex.executed) { pos.lastError = (ex.reasons || []).join(" ").slice(0, 200); return false; }
+  let ethAfter = ethBefore;
+  for (let i = 0; i < 6; i++) { ethAfter = (await walletTokenRaw(aw.address, pos.token)).eth; if (isFinite(ethBefore) && ethAfter > ethBefore) break; await new Promise((r) => setTimeout(r, 2500)); }
+  const back = isFinite(ethBefore) && ethAfter > ethBefore ? ethAfter - ethBefore : 0;
+  Object.assign(pos, { status: "closed", closedAt: Date.now(), reason: why, exitValueEth: back, pnlEth: back - pos.amountEth, txSell: (ex.result?.steps || []).at(-1)?.hash || null });
+  import("./seal.mjs").then((s) => s.seal("arena-live-close", pos.token, { agent: pos.agent, id: pos.id, reason: why, exitValueEth: back, pnlEth: pos.pnlEth }, `${pos.agent} sold $${pos.symbol}: ${why}`)).catch(() => {});
+  console.log(`[arena] live ${pos.agent} sold $${pos.symbol}: ${why}, ${back.toFixed(6)} ETH back`);
+  return true;
+}
+
 /* ---------- paper entries on every launch Sentry passes ---------- */
 export async function onLaunch(r) {
   if (!store || r?.v !== "passed" || !r.token) return;
@@ -125,7 +193,7 @@ export async function onLaunch(r) {
     if (raised != null && (raised < R.minRaisedEth || raised > R.maxRaisedEth)) continue;
     if (raised == null && R.minRaisedEth > 0 && R.source !== "pool") continue;
     if ((R.skipRingRed && ring === "red") || (R.skipRingAmber && ring === "amber")) continue;
-    const mine = (d.positions || []).filter((p) => p.agent === ag.id);
+    const mine = (d.positions || []).filter((p) => p.agent === ag.id && p.mode !== "live");
     if (mine.some((p) => lc(p.token) === lc(r.token))) continue;
     if (mine.filter((p) => p.status === "open").length >= R.maxOpen) continue;
     if (mine.filter((p) => p.openedAt > Date.now() - 86_400_000).length >= R.maxBuysPerDay) continue;
@@ -133,6 +201,8 @@ export async function onLaunch(r) {
     if (!(q?.amountOut > 0)) continue;
     const pos = { id: randomBytes(6).toString("hex"), agent: ag.id, token: getAddress(r.token), symbol: r.symbol || q.tokenOut?.symbol || "?", amountEth: R.buyEth, tokens: Number(q.amountOut), openedAt: Date.now(), raisedAtEntry: raised, rules: { takeProfitX: R.takeProfitX, stopPct: R.stopPct, maxHoldHours: R.maxHoldHours }, status: "open" };
     opened.push(pos);
+    const twin = await openLive(d, ag, pos).catch((e) => { console.warn("[arena] live open", e.message); return null; });
+    if (twin) { d.positions = [...(d.positions || []), twin]; opened.push(twin); }
     import("./seal.mjs").then((s) => s.seal("arena-open", pos.token, { agent: ag.id, ...pos }, `${ag.name || ag.id} bought $${pos.symbol}`)).catch(() => {});
   }
   if (opened.length) await store.update(FILE, {}, (x) => { x.positions = [...(x.positions || []), ...opened]; return x; });
@@ -147,7 +217,7 @@ async function tick() {
     await aiDaily(d).catch((e) => console.warn("[arena] ai", e.message));
     const { valueOf } = await import("./autopilot.mjs");
     const closed = [];
-    for (const p of d.positions.filter((x) => x.status === "open")) {
+    for (const p of d.positions.filter((x) => x.status === "open" && x.mode !== "live")) {
       const v = await valueOf(p).catch(() => null);
       if (v == null) continue;
       p.lastValueEth = v; p.lastAt = Date.now();
@@ -156,7 +226,13 @@ async function tick() {
       if (!why) continue;
       Object.assign(p, { status: "closed", closedAt: Date.now(), reason: why, exitValueEth: v, pnlEth: v - p.amountEth });
       closed.push(p);
+      const twin = d.positions.find((x) => x.mode === "live" && x.twin === p.id && x.status === "open");
+      if (twin) await closeLive(twin, why).catch((e) => { twin.lastError = e.message; });
       import("./seal.mjs").then((s) => s.seal("arena-close", p.token, { agent: p.agent, id: p.id, reason: why, exitValueEth: v, pnlEth: p.pnlEth }, `${p.agent} sold $${p.symbol}: ${why}`)).catch(() => {});
+    }
+    for (const t of d.positions.filter((x) => x.mode === "live" && x.status === "open" && x.lastError)) {
+      const paper = d.positions.find((x) => x.id === t.twin);
+      if (paper?.status === "closed") await closeLive(t, paper.reason || "retry").catch(() => {});
     }
     // the 7-day verdict for every proving strategy
     for (const ag of Object.values(d.agents)) {
@@ -167,6 +243,7 @@ async function tick() {
       if (ag.kind === "ai") ag.provingUntil = Date.now() + PROVE_MS;                // the AI traders keep competing week after week
       ag.verdictAt = Date.now(); ag.verdict = { trades: mine.length, pnlEth: +pnl.toFixed(5) };
     }
+    for (const t of d.positions.filter((x) => x.mode === "live" && x.status === "open")) { const v = await valueOf(t).catch(() => null); if (v != null) { t.lastValueEth = v; t.lastAt = Date.now(); } }
     const open = d.positions.filter((p) => p.status === "open");
     const done = d.positions.filter((p) => p.status === "closed").sort((a, b) => b.closedAt - a.closedAt).slice(0, 3000);
     await store.update(FILE, {}, (x) => { x.agents = { ...(x.agents || {}), ...d.agents }; x.positions = [...open, ...done, ...(x.positions || []).filter((p) => p.status === "open" && !open.some((o) => o.id === p.id) && !done.some((o) => o.id === p.id))]; return x; });
@@ -175,16 +252,17 @@ async function tick() {
   finally { busy = false; }
 }
 
-function statsOf(d, id) {
-  const ps = (d.positions || []).filter((p) => p.agent === id);
+function statsOf(d, id, mode = "paper") {
+  const ps = (d.positions || []).filter((p) => p.agent === id && (mode === "live" ? p.mode === "live" : p.mode !== "live"));
   const c = ps.filter((p) => p.status === "closed");
   const pnl = c.reduce((s, p) => s + (p.pnlEth || 0), 0);
   const openPnl = ps.filter((p) => p.status === "open" && p.lastValueEth != null).reduce((s, p) => s + (p.lastValueEth - p.amountEth), 0);
   return { closed: c.length, open: ps.length - c.length, pnlEth: +pnl.toFixed(5), openPnlEth: +openPnl.toFixed(5), winRate: c.length ? +(c.filter((p) => p.pnlEth > 0).length / c.length).toFixed(3) : null };
 }
 const pubAgent = (d, ag) => ({ id: ag.id, kind: ag.kind, name: ag.kind === "ai" ? ag.name : `${ag.owner.slice(0, 6)}…${ag.owner.slice(-4)}`, model: ag.model || null, status: ag.status,
-  rules: ag.rules, rulesText: rulesText(cleanRules(ag.rules)), thesis: ag.thesis || null, since: ag.createdAt, provingUntil: ag.provingUntil, verdict: ag.verdict || null, stats: statsOf(d, ag.id) });
-const pubPos = (p) => ({ agent: p.agent, token: p.token, symbol: p.symbol, amountEth: p.amountEth, openedAt: p.openedAt, status: p.status, reason: p.reason || null, pnlEth: p.pnlEth ?? null, valueEth: p.lastValueEth ?? null, closedAt: p.closedAt || null });
+  rules: ag.rules, rulesText: rulesText(cleanRules(ag.rules)), thesis: ag.thesis || null, since: ag.createdAt, provingUntil: ag.provingUntil, verdict: ag.verdict || null, stats: statsOf(d, ag.id),
+  live: ag.kind === "ai" && (d.positions || []).some((p) => p.agent === ag.id && p.mode === "live") ? { ...statsOf(d, ag.id, "live"), budgetEth: LIVE_BUDGET(), equityEth: +liveEquity(d, ag.id).toFixed(6) } : null });
+const pubPos = (p) => ({ agent: p.agent, mode: p.mode === "live" ? "live" : "paper", tx: p.txSell || p.txBuy || null, token: p.token, symbol: p.symbol, amountEth: p.amountEth, openedAt: p.openedAt, status: p.status, reason: p.reason || null, pnlEth: p.pnlEth ?? null, valueEth: p.lastValueEth ?? null, closedAt: p.closedAt || null });
 
 /** The public board, for the assistant and MCP tools. */
 export async function arenaBoard() {
@@ -199,7 +277,7 @@ export async function register(r, ctx) {
   r.get("/api/arena", async () => {
     const d = await store.readJson(FILE, {});
     const agents = Object.values(d.agents || {}).filter((a) => a.kind === "ai" || a.public !== false).map((a) => pubAgent(d, a)).sort((a, b) => (b.stats.pnlEth + b.stats.openPnlEth) - (a.stats.pnlEth + a.stats.openPnlEth));
-    return { mode: "paper", agents, recent: (d.positions || []).slice().sort((a, b) => (b.closedAt || b.openedAt) - (a.closedAt || a.openedAt)).slice(0, 40).map(pubPos),
+    return { mode: LIVE() ? "paper + live" : "paper", live: LIVE() ? { budgetPerTraderEth: LIVE_BUDGET(), maxBuyEth: LIVE_BUY() } : null, agents, recent: (d.positions || []).slice().sort((a, b) => (b.closedAt || b.openedAt) - (a.closedAt || a.openedAt)).slice(0, 40).map(pubPos),
       how: "Paper money at real prices: entries and exits are quoted on chain the moment they happen, nothing is sent. Every strategy, entry and exit is sealed at troya.codes/seal. Real-money arena opens after a real-money test." };
   }, { weight: 1 });
   r.post("/api/arena/strategy", async ({ req, body }) => {

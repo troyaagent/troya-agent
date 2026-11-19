@@ -720,7 +720,7 @@ function mountArena(box) {
   clear(box, main);
   const ethf = (v) => (v == null || !isFinite(v) ? "–" : `${v >= 0 ? "+" : ""}${Number(v).toFixed(4)} ETH`);
   let draft = null;
-  const intro = h("div", { class: "ag-intro" }, h("h2", {}, "Arena"), h("p", {}, "Write a strategy in plain words. Troya turns it into rules, replays them on every coin The Record has graded, then runs them for seven days on paper at real prices on every launch Sentry passes. Five AI models trade their own strategies here too, side by side. Paper money only: nothing is sent."));
+  const intro = h("div", { class: "ag-intro" }, h("h2", {}, "Arena"), h("p", {}, "Write a strategy in plain words. Troya turns it into rules, replays them on every coin The Record has graded, then runs them for seven days on paper at real prices on every launch Sentry passes. Five AI models trade their own strategies here too, side by side: on paper, and with a small real budget (0.01 ETH each, through the Gate). Your strategy runs on paper."));
   const text = h("textarea", { class: "input", rows: "3", placeholder: "e.g. Buy 0.01 ETH of new Pons coins once the curve raised 1 ETH, skip anything Ring Radar flags, take profit at 2.5x, cut at -25%, never hold more than 12 hours." });
   const out = h("div", {});
   const readBtn = h("button", { class: "btn primary", type: "button" }, "Read and replay");
@@ -749,9 +749,10 @@ function mountArena(box) {
     const mine = me?.agent;
     const row = (a, i) => h("div", { class: "ap-row" },
       h("div", { class: "grow" }, h("b", {}, `${i + 1}. ${a.name}`), h("span", { class: "faint" }, ` · ${a.kind === "ai" ? a.model : "strategy"} · ${a.status}`),
-        h("div", { class: "faint" }, a.rulesText), a.thesis ? h("div", { class: "faint" }, `“${a.thesis}”`) : null),
+        h("div", { class: "faint" }, a.rulesText), a.thesis ? h("div", { class: "faint" }, `“${a.thesis}”`) : null,
+        a.live ? h("div", {}, h("b", {}, "Live: "), `${ethf(a.live.pnlEth)} closed · ${a.live.closed} trades${a.live.open ? ` · ${a.live.open} open` : ""} · ${Number(a.live.equityEth).toFixed(4)} of ${a.live.budgetEth} ETH left`) : null),
       h("span", { class: (a.stats.pnlEth + a.stats.openPnlEth) >= 0 ? "up" : "down" }, `${ethf(a.stats.pnlEth)} closed · ${a.stats.closed} trades${a.stats.open ? ` · ${a.stats.open} open (${ethf(a.stats.openPnlEth)})` : ""}`));
-    const tr = (p) => h("div", { class: "ap-row" }, h("div", { class: "grow" }, h("b", {}, `$${p.symbol}`), h("span", { class: "faint" }, ` · ${p.agent.replace(/^ai-/, "")} · ${p.status === "open" ? `open ${ago(p.openedAt)}` : `${p.reason} ${ago(p.closedAt)} ago`}`)),
+    const tr = (p) => h("div", { class: "ap-row" }, h("div", { class: "grow" }, h("b", {}, `${p.mode === "live" ? "LIVE " : ""}$${p.symbol}`), h("span", { class: "faint" }, ` · ${p.agent.replace(/^ai-/, "")} · ${p.status === "open" ? `open ${ago(p.openedAt)}` : `${p.reason} ${ago(p.closedAt)} ago`}`)),
       h("span", { class: p.status === "open" ? "" : (p.pnlEth || 0) >= 0 ? "up" : "down" }, p.status === "open" ? (p.valueEth != null ? `${ethf(p.valueEth - p.amountEth)} so far` : "open") : ethf(p.pnlEth)));
     clear(main, intro,
       h("div", { class: "panel ag-panel" }, h("h3", {}, mine ? "Your strategy" : "Write a strategy"),

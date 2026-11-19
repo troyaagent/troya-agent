@@ -39,11 +39,20 @@ export function watchfirePanel() {
   const why = h("ul", { class: "wt-why" });
   const met = h("div", { class: "wt-met" });
   const live = h("span", { class: "wt-live", title: "Live feed of every transfer" });
+  // V8 F46: pin the coin, and every Watchfire fire on it reaches your inbox and Telegram
+  let token = null;
+  const pin = h("button", { class: "btn sm wt-pin", type: "button", hidden: true, onclick: async () => {
+    if (!wallet.session) return toast("Sign in to pin coins to Watchfire.", "warn");
+    try { const r = await api.post("/api/treasury/pins", { token, on: true }); toast(`Pinned. ${r.pins.length} of ${r.max} pins used.`, "ok"); pin.textContent = "Pinned"; pin.disabled = true; }
+    catch (e) { toast(e.message, "error"); }
+  } }, icon("bell"), "Pin");
   const el = h("section", { class: "panel wt-wf" },
     h("div", { class: "panel-h" }, h("h2", {}, "Watchfire"), live),
     h("div", { class: "wt-wf-b" }, badge, sub), why, met,
-    h("p", { class: "fine muted wt-foot" }, "Reads every transfer of this coin: coins gathered into one wallet, a 5%+ sale, fast selling, weight in few hands. Patterns, not proof; nobody can sell ahead of a dump inside one block."));
+    h("p", { class: "fine muted wt-foot" }, "Reads every transfer of this coin: coins gathered into one wallet, a 5%+ sale, fast selling, weight in few hands. Patterns, not proof; nobody can sell ahead of a dump inside one block."),
+    h("div", { class: "wt-foot" }, pin, h("a", { class: "link fine", href: "#/treasury" }, "Pins by tier")));
   el.update = (b) => {
+    if (b?.token && !token) { token = b.token; pin.hidden = false; }
     const k = LVL[b?.level] ? b.level : "loading";
     badge.className = `wt-lvl l-${k}`; badge.textContent = LVL[k][0];
     sub.textContent = b?.lastFire && k === "fire" ? `${LVL[k][1]} ${Math.max(0, Math.round((Date.now() - b.lastFire.at) / 1000))}s ago.` : LVL[k][1];

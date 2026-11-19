@@ -545,6 +545,32 @@ body { touch-action: manipulation; }
 }
 @media (max-aspect-ratio: 1/1) and (min-width: 641px) and (max-width: 719px) { .gas-pill i { display: none; } }
 
+/* hero: the word ANTHROPIC as line art across the black, edge to edge; every 6 s it comes in softly, sharpens and goes */
+.ant-word { position: absolute; left: 0; right: 0; top: 50%; translate: 0 -50%; z-index: 0; margin: 0; padding: 0 1.2vw; pointer-events: none; opacity: 0; animation: ant-word 6s ease-in-out infinite; }
+.ant-word svg { display: block; width: 100%; height: auto; overflow: visible; }
+.ant-word text { font: 700 160px/1 var(--sans); letter-spacing: -0.02em; fill: none; stroke: var(--fg); stroke-width: 1.1; stroke-opacity: .55; vector-effect: non-scaling-stroke; }
+@keyframes ant-word { 0% { opacity: 0; filter: blur(10px); } 30%, 58% { opacity: 1; filter: blur(0); } 86%, 100% { opacity: 0; filter: blur(9px); } }
+@media (prefers-reduced-motion: reduce) { .ant-word { animation: none; opacity: .45; } }
+@media (max-width: 640px) { .ant-word { top: 58%; } }
+
+/* hero: Trade Anthropic, above the roadmap pill: the ANT perp on Hyperliquid, funded from ETH on Robinhood Chain */
+.ant-pill { position: relative; display: inline-flex; align-items: center; gap: 10px; height: 38px; padding: 0 6px 0 14px; border-radius: 999px;
+  color: var(--fg); font: 600 12.5px/1 var(--sans); letter-spacing: .02em; background: color-mix(in srgb, var(--bg) 70%, transparent); border: 1px solid color-mix(in srgb, #f0904f 45%, transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0, 0, 0, .3); transition: border-color .25s, transform .35s; }
+.ant-pill:hover { border-color: #f0904f; transform: translateY(-1px); }
+.ant-pill i { width: 7px; height: 7px; border-radius: 50%; background: #f0904f; box-shadow: 0 0 10px #f0904f; }
+.ant-pill small { font-weight: 500; font-size: 11.5px; color: var(--muted); margin-left: 10px; padding-left: 10px; border-left: 1px solid var(--line); }
+.ant-pill b { display: inline-flex; align-items: center; height: 26px; padding: 0 11px; border-radius: 999px; background: #f0904f; color: #1c0d04; font: 700 10.5px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; }
+/* portrait screens: one row of pills fits between the title and the horse, so this one sits just above the title */
+@media (max-width: 640px) {
+  .ant-pill { position: absolute; left: 50%; top: -172px; translate: -50% 0; height: 36px; padding: 0 5px 0 11px; gap: 8px; white-space: nowrap; }
+  .ant-pill:hover { transform: none; }
+  .ant-pill small { display: none; }
+}
+@media (max-aspect-ratio: 1/1) and (min-width: 641px) {
+  .ant-pill { position: absolute; left: 50%; top: calc(max(150px, 19vh) - 54px - var(--pills-top)); translate: -50% 0; white-space: nowrap; }
+}
+
 /* 22: the posters' black ground melts into the page (dark themes), and their edges soften */
 html:is([data-t="A"], [data-t="D"]) :is(.iw-film, .iw-art-m, .iw-frame) img { mix-blend-mode: lighten; }
 :is(.iw-film, .iw-art-m, .iw-frame) img {

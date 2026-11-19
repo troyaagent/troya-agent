@@ -40,15 +40,25 @@ export async function usedToday(address) {
   const u = all[String(address).toLowerCase()];
   return u && u.day === today() ? u.usd : 0;
 }
-export async function recordUsage(address, usd) {
+export async function recordUsage(address, usd, source = null) {
   if (!(usd > 0)) return;
   await store.update("usage.json", {}, (all) => {
     const k = String(address).toLowerCase();
     const u = all[k] && all[k].day === today() ? all[k] : { day: today(), usd: 0 };
     u.usd = Math.round((u.usd + usd) * 100) / 100;
+    // V8 F44 Scepter: what each job (autopilot, playbook, aegis…) spent today, for its own cap
+    if (source) { u.bySource ||= {}; u.bySource[source] = Math.round(((u.bySource[source] || 0) + usd) * 100) / 100; }
     all[k] = u;
   });
 }
+export async function usedTodayBy(address) {
+  const all = await store.readJson("usage.json", {});
+  const u = all[String(address).toLowerCase()];
+  return u && u.day === today() ? u.bySource || {} : {};
+}
+// V8 F44 Scepter: the jobs that act on their own. The trust ladder applies to them, never to a trade the user taps.
+export const AUTO_JOBS = ["autopilot", "playbook", "aegis", "champions"];
+export const TRUST = ["watch", "approve", "auto"];
 
 // Effective limits = the stricter of operator and user values.
 export async function getPolicy(address) {
@@ -72,8 +82,11 @@ export async function getPolicy(address) {
       maxPriceImpactPct: op.maxPriceImpactPct,
       minPoolLiquidityEth: op.minPoolLiquidityEth,
       dryRun: u.dryRun == null ? !!op.mcpDryRunDefault : !!u.dryRun,
+      trust: TRUST.includes(u.trust) ? u.trust : "auto",
+      jobCaps: u.jobCaps || {},
     },
     usedTodayUsd: address ? await usedToday(address) : 0,
+    usedTodayBySource: address ? await usedTodayBy(address) : {},
   };
 }
 
@@ -122,6 +135,12 @@ export async function register(r, ctx) {
       if ("allowedPerps" in body) u.allowedPerps = Array.isArray(body.allowedPerps) ? body.allowedPerps.map((x) => String(x).toUpperCase().replace(/[^A-Z0-9:_-]/g, "")).filter(Boolean).slice(0, 100) : [];
       if ("paused" in body) u.paused = !!body.paused;
       if ("dryRun" in body) u.dryRun = !!body.dryRun;
+      if ("trust" in body && TRUST.includes(body.trust)) u.trust = body.trust;
+      if ("jobCaps" in body && body.jobCaps && typeof body.jobCaps === "object") {
+        const jc = {};
+        for (const j of AUTO_JOBS) { const n = clampNum(body.jobCaps[j], op.dailyUsd); if (n != null) jc[j] = n; }
+        u.jobCaps = jc;
+      }
       for (const key of Object.keys(u)) if (u[key] === undefined) delete u[key];
       u.updatedAt = Date.now();
       all[k] = u;

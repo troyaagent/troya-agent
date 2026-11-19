@@ -5,8 +5,9 @@ import { coinSuggest } from "../coinsearch.js";
 import { wallet, onWallet, signIn, openConnect, signerFor, reader } from "../wallet.js";
 import { waitReceipt, errText } from "../chain.js";
 import { parseEther } from "ethers";
+import { mountScepter } from "./scepter.js";
 
-const TABS = [["chat", "Chat"], ["wallet", "Wallet"], ["autopilot", "Autopilot"], ["sentry", "Sentry Autopilot"], ["aegis", "Aegis"], ["arena", "Arena"], ["playbooks", "Playbooks"]];
+const TABS = [["chat", "Chat"], ["scepter", "Scepter"], ["wallet", "Wallet"], ["autopilot", "Autopilot"], ["sentry", "Sentry Autopilot"], ["aegis", "Aegis"], ["arena", "Arena"], ["playbooks", "Playbooks"]];
 const autoPref = store("troya.autopilot", { on: false, playbooks: true, chat: false });
 
 /* ---------- tiny safe markdown (escape first, then format) ---------- */
@@ -49,7 +50,7 @@ export async function mount(view, ctx) {
   const edge = () => { nav.classList.toggle("more-r", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 4); nav.classList.toggle("more-l", nav.scrollLeft > 4); };
   nav.addEventListener("scroll", edge, { passive: true });
   requestAnimationFrame(() => { const on = nav.querySelector("[aria-current]"); if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2); edge(); });
-  const page = { chat: mountChat, wallet: mountWallet, autopilot: mountAutopilot, sentry: mountSentryAuto, aegis: mountAegis, arena: mountArena, playbooks: mountPlaybooks }[tab];
+  const page = { chat: mountChat, scepter: mountScepter, wallet: mountWallet, autopilot: mountAutopilot, sentry: mountSentryAuto, aegis: mountAegis, arena: mountArena, playbooks: mountPlaybooks }[tab];
   return page(body, ctx);
 }
 

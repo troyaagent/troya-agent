@@ -14,6 +14,7 @@ const SITE = window.SITE || {};
 const SI = {
   arena: "M4 20l6-6M14 4l6 6-9 9-3-3 9-9M4 14l6 6M15 9l-2-2",
   aegis: "M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6l7-3zM9 12l2 2 4-4",
+  scepter: "M12 9v12M8 5l2 3h4l2-3-2.5 1L12 3l-1.5 3zM10 13h4",
   spot: "M4 19h16M7 15l3-3 3 2 5-6M17 8h2v2",
   lighter: "M13 2 4 14h7l-1 8 9-12h-7l1-8z",
   stocks: "M4 20V10m6 10V4m6 16v-7m6 7V8",
@@ -64,7 +65,7 @@ export const GROUPS = [
   [null, [["Desk", "#/", "desk"]]],
   ["Trade", [["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Lighter perps", "#/lighter", "lighter"], ["Stock desk", "#/stocks", "stocks"], ["Liquidity desk", "#/liquidity", "liquidity"], ["Bridge", "#/bridge", "bridge"]]],
   ["Discover", [["Gate a coin", "#/gate", "gate"], ["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["Create coin", "#/create", "create"], ["Creator desk", "#/creator", "creator"], ["All launches", "#/launch", "launch"], ["Leaderboard", "#/leaderboard", "leaderboard"], ["Agent registry", "#/registry", "agent"]]],
-  ["Agent", [["Chat", "#/agent", "chat"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Sentry Autopilot", "#/agent/sentry", "sentry"], ["Aegis", "#/agent/aegis", "aegis"], ["Arena", "#/agent/arena", "arena"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Audited rail", "#/rail", "rail"]]],
+  ["Agent", [["Chat", "#/agent", "chat"], ["Scepter", "#/agent/scepter", "scepter"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Sentry Autopilot", "#/agent/sentry", "sentry"], ["Aegis", "#/agent/aegis", "aegis"], ["Arena", "#/agent/arena", "arena"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Audited rail", "#/rail", "rail"]]],
   ["You", [["Portfolio", "#/portfolio", "portfolio"], ["Inbox", "#/portfolio/inbox", "inbox"], ["History", "#/portfolio/history", "history"], ["Social", "#/social", "social"]]],
   ["Help", [["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Is it safe?", "/safety", "verify"], ["Verify", "/verify", "verify"], ["The Record", "/record", "record"], ["$TROYA flywheel", "#/flywheel", "flywheel"]]],
 ];

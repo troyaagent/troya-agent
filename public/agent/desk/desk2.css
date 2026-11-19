@@ -1442,3 +1442,41 @@ html[data-theme="light"] .d-side::-webkit-scrollbar-thumb { background: #d6d1c7;
 .wt-panel thead th { position: sticky; top: 0; background: var(--glass-solid, var(--bg-1)); z-index: 1; }
 /* War Table on one column: chart, then Trade, then the tabs, then the rest of the side panels */
 @media (max-width: 1100px) { .tk2 .tk-grid { display: flex; flex-direction: column; align-items: stretch; } .tk2 .tk-grid > div { display: contents; } .tk2 .tk-grid > div > * { order: 3; min-width: 0; max-width: 100%; width: 100%; } .tk2 .tk-grid > div:first-child > :first-child { order: 0; } .tk2 .tk-grid .wt-trade { order: 1; } .tk2 .tk-grid .tk-tabs { order: 2; } }
+
+/* ---------- V8 F44 Scepter (scepter.js) ---------- */
+.sc { display: grid; gap: 16px; }
+.sc-hero { padding: 6px 2px 0; }
+.sc-title { margin: 0 0 6px; font-size: clamp(28px, 4vw, 40px); letter-spacing: -.02em; }
+.sc-hero p { margin: 0; max-width: 680px; }
+.sc-empty { padding: 22px; display: grid; gap: 10px; justify-items: start; }
+.sc-cmd { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; }
+.sc-cmd.stopped { border-color: color-mix(in srgb, var(--down) 45%, transparent); }
+.sc-cmd-l { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.sc-cmd-l b { font-size: 16px; }
+.sc-cmd-l p { margin: 4px 0 0; }
+.sc-dot { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--down); box-shadow: 0 0 10px var(--down); }
+.sc-dot.on { background: var(--up); box-shadow: 0 0 10px var(--up); }
+.sc-kill { flex: none; }
+.sc-kill.danger { border-color: color-mix(in srgb, var(--down) 55%, transparent); color: var(--down); }
+.sc-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 4px 16px 16px; }
+.sc-step { text-align: left; border: 1px solid var(--line-2); border-radius: 14px; background: var(--bg-2); color: var(--fg); padding: 14px; cursor: pointer; display: grid; gap: 4px; transition: border-color .2s, background .2s; }
+.sc-step small { font: 600 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.sc-step b { font-size: 16px; }
+.sc-step span { font-size: 12.5px; color: var(--fg-2); line-height: 1.45; }
+.sc-step.on { border-color: var(--up); background: color-mix(in srgb, var(--up) 10%, transparent); }
+.sc-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.sc-in { width: 76px; height: 32px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--bg-1); color: var(--fg); padding: 0 10px; font: 500 12.5px/1 var(--mono); text-align: right; }
+.sc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px 14px; }
+.sc-row p { margin: 0; }
+.sc-st { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line-2); font: 600 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sc-st.on, .sc-st.s-executed { color: var(--up); border-color: color-mix(in srgb, var(--up) 45%, transparent); }
+.sc-st.s-blocked, .sc-st.s-failed { color: var(--down); border-color: color-mix(in srgb, var(--down) 45%, transparent); }
+.sc-st.s-proposed { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.sc-list { list-style: none; margin: 0; padding: 4px 16px 14px; display: grid; gap: 10px; }
+.sc-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.sc-list li:first-child { border-top: 0; }
+.sc-list li > div:first-child { min-width: 0; }
+.sc-acts { flex: none; display: flex; align-items: center; gap: 8px; }
+.sc-pad { padding: 0 16px 16px; margin: 0; }
+@media (max-width: 900px) { .sc-grid { grid-template-columns: minmax(0, 1fr); } .sc-steps { grid-template-columns: 1fr; } .sc-cmd { flex-direction: column; align-items: stretch; } }
+.sc-jobs .tbl-wrap { overflow-x: auto; }

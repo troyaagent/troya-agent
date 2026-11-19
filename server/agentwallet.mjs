@@ -7,7 +7,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { Wallet, JsonRpcProvider, Interface, parseUnits, formatUnits, getAddress } from "ethers";
 import { requireSession, makeChallenge, consumeChallenge } from "./auth.mjs";
 import { HttpError } from "./api.mjs";
-import { checkAction, recordUsage, getPolicy, operatorPolicy } from "./policy.mjs";
+import { checkAction, recordUsage, getPolicy, operatorPolicy, usedTodayBy, AUTO_JOBS } from "./policy.mjs";
 import { logAction } from "./journal.mjs";
 import { RPC, getBalances, quoteSwap, gateSwap, simulatePerp, gatePerp, ethUsd } from "./tools.mjs";
 import { buildSwapTx, hlFundQuote } from "./robinhood.mjs";
@@ -57,8 +57,16 @@ function signer(r, owner, chain) { return new Wallet(decrypt(r.enc, owner), prov
 async function mod(name) { try { return await import(`./${name}.mjs`); } catch { return {}; } }
 
 // caps: the stricter of the wallet's own caps and the user's policy (checkAction handles policy)
-async function capCheck(owner, r, usd) {
+async function capCheck(owner, r, usd, source = null) {
   const reasons = [];
+  // V8 F44 Scepter: each automated job has its own daily cap, inside the wallet's caps
+  if (source && AUTO_JOBS.includes(source) && usd > 0) {
+    const caps = (await getPolicy(owner)).effective.jobCaps || {};
+    if (caps[source] != null) {
+      const used = (await usedTodayBy(owner))[source] || 0;
+      if (used + usd > caps[source]) reasons.push(`Above the ${source} job's daily cap ($${caps[source]}; $${used.toFixed(2)} used today). Change it in Agent → Scepter.`);
+    }
+  }
   if (r.enabled === false) reasons.push("The Agent Wallet is switched off.");
   const op = await operatorPolicy();
   if (!op.agentWallet?.enabled) reasons.push("The operator has switched Agent Wallets off.");
@@ -148,6 +156,19 @@ async function sendLaunchAndBuy(owner, w, launchTx, buyTx, labels) {
 export async function executeForUser(owner, { kind, params = {}, rationale = "", source = "app", proposalId = null }) {
   const r = await rec(owner);
   if (!r) throw new HttpError(400, "No Agent Wallet yet. Create one in Agent → Wallet.");
+  // V8 F44 Scepter, the trust ladder: on "watch" an automated job only alerts; on "approve" it asks first (an Inbox
+  // proposal); on "auto" it acts inside the caps. A trade the user taps or confirms is never held back by the ladder.
+  if (AUTO_JOBS.includes(source) && !proposalId) {
+    const trust = (await getPolicy(owner)).effective.trust;
+    if (trust === "watch") return blocked(owner, kind, rationale || `${source}: ${kind}`, ["Your trust ladder is on Watch: automated jobs alert you and never trade. Change it in Agent → Scepter."], null, source, null);
+    if (trust === "approve") {
+      const { createProposal, addInbox } = await import("./inbox.mjs");
+      const p = await createProposal(owner, { kind, params, summary: rationale || `${source}: ${kind}`, rationale, source });
+      await addInbox(owner, { kind: "proposal", title: `${source} asks to ${kind}`, body: `${rationale || ""} Approve it in Agent → Scepter or Portfolio → Inbox.`.trim(), data: { proposalId: p.id } });
+      await logAction({ address: owner, kind: `agent-wallet.${kind}`, summary: rationale || kind, data: { params, proposalId: p.id }, status: "proposed", source });
+      return { executed: false, proposed: true, proposalId: p.id, summary: `Waiting for your approval: ${rationale || kind}` };
+    }
+  }
   const ep = (await ethUsd()) || 0;
   let usd = 0, gate = null, summary = "", result = null;
   try {
@@ -157,7 +178,7 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
       usd = q.tokenIn.native ? q.amountIn * ep : (q.tokenIn.priceUsd || 0) * q.amountIn;
       summary = `Swap ${q.amountIn} ${q.tokenIn.symbol} → ${q.tokenOut.symbol}`;
       const pc = await checkAction(owner, { kind: "swap", usd, token: q.tokenOut.native ? q.tokenIn.address : q.tokenOut.address });
-      const cap = await capCheck(owner, r, usd);
+      const cap = await capCheck(owner, r, usd, source);
       let gateFails = gate.pass ? [] : gate.checks.filter((c) => c.status === "fail");
       // V6 initial buy: this Agent Wallet buying the coin it launched through Troya minutes ago. Its curve is empty by
       // definition, so only the pool-depth check is set aside; every other Gate check still applies.
@@ -199,7 +220,7 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
         summary = `${params.side === "short" ? "Short" : "Long"} ${sim.coin} $${usd} at ${lev}x`;
       } else summary = `Close ${params.sizePct || 100}% of ${params.coin}`;
       const pc = await checkAction(owner, { kind: "perp", usd, leverage: lev, market: params.coin });
-      const cap = await capCheck(owner, r, usd);
+      const cap = await capCheck(owner, r, usd, source);
       const reasons = [...(kind === "close" ? pc.reasons.filter((x) => /kill switch/.test(x)) : pc.reasons), ...(kind === "close" ? [] : cap), ...(gate && !gate.pass ? gate.checks.filter((c) => c.status === "fail").map((c) => `${c.name}: ${c.detail}`) : [])];
       if (reasons.length) return await blocked(owner, kind, summary, reasons, gate, source, proposalId);
       const w = new Wallet(decrypt(r.enc, owner));
@@ -284,7 +305,7 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
       const tx = await buildLaunchTx({ creator: w.address, feeRecipient: params.feeRecipient || owner, name: params.name, symbol: params.symbol, logo: params.logo || "", description: params.description || "", twitter: params.twitter || "", website: params.website || "", telegram: params.telegram || "", creatorTaxBps: Math.max(0, Math.min(400, Math.round(Number(params.creatorTaxBps) || 0))) });
       usd = (Number(tx.value) / 1e18 + firstBuy) * ep;
       const pc = await checkAction(owner, { kind: "launch", usd });
-      const cap = await capCheck(owner, r, usd);
+      const cap = await capCheck(owner, r, usd, source);
       const reasons = [...pc.reasons, ...cap];
       if (!tx.enoughBalance) reasons.push(`The Agent Wallet ${w.address} needs at least ${(Number(tx.launchFeeWei) / 1e18 + 0.0001).toFixed(4)} ETH on Robinhood Chain for the Pons fee and gas.`);
       else if (!tx.simulation.ok) reasons.push(`Pons would refuse this launch: ${tx.simulation.error || "the simulation failed"}.`);
@@ -331,7 +352,7 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
     throw e.status ? e : new HttpError(502, `Execution failed: ${e.shortMessage || e.message}`);
   }
   const broadcast = result?.broadcast !== false && !(result?.steps || []).some((s) => s.broadcast === false);
-  if (broadcast && usd > 0) { await recordUsage(owner, usd); await addSpent(owner, usd); }
+  if (broadcast && usd > 0) { await recordUsage(owner, usd, source); await addSpent(owner, usd); }
   const status = broadcast ? "executed" : "built";
   await logAction({ address: owner, kind: `agent-wallet.${kind}`, summary, rationale, data: { params, gate, result }, status, source });
   if (proposalId) await markProposal(owner, proposalId, broadcast ? "done" : "built", result);

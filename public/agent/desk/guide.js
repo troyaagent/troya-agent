@@ -103,6 +103,8 @@ const G = {
     ask: ["What are safe caps for an Agent Wallet?", "How do I withdraw everything from it?"], next: [["Autopilot", "#/agent/autopilot"], ["Playbooks", "#/agent/playbooks"]] },
   "agent/autopilot": { t: "Autopilot", what: "Runs the tickets you approved, inside your caps, while this tab is open.", tour: [[".ag-intro", "How it works", "Rules first; every order still passes the Gate."]],
     ask: ["What will Autopilot do on its own?"], next: [["Sentry Autopilot", "#/agent/sentry"]] },
+  "agent/arena": { t: "Arena", what: "A strategy in plain words becomes rules, is replayed on The Record, then runs 7 days on paper; five AI models trade their own strategies side by side.", tour: [[".ag-intro", "The Arena", "Write a strategy, read the replay, then prove it on paper."]],
+    ask: ["Which strategy did best on The Record?"], next: [["The Record", "/record"]] },
   "agent/aegis": { t: "Aegis", what: "A guard on every coin you hold: dev and whale sells, a sell test every five minutes, tax jumps and broken Oaths raise an alert in your inbox and Telegram; exit mode prepares the sell on red.", tour: [[".ag-intro", "Your guard", "Switch it on and every coin in your wallet and Agent Wallet is watched."]],
     ask: ["What does Aegis watch on my coins?"], next: [["Oath", "/oath"]] },
   "agent/sentry": { t: "Sentry Autopilot", what: "Your rules on every new launch Sentry passes: practice with play money, or live from the Agent Wallet.", tour: [[".ag-intro", "Your rules", "Minimum raised, size, take profit and stop."]],

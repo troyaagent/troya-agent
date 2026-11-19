@@ -30,7 +30,7 @@ async function record(usage) {
 }
 export async function usageToday() { const u = await spentToday(); return { ...u, capUsd: DAILY_USD, model: MODEL }; }
 
-async function call(messages, tools) {
+async function call(messages, tools, opts = {}) {
   const res = await fetch(URL, {
     method: "POST",
     signal: AbortSignal.timeout(30000),
@@ -41,15 +41,24 @@ async function call(messages, tools) {
       "X-Title": "Troya Agent",
     },
     body: JSON.stringify({
-      model: MODEL, models: [MODEL, FALLBACK],
+      model: opts.model || MODEL, models: [opts.model || MODEL, FALLBACK],
       messages, tools: tools.length ? tools : undefined, tool_choice: tools.length ? "auto" : undefined,
-      max_tokens: 900, temperature: 0.3, usage: { include: true },
+      max_tokens: opts.maxTokens || 900, temperature: opts.temperature ?? 0.3, usage: { include: true },
+      ...(opts.reasoning ? { reasoning: opts.reasoning } : {}),
     }),
   });
   const j = await res.json().catch(() => ({}));
   if (!res.ok || j.error) throw new Error(j.error?.message || `OpenRouter ${res.status}`);
   await record(j.usage);
   return j.choices?.[0]?.message || {};
+}
+
+/** One plain completion with a chosen model (the Arena's AI traders each run their own), inside the same daily cap. */
+export async function ask({ system, user, model, maxTokens = 700, temperature = 0.4 }) {
+  if (!KEY || !(await underCap())) return "";
+  // thinking models spend tokens before they answer: keep their reasoning short and out of the reply
+  const msg = await call([{ role: "system", content: system }, { role: "user", content: user }], [], { model, maxTokens, temperature, reasoning: { effort: "low", exclude: true } });
+  return String(msg.content || "").trim();
 }
 
 // Runs the model, executes the tool calls it asks for (exec(name, args) → result object), and repeats until it answers.

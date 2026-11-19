@@ -479,6 +479,8 @@ async function work(s) {
     r.ageMs = r.at - (q.seenAt || s.seen[q.token] || r.at);
     // Phase 7: Sentry Autopilot sees every passing check (it keeps its own rules and never buys the same coin twice)
     if (MODE !== "dry" && r.v === "passed") import("./autopilot.mjs").then((a) => a.onLaunch(r)).catch((e) => console.warn("[sentry] autopilot:", e.message));
+    // V7 F34: the Arena's paper traders (AI models and proving strategies) see the same passing checks
+    if (MODE !== "dry" && r.v === "passed") import("./arena.mjs").then((a) => a.onLaunch(r)).catch((e) => console.warn("[sentry] arena:", e.message));
     await measureBuyers(r, q);                                          // every checked coin feeds the wallet history
     const copy = r.v === "passed" ? copyOf(s, r) : null;
     const why = r.v === "passed" && recentlyPosted(s, r.token) ? "Posted already in the last 24 hours" : holdReason(r, { copy });

@@ -6,7 +6,7 @@ import { wallet, onWallet, signIn, openConnect, signerFor } from "../wallet.js";
 import { waitReceipt, errText } from "../chain.js";
 import { parseEther } from "ethers";
 
-const TABS = [["chat", "Chat"], ["wallet", "Wallet"], ["autopilot", "Autopilot"], ["sentry", "Sentry Autopilot"], ["aegis", "Aegis"], ["playbooks", "Playbooks"]];
+const TABS = [["chat", "Chat"], ["wallet", "Wallet"], ["autopilot", "Autopilot"], ["sentry", "Sentry Autopilot"], ["aegis", "Aegis"], ["arena", "Arena"], ["playbooks", "Playbooks"]];
 const autoPref = store("troya.autopilot", { on: false, playbooks: true, chat: false });
 
 /* ---------- tiny safe markdown (escape first, then format) ---------- */
@@ -49,7 +49,7 @@ export async function mount(view, ctx) {
   const edge = () => { nav.classList.toggle("more-r", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 4); nav.classList.toggle("more-l", nav.scrollLeft > 4); };
   nav.addEventListener("scroll", edge, { passive: true });
   requestAnimationFrame(() => { const on = nav.querySelector("[aria-current]"); if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2); edge(); });
-  const page = { chat: mountChat, wallet: mountWallet, autopilot: mountAutopilot, sentry: mountSentryAuto, aegis: mountAegis, playbooks: mountPlaybooks }[tab];
+  const page = { chat: mountChat, wallet: mountWallet, autopilot: mountAutopilot, sentry: mountSentryAuto, aegis: mountAegis, arena: mountArena, playbooks: mountPlaybooks }[tab];
   return page(body, ctx);
 }
 
@@ -710,6 +710,62 @@ function mountPlaybooks(box) {
   }
   const off = onWallet(render);
   return () => { off(); stop?.(); };
+}
+
+/* =====================================================================================
+   ARENA (V7 F34): a strategy in plain words → rules → replay on The Record → 7 days on paper; AI traders side by side
+   ===================================================================================== */
+function mountArena(box) {
+  const main = h("div", { class: "ag-col" });
+  clear(box, main);
+  const ethf = (v) => (v == null || !isFinite(v) ? "–" : `${v >= 0 ? "+" : ""}${Number(v).toFixed(4)} ETH`);
+  let draft = null;
+  const intro = h("div", { class: "ag-intro" }, h("h2", {}, "Arena"), h("p", {}, "Write a strategy in plain words. Troya turns it into rules, replays them on every coin The Record has graded, then runs them for seven days on paper at real prices on every launch Sentry passes. Five AI models trade their own strategies here too, side by side. Paper money only: nothing is sent."));
+  const text = h("textarea", { class: "input", rows: "3", placeholder: "e.g. Buy 0.01 ETH of new Pons coins once the curve raised 1 ETH, skip anything Ring Radar flags, take profit at 2.5x, cut at -25%, never hold more than 12 hours." });
+  const out = h("div", {});
+  const readBtn = h("button", { class: "btn primary", type: "button" }, "Read and replay");
+  readBtn.addEventListener("click", async () => {
+    if (!wallet.session) { toast("Sign in first", "error"); return; }
+    readBtn.disabled = true; clear(out, h("p", { class: "faint" }, "Reading your strategy and replaying it on The Record…"));
+    try {
+      draft = await api.post("arena/strategy", { text: text.value });
+      const x = draft.replay;
+      clear(out,
+        h("p", {}, h("b", {}, "Rules: "), draft.rulesText), draft.thesis ? h("p", { class: "faint" }, draft.thesis) : null,
+        h("div", { class: "rows" },
+          h("div", {}, h("span", {}, "Replayed trades"), h("span", {}, String(x.trades))),
+          h("div", {}, h("span", {}, "Win rate"), h("span", {}, x.winRate != null ? `${Math.round(x.winRate * 100)}%` : "–")),
+          h("div", {}, h("span", {}, "Average per trade"), h("span", {}, x.avgReturnPct != null ? `${x.avgReturnPct}%` : "–")),
+          h("div", {}, h("span", {}, "Result at your size"), h("span", { class: x.pnlEth >= 0 ? "up" : "down" }, ethf(x.pnlEth))),
+          h("div", {}, h("span", {}, "Worst drawdown"), h("span", {}, ethf(x.maxDrawdownEth))),
+          h("div", {}, h("span", {}, "Exits"), h("span", {}, `${x.byExit.takeProfit} take-profit · ${x.byExit.stop} stop · ${x.byExit.time} time`))),
+        h("p", { class: "note" }, x.caveats),
+        h("button", { class: "btn primary", type: "button", onclick: async () => { try { await api.post("arena/prove", { text: text.value, rules: draft.rules }); toast("Proving for 7 days on paper", "ok"); render(); } catch (e) { toast(e.message, "error"); } } }, "Prove it: 7 days on paper"));
+    } catch (e) { clear(out, h("div", { class: "alert error" }, e.message)); }
+    readBtn.disabled = false;
+  });
+  async function render() {
+    const [board, me] = await Promise.all([api.get("arena").catch(() => null), wallet.session ? api.get("arena/me").catch(() => null) : null]);
+    const mine = me?.agent;
+    const row = (a, i) => h("div", { class: "ap-row" },
+      h("div", { class: "grow" }, h("b", {}, `${i + 1}. ${a.name}`), h("span", { class: "faint" }, ` · ${a.kind === "ai" ? a.model : "strategy"} · ${a.status}`),
+        h("div", { class: "faint" }, a.rulesText), a.thesis ? h("div", { class: "faint" }, `“${a.thesis}”`) : null),
+      h("span", { class: (a.stats.pnlEth + a.stats.openPnlEth) >= 0 ? "up" : "down" }, `${ethf(a.stats.pnlEth)} closed · ${a.stats.closed} trades${a.stats.open ? ` · ${a.stats.open} open (${ethf(a.stats.openPnlEth)})` : ""}`));
+    const tr = (p) => h("div", { class: "ap-row" }, h("div", { class: "grow" }, h("b", {}, `$${p.symbol}`), h("span", { class: "faint" }, ` · ${p.agent.replace(/^ai-/, "")} · ${p.status === "open" ? `open ${ago(p.openedAt)}` : `${p.reason} ${ago(p.closedAt)} ago`}`)),
+      h("span", { class: p.status === "open" ? "" : (p.pnlEth || 0) >= 0 ? "up" : "down" }, p.status === "open" ? (p.valueEth != null ? `${ethf(p.valueEth - p.amountEth)} so far` : "open") : ethf(p.pnlEth)));
+    clear(main, intro,
+      h("div", { class: "panel ag-panel" }, h("h3", {}, mine ? "Your strategy" : "Write a strategy"),
+        mine ? h("div", {}, h("p", {}, h("b", {}, `${mine.status === "proving" ? `Proving until ${new Date(mine.provingUntil).toUTCString().slice(5, 22)} UTC` : mine.status}`), ` · ${mine.rulesText}`),
+          h("p", { class: "faint" }, `${mine.stats.closed} closed · ${ethf(mine.stats.pnlEth)}${mine.stats.open ? ` · ${mine.stats.open} open` : ""}. Proven = 5+ closed trades and a profit after 7 days; a proven strategy can earn small live caps once live trading opens.`)) : null,
+        wallet.session ? [text, h("div", { class: "row", style: { marginTop: "8px" } }, readBtn), out] : needSignIn(main, "Sign in to write and prove a strategy.")),
+      h("div", { class: "panel ag-panel" }, h("h3", {}, "The board"), board?.agents?.length ? h("div", { class: "ap-list" }, board.agents.map(row)) : h("p", { class: "faint", style: { margin: 0 } }, "The AI traders write their first rules within minutes of the Arena opening."),
+        h("p", { class: "note", style: { margin: "10px 0 0" } }, board?.how || "")),
+      board?.recent?.length ? h("div", { class: "panel ag-panel" }, h("h3", {}, "Latest paper trades"), h("div", { class: "ap-list" }, board.recent.slice(0, 20).map(tr))) : null);
+  }
+  render();
+  const off = onWallet(() => render());
+  const t = setInterval(() => { if (!document.hidden && !document.activeElement?.matches("textarea")) render(); }, 60000);
+  return () => { off(); clearInterval(t); };
 }
 
 /* =====================================================================================

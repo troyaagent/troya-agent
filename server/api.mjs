@@ -44,6 +44,7 @@ const MODULES = [
   "./smartmoney.mjs",  // V7 F37 Robinhood Radar: smart wallets scored on The Record's graded calls
   "./owl.mjs",         // V7 F35 Owl: your trading week from the chain, with plain coaching, sealed
   "./verdictfeed.mjs", // V7 F38 Gate in your wallet: signed verdict feed and the transaction check behind the Troya Snap
+  "./arena.mjs",       // V7 F34 Arena: plain-words strategies replayed on The Record, 7 days on paper, and AI traders side by side
   "./council.mjs",     // V7 F33 Council: three reasons not to buy + a bull/bear/risk debate on Troya's own facts, sealed     // V7 F36 Quantum-Ready: key exposure for wallets and tokens, NIST + drand randomness        // V7 F35 Seal: signed, hash-chained receipts (ECDSA + ML-DSA) for every Troya decision, anchored daily on Robinhood Chain
   "./x402.mjs",        // F23+: the same Gate check over x402 v2, $0.01 USDC on Base per call, listed in x402 directories (off until X402_ENABLED=1)
   "./portfolio.mjs",   // every token a wallet holds (Blockscout), priced, with PnL from its own trades

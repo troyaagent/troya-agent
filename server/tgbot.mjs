@@ -45,6 +45,7 @@ Or just write it: "long ETH $20 at 3x" gets you a ticket to confirm.
 /ring 0x… · Ring Radar: a rigged Pons launch? (exempt wallets, bundles, decoys)
 /council 0x… · three reasons not to buy, then a bull/bear/risk debate on Troya's data
 /oath 0x… · the dev's Oath for a coin: kept or broken
+/aegis 0x… · what Aegis caught on a coin (dev and whale sells, sell test)
 /price NVDA · live price (a symbol or a 0x address)
 /gas · live gas cost of a swap, approval or send
 /sentry · the latest launches through the Gate
@@ -127,6 +128,15 @@ async function councilCmd(arg) {
   const c = await m.council(a).catch((e) => null);
   if (!c) return "The Council could not sit on this coin right now. Try again in a minute.";
   return `<b>Troya Council</b> · <code>${a}</code>\n${esc(m.councilText(c))}`;
+}
+async function aegisCmd(arg) {
+  const a = (String(arg || "").match(/0x[0-9a-fA-F]{40}/) || [])[0];
+  if (!a) return `<b>Aegis</b> guards every coin you hold: dev and whale sells, a sell test every 5 minutes, tax jumps, broken Oaths. Alerts land in your inbox and here in a DM. Turn it on: <a href="${SITE}/agent#/agent/aegis">Agent → Aegis</a>\nUsage: /aegis 0x… for one coin`;
+  const g = await (await import("./aegis.mjs")).aegisToken(a).catch(() => null);
+  if (!g) return "Could not read Aegis right now.";
+  const ev = (g.events || []).slice(0, 4).map((e) => `• ${e.level === "red" ? "RED" : "amber"} · ${esc(e.text)}`).join("\n");
+  const st = g.sellTest ? (g.sellTest.ok ? `sells, tax ${Number(g.sellTest.tax || 0).toFixed(1)}%` : "sell test failed") : null;
+  return `<b>Aegis</b> · ${g.symbol ? "$" + esc(g.symbol) + " · " : ""}<code>${a}</code>\n${g.guarded ? `Guarded${st ? ` · last sell test: ${st}` : ""}` : esc(g.note)}${ev ? "\n" + ev : g.guarded ? "\nQuiet so far." : ""}\nGuard your own coins: <a href="${SITE}/agent#/agent/aegis">Agent → Aegis</a>`;
 }
 async function oathCmd(arg) {
   const a = (String(arg || "").match(/0x[0-9a-fA-F]{40}/) || [])[0];
@@ -499,7 +509,7 @@ export async function handleBotMessage(m, tg, me) {
   const [, cmdRaw, at, arg = ""] = cm;
   if (at && me?.username && at.toLowerCase() !== me.username.toLowerCase()) return;
   const cmd = cmdRaw.toLowerCase();
-  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "oath", "rules", "sentry", "badge", "perks", "reports", "flywheel"].includes(cmd)) return;
+  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "oath", "aegis", "rules", "sentry", "badge", "perks", "reports", "flywheel"].includes(cmd)) return;
   // one answer per person every 3 s keeps the group readable
   const who = `${chatId}:${m.from?.id}`;
   if (Date.now() - (lastReply.get(who) || 0) < 3000) return;
@@ -556,6 +566,7 @@ Nobody from Troya DMs first or asks for a seed phrase or private key.` });
     else if (cmd === "ring") { text = await ringCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else if (cmd === "council") { text = await councilCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else if (cmd === "oath") { text = await oathCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
+    else if (cmd === "aegis") { text = await aegisCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else { text = await gate(arg); if (coinOf(arg) && !/no contract|Usage/i.test(text)) markup = coinKb(coinOf(arg)); }
   } catch (e) { text = `Could not read that right now (${esc(String(e.message || e).slice(0, 80))}). Try again in a moment.`; }
   await tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true }, ...(markup ? { reply_markup: markup } : {}) });

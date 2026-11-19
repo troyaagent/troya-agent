@@ -6,7 +6,7 @@ import { wallet, onWallet, signIn, openConnect, signerFor } from "../wallet.js";
 import { waitReceipt, errText } from "../chain.js";
 import { parseEther } from "ethers";
 
-const TABS = [["chat", "Chat"], ["wallet", "Wallet"], ["autopilot", "Autopilot"], ["sentry", "Sentry Autopilot"], ["playbooks", "Playbooks"]];
+const TABS = [["chat", "Chat"], ["wallet", "Wallet"], ["autopilot", "Autopilot"], ["sentry", "Sentry Autopilot"], ["aegis", "Aegis"], ["playbooks", "Playbooks"]];
 const autoPref = store("troya.autopilot", { on: false, playbooks: true, chat: false });
 
 /* ---------- tiny safe markdown (escape first, then format) ---------- */
@@ -49,7 +49,7 @@ export async function mount(view, ctx) {
   const edge = () => { nav.classList.toggle("more-r", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 4); nav.classList.toggle("more-l", nav.scrollLeft > 4); };
   nav.addEventListener("scroll", edge, { passive: true });
   requestAnimationFrame(() => { const on = nav.querySelector("[aria-current]"); if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2); edge(); });
-  const page = { chat: mountChat, wallet: mountWallet, autopilot: mountAutopilot, sentry: mountSentryAuto, playbooks: mountPlaybooks }[tab];
+  const page = { chat: mountChat, wallet: mountWallet, autopilot: mountAutopilot, sentry: mountSentryAuto, aegis: mountAegis, playbooks: mountPlaybooks }[tab];
   return page(body, ctx);
 }
 
@@ -710,6 +710,47 @@ function mountPlaybooks(box) {
   }
   const off = onWallet(render);
   return () => { off(); stop?.(); };
+}
+
+/* =====================================================================================
+   AEGIS (V7 F31): a guard on every coin you hold, alerts in the inbox and Telegram, exit tickets on red
+   ===================================================================================== */
+const AEGIS_KIND = { "dev-sell": "Dev sold", "dev-moved": "Dev moved coins", "whale-sell": "Whale sold", "tax-up": "Sell tax up", "cannot-sell": "Cannot sell", "oath-broken": "Oath broken", ring: "Ring Radar", "curve-drain": "Curve draining" };
+function mountAegis(box) {
+  const main = h("div", { class: "ag-col" });
+  clear(box, main);
+  const evRow = (e) => h("div", { class: "ap-row" },
+    h("div", { class: "grow" }, h("b", { class: e.level === "red" ? "down" : "" }, `${e.level === "red" ? "RED" : "Amber"} · ${AEGIS_KIND[e.kind] || e.kind}`), h("span", { class: "faint" }, ` · $${e.symbol || "?"} · ${ago(e.at)} ago`), h("div", { class: "faint" }, e.text)),
+    e.tx ? h("a", { class: "link", href: `https://robinhoodchain.blockscout.com/tx/${e.tx}`, target: "_blank", rel: "noopener" }, "Tx") : null);
+  async function render() {
+    const f = await api.get("aegis/feed").catch(() => null);
+    const caught = h("div", { class: "panel ag-panel" }, h("h3", {}, "What Aegis caught lately"), f?.events?.length ? h("div", { class: "ap-list" }, f.events.slice(0, 15).map(evRow)) : h("p", { class: "faint", style: { margin: 0 } }, "Nothing raised yet on the coins people guard."));
+    const intro = h("div", { class: "ag-intro" }, h("h2", {}, "Aegis"), h("p", {}, "A guard on every coin you hold on Robinhood Chain. Once a minute Aegis reads what the dev, the wallets it disclosed and the top holders do, and test-sells your coin every five minutes. When the dev dumps, a whale sells, the sell tax jumps, the coin stops selling or the dev breaks its Oath, you get an alert in your inbox and on Telegram. In exit mode a red alert also prepares the sell to ETH for you to approve."));
+    if (!wallet.session) { clear(main, intro, needSignIn(main, "Sign in to guard your coins."), caught); return; }
+    let d;
+    try { d = await api.get("aegis/me"); } catch (e) { clear(main, intro, h("div", { class: "alert error" }, e.message)); return; }
+    const save = async (patch) => { try { await api.post("aegis/me", { on: d.on, mode: d.mode, minUsd: d.minUsd, ...patch }); toast("Saved", "ok"); setTimeout(render, 2500); } catch (e) { toast(e.message, "error"); } };
+    const sw = h("button", { class: `ag-switch ${d.on ? "on" : ""}`, type: "button", role: "switch", "aria-checked": String(d.on), "aria-label": "Aegis on or off", onclick: () => save({ on: !d.on }) }, h("i"));
+    const mode = h("div", { class: "seg" },
+      h("button", { type: "button", "aria-pressed": String(d.mode === "alert"), onclick: () => save({ mode: "alert" }) }, "Alert"),
+      h("button", { type: "button", "aria-pressed": String(d.mode === "exit"), onclick: () => save({ mode: "exit" }) }, "Exit"));
+    const coin = (c) => h("div", { class: "ap-row" },
+      h("div", { class: "grow" }, h("b", {}, `$${c.symbol}`), h("span", { class: "faint" }, `${c.usd != null ? ` · ${usd(c.usd)}` : ""}${c.inAgentWallet ? " · Agent Wallet" : ""}`),
+        c.events?.length ? h("div", { class: c.events[0].level === "red" ? "down" : "faint" }, `${AEGIS_KIND[c.events[0].kind] || c.events[0].kind}: ${c.events[0].text}`) : h("div", { class: "faint" }, "Quiet so far.")),
+      h("span", { class: "faint" }, c.sellTest ? (c.sellTest.ok ? `sells · tax ${Number(c.sellTest.tax || 0).toFixed(1)}%` : "sell test failed") : "sell test pending"));
+    clear(main, intro,
+      h("div", { class: "panel ag-panel" },
+        h("div", { class: "ag-auto-h" }, h("div", {}, h("b", {}, d.on ? `On · ${d.mode === "exit" ? "exit tickets on red" : "alerts only"}` : "Off"),
+          h("div", { class: "faint" }, d.mode === "exit" ? (d.autoExit ? "A red alert sells coins held in your Agent Wallet through the Gate and its caps; coins in your own wallet get a ticket to approve." : "A red alert prepares a sell to ETH for you to approve in Portfolio, Inbox.") : "You decide every exit; Aegis only tells you.")),
+          h("div", { class: "row" }, mode, sw)),
+        h("p", { class: "note", style: { margin: "10px 0 0" } }, `Guards up to ${d.limit} coins${d.limit < 10 ? " (Holder Pass: up to 50)" : ""}, largest first${d.capped ? `; ${d.capped} more not guarded` : ""}. Link Telegram in Settings to get the alerts there.`)),
+      h("div", { class: "panel ag-panel" }, h("h3", {}, `Guarded coins (${d.coins.length})`), d.coins.length ? h("div", { class: "ap-list" }, d.coins.map(coin)) : h("p", { class: "faint", style: { margin: 0 } }, d.on ? "Reading your wallet. Coins show up here within a minute." : "Switch it on and every coin in your wallet and Agent Wallet is guarded.")),
+      caught);
+  }
+  render();
+  const off = onWallet(() => render());
+  const t = setInterval(() => { if (!document.hidden) render(); }, 30000);
+  return () => { off(); clearInterval(t); };
 }
 
 /* =====================================================================================

@@ -135,7 +135,7 @@ const LINK_OK = /^(https?:\/\/)?(www\.)?(troya\.codes|t\.me\/troyaagent|x\.com\/
 export const oneCashtag = (t) => { let n = 0; return String(t || "").replace(/\$([A-Za-z][A-Za-z0-9]{0,15})\b/g, (m, sym) => (n++ ? sym : m)); };
 function tidy(t) {
   let s = String(t || "").replace(/\*\*|__|`/g, "").replace(/^#+\s*/gm, "").replace(/\s+\n/g, "\n").trim();
-  s = s.replace(/(^|\s)@\w+/g, "$1").replace(/https?:\/\/\S+/g, (u) => (LINK_OK.test(u) ? u : "")).replace(/[ \t]{2,}/g, " ").trim();
+  s = s.replace(/(^|\s)@\w+(?![\w/])/g, "$1").replace(/https?:\/\/\S+/g, (u) => (LINK_OK.test(u) ? u : "")).replace(/[ \t]{2,}/g, " ").trim();
   s = oneCashtag(s);
   if (s.length > 270) s = s.slice(0, 267).replace(/\s+\S*$/, "") + "…";
   return s;

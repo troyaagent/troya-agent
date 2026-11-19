@@ -103,6 +103,8 @@ const G = {
     ask: ["What are safe caps for an Agent Wallet?", "How do I withdraw everything from it?"], next: [["Autopilot", "#/agent/autopilot"], ["Playbooks", "#/agent/playbooks"]] },
   "agent/autopilot": { t: "Autopilot", what: "Runs the tickets you approved, inside your caps, while this tab is open.", tour: [[".ag-intro", "How it works", "Rules first; every order still passes the Gate."]],
     ask: ["What will Autopilot do on its own?"], next: [["Sentry Autopilot", "#/agent/sentry"]] },
+  "agent/aegis": { t: "Aegis", what: "A guard on every coin you hold: dev and whale sells, a sell test every five minutes, tax jumps and broken Oaths raise an alert in your inbox and Telegram; exit mode prepares the sell on red.", tour: [[".ag-intro", "Your guard", "Switch it on and every coin in your wallet and Agent Wallet is watched."]],
+    ask: ["What does Aegis watch on my coins?"], next: [["Oath", "/oath"]] },
   "agent/sentry": { t: "Sentry Autopilot", what: "Your rules on every new launch Sentry passes: practice with play money, or live from the Agent Wallet.", tour: [[".ag-intro", "Your rules", "Minimum raised, size, take profit and stop."]],
     ask: ["What rules make sense for Sentry Autopilot?"], next: [["The Record", "/record"]] },
   "agent/playbooks": { t: "Playbooks", what: "Rules the server watches for you: stop-loss, take-profit ladders, DCA, TWAP, price alerts, range and loan guards.", tour: [[".ag-intro", "Rules that watch", "Checked every 20 seconds; triggers execute inside your caps or land in your inbox."]],

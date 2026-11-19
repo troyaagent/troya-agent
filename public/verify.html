@@ -27,6 +27,7 @@
 <link rel="stylesheet" href="/css/site.css">
 <link rel="preload" href="/home/fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/home/pages.css">
+<link rel="stylesheet" href="/home/verify-latest.css">
 <link rel="stylesheet" href="/css/buybar.css">
 <script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
 <script src="/config.js"></script>
@@ -51,6 +52,7 @@
     <span class="eyebrow"><i class="dot"></i>Verify</span>
     <h1 id="ph" class="words" data-words>The sentry's log</h1>
     <p class="lead rv">Troya has run with real funds on Robinhood Chain since before launch, through the same app anyone opens. Each line below has a place to read it, no account needed. Each step names who signed: the test wallet <a class="ulink" href="https://robinhoodchain.blockscout.com/address/0x12a05719851c8375342DE65c9105329c81f57054" target="_blank" rel="noopener">0x12a0…7054</a> and, from 16 Nov, the team wallet <a class="ulink" href="https://robinhoodchain.blockscout.com/address/0x45611870017682Ec781EDb9F71fA72fA91159350" target="_blank" rel="noopener">0x4561…9350</a>, each in its own browser wallet; Agent Wallets the Troya server created for them (each funded by its owner and paying back only to it); the bridge relayer that delivers on the other chain; Lighter's operator, which pays Lighter withdrawals out; and the $TROYA creator wallet for the LP burn. Every transaction, its signer and its time, machine-readable: <a class="ulink" href="/proof.json" target="_blank" rel="noopener">proof.json</a>.</p>
+    <div class="vl-latest" data-latest aria-label="Latest proof" hidden></div>
   </section>
 
   <section class="ip" aria-labelledby="how-h">
@@ -158,5 +160,6 @@
 <script type="module" src="/home/pages.js"></script>
 <script src="/js/buybar.js" defer></script>
 <script src="/home/rain.js" defer></script>
+<script src="/home/verify-latest.js" defer></script>
 </body>
 </html>

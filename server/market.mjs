@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { KYBER_ON } from "./kyber.mjs";
-import { noteV4, ponsState, ponsPublic, ponsProfile, STOCKS, ADDR as RH } from "./robinhood.mjs";
+import { noteV4, ponsState, ponsPublic, ponsProfile, STOCKS, ADDR as RH, rpc as rhRpc, CHAINS as RH_CHAINS } from "./robinhood.mjs";
 
 const UA = { "user-agent": "troya-agent/0.2 (+market-reader)", accept: "application/json" };
 const HL = "https://api.hyperliquid.xyz/info";
@@ -86,15 +86,18 @@ export const geckoApi = (pathQs, opts) => gecko(pathQs, opts);
 // piled up behind the 10-second background pace and the queue only grew); a user asking for something the background
 // already queued moves it up front. The background queue is capped: its oldest job gives way.
 const LO_CAP = 40;
+const CHART_RE = /\/ohlcv\//;
 function gecko(pathQs, { hi = false } = {}) {
   return new Promise((resolve, reject) => {
     const dup = gq.hi.find((j) => j.pathQs === pathQs) || gq.lo.find((j) => j.pathQs === pathQs);
     if (dup) {
       dup.waiters.push({ resolve, reject });
-      if (hi && !dup.hi) { gq.lo.splice(gq.lo.indexOf(dup), 1); dup.hi = true; dup.queuedAt = Date.now(); gq.hi.push(dup); }
+      if (hi && !dup.hi) { gq.lo.splice(gq.lo.indexOf(dup), 1); dup.hi = true; dup.queuedAt = Date.now(); if (CHART_RE.test(pathQs)) gq.hi.unshift(dup); else gq.hi.push(dup); }
       return;
     }
-    (hi ? gq.hi : gq.lo).push({ pathQs, waiters: [{ resolve, reject }], hi, queuedAt: Date.now() });
+    const job = { pathQs, waiters: [{ resolve, reject }], hi, queuedAt: Date.now() };
+    // a chart someone is looking at goes to the front of the user queue (it waited ~47 s behind back-fills on 20 Nov)
+    if (hi && CHART_RE.test(pathQs)) gq.hi.unshift(job); else (hi ? gq.hi : gq.lo).push(job);
     while (gq.lo.length > LO_CAP) { const old = gq.lo.shift(); for (const w of old.waiters) w.reject(Object.assign(new Error("GeckoTerminal queue is full; try again shortly"), { status: 503 })); }
     pumpGecko();
   });
@@ -830,11 +833,78 @@ const setLast = (k, v) => { LAST.delete(k); LAST.set(k, v); lastDirty = true; if
 
 // candles for a Robinhood token's main pool, in USD: [{time(sec), open, high, low, close, volume}]
 const GT_TF = { "5m": ["minute", 5], "15m": ["minute", 15], "1h": ["hour", 1], "4h": ["hour", 4], "1d": ["day", 1] };
+// Candles straight from the chain for a coin still on its Pons curve: the curve's own Buy and Sell events (ETH and tokens
+// per trade, each log carrying its block time), read through our own RPC. GeckoTerminal (free and rate-limited: its 429s
+// held a chart for ~50 s on 20 Nov 2026) stays for graduated coins and other pools.
+//   Buy  data: quoteIn (gross ETH), tokensOut, fee, creatorTax      Sell data: tokensIn, quoteOut, fee, creatorTax
+const T_CBUY = "0xec36bf571f136799e8dc0b0b8bea4b04d8bd3d43de838aab0d5fc21d4cbfc455";
+const T_CSELL = "0x8113d738abdcb6b38357e9d53a54a7157861a09031b453651f0fe7fe151f59df";
+const IV_S = { "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400 };
+const CURVES = new Map();      // token -> { curve, last, dec, trades: [[unix s, ETH per token, ETH volume]], busy }
+const rhHex = (n) => "0x" + n.toString(16);
+async function curveTrades(a) {
+  const ps = await memo(`rh:curveps:${a}`, 60_000, () => ponsState(a)).catch(() => null);
+  if (!ps?.curve || ps.graduated) return null;
+  let c = CURVES.get(a);
+  if (!c || lc(c.curve) !== lc(ps.curve)) {
+    const head0 = Number(BigInt(await rhRpc("robinhood", "eth_blockNumber", [])));
+    const { findLaunchTx } = await import("./ringradar.mjs");
+    const l = await findLaunchTx(a).catch(() => null);
+    const decHex = await rhRpc("robinhood", "eth_call", [{ to: a, data: "0x313ce567" }, "latest"]).catch(() => null);
+    c = { curve: ps.curve, last: l?.block ? l.block - 1 : Math.max(0, head0 - 3_000_000), dec: decHex && decHex !== "0x" ? Number(BigInt(decHex)) : 18, trades: [], busy: null };
+    CURVES.set(a, c);
+    while (CURVES.size > 400) CURVES.delete(CURVES.keys().next().value);
+  }
+  if (!c.busy) c.busy = (async () => {
+    const head = Number(BigInt(await rhRpc("robinhood", "eth_blockNumber", [])));
+    if (head <= c.last) return;
+    // one topic per query: the official RPC takes a wide range only with a single value per topic position
+    const q = (t) => rhRpc("robinhood", "eth_getLogs", [{ address: c.curve, topics: [t], fromBlock: rhHex(c.last + 1), toBlock: rhHex(head) }], { only: RH_CHAINS.robinhood.wide, timeoutMs: 20_000 });
+    const [buys, sells] = await Promise.all([q(T_CBUY), q(T_CSELL)]);
+    const logs = [...(buys || []), ...(sells || [])].sort((x, y) => Number(BigInt(x.blockNumber)) - Number(BigInt(y.blockNumber)) || Number(BigInt(x.logIndex)) - Number(BigInt(y.logIndex)));
+    for (const l of logs) {
+      const w = (l.data.slice(2).match(/.{64}/g) || []).map((x) => BigInt("0x" + x));
+      if (w.length < 4) continue;
+      const buy = l.topics[0] === T_CBUY;
+      const eth = buy ? w[0] - w[2] - w[3] : w[1] + w[2] + w[3], tok = buy ? w[1] : w[0];
+      if (tok <= 0n || eth <= 0n) continue;
+      const ethF = Number(eth) / 1e18, tokF = Number(tok) / 10 ** c.dec;
+      c.trades.push([Number(BigInt(l.blockTimestamp)), ethF / tokF, ethF]);
+    }
+    c.last = head;
+  })().finally(() => { c.busy = null; });
+  await c.busy;
+  return c;
+}
+async function curveCandles(a, iv) {
+  const c = await curveTrades(a);
+  if (!c || !c.trades.length) return null;
+  const step = IV_S[iv], ethUsd = await getEthUsd().catch(() => null);
+  if (!ethUsd) return null;
+  const now = Math.floor(Date.now() / 1000), by = new Map();
+  for (const [t, px, eth] of c.trades) {
+    const b = Math.floor(t / step) * step, p = px * ethUsd, v = eth * ethUsd, k = by.get(b);
+    if (!k) by.set(b, { time: b, open: p, high: p, low: p, close: p, volume: v });
+    else { k.high = Math.max(k.high, p); k.low = Math.min(k.low, p); k.close = p; k.volume += v; }
+  }
+  // quiet stretches carry the last price forward, up to the current bar, so the chart runs to now (300 bars at most)
+  const first = Math.min(...by.keys()), endB = Math.floor(now / step) * step, out = [];
+  let prev = null;
+  for (let b = Math.max(first, endB - 299 * step); b <= endB; b += step) {
+    const k = by.get(b);
+    if (k) { if (prev != null) k.open = prev; out.push(k); prev = k.close; }
+    else if (prev != null) out.push({ time: b, open: prev, high: prev, low: prev, close: prev, volume: 0 });
+    else { const before = c.trades.filter(([t]) => t < b).pop(); if (before) { prev = before[1] * ethUsd; out.push({ time: b, open: prev, high: prev, low: prev, close: prev, volume: 0 }); } }
+  }
+  return { candles: out, interval: iv, source: "Pons curve (on-chain)", unit: "USD", trades: c.trades.length, updatedAt: Date.now() };
+}
+
 // bg: a background job (the Record back-fill, smart DCA sizing) waits behind people loading a chart or a range
 export async function getRobinhoodCandles(address, interval = "1h", { bg = false } = {}) {
   if (!ADDR_RE.test(String(address || ""))) throw httpErr(400, "That is not a valid token address.");
   const iv = GT_TF[interval] ? interval : "1h";
   const a = lc(address);
+  if (!bg) { const cc = await memo(`rh:ccandles:${a}:${iv}`, 10_000, () => curveCandles(a, iv)).catch(() => null); if (cc?.candles?.length) return cc; }
   const lastC = bg ? null : LAST.get(`c:${a}:${iv}`);
   const freshC = memo(`rh:candles:${a}:${iv}`, iv === "5m" || iv === "15m" ? 2 * 60_000 : 5 * 60_000, async () => {
     let pool = board.rows.get(a)?.pool;

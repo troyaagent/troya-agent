@@ -236,7 +236,10 @@ export async function mount(view, { parts, go }) {
     const my = ++chartSeq, ac = new AbortController();
     const wait = h("span", { class: "tk-chart-wait fine muted" });
     clear(chartBox, h("div", { class: "tk-chart-msg" }, h("div", { class: "sk", style: { height: "300px", width: "100%" } }), wait));
-    const slowT = setTimeout(() => { wait.textContent = "Still loading the price history from GeckoTerminal. Busy coins can take up to a minute."; }, 8000);
+    const slowT = setTimeout(() => {
+      const quiet = board && board.level !== "loading" && !(board.trades || []).length;
+      wait.textContent = quiet ? "No trades on this coin in the last hours; checking GeckoTerminal for older price history…" : "Still loading the price history from GeckoTerminal…";
+    }, 6000);
     const stopT = setTimeout(() => ac.abort(), 60000);
     try {
       const c = await api.get(`market/robinhood/candles?address=${address}&interval=${interval}`, { signal: ac.signal });
@@ -244,7 +247,7 @@ export async function mount(view, { parts, go }) {
       if (chartStop || my !== chartSeq) return;
       chartSrc.textContent = `${c.source} · ${c.interval} candles · priced in USD`;
       if (!c.candles?.length || c.candles.length < 2) {
-        clear(chartBox, h("div", { class: "tk-chart-msg" }, h("b", {}, "No price history yet"), h("span", {}, pons && !pons.graduated ? "Not enough trades on the curve yet for a chart." : "Not enough swaps have been indexed for a chart.")));
+        clear(chartBox, h("div", { class: "tk-chart-msg" }, h("b", {}, c.candles?.length ? "Not enough trades for a chart yet" : "No trades yet"), h("span", {}, pons && !pons.graduated ? "The chart starts once a few buys and sells land on the curve." : "The chart starts once a few swaps have been indexed.")));
         return;
       }
       const LW = await import("lightweight-charts");

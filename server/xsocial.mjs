@@ -396,6 +396,25 @@ export async function latestPosts(n = 3) {
   return v.slice(0, n);
 }
 
+// /raid targets Troya's PINNED post on X (owner, 19 Nov 2026: the pinned post covers everything, raids go there), read
+// once every 10 minutes at most inside the daily "users" budget; null when nothing is pinned
+let pinMemo = null;
+export async function pinnedPost() {
+  if (pinMemo && Date.now() - pinMemo.at < 10 * 60_000) return pinMemo.v;
+  const bot = await botTokens();
+  if (!bot?.access || !bot.id || !(await spend("users"))) return pinMemo?.v || null;
+  const p = await xApi(`/2/users/${bot.id}?user.fields=pinned_tweet_id&expansions=pinned_tweet_id&tweet.fields=created_at,public_metrics`, { token: bot.access });
+  const t = (p?.includes?.tweets || []).find((x) => x.id === p?.data?.pinned_tweet_id) || null;
+  const pid = p?.data?.pinned_tweet_id || null;
+  // X cannot expand some pinned posts (the pinned story video answers "Could not find tweet"): keep the id, and take the
+  // text from our own post log when we posted it
+  const logged = !t && pid ? (await store.readJson("x-log.json", [])).find((e) => e.replyId === pid) : null;
+  const v = t ? { id: t.id, text: String(t.text || ""), at: t.created_at ? Date.parse(t.created_at) : null, likes: t.public_metrics?.like_count ?? null, reposts: t.public_metrics?.retweet_count ?? null, replies: t.public_metrics?.reply_count ?? null, pinned: true }
+    : pid ? { id: pid, text: String(logged?.reply || ""), at: logged?.at || null, likes: null, reposts: null, replies: null, pinned: true } : null;
+  pinMemo = { at: Date.now(), v };
+  return v;
+}
+
 // Project check (projectcheck.mjs): one public profile read, inside the daily "users" budget
 export async function userProfile(username) {
   const bot = await botTokens();

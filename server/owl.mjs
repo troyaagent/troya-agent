@@ -18,7 +18,7 @@ let store = null;
 
 async function transfersThisWeek(a) {
   const { blockscoutApi, hasBlockscout } = await import("./market.mjs");
-  if (!hasBlockscout()) throw new HttpError(503, "Trade history is not configured on this server.");
+  if (!hasBlockscout()) throw new HttpError(503, "Trade history is not available right now (the chain data provider is paused for a while). Try Owl again in an hour.");
   const since = Date.now() - WEEK, out = [];
   let q = "", pages = 0;
   while (pages++ < 5) {

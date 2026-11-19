@@ -4,7 +4,8 @@
 //   · feeLockDays: the creator-fee recipient does not claim from the Pons fee escrow for this many days
 //   · wallets: every wallet the dev controls or freed from the snipe tax, disclosed up front (they count toward the cap)
 // Signed with EIP-712 (domain "Troya Oath" v1, chain 4663) by the coin's Pons deployer or creator-fee recipient. Tier 2
-// (held by Troya's rules) and tier 3 (an Oath Vault enforced in code and proven) build on the same record.
+// (held by Troya's rules: a broken Oath turns the coin's Gate verdict and Sentry post to caution, and the wallets behind it cannot
+// launch through Troya for 30 days) and tier 3 (an Oath Vault enforced in code and proven) build on the same record.
 //   GET  /api/oath                 every oath and its status
 //   GET  /api/oath/:token          one coin's oath, breaches and the evidence
 //   POST /api/oath                 { token, pledge:{maxSellBps,feeLockDays,wallets,issuedAt}, signature }
@@ -93,6 +94,21 @@ async function watch() {
 const view = (o) => ({ token: o.token, status: o.status, pledge: { maxSellPctPerDay: o.maxSellBps / 100, feeLockDays: o.feeLockDays, wallets: o.wallets },
   signer: o.signer, takenAt: o.takenAt, breaches: o.breaches, checkedBlock: o.checkedBlock,
   feeLockUntil: o.feeLockDays ? o.takenAt + o.feeLockDays * 86_400_000 : null, tier: "watched" });
+
+/** Tier 2, held by Troya's rules: the newest Oath one of these wallets broke in the last 30 days, or null. */
+export async function brokeOath(wallets) {
+  const want = new Set((wallets || []).filter(Boolean).map(lc));
+  const d = await store.readJson(FILE, {});
+  let hit = null;
+  for (const o of Object.values(d.oaths || {})) {
+    if (o.status !== "broken") continue;
+    const at = Math.max(...o.breaches.map((b) => b.at || 0));
+    if (Date.now() - at > 30 * 86_400_000) continue;
+    if (![o.signer, o.deployer, o.feeRecipient, ...(o.wallets || [])].some((w) => want.has(lc(w)))) continue;
+    if (!hit || at > hit.at) hit = { token: o.token, at, until: at + 30 * 86_400_000, breach: o.breaches.at(-1) };
+  }
+  return hit;
+}
 
 export async function oathOf(token) { const d = await store.readJson(FILE, {}); const o = d.oaths?.[lc(token)]; return o ? view(o) : null; }
 

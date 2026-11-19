@@ -214,6 +214,7 @@ export function formatPost(r) {
   if (bits.length) lines.push(bits.join(" · "));
   if (r.pons) lines.push(`Curve ${eth(r.pons.raised)} ${esc(r.pons.pair?.symbol || "ETH")} raised · ${r.pons.progressPct != null ? r.pons.progressPct.toFixed(r.pons.progressPct < 1 ? 2 : 1) : "–"}% to graduation · tax ${Number((1 + (r.pons.fees.creatorTaxBps || 0) / 100).toFixed(2))}% (1% Pons fee${r.pons.fees.creatorTaxBps ? ` + ${Number((r.pons.fees.creatorTaxBps / 100).toFixed(2))}% creator tax` : ", no creator tax"})`);
   if (r.ring && (r.ring.verdict === "red" || r.ring.verdict === "amber") && r.why?.label !== "Ring Radar") lines.push(`Ring Radar ${r.ring.verdict === "red" ? "red" : "amber"}: ${esc(r.ring.reasons.slice(0, 2).join("; ").slice(0, 220))}`);
+  if (r.oath?.status === "kept") lines.push(`Oath kept: the dev pledged to sell at most ${r.oath.pledge.maxSellPctPerDay}% of the supply a day${r.oath.pledge.feeLockDays ? ` and leave creator fees for ${r.oath.pledge.feeLockDays} days` : ""}`);
   if (r.assay?.length) for (const l of r.assay) lines.push(esc(l));
   lines.push(`<code>${r.token}</code>`);
   return lines.join("\n");
@@ -448,6 +449,9 @@ async function work(s) {
       r.ring = await import("./ringradar.mjs").then((m) => m.ringCheck(q.token, q.tx ? { tx: q.tx, block: q.block } : null)).catch(() => null);
       if (r.ring?.verdict === "red" && r.v === "passed") { r.v = "caution"; r.why = { label: "Ring Radar", detail: r.ring.reasons.slice(0, 2).join("; ") }; }
     }
+    // V7 F32 Oath tier 2: a broken Oath turns a pass into caution; a kept one is shown in the post
+    r.oath = await import("./oath.mjs").then((m) => m.oathOf(q.token)).catch(() => null);
+    if (r.oath?.status === "broken" && r.v === "passed") { const b = r.oath.breaches.at(-1); r.v = "caution"; r.why = { label: "Oath broken", detail: b?.kind === "sell" ? `the dev sold ${b.soldPct}% of the supply on ${b.day}, over its ${b.capPct}% a day pledge` : b?.note || "see troya.codes/oath" }; }
     if (q.kind === "pool") {
       if (r.pons) { s.queue = s.queue.filter((x) => x !== q); continue; }                 // a Pons coin: its launch is covered already
       const ck = Object.fromEntries(r.checks.map((c) => [c.key, c]));

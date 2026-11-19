@@ -280,6 +280,9 @@ async function launchPlanned(p, { owner, name, symbol, logo, creatorTaxBps = 0, 
   const aw = await import("./agentwallet.mjs");
   const w = await aw.getAgentWallet(owner);
   if (!w?.exists) return { ok: false, why: "no-agent-wallet" };
+  // V7 F32 Oath tier 2: wallets behind an Oath broken in the last 30 days cannot launch through Troya
+  const broke = await import("./oath.mjs").then((m) => m.brokeOath([owner, w.address])).catch(() => null);
+  if (broke) return { ok: false, why: "oath-broken", reasons: [`This wallet broke its Oath on ${broke.token.slice(0, 10)}… (troya.codes/oath), so Troya launches are closed for it until ${new Date(broke.until).toISOString().slice(0, 10)}.`] };
   buyEth = Number(buyEth) || 0;
   if (buyEth < 0 || buyEth > MAX_INITIAL_BUY_ETH) return { ok: false, why: "buy-size", reasons: [`The initial buy can be up to ${MAX_INITIAL_BUY_ETH} ETH.`] };
   if (buyEth > 0) {

@@ -171,7 +171,9 @@ async function runCheck(token, { amountEth, from, withAssay }) {
   const vd = verdict(g);
   const q = g.quote || {};
   const ring = await import("./ringradar.mjs").then((m) => m.ringFlags(token)).catch(() => []);   // V7 F31, from the radar's cache
-  const flags = [...(a?.status === "done" ? (a.flags || []).filter((f) => f.key !== "partial").map((f) => Object.fromEntries(ASSAY_KEEP.map((k) => [k, f[k]]))) : []), ...ring];
+  const oath = await import("./oath.mjs").then((m) => m.oathOf(token)).catch(() => null);           // V7 F32 tier 2
+  const oathFlag = oath?.status === "broken" ? [{ key: "oath", level: "red", title: "Oath broken", detail: `the dev broke its pledge (${oath.breaches.length} breach${oath.breaches.length > 1 ? "es" : ""}); see troya.codes/oath` }] : [];
+  const flags = [...(a?.status === "done" ? (a.flags || []).filter((f) => f.key !== "partial").map((f) => Object.fromEntries(ASSAY_KEEP.map((k) => [k, f[k]]))) : []), ...ring, ...oathFlag];
   const red = flags.some((f) => f.level === "red");
   const v = vd.v === "nobuys" ? "untested" : vd.v === "passed" && red ? "caution" : vd.v;
   const attested = {

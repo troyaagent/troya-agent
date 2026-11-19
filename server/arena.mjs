@@ -117,6 +117,10 @@ async function aiDaily(d) {
    ARENA_LIVE_BUY_ETH and never more than what the trader has left after its open positions and realized losses.
    Live positions follow their paper twin: opened on the same launch, closed when the paper one closes. */
 const LIVE = () => process.env.ARENA_LIVE === "1" && isAddr(process.env.ARENA_LIVE_OWNER);
+// traders whose real-money twin is paused (ARENA_LIVE_PAUSE=ai-qwen,...): paper keeps trading, no new live buys, open live
+// positions still close with their paper twin. 19 Nov 2026: Qwen's three live trades were all hit by coordinated dumps;
+// paused until Ring Radar catches clusters that sell together (owner's decision).
+const LIVE_PAUSED = () => String(process.env.ARENA_LIVE_PAUSE || "").split(",").map((s) => s.trim()).filter(Boolean);
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(String(a || ""));
 const LIVE_BUDGET = () => Number(process.env.ARENA_LIVE_BUDGET_ETH || 0.01);
 const LIVE_BUY = () => Number(process.env.ARENA_LIVE_BUY_ETH || 0.002);
@@ -137,6 +141,7 @@ async function walletTokenRaw(addr, token) {
 }
 
 async function openLive(d, ag, paper) {
+  if (LIVE_PAUSED().includes(ag.id)) return null;
   if (!LIVE() || ag.kind !== "ai") return null;
   const owner = process.env.ARENA_LIVE_OWNER;
   const aw = await (await import("./agentwallet.mjs")).getAgentWallet(owner).catch(() => null);
@@ -290,7 +295,8 @@ function statsOf(d, id, mode = "paper") {
 }
 const pubAgent = (d, ag) => ({ id: ag.id, kind: ag.kind, name: ag.kind === "ai" ? ag.name : `${ag.owner.slice(0, 6)}…${ag.owner.slice(-4)}`, model: ag.model || null, status: ag.status,
   rules: ag.rules, rulesText: rulesText(cleanRules(ag.rules)), thesis: ag.thesis || null, since: ag.createdAt, provingUntil: ag.provingUntil, verdict: ag.verdict || null, stats: statsOf(d, ag.id),
-  live: ag.kind === "ai" && (d.positions || []).some((p) => p.agent === ag.id && p.mode === "live") ? { ...statsOf(d, ag.id, "live"), budgetEth: LIVE_BUDGET(), equityEth: +liveEquity(d, ag.id).toFixed(6) } : null });
+  live: ag.kind === "ai" && (d.positions || []).some((p) => p.agent === ag.id && p.mode === "live") ? { ...statsOf(d, ag.id, "live"), budgetEth: LIVE_BUDGET(), equityEth: +liveEquity(d, ag.id).toFixed(6) } : null,
+  livePaused: ag.kind === "ai" && LIVE_PAUSED().includes(ag.id) });
 const pubPos = (p) => ({ agent: p.agent, mode: p.mode === "live" ? "live" : "paper", tx: p.txSell || p.txBuy || null, txBuy: p.txBuy || null, txSell: p.txSell || null, seal: p.sealClose || p.sealOpen || null, token: p.token, symbol: p.symbol, amountEth: p.amountEth, openedAt: p.openedAt, status: p.status, reason: p.reason || null, pnlEth: p.pnlEth ?? null, valueEth: p.lastValueEth ?? null, closedAt: p.closedAt || null });
 
 /** The public board, for the assistant and MCP tools. */

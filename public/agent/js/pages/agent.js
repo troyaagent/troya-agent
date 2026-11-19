@@ -785,7 +785,7 @@ function mountArena(box) {
           h("div", { class: "ag-ar-book" }, h("div", { class: "k" }, h("span", { class: "ag-ar-tag" }, "Paper")), h("div", { class: `v ${cls(a.stats.pnlEth)}` }, ethf(a.stats.pnlEth)),
             h("div", { class: "faint" }, `${a.stats.closed} closed${a.stats.winRate != null ? ` · ${Math.round(a.stats.winRate * 100)}% wins` : ""}${a.stats.open ? ` · ${a.stats.open} open (${ethf(a.stats.openPnlEth)})` : ""}`)),
           h("div", { class: "ag-ar-book live" }, h("div", { class: "k" }, h("span", { class: "ag-ar-tag live" }, "Live")),
-            a.live ? [h("div", { class: `v ${cls(a.live.pnlEth + a.live.openPnlEth)}` }, ethf(a.live.pnlEth + a.live.openPnlEth)), h("div", { class: "faint" }, `${Number(a.live.equityEth).toFixed(4)} of ${a.live.budgetEth} ETH · ${a.live.closed} closed${a.live.open ? ` · ${a.live.open} open` : ""}`)]
+            a.live ? [h("div", { class: `v ${cls(a.live.pnlEth + a.live.openPnlEth)}` }, ethf(a.live.pnlEth + a.live.openPnlEth)), h("div", { class: "faint" }, a.livePaused ? `Paused: no new live buys until Ring Radar catches wallets that dump together. ${Number(a.live.equityEth).toFixed(4)} of ${a.live.budgetEth} ETH left` : `${Number(a.live.equityEth).toFixed(4)} of ${a.live.budgetEth} ETH · ${a.live.closed} closed${a.live.open ? ` · ${a.live.open} open` : ""}`)]
               : [h("div", { class: "v ag-ar-wait" }, a.kind === "ai" && live ? "Ready" : "–"), h("div", { class: "faint" }, a.kind === "ai" && live ? `${live.budgetPerTraderEth} ETH waiting for its first live trade` : "Strategies trade on paper")])),
         h("p", { class: "ag-ar-rules" }, a.rulesText),
         a.thesis ? h("details", { class: "ag-ar-why" }, h("summary", {}, "Why these rules"), h("p", {}, a.thesis)) : null,

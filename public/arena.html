@@ -141,7 +141,7 @@ async function load() {
         <div><div class="ar-name">${esc(a.name)}</div><div class="ar-model">${esc(a.model || "user strategy")} · ${esc(a.status)}</div></div><div class="ar-rank">#${i + 1}</div></div>
       <div class="ar-two">
         <div class="ar-box"><small>Paper</small><b class="${cls(total)}">${eth(total)}</b><span>${a.stats.closed} closed${a.stats.winRate != null ? ` · ${Math.round(a.stats.winRate * 100)}% won` : ""}${a.stats.open ? ` · ${a.stats.open} open` : ""}</span></div>
-        <div class="ar-box live"><small>Live</small>${a.live ? `<b class="${cls(a.live.pnlEth)}">${eth(a.live.pnlEth)}</b><span>${Number(a.live.equityEth).toFixed(4)} of ${a.live.budgetEth} ETH left${a.live.open ? ` · ${a.live.open} open` : ""}</span>` : a.kind === "ai" && d.live ? `<b class="flat">ready</b><span>${d.live.budgetPerTraderEth} ETH, no live trade yet</span>` : `<b class="flat">paper</b><span>live caps after proving</span>`}</div>
+        <div class="ar-box live"><small>Live${a.livePaused ? " · paused" : ""}</small>${a.live ? `<b class="${cls(a.live.pnlEth)}">${eth(a.live.pnlEth)}</b><span>${a.livePaused ? "paused until Ring Radar catches wallets that dump together · " : ""}${Number(a.live.equityEth).toFixed(4)} of ${a.live.budgetEth} ETH left${a.live.open ? ` · ${a.live.open} open` : ""}</span>` : a.kind === "ai" && d.live ? `<b class="flat">ready</b><span>${d.live.budgetPerTraderEth} ETH, no live trade yet</span>` : `<b class="flat">paper</b><span>live caps after proving</span>`}</div>
       </div>
       <div class="ar-rules">${esc(a.rulesText)}</div>
       ${a.thesis ? `<div class="ar-thesis">“${esc(a.thesis)}”</div>` : ""}

@@ -214,6 +214,9 @@ export async function onLaunch(r) {
     pos.sealOpen = (await import("./seal.mjs").then((s) => s.seal("arena-open", pos.token, { agent: ag.id, ...pos }, `${ag.name || ag.id} bought $${pos.symbol}`)).catch(() => null))?.hash || null;
   }
   if (opened.length) await store.update(FILE, {}, (x) => { x.positions = [...(x.positions || []), ...opened]; return x; });
+  // V8 F43 Champions: followers of these traders buy the same coin from their own Agent Wallets (not awaited)
+  const papers = opened.filter((p) => p.mode !== "live");
+  if (papers.length) import("./champions.mjs").then((m) => m.onArenaOpen(papers)).catch((e) => console.warn("[champions] open", e.message));
 }
 
 /* Stops and take-profits run on their own loop (19 Nov 2026): the first live trade's stop at -25% filled at -64% because
@@ -277,6 +280,7 @@ async function watch() {
     const done = d.positions.filter((x) => x.status === "closed").sort((a, b) => b.closedAt - a.closedAt).slice(0, 3000);
     await store.update(FILE, {}, (x) => { x.positions = [...open, ...done, ...(x.positions || []).filter((q) => q.status === "open" && !open.some((o) => o.id === q.id) && !done.some((o) => o.id === q.id))]; return x; });
     if (closed.length) console.log(`[arena] closed ${closed.length} paper trade(s)`);
+    if (closed.length) import("./champions.mjs").then((m) => m.onArenaClose(closed)).catch((e) => console.warn("[champions] close", e.message));
   } catch (e) { console.warn("[arena] watch", e.message); }
   finally { watchBusy = false; }
 }

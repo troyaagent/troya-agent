@@ -755,7 +755,8 @@ function mountArena(box) {
     readBtn.disabled = false;
   });
   async function render() {
-    const [board, me] = await Promise.all([api.get("arena").catch(() => null), wallet.session ? api.get("arena/me").catch(() => null) : null]);
+    const [board, me, champs, myChamps] = await Promise.all([api.get("arena").catch(() => null), wallet.session ? api.get("arena/me").catch(() => null) : null,
+      api.get("champions").catch(() => null), wallet.session ? api.get("champions/me").catch(() => null) : null]);
     const mine = me?.agent;
     const SCAN = "https://robinhoodchain.blockscout.com";
     const agents = board?.agents || [], recent = board?.recent || [], live = board?.live || null;
@@ -807,7 +808,29 @@ function mountArena(box) {
           link(`${SCAN}/token/${p.token}`, "Coin"))),
       h("span", { class: `ag-ar-pnl ${p.status === "open" ? "" : cls(p.pnlEth)}` }, p.status === "open" ? (p.valueEth != null ? `${ethf(p.valueEth - p.amountEth)} so far` : "open") : ethf(p.pnlEth)));
 
+    // V8 F43 Champions: follow a proven trader into your own capped Agent Wallet
+    const follows = myChamps?.follows || {};
+    const champPanel = champs ? h("div", { class: "panel ag-panel ch-panel" },
+      h("div", { class: "ag-ar-top" }, h("h3", {}, "Champions"), h("span", { class: "faint" }, "Follow a proven trader")),
+      h("p", { class: "faint", style: { margin: "0 0 10px" } }, champs.rule),
+      champs.champions?.length ? h("div", { class: "ch-list" }, champs.champions.map((c) => {
+        const f = follows[c.id];
+        const amt = h("input", { class: "sc-in", type: "text", inputmode: "decimal", value: String(f?.buyEth ?? champs.buy?.def ?? 0.002), "aria-label": `ETH a trade when following ${c.name}` });
+        const rec = c.live ? `Live ${ethf(c.live.pnlEth + (c.live.openPnlEth || 0))} · ${c.live.closed} closed` : `Paper ${ethf(c.paper?.pnlEth)} · ${c.paper?.closed || 0} closed`;
+        return h("div", { class: `ch-row${f?.on ? " on" : ""}` },
+          h("div", { class: "ch-who" }, AI_LOGOS[c.id] ? h("img", { class: "ag-ar-logo", src: `/img/logos/ai/${AI_LOGOS[c.id]}.svg`, alt: "", width: 22, height: 22 }) : null,
+            h("div", {}, h("b", {}, c.name), h("div", { class: "faint" }, `${rec} · ${c.followers} following${c.livePaused ? " · live paused" : ""}`))),
+          wallet.session ? h("div", { class: "ch-act" }, amt, h("span", { class: "faint" }, "ETH a trade"),
+            h("button", { class: `btn sm ${f?.on ? "" : "primary"}`, type: "button", onclick: async () => {
+              try { await api.post("champions/follow", { agentId: c.id, buyEth: Number(amt.value), on: !f?.on }); toast(f?.on ? `Stopped following ${c.name}.` : `Following ${c.name}. Each trade passes the Gate, your caps and your trust ladder (Agent → Scepter).`, "ok"); render(); }
+              catch (e) { toast(e.message, "error"); }
+            } }, f?.on ? "Unfollow" : "Follow")) : null);
+      })) : h("p", { class: "faint", style: { margin: 0 } }, "No trader can be followed yet: AI traders need a real-money record, user strategies need to finish proving."),
+      (myChamps?.trades || []).length ? h("div", { class: "ch-mine" }, h("h4", {}, "Your follow trades"), h("ul", { class: "sc-list" }, myChamps.trades.slice(0, 8).map((t) => h("li", {},
+        h("div", {}, h("b", {}, `$${t.symbol}`), h("div", { class: "faint" }, `${nameOf(t.agent)} · ${t.result || ""}${t.exit ? ` · ${t.exit}` : ""}`)), h("span", { class: `sc-st s-${t.status === "open" ? "executed" : t.status === "skipped" ? "blocked" : "closed"}` }, t.status))))) : null,
+      !wallet.session ? needSignIn(main, "Sign in to follow a champion.") : null) : null;
     clear(main, intro,
+      champPanel,
       h("div", { class: "panel ag-panel" }, h("div", { class: "ag-ar-top" }, h("h3", {}, "The board"), h("a", { class: "link", href: "/arena", target: "_self" }, "Full Arena page")), summary, walletLine,
         agents.length ? h("div", { class: "ag-ar-grid" }, agents.map(card)) : h("p", { class: "faint", style: { margin: 0 } }, "The AI traders write their first rules within minutes of the Arena opening.")),
       recent.length ? h("div", { class: "panel ag-panel" }, h("h3", {}, "Latest trades"),

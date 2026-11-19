@@ -14,11 +14,11 @@ export async function mount(view, ctx) {
   useCss("portfolio");
   let alive = true;
   const stops = [];
-  let tab = ctx.parts[0] === "inbox" ? "inbox" : ctx.parts[0] === "history" ? "history" : "overview";
+  let tab = ["inbox", "history", "owl"].includes(ctx.parts[0]) ? ctx.parts[0] : "overview";
   const st = { rh: null, toks: null, hl: null, eth: null, key: null, journal: null, errors: {}, brief: null, briefSum: null };
 
   const body = h("div", {});
-  const tabsEl = tabs([{ value: "overview", label: "Overview" }, { value: "inbox", label: "Inbox" }, { value: "history", label: "History" }], tab, (v) => {
+  const tabsEl = tabs([{ value: "overview", label: "Overview" }, { value: "inbox", label: "Inbox" }, { value: "history", label: "History" }, { value: "owl", label: "Owl" }], tab, (v) => {
     tab = v;
     history.replaceState(null, "", `#/portfolio${v === "overview" ? "" : "/" + v}`);
     render();
@@ -354,11 +354,39 @@ export async function mount(view, ctx) {
     })();
   }
 
+  /* ---------- V7 F35 Owl: your week, read from the chain, three plain lines of coaching ---------- */
+  async function owlTab(box) {
+    const intro = h("div", { class: "panel", style: { padding: "18px 20px", marginBottom: "14px" } }, h("h2", { style: { margin: "0 0 6px" } }, "Owl"), h("p", { class: "muted", style: { margin: 0 } }, "Your last 7 days on Robinhood Chain: the coins you traded most, what each one really cost or made in ETH, and what Troya knew about it. Then three plain lines: keep, change, try."));
+    if (!wallet.session) { clear(box, intro, h("div", { class: "empty" }, h("b", {}, "Sign in to read your week."), h("button", { class: "btn primary sm", type: "button", onclick: async () => { try { if (!wallet.address) await openConnect(); if (wallet.address) await signIn(); } catch (e) { toast(e.message, "error"); } } }, wallet.address ? "Sign in" : "Connect wallet"))); return; }
+    clear(box, intro, h("div", { class: "empty" }, h("b", {}, "Owl is reading your week…"), "Every trade is matched with what it cost and paid in ETH, so this takes a few seconds."));
+    let v;
+    try { v = await api.get("owl/me"); } catch (e) { if (alive && tab === "owl") clear(box, intro, h("div", { class: "empty" }, h("b", {}, "Owl could not read your week."), e.message)); return; }
+    if (!alive || tab !== "owl") return;
+    const eth = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${x.toFixed(4)} ETH`);
+    const weekly = h("label", { class: "row", style: { gap: "8px", alignItems: "center" } }, h("input", { type: "checkbox", checked: v.weekly, onchange: async (e) => { try { await api.post("owl/me", { weekly: e.target.checked }); toast(e.target.checked ? "Owl will DM you every Monday" : "Weekly Owl off", "ok"); } catch (err) { toast(err.message, "error"); } } }), "Send me this card in Telegram every Monday");
+    const line = (k, t) => (t ? h("p", { style: { margin: "6px 0" } }, h("b", {}, `${k}: `), t) : null);
+    clear(box, intro,
+      h("div", { class: "panel", style: { padding: "18px 20px", marginBottom: "14px" } },
+        h("div", { class: "row", style: { justifyContent: "space-between", flexWrap: "wrap", gap: "10px" } },
+          h("b", {}, `${v.coinsTraded} coin${v.coinsTraded === 1 ? "" : "s"} traded · ${v.wins}W / ${v.losses}L`),
+          h("b", { class: v.pnlEth == null ? "" : v.pnlEth >= 0 ? "up" : "down" }, v.pnlEth == null ? "No priced trades" : `${eth(v.pnlEth)} on the ${v.read} read`)),
+        line("Keep", v.coach.keep), line("Change", v.coach.change), line("Try", v.coach.try)),
+      v.coins.length ? h("div", { class: "panel", style: { padding: "8px 12px", marginBottom: "14px" } },
+        h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, ["Coin", "Trades", "Result", "Held", "Troya saw"].map((c) => h("th", {}, c)))), h("tbody", {}, v.coins.map((r) => h("tr", {}, [
+          h("a", { class: "link", href: `#/gate/${r.token}` }, `$${r.symbol}`), String(r.trades),
+          h("span", { class: r.pnlEth == null ? "muted" : r.pnlEth >= 0 ? "up" : "down" }, r.pnlEth == null ? "not priced" : `${eth(r.pnlEth)}${r.pnlPct != null ? ` (${r.pnlPct.toFixed(0)}%)` : ""}`),
+          r.holding ? "still held" : r.heldMin != null ? `${r.heldMin} min` : "–",
+          [r.ring === "red" ? "Ring Radar red" : r.ring === "amber" ? "Ring Radar amber" : "", r.aegisRed ? `${r.aegisRed} Aegis red` : ""].filter(Boolean).join(" · ") || "–"].map((c) => h("td", {}, c)))))))) : null,
+      h("div", { class: "row", style: { justifyContent: "space-between", flexWrap: "wrap", gap: "10px" } }, weekly, v.receipt ? h("a", { class: "link", href: `/api/seal/r/${v.receipt}`, target: "_blank", rel: "noopener" }, "Sealed receipt") : null),
+      h("p", { class: "muted", style: { fontSize: "12px" } }, `${v.note}${v.capped ? ` ${v.capped} more coins traded this week are not read.` : ""}`));
+  }
+
   /* ---------- render ---------- */
   function render() {
     tabsEl.set(tab);
     if (tab === "overview") clear(body, overview());
     else if (tab === "inbox") inbox(body);
+    else if (tab === "owl") owlTab(body);
     else historyTab(body);
   }
 

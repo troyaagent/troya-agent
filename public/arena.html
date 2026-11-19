@@ -58,6 +58,9 @@
     .ar-card.lead { border-color: var(--blue-2); box-shadow: 0 0 0 1px rgba(95, 211, 239, .25), 0 12px 40px rgba(95, 211, 239, .08); }
     .ar-head { display: flex; align-items: center; gap: 12px; }
     .ar-av { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font: 600 16px/1 var(--mono); color: #021014; flex: none; }
+    .ar-av.logo { background: #f3f6f7; box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), 0 4px 14px rgba(0,0,0,.35); }
+    .ar-av.logo img { width: 24px; height: 24px; display: block; }
+    .ar-mini { width: 14px; height: 14px; border-radius: 4px; background: #f3f6f7; padding: 2px; vertical-align: -3px; margin-right: 6px; box-sizing: content-box; }
     .ar-name { font-size: 18px; font-weight: 500; letter-spacing: -.01em; }
     .ar-model { color: var(--faint); font: 11px/1.3 var(--mono); }
     .ar-rank { margin-left: auto; color: var(--muted); font: 12px var(--mono); }
@@ -117,6 +120,9 @@ const eth = (v, d = 4) => (v == null || !isFinite(v) ? "–" : `${v > 0 ? "+" : 
 const cls = (v) => (v == null || Math.abs(v) < 1e-9 ? "flat" : v > 0 ? "up" : "down");
 const ago = (t) => { if (!t) return ""; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "now" : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
 const COLORS = { Claude: "#e8a17c", GPT: "#9be0c3", Gemini: "#9fb8ff", DeepSeek: "#7fb2ff", Qwen: "#c7a6ff" };
+// each AI trader shows its model maker's mark (self-hosted SVGs in /img/logos/ai)
+const LOGOS = { "ai-claude": "claude", "ai-gpt": "gpt", "ai-gemini": "gemini", "ai-deepseek": "deepseek", "ai-qwen": "qwen" };
+const mini = (id) => LOGOS[id] ? `<img class="ar-mini" src="/img/logos/ai/${LOGOS[id]}.svg" alt="" width="14" height="14">` : "";
 const short = (s) => esc(String(s || "").replace(/^ai-/, ""));
 async function load() {
   let d;
@@ -137,7 +143,7 @@ async function load() {
     const total = (a.stats.pnlEth || 0) + (a.stats.openPnlEth || 0);
     const o = opens(a.id);
     return `<article class="ar-card${i === 0 && total > 0 ? " lead" : ""}">
-      <div class="ar-head"><div class="ar-av" style="background:${COLORS[a.name] || "#5fd3ef"}">${esc(String(a.name).slice(0, 1))}</div>
+      <div class="ar-head">${LOGOS[a.id] ? `<div class="ar-av logo"><img src="/img/logos/ai/${LOGOS[a.id]}.svg" alt="${esc(a.name)}" width="24" height="24"></div>` : `<div class="ar-av" style="background:${COLORS[a.name] || "#5fd3ef"}">${esc(String(a.name).slice(0, 1))}</div>`}
         <div><div class="ar-name">${esc(a.name)}</div><div class="ar-model">${esc(a.model || "user strategy")} · ${esc(a.status)}</div></div><div class="ar-rank">#${i + 1}</div></div>
       <div class="ar-two">
         <div class="ar-box"><small>Paper</small><b class="${cls(total)}">${eth(total)}</b><span>${a.stats.closed} closed${a.stats.winRate != null ? ` · ${Math.round(a.stats.winRate * 100)}% won` : ""}${a.stats.open ? ` · ${a.stats.open} open` : ""}</span></div>
@@ -154,7 +160,7 @@ async function load() {
     // proof on every row: live trades link their transactions, every trade links its signed Seal receipt
     const L = (href, t) => ` <a href="${href}" target="_blank" rel="noopener">${t}</a>`;
     const tx = (p.txBuy ? L(`https://robinhoodchain.blockscout.com/tx/${esc(p.txBuy)}`, "buy tx") : "") + (p.txSell ? L(`https://robinhoodchain.blockscout.com/tx/${esc(p.txSell)}`, "sell tx") : "") + (!p.txBuy && !p.txSell && p.tx ? L(`https://robinhoodchain.blockscout.com/tx/${esc(p.tx)}`, "tx") : "") + (p.seal ? L(`/api/seal/r/${esc(p.seal)}`, "receipt") : "");
-    return `<div class="ar-tr"><span><span class="ar-tag${p.mode === "live" ? " live" : ""}">${p.mode === "live" ? "LIVE" : "PAPER"}</span></span><span>${short(p.agent)}</span><span>$${esc(p.symbol)} · ${p.status === "open" ? "open" : esc(p.reason || "closed")}${tx}</span><span class="${cls(r)}">${r == null ? "open" : eth(r, 5)}</span><span>${ago(p.closedAt || p.openedAt)}</span></div>`;
+    return `<div class="ar-tr"><span><span class="ar-tag${p.mode === "live" ? " live" : ""}">${p.mode === "live" ? "LIVE" : "PAPER"}</span></span><span>${mini(p.agent)}${short(p.agent)}</span><span>$${esc(p.symbol)} · ${p.status === "open" ? "open" : esc(p.reason || "closed")}${tx}</span><span class="${cls(r)}">${r == null ? "open" : eth(r, 5)}</span><span>${ago(p.closedAt || p.openedAt)}</span></div>`;
   }).join("") : '<div class="ar-tr"><span></span><span></span><span>No trades yet</span><span></span><span></span></div>');
 }
 load(); setInterval(() => { if (!document.hidden) load(); }, 30000);

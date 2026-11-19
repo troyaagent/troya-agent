@@ -188,6 +188,7 @@
 .ag-ar-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
 .ag-ar-card { border: 1px solid var(--line-2); border-radius: var(--radius); background: linear-gradient(180deg, var(--bg-2), var(--bg-1)); padding: 14px; display: grid; gap: 10px; min-width: 0; }
 .ag-ar-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ag-ar-logo { width: 22px; height: 22px; padding: 7px; box-sizing: content-box; border-radius: 10px; background: #f3f6f7; flex: none; box-shadow: 0 0 0 1px var(--line, rgba(0,0,0,.08)); }
 .ag-ar-head .grow { min-width: 0; }
 .ag-ar-head .faint { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ag-ar-rank { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 600 13px var(--mono); color: var(--bg); background: var(--blue-2); box-shadow: 0 0 14px rgba(95, 211, 239, .35); flex: 0 0 auto; }

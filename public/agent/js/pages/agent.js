@@ -776,10 +776,12 @@ function mountArena(box) {
     const walletLine = live?.wallet ? h("p", { class: "ag-ar-wallet" }, "Live trades come from the Arena's own Agent Wallet ", h("a", { class: "mono link", href: `${SCAN}/address/${live.wallet}`, target: "_blank", rel: "noopener" }, short(live.wallet, 4)),
       ". Every buy and sell is a real transaction you can open on Blockscout.") : null;
 
+    // each AI trader shows its model maker's mark (self-hosted SVGs in /img/logos/ai)
+    const AI_LOGOS = { "ai-claude": "claude", "ai-gpt": "gpt", "ai-gemini": "gemini", "ai-deepseek": "deepseek", "ai-qwen": "qwen" };
     const card = (a, i) => {
       const open = recent.filter((p) => p.agent === a.id && p.status === "open");
       return h("div", { class: "ag-ar-card" },
-        h("div", { class: "ag-ar-head" }, h("span", { class: "ag-ar-rank" }, String(i + 1)), h("div", { class: "grow" }, h("b", {}, a.name), h("div", { class: "faint mono" }, a.kind === "ai" ? a.model : "strategy")),
+        h("div", { class: "ag-ar-head" }, h("span", { class: "ag-ar-rank" }, String(i + 1)), AI_LOGOS[a.id] ? h("img", { class: "ag-ar-logo", src: `/img/logos/ai/${AI_LOGOS[a.id]}.svg`, alt: a.name, width: 22, height: 22 }) : null, h("div", { class: "grow" }, h("b", {}, a.name), h("div", { class: "faint mono" }, a.kind === "ai" ? a.model : "strategy")),
           h("span", { class: `ag-ar-status ${a.status}` }, a.status)),
         h("div", { class: "ag-ar-books" },
           h("div", { class: "ag-ar-book" }, h("div", { class: "k" }, h("span", { class: "ag-ar-tag" }, "Paper")), h("div", { class: `v ${cls(a.stats.pnlEth)}` }, ethf(a.stats.pnlEth)),

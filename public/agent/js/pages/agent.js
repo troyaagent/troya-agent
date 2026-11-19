@@ -786,7 +786,8 @@ function mountAegis(box) {
   const main = h("div", { class: "ag-col" });
   clear(box, main);
   const evRow = (e) => h("div", { class: "ap-row" },
-    h("div", { class: "grow" }, h("b", { class: e.level === "red" ? "down" : "" }, `${e.level === "red" ? "RED" : "Amber"} · ${AEGIS_KIND[e.kind] || e.kind}`), h("span", { class: "faint" }, ` · $${e.symbol || "?"} · ${ago(e.at)} ago`), h("div", { class: "faint" }, e.text)),
+    h("div", { class: "grow" }, (() => { const b = h("b", { class: e.level === "red" ? "down" : "" }, `${e.level === "red" ? "RED" : "Amber"} · ${AEGIS_KIND[e.kind] || e.kind}`); return e.token ? h("a", { class: "link", href: `#/gate/${e.token}`, title: "Open this coin on the Gate: its Oath, Aegis and verdict" }, b) : b; })(), h("span", { class: "faint" }, ` · $${e.symbol || "?"} · ${ago(e.at)} ago`), h("div", { class: "faint" }, e.text)),
+    e.token ? h("a", { class: "link", href: `#/gate/${e.token}` }, "Gate") : null,
     e.tx ? h("a", { class: "link", href: `https://robinhoodchain.blockscout.com/tx/${e.tx}`, target: "_blank", rel: "noopener" }, "Tx") : null);
   async function render() {
     const f = await api.get("aegis/feed").catch(() => null);

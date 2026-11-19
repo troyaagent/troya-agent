@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Troya Gate on the confirm screen: the Gate verdict for every Robinhood Chain coin a transaction touches.",
   "proposedName": "Troya Gate",
   "repository": {
@@ -7,7 +7,7 @@
     "url": "https://github.com/troyaagent/troya-agent.git"
   },
   "source": {
-    "shasum": "XNeT4zvj8RUqxpmouXVH/aA82qFGS/rRxn9Bt4QSVPw=",
+    "shasum": "w4IuohD/KGRBt1DsosJu7k4CX2v18nd8ZHJUuhIMZW8=",
     "location": {
       "npm": {
         "filePath": "dist/bundle.js",

@@ -1,6 +1,6 @@
 {
   "name": "@troyaagent/snap",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Troya Gate on MetaMask's confirm screen: the Gate verdict for every Robinhood Chain coin a transaction touches, and a warning on unlimited approvals to unknown contracts.",
   "homepage": "https://troya.codes",
   "repository": {

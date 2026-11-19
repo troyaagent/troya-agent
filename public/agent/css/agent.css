@@ -177,3 +177,46 @@
   .ag-bal .stat:first-child { border-top: 0; }
   .ag-fund .ag-fund-in { flex: 1 1 100%; width: auto; }
 }
+
+/* Arena tab as a dashboard (19 Nov, asked by the owner): summary, one card per trader with its paper and live books,
+   trades with LIVE/PAPER tags and links to the transaction, the sealed receipt and the coin */
+.ag-ar-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ag-ar-sum { grid-template-columns: repeat(4, 1fr); margin-top: 10px; }
+.ag-ar-sum .stat .v { font-size: 22px; }
+.ag-ar-sum .stat .faint { font-size: 11.5px; margin-top: 4px; }
+.ag-ar-wallet { font-size: 12.5px; color: var(--fg-2); margin: 10px 0 0; }
+.ag-ar-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.ag-ar-card { border: 1px solid var(--line-2); border-radius: var(--radius); background: linear-gradient(180deg, var(--bg-2), var(--bg-1)); padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.ag-ar-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ag-ar-head .grow { min-width: 0; }
+.ag-ar-head .faint { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-ar-rank { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 600 13px var(--mono); color: var(--bg); background: var(--blue-2); box-shadow: 0 0 14px rgba(95, 211, 239, .35); flex: 0 0 auto; }
+.ag-ar-status { font: 600 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; padding: 5px 8px; border-radius: 999px; border: 1px solid var(--line-3); color: var(--muted); }
+.ag-ar-status.proven { color: var(--up); border-color: var(--up); }
+.ag-ar-books { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ag-ar-book { border: 1px solid var(--line); border-radius: var(--radius-s); padding: 10px; background: var(--bg-1); min-width: 0; }
+.ag-ar-book.live { border-color: rgba(95, 211, 239, .35); background: linear-gradient(180deg, rgba(95, 211, 239, .06), var(--bg-1)); }
+.ag-ar-book .v { font-size: 19px; font-weight: 500; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.ag-ar-book .faint { font-size: 11.5px; margin-top: 2px; }
+.ag-ar-wait { color: var(--fg-2); }
+.ag-ar-tag { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; font: 600 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; border: 1px solid var(--line-3); color: var(--muted); flex: 0 0 auto; }
+.ag-ar-tag.live { border-color: var(--blue-2); color: #021014; background: var(--blue-2); box-shadow: 0 0 12px rgba(95, 211, 239, .4); }
+.ag-ar-rules { font-size: 12.5px; color: var(--fg-2); margin: 0; }
+.ag-ar-why summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+.ag-ar-why p { font-size: 12.5px; color: var(--fg-2); margin: 6px 0 0; }
+.ag-ar-open { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ag-ar-open .faint { font-size: 11.5px; margin-right: 2px; }
+.ag-ar-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue-2); box-shadow: 0 0 8px var(--blue-2); }
+.ag-ar-trades { display: grid; }
+.ag-ar-tr { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 13px; min-width: 0; }
+.ag-ar-tr:first-child { border-top: 0; }
+.ag-ar-tr .grow { min-width: 0; }
+.ag-ar-tr .faint { font-size: 12px; }
+.ag-ar-tr.live { background: linear-gradient(90deg, rgba(95, 211, 239, .06), transparent 60%); }
+.ag-ar-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 3px; }
+.ag-ar-l { font-size: 11.5px; color: var(--blue-2); text-decoration: none; border-bottom: 1px dotted rgba(95, 211, 239, .5); }
+.ag-ar-l:hover { color: var(--blue-3); }
+.ag-ar-pnl { font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 860px) { .ag-ar-sum { grid-template-columns: repeat(2, 1fr); } .ag-ar-sum .stat:nth-child(3) { border-left: 0; } .ag-ar-sum .stat:nth-child(n+3) { border-top: 1px solid var(--line); } }
+@media (max-width: 700px) { .ag-ar-grid { grid-template-columns: 1fr; } }
+@media (max-width: 420px) { .ag-ar-books { grid-template-columns: 1fr; } .ag-ar-tr { flex-wrap: wrap; } .ag-ar-pnl { margin-left: 30px; } }

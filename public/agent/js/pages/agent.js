@@ -756,21 +756,65 @@ function mountArena(box) {
   async function render() {
     const [board, me] = await Promise.all([api.get("arena").catch(() => null), wallet.session ? api.get("arena/me").catch(() => null) : null]);
     const mine = me?.agent;
-    const row = (a, i) => h("div", { class: "ap-row" },
-      h("div", { class: "grow" }, h("b", {}, `${i + 1}. ${a.name}`), h("span", { class: "faint" }, ` · ${a.kind === "ai" ? a.model : "strategy"} · ${a.status}`),
-        h("div", { class: "faint" }, a.rulesText), a.thesis ? h("div", { class: "faint" }, `“${a.thesis}”`) : null,
-        a.live ? h("div", {}, h("b", {}, "Live: "), `${ethf(a.live.pnlEth)} closed · ${a.live.closed} trades${a.live.open ? ` · ${a.live.open} open` : ""} · ${Number(a.live.equityEth).toFixed(4)} of ${a.live.budgetEth} ETH left`) : null),
-      h("span", { class: (a.stats.pnlEth + a.stats.openPnlEth) >= 0 ? "up" : "down" }, `${ethf(a.stats.pnlEth)} closed · ${a.stats.closed} trades${a.stats.open ? ` · ${a.stats.open} open (${ethf(a.stats.openPnlEth)})` : ""}`));
-    const tr = (p) => h("div", { class: "ap-row" }, h("div", { class: "grow" }, h("b", {}, `${p.mode === "live" ? "LIVE " : ""}$${p.symbol}`), h("span", { class: "faint" }, ` · ${p.agent.replace(/^ai-/, "")} · ${p.status === "open" ? `open ${ago(p.openedAt)}` : `${p.reason} ${ago(p.closedAt)} ago`}`)),
-      h("span", { class: p.status === "open" ? "" : (p.pnlEth || 0) >= 0 ? "up" : "down" }, p.status === "open" ? (p.valueEth != null ? `${ethf(p.valueEth - p.amountEth)} so far` : "open") : ethf(p.pnlEth)));
+    const SCAN = "https://robinhoodchain.blockscout.com";
+    const agents = board?.agents || [], recent = board?.recent || [], live = board?.live || null;
+    const nameOf = (id) => agents.find((a) => a.id === id)?.name || String(id || "").replace(/^ai-/, "");
+    const cls = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
+    const sum = (f) => agents.reduce((t, a) => t + (f(a) || 0), 0);
+    const paperClosed = sum((a) => a.stats.pnlEth), paperTrades = sum((a) => a.stats.closed);
+    const wins = recent.filter((p) => p.mode !== "live" && p.status === "closed" && p.pnlEth > 0).length, closedRecent = recent.filter((p) => p.mode !== "live" && p.status === "closed").length;
+    const liveAgents = agents.filter((a) => a.live);
+    const liveResult = liveAgents.length ? sum((a) => (a.live ? a.live.pnlEth + a.live.openPnlEth : 0)) : null;
+    const liveBudget = live ? live.budgetPerTraderEth * agents.filter((a) => a.kind === "ai").length : null;
+    const liveLeft = live ? agents.filter((a) => a.kind === "ai").reduce((t, a) => t + (a.live ? Number(a.live.equityEth) : live.budgetPerTraderEth), 0) : null;
+    const stat = (k, v, sub, c = "") => h("div", { class: "stat" }, h("div", { class: "k" }, k), h("div", { class: `v ${c}` }, v), sub ? h("div", { class: "faint" }, sub) : null);
+    const summary = h("div", { class: "stats ag-ar-sum" },
+      stat("Live money", live ? `${liveLeft.toFixed(4)} ETH` : "Paper only", live ? `of ${liveBudget.toFixed(2)} ETH · ${live.budgetPerTraderEth} per AI trader` : "Live trading is off"),
+      stat("Live result", liveResult == null ? "No trade yet" : ethf(liveResult), liveResult == null ? "Waits for a launch that fits a trader's rules and passes the Gate" : `${sum((a) => a.live?.closed)} closed · ${sum((a) => a.live?.open)} open`, cls(liveResult)),
+      stat("Paper result", ethf(paperClosed), `${paperTrades} closed trades${closedRecent ? ` · ${Math.round((wins / closedRecent) * 100)}% wins lately` : ""}`, cls(paperClosed)),
+      stat("Traders", String(agents.length), `${agents.filter((a) => a.kind === "ai").length} AI models${agents.length > agents.filter((a) => a.kind === "ai").length ? " + strategies" : ""}`));
+    const walletLine = live?.wallet ? h("p", { class: "ag-ar-wallet" }, "Live trades come from the Arena's own Agent Wallet ", h("a", { class: "mono link", href: `${SCAN}/address/${live.wallet}`, target: "_blank", rel: "noopener" }, short(live.wallet, 4)),
+      ". Every buy and sell is a real transaction you can open on Blockscout.") : null;
+
+    const card = (a, i) => {
+      const open = recent.filter((p) => p.agent === a.id && p.status === "open");
+      return h("div", { class: "ag-ar-card" },
+        h("div", { class: "ag-ar-head" }, h("span", { class: "ag-ar-rank" }, String(i + 1)), h("div", { class: "grow" }, h("b", {}, a.name), h("div", { class: "faint mono" }, a.kind === "ai" ? a.model : "strategy")),
+          h("span", { class: `ag-ar-status ${a.status}` }, a.status)),
+        h("div", { class: "ag-ar-books" },
+          h("div", { class: "ag-ar-book" }, h("div", { class: "k" }, h("span", { class: "ag-ar-tag" }, "Paper")), h("div", { class: `v ${cls(a.stats.pnlEth)}` }, ethf(a.stats.pnlEth)),
+            h("div", { class: "faint" }, `${a.stats.closed} closed${a.stats.winRate != null ? ` · ${Math.round(a.stats.winRate * 100)}% wins` : ""}${a.stats.open ? ` · ${a.stats.open} open (${ethf(a.stats.openPnlEth)})` : ""}`)),
+          h("div", { class: "ag-ar-book live" }, h("div", { class: "k" }, h("span", { class: "ag-ar-tag live" }, "Live")),
+            a.live ? [h("div", { class: `v ${cls(a.live.pnlEth + a.live.openPnlEth)}` }, ethf(a.live.pnlEth + a.live.openPnlEth)), h("div", { class: "faint" }, `${Number(a.live.equityEth).toFixed(4)} of ${a.live.budgetEth} ETH · ${a.live.closed} closed${a.live.open ? ` · ${a.live.open} open` : ""}`)]
+              : [h("div", { class: "v ag-ar-wait" }, a.kind === "ai" && live ? "Ready" : "–"), h("div", { class: "faint" }, a.kind === "ai" && live ? `${live.budgetPerTraderEth} ETH waiting for its first live trade` : "Strategies trade on paper")])),
+        h("p", { class: "ag-ar-rules" }, a.rulesText),
+        a.thesis ? h("details", { class: "ag-ar-why" }, h("summary", {}, "Why these rules"), h("p", {}, a.thesis)) : null,
+        open.length ? h("div", { class: "ag-ar-open" }, h("div", { class: "faint" }, "Holding now"), open.map((p) => h("a", { class: "chip", href: `#/token/${p.token}` }, p.mode === "live" ? h("span", { class: "ag-ar-dot" }) : null, `$${p.symbol}`, h("span", { class: cls(p.valueEth != null ? p.valueEth - p.amountEth : null) }, p.valueEth != null ? ethf(p.valueEth - p.amountEth) : "")))) : null);
+    };
+
+    const link = (href, text) => h("a", { class: "ag-ar-l", href, target: "_blank", rel: "noopener" }, text);
+    const tr = (p) => h("div", { class: `ag-ar-tr ${p.mode}` },
+      h("span", { class: `ag-ar-tag ${p.mode === "live" ? "live" : ""}` }, p.mode === "live" ? "Live" : "Paper"),
+      h("div", { class: "grow" },
+        h("div", {}, h("a", { class: "link", href: `#/token/${p.token}` }, h("b", {}, `$${p.symbol}`)), h("span", { class: "faint" }, ` · ${nameOf(p.agent)} · ${p.status === "open" ? `bought ${ago(p.openedAt)} ago` : `${p.reason} ${ago(p.closedAt)} ago`}`)),
+        h("div", { class: "ag-ar-links" },
+          p.txBuy ? link(`${SCAN}/tx/${p.txBuy}`, "Buy tx") : null,
+          p.txSell ? link(`${SCAN}/tx/${p.txSell}`, "Sell tx") : null,
+          p.seal ? link(`/api/seal/r/${p.seal}`, "Receipt") : null,
+          link(`${SCAN}/token/${p.token}`, "Coin"))),
+      h("span", { class: `ag-ar-pnl ${p.status === "open" ? "" : cls(p.pnlEth)}` }, p.status === "open" ? (p.valueEth != null ? `${ethf(p.valueEth - p.amountEth)} so far` : "open") : ethf(p.pnlEth)));
+
     clear(main, intro,
+      h("div", { class: "panel ag-panel" }, h("div", { class: "ag-ar-top" }, h("h3", {}, "The board"), h("a", { class: "link", href: "/arena", target: "_self" }, "Full Arena page")), summary, walletLine,
+        agents.length ? h("div", { class: "ag-ar-grid" }, agents.map(card)) : h("p", { class: "faint", style: { margin: 0 } }, "The AI traders write their first rules within minutes of the Arena opening.")),
+      recent.length ? h("div", { class: "panel ag-panel" }, h("h3", {}, "Latest trades"),
+        h("p", { class: "faint", style: { margin: "0 0 6px" } }, "Live rows are real transactions: open them on Blockscout. Paper rows send nothing; each has a signed receipt instead."),
+        h("div", { class: "ag-ar-trades" }, recent.slice(0, 24).map(tr))) : null,
       h("div", { class: "panel ag-panel" }, h("h3", {}, mine ? "Your strategy" : "Write a strategy"),
         mine ? h("div", {}, h("p", {}, h("b", {}, `${mine.status === "proving" ? `Proving until ${new Date(mine.provingUntil).toUTCString().slice(5, 22)} UTC` : mine.status}`), ` · ${mine.rulesText}`),
-          h("p", { class: "faint" }, `${mine.stats.closed} closed · ${ethf(mine.stats.pnlEth)}${mine.stats.open ? ` · ${mine.stats.open} open` : ""}. Proven = 5+ closed trades and a profit after 7 days; a proven strategy can earn small live caps once live trading opens.`)) : null,
+          h("p", { class: "faint" }, `${mine.stats.closed} closed · ${ethf(mine.stats.pnlEth)}${mine.stats.open ? ` · ${mine.stats.open} open` : ""}. Proven = 5+ closed trades and a profit after 7 days.`)) : null,
         wallet.session ? [text, h("div", { class: "row", style: { marginTop: "8px" } }, readBtn), out] : needSignIn(main, "Sign in to write and prove a strategy.")),
-      h("div", { class: "panel ag-panel" }, h("h3", {}, "The board"), board?.agents?.length ? h("div", { class: "ap-list" }, board.agents.map(row)) : h("p", { class: "faint", style: { margin: 0 } }, "The AI traders write their first rules within minutes of the Arena opening."),
-        h("p", { class: "note", style: { margin: "10px 0 0" } }, board?.how || "")),
-      board?.recent?.length ? h("div", { class: "panel ag-panel" }, h("h3", {}, "Latest paper trades"), h("div", { class: "ap-list" }, board.recent.slice(0, 20).map(tr))) : null);
+      board?.how ? h("p", { class: "note" }, board.how) : null);
   }
   render();
   const off = onWallet(() => render());

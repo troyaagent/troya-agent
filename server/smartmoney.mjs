@@ -105,7 +105,7 @@ async function build({ max = 40 } = {}) {
   finally { busy = false; }
 }
 
-async function boardNow() { if (board) return board; const d = await store.readJson(FILE, {}); board = d.board || null; return board; }
+export async function boardNow() { if (board) return board; const d = await store.readJson(FILE, {}); board = d.board || null; return board; }
 
 /** smart wallets among the first-15-minute buyers of a coin (live coins too), cached 5 min */
 export async function smartIn(token) {

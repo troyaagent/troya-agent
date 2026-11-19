@@ -186,6 +186,12 @@ const pubAgent = (d, ag) => ({ id: ag.id, kind: ag.kind, name: ag.kind === "ai" 
   rules: ag.rules, rulesText: rulesText(cleanRules(ag.rules)), thesis: ag.thesis || null, since: ag.createdAt, provingUntil: ag.provingUntil, verdict: ag.verdict || null, stats: statsOf(d, ag.id) });
 const pubPos = (p) => ({ agent: p.agent, token: p.token, symbol: p.symbol, amountEth: p.amountEth, openedAt: p.openedAt, status: p.status, reason: p.reason || null, pnlEth: p.pnlEth ?? null, valueEth: p.lastValueEth ?? null, closedAt: p.closedAt || null });
 
+/** The public board, for the assistant and MCP tools. */
+export async function arenaBoard() {
+  const d = await store.readJson(FILE, {});
+  return { mode: "paper", agents: Object.values(d.agents || {}).filter((a) => a.kind === "ai" || a.public !== false).map((a) => pubAgent(d, a)).sort((a, b) => (b.stats.pnlEth + b.stats.openPnlEth) - (a.stats.pnlEth + a.stats.openPnlEth)), recent: (d.positions || []).slice(-15).reverse().map(pubPos) };
+}
+
 export async function register(r, ctx) {
   store = ctx.store;
   setTimeout(() => tick().catch(() => {}), 100_000);

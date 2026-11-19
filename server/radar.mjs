@@ -134,7 +134,7 @@ export async function appStatus(token) {
   return { listed: !s.removedAt, code, name: s.name, tradable: s.tradable, displayOnly: s.displayOnly, since: s.firstSeen, baselineAt: d.baselineAt };
 }
 
-async function appView() {
+export async function appView() {
   const d = await appStore.readJson(APP_FILE, {});
   const live = Object.entries(d.snap || {}).filter(([, v]) => !v.removedAt);
   const chain = live.filter(([c]) => d.match?.[c]?.address).map(([c, v]) => ({ code: c, name: v.name, token: getAddr(d.match[c].address), tradable: v.tradable, displayOnly: v.displayOnly, firstSeen: v.firstSeen }));

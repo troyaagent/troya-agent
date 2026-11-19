@@ -1,0 +1,33 @@
+{
+  "name": "@troyaagent/snap",
+  "version": "0.1.0",
+  "description": "Troya Gate on MetaMask's confirm screen: the Gate verdict for every Robinhood Chain coin a transaction touches, and a warning on unlimited approvals to unknown contracts.",
+  "homepage": "https://troya.codes",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/troyaagent/troya-agent.git"
+  },
+  "license": "MIT",
+  "main": "./dist/bundle.js",
+  "files": [
+    "dist/",
+    "images/",
+    "snap.manifest.json"
+  ],
+  "scripts": {
+    "build": "mm-snap build",
+    "serve": "mm-snap serve",
+    "start": "mm-snap watch"
+  },
+  "dependencies": {
+    "@metamask/snaps-sdk": "12.1.0"
+  },
+  "devDependencies": {
+    "@metamask/snaps-cli": "^8.4.1",
+    "typescript": "^5.6.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

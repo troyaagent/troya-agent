@@ -13,6 +13,7 @@
 !/cli/
 !/rail/
 !/acp/
+!/snap/
 !/contracts/
 /contracts/lib/
 /contracts/out/

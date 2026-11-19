@@ -1,0 +1,28 @@
+{
+  "version": "0.1.0",
+  "description": "Troya Gate on the confirm screen: the Gate verdict for every Robinhood Chain coin a transaction touches.",
+  "proposedName": "Troya Gate",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/troyaagent/troya-agent.git"
+  },
+  "source": {
+    "shasum": "XNeT4zvj8RUqxpmouXVH/aA82qFGS/rRxn9Bt4QSVPw=",
+    "location": {
+      "npm": {
+        "filePath": "dist/bundle.js",
+        "iconPath": "images/icon.svg",
+        "packageName": "@troyaagent/snap",
+        "registry": "https://registry.npmjs.org/"
+      }
+    }
+  },
+  "initialPermissions": {
+    "endowment:transaction-insight": {
+      "allowTransactionOrigin": false
+    },
+    "endowment:network-access": {}
+  },
+  "platformVersion": "12.1.0",
+  "manifestVersion": "0.1"
+}

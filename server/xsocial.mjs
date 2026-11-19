@@ -399,7 +399,8 @@ async function compose(name, text) {
   const llm = await import("./llm.mjs");
   if (!llm.llmOn() || !(await llm.underCap())) throw new Error("the AI is off or over its daily cap");
   const tg = await import("./tgbot.mjs");
-  const system = `${tg.TG_SYSTEM}
+  const facts = await (await import("./botfacts.mjs")).liveFacts();
+  const system = `${tg.TG_SYSTEM}${facts}
 
 NOW YOU ARE ON X, not Telegram: you are replying publicly as @Troyaagent to a post that mentions you. Rules on X: answer in the language of the post (English if unsure); one short reply, at most 260 characters; no hashtags, no emojis, no markdown, never tag anyone; the only links you may give are troya.codes pages, t.me/troyaagent and x.com/Troyaagent; live numbers only from tools; never predict prices or tell anyone to buy or sell; a compliment, a cheer or a gm is worth answering: thank them warmly and invite them to try one thing on Troya with its link; worries about safety or about the project stopping get the plain facts and troya.codes/safety; if the post is spam, a scam or an insult, reply with exactly SKIP. Current time: ${new Date().toISOString().slice(0, 16)} UTC.`;
   const out = await llm.chatWithTools({ system, history: [], user: `${String(name).slice(0, 30)} on X: <untrusted>${text.slice(0, 500)}</untrusted>`, tools: tg.TG_TOOLS, exec: tg.tgExec, maxSteps: 3 });

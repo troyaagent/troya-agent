@@ -92,10 +92,16 @@ export async function mount(view, ctx) {
       ticket)));
 
   /* ---------- markets + header ---------- */
+  // the market asked for in the link (e.g. Anthropic, xyz:ANT). If the list comes back without it (the trade.xyz list
+  // failed for a moment) BTC shows meanwhile, and the page switches to it as soon as a refresh brings it back.
+  const want = (ctx.parts[0] || "").toUpperCase().replace(/-PERP$/, "");
+  let fellBack = false;
   async function loadMeta() {
     const r = await api.get("hl/meta?all=1");
     st.markets = r.markets.filter((m) => !m.isDelisted);
+    if (fellBack && st.markets.some((x) => x.coin.toUpperCase() === want)) { fellBack = false; ctx.go(location.hash); return; }
     const m = st.markets.find((x) => x.coin.toUpperCase() === String(st.coin).toUpperCase()) || st.markets.find((x) => x.coin === "BTC");
+    if (!st.m && want && m.coin.toUpperCase() !== want) fellBack = true;
     if (!st.m || m.coin !== st.m.coin) { st.coin = m.coin; }
     st.m = m;
     if (st.lev == null) st.lev = Math.min(prefs.get().lev?.[m.coin] || 3, m.maxLeverage, st.limits.maxLeverage);
@@ -644,9 +650,11 @@ export async function mount(view, ctx) {
   }
 
   /* ---------- boot ---------- */
-  try { await loadMeta(); }
-  catch (e) { clear(view, h("div", { class: "empty", style: { padding: "100px 0" } }, h("b", {}, "Hyperliquid markets could not be loaded."), h("div", {}, e.message), h("button", { class: "btn", type: "button", onclick: () => ctx.go(location.hash) }, "Try again"))); return; }
-  if (ctx.parts[0] && st.m.coin.toUpperCase() !== (ctx.parts[0] || "").toUpperCase().replace(/-PERP$/, "")) toast(`No perp called ${ctx.parts[0]}; showing ${st.m.coin}.`, "");
+  try {
+    await loadMeta();
+    for (let i = 0; i < 2 && fellBack && alive; i++) { await new Promise((r) => setTimeout(r, 1500)); st.m = null; fellBack = false; await loadMeta(); }
+  } catch (e) { clear(view, h("div", { class: "empty", style: { padding: "100px 0" } }, h("b", {}, "Hyperliquid markets could not be loaded."), h("div", {}, e.message), h("button", { class: "btn", type: "button", onclick: () => ctx.go(location.hash) }, "Try again"))); return; }
+  if (fellBack) toast(want.includes(":") ? `${ctx.parts[0]} (trade.xyz) has not loaded yet; showing ${st.m.coin} and switching the moment it does.` : `No perp called ${ctx.parts[0]}; showing ${st.m.coin}.`, "", 7000);
   renderIvals();
   renderTicket();
   renderPositions();

@@ -65,7 +65,13 @@ export async function hlMeta() {
 // use asset 100000 + dexIndex × 10000 + index, margin sits in a separate "xyz" balance. Read from the live meta each time.
 export const XYZ = "xyz";
 export const XYZ_USDC = "USDC:0x6d1e7cde53ba9467b783cb7c530ce054";   // the collateral token as sendAsset names it
+// the last good trade.xyz list: a failed refresh (rate limit, timeout) serves it instead of dropping every stock perp
+let lastXyz = null;
 export async function hlXyzMeta() {
+  try { const r = await hlXyzMetaFresh(); if (r.markets.length) lastXyz = r; return r.markets.length || !lastXyz ? r : lastXyz; }
+  catch (e) { if (lastXyz) return lastXyz; throw e; }
+}
+async function hlXyzMetaFresh() {
   return cached("meta:xyz", 5000, async () => {
     const dexes = await cached("perpDexs", 10 * 60e3, () => hlInfo({ type: "perpDexs" }));
     const idx = (dexes || []).findIndex((d) => d && d.name === XYZ);

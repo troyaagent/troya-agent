@@ -322,8 +322,11 @@ function fold(map, pr, ethUsd) {
   t.volume24hUsd += pr.volumeUsd; t.buys24h += pr.buys; t.sells24h += pr.sells; t.txns24h = t.buys24h + t.sells24h;
   if (pr.createdAt && (!t.createdAt || pr.createdAt < t.createdAt)) t.createdAt = pr.createdAt;
   if (!t.image && pr.image) t.image = pr.image;
-  const pad = padOfDex(pr.dex);
-  if (LAUNCH_PADS.has(pad) || (!LAUNCH_PADS.has(t.launchpad) && t.launchpad === "other")) t.launchpad = LAUNCH_PADS.has(t.launchpad) ? t.launchpad : pad;
+  // the launchpad is where the coin was born: a Pons curve always wins; otherwise the oldest pool seen decides. Before
+  // (20 Nov) any pool on a launchpad's DEX relabelled a coin (PONS and CASHCAT showed "Abyss" from a later Abyss pair)
+  // and the label of a coin without one followed the order pages arrived in ("Ramses" one pass, "Uniswap" the next)
+  const pad = padOfDex(pr.dex), at = pr.createdAt || Infinity;
+  if (t.launchpad !== "pons" && (pad === "pons" || t._padAt === undefined || at < t._padAt)) { t.launchpad = pad; t._padAt = at; }
   if (ROUTABLE(pr.dex)) t.tradable = true;
   if (!t._main || (pr.liquidityUsd || 0) > (t._main.liquidityUsd || 0)) {
     t._main = pr;
@@ -337,7 +340,7 @@ function fold(map, pr, ethUsd) {
   t.mcapEth = ethUsd && t.mcapUsd != null ? t.mcapUsd / ethUsd : null;
   if (t.image) IMAGES.set(t.address, t.image);
 }
-const clean = (t) => { const { _main, _pick, ...rest } = t; return rest; };
+const clean = (t) => { const { _main, _pick, _padAt, ...rest } = t; return rest; };
 // the newest pools on Robinhood Chain across every venue (Sentry uses this to catch launches outside Pons and Uniswap)
 export async function newLaunchPools() {
   const d = await gecko(`new_pools?page=1&include=base_token`);

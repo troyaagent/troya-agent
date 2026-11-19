@@ -188,6 +188,7 @@ export async function onLaunch(r) {
   if (!store || r?.v !== "passed" || !r.token) return;
   const raised = r.pons && !r.pons.graduated && (r.pons.pair?.address === "native" || /ETH/i.test(r.pons.pair?.symbol || "")) ? Number(r.pons.raised) : null;
   const ring = (await import("./ringradar.mjs").catch(() => null))?.ringFlags(r.token)?.[0]?.level || null;
+  const wfLevel = (await import("./watchfire.mjs").catch(() => null))?.watchfireState(r.token)?.level || null;
   const d = await store.readJson(FILE, {});
   const { quoteSwap } = await import("./tools.mjs");
   const opened = [];
@@ -199,6 +200,7 @@ export async function onLaunch(r) {
     if (raised != null && (raised < R.minRaisedEth || raised > R.maxRaisedEth)) continue;
     if (raised == null && R.minRaisedEth > 0 && R.source !== "pool") continue;
     if ((R.skipRingRed && ring === "red") || (R.skipRingAmber && ring === "amber")) continue;
+    if (["red", "fire"].includes(wfLevel)) continue;
     const mine = (d.positions || []).filter((p) => p.agent === ag.id && p.mode !== "live");
     if (mine.some((p) => lc(p.token) === lc(r.token))) continue;
     if (mine.filter((p) => p.status === "open").length >= R.maxOpen) continue;
@@ -219,6 +221,16 @@ export async function onLaunch(r) {
    five minutes after the buy. Now: every 30 seconds while a live position is open (every 90 seconds on paper only),
    never waiting on the AI rules or the weekly verdicts, and the sell goes out before the receipt is written. */
 let watchBusy = false, lastWatch = 0;
+// V8 F39 Watchfire fires (gathering into one wallet, a whale sale): paper positions in that coin close at once. A live
+// twin closes with it only when ARENA_WATCHFIRE_LIVE=1 (after its real-money test); until then the paper position is
+// marked and keeps its normal stop, so paper and live stay one trade.
+const WF = new Map();                                  // token → { at, kind, detail }
+const WF_LIVE = () => process.env.ARENA_WATCHFIRE_LIVE === "1";
+export function watchfireFire(token, f) {
+  WF.set(lc(token), { at: Date.now(), kind: f?.kind, detail: f?.detail });
+  lastWatch = 0;
+  watch().catch(() => {});
+}
 async function watch() {
   if (watchBusy || !store) return;
   watchBusy = true;
@@ -241,7 +253,11 @@ async function watch() {
       if (v == null) continue;
       p.lastValueEth = v; p.lastAt = Date.now();
       const ratio = v / p.amountEth;
-      const why = ratio >= p.rules.takeProfitX ? "take-profit" : ratio <= 1 - p.rules.stopPct / 100 ? "stop" : Date.now() - p.openedAt > p.rules.maxHoldHours * 3600_000 ? "time" : null;
+      const wf = WF.get(lc(p.token));
+      const wfHit = wf && wf.at > p.openedAt && Date.now() - wf.at < 10 * 60_000;
+      const hasLive = d.positions.some((x) => x.mode === "live" && x.twin === p.id && x.status === "open");
+      if (wfHit && !p.watchfire) p.watchfire = { at: wf.at, kind: wf.kind, detail: wf.detail };
+      const why = ratio >= p.rules.takeProfitX ? "take-profit" : wfHit && (!hasLive || WF_LIVE()) ? "watchfire" : ratio <= 1 - p.rules.stopPct / 100 ? "stop" : Date.now() - p.openedAt > p.rules.maxHoldHours * 3600_000 ? "time" : null;
       if (!why) continue;
       Object.assign(p, { status: "closed", closedAt: Date.now(), reason: why, exitValueEth: v, pnlEth: v - p.amountEth });
       closed.push(p);

@@ -36,6 +36,7 @@ const MODULES = [
   "./gas.mjs",         // Troya pays gas: the weekly drip for holders and Agent Wallet gas refunds, from a sponsor wallet
   "./gateapi.mjs",     // F23: Gate for every agent, a fresh signed Gate check as an API, paid per check in USDG
   "./ringradar.mjs",   // V7 F31 Ring Radar: Pons launch forensics (snipe-tax exemptions, bundle buys, reused bundlers, decoys)
+  "./watchfire.mjs",   // V8 F39 Watchfire: keeps watching coins after launch (gathering, whale exits, sell velocity, herds)
   "./seal.mjs",
   "./quantum.mjs",
   "./oath.mjs",        // V7 F32 Oath (tier 1, watched): signed dev pledges shown live as kept or broken, with the breaking txs

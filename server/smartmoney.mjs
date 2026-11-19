@@ -37,7 +37,7 @@ async function earlyBuyers(token, fromBlock, toBlock) {
   const venues = new Set([lc(ADDR.poolManager), lc(ADDR.universalRouter), lc(ADDR.swapRouter02), "0x204faca1764b154221e35c0d20abb3c525710498", "0x6131b5fae19ea4f9d964eac0408e4408b66337b5", ps?.curve && lc(ps.curve)].filter(Boolean));
   const devs = new Set([ps?.deployer, ps?.creatorFeeRecipient].filter(Boolean).map(lc));
   const q = [{ address: token, topics: [T_TRANSFER], fromBlock: hex(fromBlock), toBlock: hex(toBlock) }];
-  const logs = await rpc("robinhood", "eth_getLogs", q, { timeoutMs: 20_000 }).catch(() => rpc("robinhood", "eth_getLogs", q, { timeoutMs: 25_000, only: CHAINS.robinhood.upstreams[0] }));
+  const logs = await rpc("robinhood", "eth_getLogs", q, { timeoutMs: 20_000 }).catch(() => rpc("robinhood", "eth_getLogs", q, { timeoutMs: 25_000, only: CHAINS.robinhood.wide }));
   const buyers = new Map();
   let firstBlock = null;
   for (const l of logs || []) {

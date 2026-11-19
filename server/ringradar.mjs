@@ -63,7 +63,7 @@ export async function findLaunchTx(token) {
   const pad = zeroPadValue(token, 32);
   for (let to = head, i = 0; i < 60 && to > 0; i++, to -= 30_000) {
     // wide log ranges only work on the official RPC (the mirrors cap them), as Sentry does
-    const logs = await rpc("robinhood", "eth_getLogs", [{ address: ADDR.ponsFactory, topics: [LAUNCH_TOPIC, pad], fromBlock: hex(Math.max(0, to - 29_999)), toBlock: hex(to) }], { timeoutMs: 20_000, only: CHAINS.robinhood.upstreams[0] }).catch(() => []);
+    const logs = await rpc("robinhood", "eth_getLogs", [{ address: ADDR.ponsFactory, topics: [LAUNCH_TOPIC, pad], fromBlock: hex(Math.max(0, to - 29_999)), toBlock: hex(to) }], { timeoutMs: 20_000, only: CHAINS.robinhood.wide }).catch(() => []);
     if (logs?.length) return { tx: logs[0].transactionHash, block: Number(BigInt(logs[0].blockNumber)) };
   }
   return null;

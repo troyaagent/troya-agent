@@ -121,7 +121,7 @@ async function scanCoin(token, st, raise) {
   const watched = watchedOf(c);
   if (watched.length && from <= to) {
     const q = [{ address: token, topics: [T_TRANSFER, watched.map((w) => zeroPadValue(w, 32))], fromBlock: hex(from), toBlock: hex(to) }];
-    const logs = await rpc("robinhood", "eth_getLogs", q, { timeoutMs: 15_000 }).catch(() => rpc("robinhood", "eth_getLogs", q, { timeoutMs: 20_000, only: CHAINS.robinhood.upstreams[0] })).catch(() => null);
+    const logs = await rpc("robinhood", "eth_getLogs", q, { timeoutMs: 15_000 }).catch(() => rpc("robinhood", "eth_getLogs", q, { timeoutMs: 20_000, only: CHAINS.robinhood.wide })).catch(() => null);
     if (!logs) return;                                                      // try the same range next tick
     for (const l of logs) {
       const fromW = "0x" + l.topics[1].slice(26), toW = "0x" + l.topics[2].slice(26), v = BigInt(l.data);

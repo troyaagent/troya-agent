@@ -58,7 +58,7 @@ async function readRange(token, from, to, acc, depth = 0) {
   let e;
   for (let i = 0; i < 4; i++) {
     try {
-      const logs = await rpc("robinhood", "eth_getLogs", [{ address: token, topics: [T_TRANSFER], fromBlock: hex(from), toBlock: hex(to) }], { only: CHAINS.robinhood.upstreams[0], timeoutMs: 45000 });
+      const logs = await rpc("robinhood", "eth_getLogs", [{ address: token, topics: [T_TRANSFER], fromBlock: hex(from), toBlock: hex(to) }], { only: CHAINS.robinhood.wide, timeoutMs: 45000 });
       for (const l of logs || []) acc.out.push(compact(l));
       acc.from = Math.min(acc.from, from);
       return;
@@ -87,7 +87,7 @@ async function bornBlock(token, head) {
   // oldest window first: the first window holding a mint holds the birth
   for (let a = 1; a <= head && b == null; a += SPAN + 1) {
     try {
-      const mints = await rpc("robinhood", "eth_getLogs", [{ address: token, topics: [T_TRANSFER, "0x" + "0".repeat(64)], fromBlock: hex(a), toBlock: hex(Math.min(head, a + SPAN)) }], { only: CHAINS.robinhood.upstreams[0], timeoutMs: 45000 });
+      const mints = await rpc("robinhood", "eth_getLogs", [{ address: token, topics: [T_TRANSFER, "0x" + "0".repeat(64)], fromBlock: hex(a), toBlock: hex(Math.min(head, a + SPAN)) }], { only: CHAINS.robinhood.wide, timeoutMs: 45000 });
       if (mints?.length) b = Math.min(...mints.map((l) => Number(l.blockNumber)));
     } catch { break; }
   }

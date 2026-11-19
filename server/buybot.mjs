@@ -138,7 +138,7 @@ async function scanPools(s, token, head) {
     // wide ranges go to the official RPC first (the fallbacks cap eth_getLogs, drpc's free plan at 10,000 blocks);
     // if it is down, a short gap is read in 9,000-block pieces from whichever upstream answers, a long one waits
     let logs;
-    try { logs = await rpc("robinhood", "eth_getLogs", filter(from, to), { timeoutMs: 25000, only: CHAINS.robinhood.upstreams[0] }); }
+    try { logs = await rpc("robinhood", "eth_getLogs", filter(from, to), { timeoutMs: 25000, only: CHAINS.robinhood.wide }); }
     catch (e) {
       if (to - from > 200_000) throw e;
       logs = [];

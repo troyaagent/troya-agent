@@ -60,7 +60,7 @@ async function watch() {
       const devs = [...new Set([o.signer, o.deployer, o.feeRecipient, ...(o.wallets || [])].map(lc))];
       const venues = new Set([lc(o.curve), lc(ADDR.poolManager)].filter(Boolean));
       const supply = BigInt(await rpc("robinhood", "eth_call", [{ to: o.token, data: ERC20.encodeFunctionData("totalSupply") }, "latest"]));
-      const logs = await rpc("robinhood", "eth_getLogs", [{ address: o.token, topics: [T_TRANSFER, devs.map((w) => zeroPadValue(w, 32))], fromBlock: hex(from), toBlock: hex(to) }], { timeoutMs: 20_000, only: CHAINS.robinhood.upstreams[0] }).catch(() => null);
+      const logs = await rpc("robinhood", "eth_getLogs", [{ address: o.token, topics: [T_TRANSFER, devs.map((w) => zeroPadValue(w, 32))], fromBlock: hex(from), toBlock: hex(to) }], { timeoutMs: 20_000, only: CHAINS.robinhood.wide }).catch(() => null);
       if (!logs) continue;
       const blockTime = new Map();
       for (const l of logs) {
@@ -77,7 +77,7 @@ async function watch() {
         }
       }
       if (o.feeLockDays > 0 && Date.now() < o.takenAt + o.feeLockDays * 86_400_000) {
-        const claims = await rpc("robinhood", "eth_getLogs", [{ address: ESCROW, topics: [T_CLAIMED, zeroPadValue(lc(o.feeRecipient), 32)], fromBlock: hex(from), toBlock: hex(to) }], { timeoutMs: 20_000, only: CHAINS.robinhood.upstreams[0] }).catch(() => []);
+        const claims = await rpc("robinhood", "eth_getLogs", [{ address: ESCROW, topics: [T_CLAIMED, zeroPadValue(lc(o.feeRecipient), 32)], fromBlock: hex(from), toBlock: hex(to) }], { timeoutMs: 20_000, only: CHAINS.robinhood.wide }).catch(() => []);
         for (const c of claims || []) if (!o.breaches.some((b) => b.tx === c.transactionHash)) o.breaches.push({ kind: "fee-claim", tx: c.transactionHash, at: Date.now(), note: `claimed creator fees during the ${o.feeLockDays}-day lock` });
       }
       const was = o.status;
@@ -102,7 +102,7 @@ export async function vaultOf(token) {
   if (!isAddress(VAULT)) return null;
   const t = lc(token), hit = vaultMemo.get(t);
   if (hit && Date.now() - hit.at < 5 * 60_000) return hit.v;
-  const logs = await rpc("robinhood", "eth_getLogs", [{ address: VAULT, topics: [T_LOCKED, null, zeroPadValue(t, 32)], fromBlock: hex(Number(process.env.OATH_VAULT_BLOCK || 0)), toBlock: "latest" }], { timeoutMs: 20_000, only: CHAINS.robinhood.upstreams[0] }).catch(() => null);
+  const logs = await rpc("robinhood", "eth_getLogs", [{ address: VAULT, topics: [T_LOCKED, null, zeroPadValue(t, 32)], fromBlock: hex(Number(process.env.OATH_VAULT_BLOCK || 0)), toBlock: "latest" }], { timeoutMs: 20_000, only: CHAINS.robinhood.wide }).catch(() => null);
   if (!logs) return null;
   const ps = await ponsState(t).catch(() => null);
   const dev = new Set([ps?.deployer, ps?.creatorFeeRecipient].filter(Boolean).map(lc));

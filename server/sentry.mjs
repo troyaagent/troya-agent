@@ -163,7 +163,7 @@ export async function transfersOf(token, fromBlock, sinceMs = null) {
   const head = Number(BigInt(await rpc("robinhood", "eth_blockNumber", [])));
   const from = Math.max(fromBlock || head - (sinceMs ? Math.ceil((Date.now() - sinceMs) / 1000 + 3600) * 12 : 400000), 0);
   const q = { address: token, topics: [T_TRANSFER], fromBlock: hex(from), toBlock: hex(head) };
-  try { return await rpc("robinhood", "eth_getLogs", [q], { timeoutMs: 20000, only: CHAINS.robinhood.upstreams[0] }); } catch { /* next */ }
+  try { return await rpc("robinhood", "eth_getLogs", [q], { timeoutMs: 20000, only: CHAINS.robinhood.wide }); } catch { /* next */ }
   try { return await rpc("robinhood", "eth_getLogs", [q], { timeoutMs: 20000 }); }
   catch (e) {
     if (head - from > 60 * 9000) throw e;
@@ -340,7 +340,7 @@ export async function checkLaunch(token) {
 // free plans refuse wide ranges, which used to turn a single official hiccup into a noisy failed round)
 async function scanLogs(q) {
   for (let i = 0; i < 2; i++) {
-    try { return await rpc("robinhood", "eth_getLogs", [q], { timeoutMs: 20000, only: CHAINS.robinhood.upstreams[0] }); }
+    try { return await rpc("robinhood", "eth_getLogs", [q], { timeoutMs: 20000, only: CHAINS.robinhood.wide }); }
     catch { await new Promise((r) => setTimeout(r, 1500)); }
   }
   return rpc("robinhood", "eth_getLogs", [q], { timeoutMs: 20000 });

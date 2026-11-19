@@ -26,7 +26,9 @@ const list = (env, fallback) => (process.env[env] ? process.env[env].split(/[\s,
 export const CHAIN_ID = 4663;
 const OFFICIAL_RPC = "https://rpc.mainnet.chain.robinhood.com";
 export const CHAINS = {
-  robinhood: { id: 4663, name: "Robinhood Chain", upstreams: list("ROBINHOOD_RPCS", [OFFICIAL_RPC, "https://robinhood-rpc.publicnode.com", "https://robinhood.drpc.org"]) },
+  // upstreams: tried in order (Chainstack first when ROBINHOOD_RPCS lists it). wide: the RPC for long eth_getLogs ranges
+  // (the official one takes 30,000 blocks a call; Chainstack takes 10,000 and the mirrors less)
+  robinhood: { id: 4663, name: "Robinhood Chain", upstreams: list("ROBINHOOD_RPCS", [OFFICIAL_RPC, "https://robinhood-rpc.publicnode.com", "https://robinhood.drpc.org"]), wide: process.env.ROBINHOOD_WIDE_RPC || OFFICIAL_RPC },
   arbitrum: { id: 42161, name: "Arbitrum One", upstreams: list("ARBITRUM_RPCS", ["https://arb1.arbitrum.io/rpc", "https://arbitrum-one-rpc.publicnode.com"]) },
   // bridge sources: the browser reads balances and receipts here through the relay
   base: { id: 8453, name: "Base", upstreams: list("BASE_RPCS", ["https://mainnet.base.org", "https://base-rpc.publicnode.com"]) },
@@ -68,7 +70,8 @@ async function post(url, payload, timeoutMs) {
     method: "POST", headers: { "content-type": "application/json", accept: "application/json", "user-agent": "troya-agent/0.2" },
     body: JSON.stringify(payload), signal: AbortSignal.timeout(timeoutMs),
   });
-  if (res.status >= 500 || res.status === 429 || res.status === 403) throw Object.assign(new Error(`upstream ${res.status}`), { transient: true });
+  // 402: a paid node over its quota (extra usage off) answers this; the next upstream takes over
+  if (res.status >= 500 || res.status === 429 || res.status === 403 || res.status === 402) throw Object.assign(new Error(`upstream ${res.status}`), { transient: true });
   const text = await res.text();
   try { return JSON.parse(text); } catch { throw Object.assign(new Error(`upstream sent non-JSON (${res.status})`), { transient: true }); }
 }
@@ -79,8 +82,14 @@ function ordered(chain) {
 }
 async function forward(chain, payload, { noRetry = false, timeoutMs = Number(process.env.RPC_TIMEOUT_MS) || 9000, only } = {}) {
   let lastErr;
-  for (const url of only ? [only] : ordered(chain)) {
-    try { return await post(url, payload, timeoutMs); }
+  const urls = only ? [only] : ordered(chain);
+  for (const [i, url] of urls.entries()) {
+    try {
+      const r = await post(url, payload, timeoutMs);
+      // a log range one upstream refuses (Chainstack: 10,000 blocks) or a node over its quota: try the next one
+      if (r?.error && i < urls.length - 1 && /block range|range limit|too many blocks|more than \d+ (blocks|results)|limit exceeded|quota|credits/i.test(String(r.error.message || ""))) { lastErr = new Error(r.error.message); continue; }
+      return r;
+    }
     catch (e) {
       lastErr = e;
       failedAt.set(url, Date.now());

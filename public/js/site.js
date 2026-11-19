@@ -99,3 +99,6 @@ const io = new IntersectionObserver((list) => {
 }, { rootMargin: "0px 0px -8% 0px", threshold: 0.12 });
 $$(".rv, [data-words]").forEach((el) => io.observe(el));
 
+
+// "New" badges: shown for 48 hours after their data-new date, then removed
+for (const el of document.querySelectorAll("[data-new]")) { const t = Date.parse(el.dataset.new); if (!t || Date.now() - t > 48 * 3600e3) el.remove(); }

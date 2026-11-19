@@ -346,3 +346,6 @@ body.site { overflow-x: hidden; }
 .step p.vlinks { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 4px; font-size: 13px; }
 .step p.signer { font-size: 12.5px; color: var(--muted, rgba(232,244,248,.62)); margin-top: 6px; line-height: 1.5; }
 .step code { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; word-break: normal; color: var(--fg); }
+
+/* "New" on anything shipped in the last 48 hours; js/site.js removes it after that */
+.new-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; margin-left: 8px; border-radius: 999px; font: 600 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; vertical-align: middle; background: var(--blue-2); color: #021014; box-shadow: 0 0 14px rgba(95, 211, 239, .45); }

@@ -525,13 +525,15 @@ async function holdersTick() {
   if (holdersBusy || (fallback && (gq.hi.length || gq.lo.length > 1) && Date.now() - geckoHoldersAt < 30_000)) return;
   if (fallback) geckoHoldersAt = Date.now();
   const now = Date.now();
-  const next = [...board.rows.values()].filter((t) => { const h = HOLDERS.get(t.address); return !h || now - h.at > 6 * 3600_000; })
-    .sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0))[0];
+  // the 200 most traded coins, each every 12 hours: the shared Blockscout credits (about 5,000 calls a day) also serve the
+  // token pages, Portfolio, Owl and Aegis, and a refresh of every coin every 6 hours used nearly all of them
+  const next = [...board.rows.values()].sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0)).slice(0, 200)
+    .filter((t) => { const h = HOLDERS.get(t.address); return !h || now - h.at > 12 * 3600_000; })[0];
   if (!next) return;
   holdersBusy = true;
   try { await fetchHolders(next.address); } catch { HOLDERS.set(next.address, { ...(HOLDERS.get(next.address) || {}), at: now - 5 * 3600_000 }); } finally { holdersBusy = false; }
 }
-setInterval(() => holdersTick().catch(() => {}), BS_KEY ? 4_000 : 20_000).unref();
+setInterval(() => holdersTick().catch(() => {}), BS_KEY ? 8_000 : 20_000).unref();
 const holdersOf = (a) => HOLDERS.get(a) || null;
 /* Troya picks: a read of live data, never advice. A coin needs a real pool and real trading, then earns points for
    buyers outnumbering sellers, holders spread out, volume a pool can carry (not wash trading), listed socials and a day

@@ -266,3 +266,9 @@ textarea.input { height: auto; padding: 10px 11px; resize: vertical; line-height
 .tok-wrap > .tok-net { box-shadow: 0 0 0 1.5px var(--bg-2), 0 0 0 2.5px var(--logo-ring-2, rgba(255, 255, 255, .55)); }
 .pad-logo, .wallet-logo { box-shadow: 0 0 0 1px var(--logo-ring, rgba(255, 255, 255, .34)); }
 .tok-ico { box-shadow: 0 0 0 1px var(--logo-edge, rgba(255, 255, 255, .14)); }
+
+/* Phones, everywhere in the app (19 Nov, after the Agent Wallet report): a long address, hash or code in a panel must
+   wrap instead of pushing the panel, and the page, wider than the screen. Grid and flex children may shrink. */
+.panel > *, .stats > *, .rows > *, .row > * { min-width: 0; }
+.mono, code, .hash, .addr { overflow-wrap: anywhere; }
+@media (max-width: 560px) { .panel { max-width: 100%; } }

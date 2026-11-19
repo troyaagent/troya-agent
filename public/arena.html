@@ -107,6 +107,14 @@
     <div class="eyebrow-line"><span>03 / Latest trades</span></div>
     <div class="ar-trades" data-ar-trades></div>
   </section>
+
+  <section class="ip" aria-label="Anthropic Round" id="anthropic">
+    <div class="eyebrow-line"><span>04 / Anthropic Round</span></div>
+    <p class="ar-note" data-ant-head>Loading the Anthropic Round…</p>
+    <div class="ar-grid ant-grid" data-ant-grid></div>
+    <p class="ar-note" data-ant-how></p>
+    <p class="ar-note"><a class="ulink" href="/agent#/perps/xyz:ANT">Trade Anthropic (ANT) yourself on Troya</a> · A perp that tracks the Nasdaq share, not the share itself. Coins on Robinhood Chain named "Anthropic" or "ANT" are not the stock.</p>
+  </section>
 </main>
 </main>
 </main>
@@ -163,7 +171,28 @@ async function load() {
     return `<div class="ar-tr"><span><span class="ar-tag${p.mode === "live" ? " live" : ""}">${p.mode === "live" ? "LIVE" : "PAPER"}</span></span><span>${mini(p.agent)}${short(p.agent)}</span><span>$${esc(p.symbol)} · ${p.status === "open" ? "open" : esc(p.reason || "closed")}${tx}</span><span class="${cls(r)}">${r == null ? "open" : eth(r, 5)}</span><span>${ago(p.closedAt || p.openedAt)}</span></div>`;
   }).join("") : '<div class="ar-tr"><span></span><span></span><span>No trades yet</span><span></span><span></span></div>');
 }
-load(); setInterval(() => { if (!document.hidden) load(); }, 30000);
+// Arena: Anthropic Round, the five AI traders on xyz:ANT (the trade.xyz perp tracking the Nasdaq share)
+async function loadAnt() {
+  let d;
+  try { d = await (await fetch("/api/arena/anthropic")).json(); } catch { return; }
+  const m = d.mark?.mark;
+  $("[data-ant-head]").innerHTML = m ? `Anthropic (ANT) at <b>$${m.toFixed(2)}</b> on the trade.xyz perp, ${d.live ? "<b>live money</b>" : "paper"}: each AI trader picks long, short or flat on a $${d.stake} stake.` : "Loading the Anthropic Round…";
+  $("[data-ant-how]").textContent = d.how || "";
+  const last = new Map(); for (const c of d.recent || []) if (!last.has(c.agent)) last.set(c.agent, c);
+  const cards = (d.traders || []).map((t) => {
+    const c = t.open || last.get(t.agent);
+    const now = c?.status === "open" ? c.nowPct : c?.pnlPct;
+    const side = !c ? "–" : c.side === "flat" ? "Flat" : `${c.side === "long" ? "Long" : "Short"} ${c.lev}x`;
+    const cls2 = now == null ? "flat" : now >= 0 ? "up" : "down";
+    return `<article class="ar-card"><div class="ar-head">${LOGOS[t.agent] ? `<div class="ar-av logo"><img src="/img/logos/ai/${LOGOS[t.agent]}.svg" alt="${esc(t.name)}" width="24" height="24"></div>` : ""}
+      <div><div class="ar-name">${esc(t.name || t.agent)}</div><div class="ar-model">${esc(t.model || "")}</div></div></div>
+      <div class="ar-two"><div class="ar-box"><small>${c?.status === "open" ? "Open call" : "Last call"}</small><b class="${c?.side === "short" ? "down" : c?.side === "long" ? "up" : "flat"}">${side}</b><span>${c && c.side !== "flat" ? `entry $${Number(c.entry).toFixed(2)} · stop -${c.stopPct}% · target +${c.tpPct}%` : "sat this one out"}</span></div>
+      <div class="ar-box"><small>${c?.status === "open" ? "So far" : "Result"}</small><b class="${cls2}">${now == null ? "–" : `${now >= 0 ? "+" : ""}${Number(now).toFixed(1)}%`}</b><span>${t.closed} closed · ${t.pnlUsd >= 0 ? "+" : ""}$${Number(t.pnlUsd).toFixed(2)}</span></div></div>
+      ${c?.thesis ? `<p class="ar-thesis">“${esc(c.thesis)}”</p>` : ""}</article>`;
+  });
+  $("[data-ant-grid]").innerHTML = cards.join("") || '<p class="ar-note">The AI traders take their first calls within minutes.</p>';
+}
+load(); loadAnt(); setInterval(() => { if (!document.hidden) { load(); loadAnt(); } }, 30000);
 </script>
 <script type="module" src="/js/site.js"></script>
 <script type="module" src="/home/pages.js"></script>

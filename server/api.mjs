@@ -45,6 +45,7 @@ const MODULES = [
   "./callouts.mjs",    // V8 F41 War Table: callouts stamped at the price of the moment, graded at 24 h; X posts that mention a coin
   "./herald.mjs",      // V8 F42 Herald: referral links, the weekly Arena Cup and the contributor board (share cards are drawn in the browser)
   "./xtracker.mjs",    // V8 F41 X Tracker: tracked X accounts ride on the filtered stream; a posted contract gets the Gate and a ping
+  "./antround.mjs",    // Arena: Anthropic Round, the five AI traders on xyz:ANT (paper; live with ANT_ROUND_LIVE=1)
   "./seal.mjs",
   "./quantum.mjs",
   "./oath.mjs",        // V7 F32 Oath (tier 1, watched): signed dev pledges shown live as kept or broken, with the breaking txs

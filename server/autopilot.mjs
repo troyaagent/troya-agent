@@ -194,7 +194,10 @@ export async function close(pos, reason, valueEth) {
   return pos;
 }
 export async function valueOf(pos) {
-  const q = await quoteSwap({ tokenIn: pos.token, tokenOut: "ETH", amountIn: decStr(pos.tokens), slippagePct: 8 });
+  // straight to the on-chain quote with the coin's address (19 Nov 2026): tools.quoteSwap first looked the coin up and built
+  // its whole token page, up to ~30 s for a coin nobody had opened, which held up stops here and in the Arena
+  const { quoteSwap: chainQuote } = await import("./robinhood.mjs");
+  const q = await chainQuote({ tokenIn: pos.token, tokenOut: "ETH", amountIn: decStr(pos.tokens), slippageBps: 500 });
   return Number(q.amountOut) || 0;
 }
 async function tick() {

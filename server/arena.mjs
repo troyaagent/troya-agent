@@ -209,17 +209,30 @@ export async function onLaunch(r) {
   if (opened.length) await store.update(FILE, {}, (x) => { x.positions = [...(x.positions || []), ...opened]; return x; });
 }
 
-async function tick() {
-  if (busy || !store) return;
-  busy = true;
+/* Stops and take-profits run on their own loop (19 Nov 2026): the first live trade's stop at -25% filled at -64% because
+   the old 2-minute round was still busy after a restart and its next round was skipped, so the coin was first priced
+   five minutes after the buy. Now: every 30 seconds while a live position is open (every 90 seconds on paper only),
+   never waiting on the AI rules or the weekly verdicts, and the sell goes out before the receipt is written. */
+let watchBusy = false, lastWatch = 0;
+async function watch() {
+  if (watchBusy || !store) return;
+  watchBusy = true;
   try {
     const d = await store.readJson(FILE, {});
-    d.agents ||= {}; d.positions ||= [];
-    await aiDaily(d).catch((e) => console.warn("[arena] ai", e.message));
+    d.positions ||= [];
+    const liveOpen = d.positions.some((x) => x.mode === "live" && x.status === "open");
+    if (!liveOpen && Date.now() - lastWatch < 85_000) return;
+    lastWatch = Date.now();
     const { valueOf } = await import("./autopilot.mjs");
-    const closed = [];
-    for (const p of d.positions.filter((x) => x.status === "open" && x.mode !== "live")) {
-      const v = await valueOf(p).catch(() => null);
+    const t0 = Date.now();
+    // every open position is priced at once, each within 15 s: one slow or stuck quote never holds up a stop on another
+    const limit = (pr, ms) => Promise.race([pr, new Promise((_, no) => setTimeout(() => no(new Error("quote timeout")), ms))]);
+    const priced = async (list) => Promise.all(list.map((x) => limit(valueOf(x), 15_000).catch(() => null)));
+    const closed = [], seals = [];
+    const papers = d.positions.filter((x) => x.status === "open" && x.mode !== "live");
+    const vals = await priced(papers);
+    for (let k = 0; k < papers.length; k++) {
+      const p = papers[k], v = vals[k];
       if (v == null) continue;
       p.lastValueEth = v; p.lastAt = Date.now();
       const ratio = v / p.amountEth;
@@ -229,13 +242,32 @@ async function tick() {
       closed.push(p);
       const twin = d.positions.find((x) => x.mode === "live" && x.twin === p.id && x.status === "open");
       if (twin) await closeLive(twin, why).catch((e) => { twin.lastError = e.message; });
-      p.sealClose = (await import("./seal.mjs").then((s) => s.seal("arena-close", p.token, { agent: p.agent, id: p.id, reason: why, exitValueEth: v, pnlEth: p.pnlEth }, `${p.agent} sold $${p.symbol}: ${why}`)).catch(() => null))?.hash || null;
+      seals.push(import("./seal.mjs").then((m) => m.seal("arena-close", p.token, { agent: p.agent, id: p.id, reason: why, exitValueEth: v, pnlEth: p.pnlEth }, `${p.agent} sold $${p.symbol}: ${why}`)).then((r) => { p.sealClose = r?.hash || null; }).catch(() => {}));
     }
     for (const t of d.positions.filter((x) => x.mode === "live" && x.status === "open" && x.lastError)) {
       const paper = d.positions.find((x) => x.id === t.twin);
       if (paper?.status === "closed") await closeLive(t, paper.reason || "retry").catch(() => {});
     }
-    // the 7-day verdict for every proving strategy
+    const lives = d.positions.filter((x) => x.mode === "live" && x.status === "open");
+    (await priced(lives)).forEach((v, k) => { if (v != null) { lives[k].lastValueEth = v; lives[k].lastAt = Date.now(); } });
+    await Promise.all(seals);
+    if (Date.now() - t0 > 25_000) console.warn(`[arena] watch pass took ${Math.round((Date.now() - t0) / 1000)} s for ${papers.length + lives.length} positions`);
+    const open = d.positions.filter((x) => x.status === "open");
+    const done = d.positions.filter((x) => x.status === "closed").sort((a, b) => b.closedAt - a.closedAt).slice(0, 3000);
+    await store.update(FILE, {}, (x) => { x.positions = [...open, ...done, ...(x.positions || []).filter((q) => q.status === "open" && !open.some((o) => o.id === q.id) && !done.some((o) => o.id === q.id))]; return x; });
+    if (closed.length) console.log(`[arena] closed ${closed.length} paper trade(s)`);
+  } catch (e) { console.warn("[arena] watch", e.message); }
+  finally { watchBusy = false; }
+}
+
+// the slow round, every 2 minutes: the AI traders' rules for the day and the 7-day verdicts (agents only)
+async function tick() {
+  if (busy || !store) return;
+  busy = true;
+  try {
+    const d = await store.readJson(FILE, {});
+    d.agents ||= {}; d.positions ||= [];
+    await aiDaily(d).catch((e) => console.warn("[arena] ai", e.message));
     for (const ag of Object.values(d.agents)) {
       if (ag.status !== "proving" || Date.now() < ag.provingUntil) continue;
       const mine = d.positions.filter((p) => p.agent === ag.id && p.status === "closed" && p.openedAt >= ag.provingUntil - PROVE_MS);
@@ -244,11 +276,7 @@ async function tick() {
       if (ag.kind === "ai") ag.provingUntil = Date.now() + PROVE_MS;                // the AI traders keep competing week after week
       ag.verdictAt = Date.now(); ag.verdict = { trades: mine.length, pnlEth: +pnl.toFixed(5) };
     }
-    for (const t of d.positions.filter((x) => x.mode === "live" && x.status === "open")) { const v = await valueOf(t).catch(() => null); if (v != null) { t.lastValueEth = v; t.lastAt = Date.now(); } }
-    const open = d.positions.filter((p) => p.status === "open");
-    const done = d.positions.filter((p) => p.status === "closed").sort((a, b) => b.closedAt - a.closedAt).slice(0, 3000);
-    await store.update(FILE, {}, (x) => { x.agents = { ...(x.agents || {}), ...d.agents }; x.positions = [...open, ...done, ...(x.positions || []).filter((p) => p.status === "open" && !open.some((o) => o.id === p.id) && !done.some((o) => o.id === p.id))]; return x; });
-    if (closed.length) console.log(`[arena] closed ${closed.length} paper trade(s)`);
+    await store.update(FILE, {}, (x) => { x.agents = { ...(x.agents || {}), ...d.agents }; return x; });
   } catch (e) { console.warn("[arena]", e.message); }
   finally { busy = false; }
 }
@@ -313,6 +341,8 @@ export async function register(r, ctx) {
   setTimeout(() => tick().catch(() => {}), 100_000);
   setTimeout(() => backfillSeals(ctx.dataDir).catch((e) => console.warn("[arena] seal backfill:", e.message)), 30_000);
   setInterval(() => tick().catch(() => {}), TICK_MS).unref();
+  setTimeout(() => watch().catch(() => {}), 20_000);
+  setInterval(() => watch().catch(() => {}), 30_000).unref();
   r.get("/api/arena", async () => {
     const d = await store.readJson(FILE, {});
     const agents = Object.values(d.agents || {}).filter((a) => a.kind === "ai" || a.public !== false).map((a) => pubAgent(d, a)).sort((a, b) => (b.stats.pnlEth + b.stats.openPnlEth) - (a.stats.pnlEth + a.stats.openPnlEth));

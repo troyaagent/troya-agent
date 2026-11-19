@@ -77,11 +77,13 @@ export async function attest(obj, label = "Troya record") {
 
 /* ---------- ledger ---------- */
 const settings = async () => ({ ...DEFAULTS, ...((await store.readJson(FILE, {})).settings || {}) });
+export const gateSettings = () => settings();   // V8 F46 Treasury shows the checks a day per tier
 async function creditOf(address) {
   const d = await store.readJson(FILE, {}), a = lc(address), s = await settings();
   const used = d.usage?.day === today() ? d.usage.by?.[a] || 0 : 0;
   const holder = await import("./holders.mjs").then((m) => m.holderOf(a)).catch(() => null);
-  const free = holder?.holder ? s.holderFreePerDay : s.freePerDay;
+  // V8 F46 Treasury: the daily free checks grow with the holder tier
+  const free = await import("./treasury.mjs").then((m) => m.gateFreeFor(a, s)).catch(() => (holder?.holder ? s.holderFreePerDay : s.freePerDay));
   return { address: getAddress(a), balanceUsdg: (d.credits?.[a] || 0) / 1e6, checksLeft: Math.floor((d.credits?.[a] || 0) / micro(s.priceUsdg)), freePerDay: free, freeLeftToday: Math.max(0, free - used), holder: !!holder?.holder,
     deposits: Object.entries(d.deposits || {}).filter(([, x]) => x.from === a).map(([k, x]) => ({ tx: k.split(":")[0], usdg: x.usdg, at: x.at })).sort((p, q) => q.at - p.at).slice(0, 50) };
 }
@@ -127,7 +129,7 @@ async function charge(id, ip, { preferCredit = false } = {}) {
   if (!s.enabled) throw new HttpError(503, "The Gate API is paused right now.");
   const holder = id.address ? await import("./holders.mjs").then((m) => m.holderOf(id.address)).catch(() => null) : null;
   const key = id.address || `ip:${ip}`;
-  const free = id.address ? (holder?.holder ? s.holderFreePerDay : s.freePerDay) : s.anonPerDay;
+  const free = id.address ? await import("./treasury.mjs").then((m) => m.gateFreeFor(id.address, s)).catch(() => (holder?.holder ? s.holderFreePerDay : s.freePerDay)) : s.anonPerDay;
   const price = micro(s.priceUsdg);
   let paid = null;
   await store.update(FILE, {}, (d) => {

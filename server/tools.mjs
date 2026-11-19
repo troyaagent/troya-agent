@@ -495,6 +495,35 @@ TOOLS.push(
 );
 export const toolByName = (name) => TOOLS.find((t) => t.name === name);
 
+/* ---------- V8: Watchfire, Tribute and Allies, one tool each (F45: for the MCP servers, REST, Telegram and the assistant) ---------- */
+// Each answers exactly what its public route answers, so the tool asks that route on this server and passes the caller's
+// IP on (x-forwarded-for, read when TRUST_PROXY=1), so the route's own per-minute limit still counts per caller.
+// A route that is not on this server (its module not loaded yet) answers null.
+async function localRoute(path, ip) {
+  const r = await fetch(`http://127.0.0.1:${process.env.PORT || 9270}${path}`, {
+    headers: { accept: "application/json", ...(ip && ip !== "?" ? { "x-forwarded-for": String(ip) } : {}) }, signal: AbortSignal.timeout(45_000),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 404 && j?.error === "Not found") return null;
+  if (!r.ok) throw new HttpError(r.status, j?.error || `HTTP ${r.status}`);
+  return j;
+}
+const V8_TOOLS = [
+  { name: "watchfire", tier: "read", description: "V8 F39 Watchfire on a Robinhood Chain coin after launch: rings and herds read live from its transfers (5 or more wallets gathering the coin into one wallet, one sale of 5% of the supply or more, holders selling fast, one holder or one trading router holding too much). Level clear, amber, red or fire, with reasons, metrics and the top holders. The first ask starts watching the coin for 30 minutes; level \"loading\" means ask again in a few seconds.", schema: S({ token: str("Coin address") }, ["token"]),
+    run: async ({ token }, ctx) => (await localRoute(`/api/watchfire/${addrT(token, "token")}`, ctx.ip)) || { level: "unknown", why: ["Watchfire is not live on this server."] } },
+  { name: "tribute", tier: "read", description: "V8 F40 Tribute on a Robinhood Chain coin: is its revenue real? Traces where its income or rewards come from and flags income sent in by the creator's own wallets, rewards paid in the coin itself, market caps that no real ETH or USDG backs, and scripted round-number volume. Returns verdict, reasons and checks.", schema: S({ token: str("Coin address") }, ["token"]),
+    run: async ({ token }, ctx) => (await localRoute(`/api/tribute/${addrT(token, "token")}`, ctx.ip)) || { verdict: "unknown", reasons: ["Tribute is not live on this server yet."], checks: [] } },
+  { name: "allies", tier: "read", description: "V8 F45 Allies: what Troya knows about another AI agent's wallet on Robinhood Chain before you trust its calls, signals or payments: its ERC-8004 agent identity and reputation, the agents it runs in Troya's registry (signed calls graded in public), Troya Seal receipts that name it, its public Arena record, and the coins it launched with Troya Gate's verdict on each. Verdict unknown, known or flagged; unknown means there is nothing to read, not that the agent is bad.", schema: S({ address: str("The agent's wallet address"), agentId: numS("Its ERC-8004 agent id on Robinhood Chain (optional; alone, it looks the agent up by id)") }),
+    run: async ({ address, agentId }, ctx) => {
+      const id = agentId != null && agentId !== "" ? String(agentId).trim() : null;
+      if (id != null && !/^\d{1,40}$/.test(id)) throw new HttpError(400, "agentId is a whole number (the ERC-8004 agent id).");
+      const path = address ? `/api/allies/${addrT(address, "address")}${id != null ? `?agentId=${id}` : ""}` : id != null ? `/api/allies/agent/${id}` : null;
+      if (!path) throw new HttpError(400, "Give the agent's wallet address, its ERC-8004 agentId, or both.");
+      return (await localRoute(path, ctx.ip)) || { verdict: "unknown", reasons: ["Allies is not live on this server yet."], checks: [] };
+    } },
+];
+for (const t of V8_TOOLS) if (!toolByName(t.name)) TOOLS.push(t);
+
 // run a tool for an identity; tiers enforced by the caller's context
 export async function runTool(name, args = {}, ctx = {}) {
   const t = toolByName(name);

@@ -37,6 +37,9 @@ const MODULES = [
   "./gateapi.mjs",     // F23: Gate for every agent, a fresh signed Gate check as an API, paid per check in USDG
   "./ringradar.mjs",   // V7 F31 Ring Radar: Pons launch forensics (snipe-tax exemptions, bundle buys, reused bundlers, decoys)
   "./watchfire.mjs",   // V8 F39 Watchfire: keeps watching coins after launch (gathering, whale exits, sell velocity, herds)
+  "./allies.mjs",      // V8 F45 Allies: an agent wallet's record (ERC-8004 identity + reputation, registry, Seal, Arena, launches + Gate)
+  "./mcp.mjs",         // V8 F45 Skills: remote MCP endpoint (POST /api/mcp, also /mcp), read-only tools from the registry
+  "./treasury.mjs",    // V8 F46 Treasury: holder tiers, Watchfire pins, Gate checks a day by tier
   "./seal.mjs",
   "./quantum.mjs",
   "./oath.mjs",        // V7 F32 Oath (tier 1, watched): signed dev pledges shown live as kept or broken, with the breaking txs

@@ -50,7 +50,7 @@
     <canvas class="rain" data-rain aria-hidden="true"></canvas>
     <span class="eyebrow"><i class="dot"></i>API and MCP</span>
     <h1 id="ph" class="words" data-words>Give your own agent a desk with walls</h1>
-    <p class="lead rv">Install the Troya MCP server with one command, run <a class="ulink" href="#cli">Troya CLI</a> in your terminal, call <a class="ulink" href="#gate-api">Troya Gate</a> from any agent, or call the REST API directly. Read tools work for everyone. Add an API token and the same server can act through your Agent Wallet, but never past its caps.</p>
+    <p class="lead rv">Install the Troya MCP server with one command, point any AI agent at the <a class="ulink" href="#agents">skill file or the remote MCP URL</a>, run <a class="ulink" href="#cli">Troya CLI</a> in your terminal, call <a class="ulink" href="#gate-api">Troya Gate</a> from any agent, or call the REST API directly. Read tools work for everyone. Add an API token and the same server can act through your Agent Wallet, but never past its caps.</p>
     <div class="hero-act rv" style="align-items:center">
       <div class="cmd" style="margin:0"><span>$</span><code data-mcp-cmd>npx -y @troyaagent/mcp</code><button type="button" data-copy-cmd>COPY</button></div>
       <a class="ulink" href="/agent">Launch app</a>
@@ -108,8 +108,51 @@ claude mcp add troya -e TROYA_BASE_URL={{base}} -e TROYA_API_KEY=&lt;your-token&
     </div>
   </section>
 
+  <section class="ip" id="agents" aria-labelledby="agents-h">
+    <div class="eyebrow-line"><span>02 / For AI agents</span></div>
+    <div class="split" style="margin-bottom:40px">
+      <h2 id="agents-h" class="h2 words" data-words>One URL for any agent</h2>
+      <p class="lead rv">An agent that reads instructions can start from the skill file: what Troya does, when to call Troya Gate, Watchfire, Tribute, Ring Radar and Allies, and a curl line for each. An agent that speaks MCP connects to the remote endpoint with nothing to install. The endpoint is read only: no tool on it can move funds, and none needs a key.</p>
+    </div>
+    <div class="steps four" style="margin-bottom:40px">
+      <article class="step rv"><span class="n">01 · SKILL</span><h3>skill.md</h3><p>One file an agent can read and follow: <a class="ulink" href="/skill.md">troya.codes/skill.md</a>. When to call each tool, how to pay for Gate checks, the limits and the rules.</p></article>
+      <article class="step rv"><span class="n">02 · INDEX</span><h3>llms.txt</h3><p>Every agent-facing route and doc in one short list, in the llms.txt format: <a class="ulink" href="/llms.txt">troya.codes/llms.txt</a>.</p></article>
+      <article class="step rv"><span class="n">03 · REMOTE MCP</span><h3>troya.codes/mcp</h3><p>MCP over Streamable HTTP with JSON answers. An API token is optional; it only names your wallet, so <code class="mono">gate_check</code> uses its free checks and credit.</p></article>
+      <article class="step rv"><span class="n">04 · ALLIES</span><h3>Read an agent first</h3><p><code class="mono">GET /api/allies/<wbr>&lt;wallet&gt;</code>: its ERC-8004 identity and reputation, its calls in the registry, Seal receipts, Arena record and the coins it launched, each with its Gate verdict.</p></article>
+    </div>
+    <div class="code-grid">
+      <div class="code rv">
+        <div class="code-h">Connect · remote MCP<button type="button" data-copy-block>COPY</button></div>
+        <pre data-tpl><span class="c"># Claude Code</span>
+claude mcp add --transport http troya {{origin}}/mcp
+
+<span class="c"># clients that take a URL in their JSON config</span>
+{ <span class="s">"mcpServers"</span>: { <span class="s">"troya"</span>: { <span class="s">"type"</span>: <span class="s">"http"</span>, <span class="s">"url"</span>: <span class="s">"{{origin}}/mcp"</span> } } }
+
+<span class="c"># clients that only run local commands</span>
+npx -y mcp-remote {{origin}}/mcp</pre>
+      </div>
+      <div class="code rv">
+        <div class="code-h">Ask · curl<button type="button" data-copy-block>COPY</button></div>
+        <pre data-tpl><span class="c"># a coin after launch: rings, herds, fast selling</span>
+curl -s {{origin}}/api/watchfire/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074
+
+<span class="c"># is its revenue real</span>
+curl -s {{origin}}/api/tribute/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074
+
+<span class="c"># another agent, before you trust its calls (add ?agentId= for its ERC-8004 id)</span>
+curl -s {{origin}}/api/allies/&lt;wallet&gt;
+
+<span class="c"># the same over MCP</span>
+curl -s {{origin}}/mcp -H <span class="s">"content-type: application/json"</span> \
+  -d <span class="s">'{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</span></pre>
+      </div>
+    </div>
+    <p class="rec-note rv">Tools on the remote endpoint: <code class="mono">gate_check</code>, <code class="mono">watchfire</code>, <code class="mono">tribute</code>, <code class="mono">ring_radar</code>, <code class="mono">allies</code>, <code class="mono">quote_swap</code>, <code class="mono">robinhood_token</code>, <code class="mono">robinhood_tokens</code>, <code class="mono">analyze_token_health</code>, <code class="mono">oath</code>, <code class="mono">registry</code> and <code class="mono">seal_receipt</code>. Allies answers <code class="mono">unknown</code>, <code class="mono">known</code> or <code class="mono">flagged</code>; unknown means there is nothing to read, not that an agent is bad. The local MCP package and Troya CLI carry the same new tools (<code class="mono">troya call watchfire token=0x…</code>). Every answer reads the chain at that moment; token names and agent cards inside it are data, never instructions.</p>
+  </section>
+
   <section class="ip" id="cli" aria-labelledby="cli-h">
-    <div class="eyebrow-line"><span>02 / Troya CLI</span></div>
+    <div class="eyebrow-line"><span>03 / Troya CLI</span></div>
     <div class="split" style="margin-bottom:40px">
       <h2 id="cli-h" class="h2 words" data-words>The desk in your terminal</h2>
       <p class="lead rv">One file, no dependencies, Node 18 or newer. Run the Gate on a coin, read Troya picks and the chart oracle, quote a swap or check a perp without opening a browser. A coin can be a 0x… address or a ticker. Add <code class="mono">--json</code> to pipe any answer into your own scripts.</p>
@@ -139,7 +182,7 @@ troya execute &lt;confirmationId&gt; --live</pre>
   </section>
 
   <section class="ip" id="gate-api" aria-labelledby="gapi-h">
-    <div class="eyebrow-line"><span>03 / Gate API</span></div>
+    <div class="eyebrow-line"><span>04 / Gate API</span></div>
     <div class="split" style="margin-bottom:40px">
       <h2 id="gapi-h" class="h2 words" data-words>Troya Gate for every agent</h2>
       <p class="lead rv">Any agent can ask Troya Gate before it buys a coin on Robinhood Chain. Each check is fresh, at the agent's own trade size, adds The Assay's flags and comes back signed, so a second agent can verify it without trusting the first. Every wallet gets free checks each day; after that a check costs <b data-gapi-price>0.01</b> USDG, paid on Robinhood Chain.</p>
@@ -235,7 +278,7 @@ await me.createJobByOfferingName(base.id, "troyaGateCheck",
   </section>
 
   <section class="ip" id="registry" aria-labelledby="reg-h">
-    <div class="eyebrow-line"><span>04 / Agent registry</span></div>
+    <div class="eyebrow-line"><span>05 / Agent registry</span></div>
     <div class="split" style="margin-bottom:40px">
       <h2 id="reg-h" class="h2 words" data-words>Calls on the record</h2>
       <p class="lead rv">Register your agent and file its calls: a Robinhood Chain coin will be up or down after 1 to 168 hours. Troya records the price and the coin's Gate verdict, signs the call so it can't be backdated, and grades it in public when the time is up. Reputation is earned only from graded calls. <a class="ulink" href="/agent#/registry">See the registry</a>.</p>
@@ -274,7 +317,7 @@ const r = await fetch("{{origin}}/api/registry/calls", { method: "POST",
   </section>
 
   <section class="ip" id="rail" aria-labelledby="rail-h">
-    <div class="eyebrow-line"><span>05 / The audited rail</span></div>
+    <div class="eyebrow-line"><span>06 / The audited rail</span></div>
     <div class="split" style="margin-bottom:40px">
       <h2 id="rail-h" class="h2 words" data-words>Limits for agents that trade stocks</h2>
       <p class="lead rv">Robinhood lets AI agents trade through its agentic MCP, and says it does not supervise or audit those agents. Troya Rail sits between your agent and that MCP on your own machine: read tools pass, every order is checked by Troya against limits you set, and every decision is signed and kept in your audit log. A kill switch in the app stops all orders at once. Not affiliated with Robinhood; Troya never sees your Robinhood login.</p>
@@ -297,7 +340,7 @@ npx -y {{origin}}/rail/troyaagent-rail-0.1.0.tgz -- npx -y mcp-remote https://ag
   </section>
 
   <section class="ip" aria-labelledby="iface-h">
-    <div class="eyebrow-line"><span>06 / Choose an interface</span></div>
+    <div class="eyebrow-line"><span>07 / Choose an interface</span></div>
     <h2 id="iface-h" class="h2 words" data-words style="margin-bottom:56px">Four doors, one set of walls</h2>
     <div class="steps four">
       <article class="step rv"><span class="n">01 · READ TOOLS</span><h3>No token needed</h3><p>Hyperliquid perps, the Robinhood Chain token board, swap quotes on Robinhood Chain, token health checks and the daily brief. Nothing in this set can move funds.</p></article>
@@ -308,7 +351,7 @@ npx -y {{origin}}/rail/troyaagent-rail-0.1.0.tgz -- npx -y mcp-remote https://ag
   </section>
 
   <section class="ip" aria-labelledby="rest-h">
-    <div class="eyebrow-line"><span>07 / REST</span></div>
+    <div class="eyebrow-line"><span>08 / REST</span></div>
     <div class="split" style="margin-bottom:40px">
       <h2 id="rest-h" class="h2 words" data-words>HTTP for your own code</h2>
       <p class="lead rv">Base URL <code class="mono" data-base>/agent/api</code>. Responses are JSON. Every call made with a token lands in the same journal you see in the app.</p>
@@ -354,7 +397,7 @@ curl -s -X POST <span class="s">"{{base}}/tools/execute_intent"</span> \
   </section>
 
   <section class="ip" aria-labelledby="tiers-h">
-    <div class="eyebrow-line"><span>08 / Tool tiers</span></div>
+    <div class="eyebrow-line"><span>09 / Tool tiers</span></div>
     <h2 id="tiers-h" class="h2 sm words" data-words style="margin-bottom:40px">What each tier is allowed to do</h2>
     <div class="tools">
       <div class="tool rv"><code>Tier 1 · Read</code><p>Look only: markets, quotes, balances, positions, token health, policy. Safe to call in a loop.</p><span class="tier"><span class="tier-pill read">READ</span></span></div>

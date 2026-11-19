@@ -82,6 +82,17 @@ async function serve(req, res) {
     res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
     if (req.method === "OPTIONS") { res.writeHead(204).end(); return; }
   }
+  // V8 F45: the remote MCP endpoint (server/mcp.mjs) also answers at /mcp. MCP clients, agents and browser tools call it, the
+  // skill file and llms.txt from any origin; no cookies are read there, an optional API token comes in a header
+  if (url.pathname === "/mcp" || url.pathname === "/mcp/") url.pathname = "/api/mcp";
+  if (url.pathname === "/api/mcp" || url.pathname === "/agent/api/mcp") {
+    res.setHeader("access-control-allow-origin", "*");
+    res.setHeader("access-control-allow-headers", "content-type, accept, authorization, x-api-key, mcp-protocol-version, mcp-session-id, last-event-id");
+    res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
+    res.setHeader("access-control-expose-headers", "mcp-session-id, mcp-protocol-version");
+    if (req.method === "OPTIONS") { res.writeHead(204).end(); return; }
+  }
+  if (url.pathname === "/skill.md" || url.pathname === "/llms.txt") res.setHeader("access-control-allow-origin", "*");
   if (await handleApi(req, res, url)) return;
   let path;
   try { path = decodeURIComponent(url.pathname); } catch { res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }).end("Bad request"); return; }

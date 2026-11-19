@@ -208,6 +208,9 @@ function onFire(st, kind, detail, block) {
   console.log(`[watchfire] fire $${st.symbol || "?"} ${kind}: ${detail}`);
   import("./arena.mjs").then((m) => m.watchfireFire?.(st.token, f)).catch(() => {});
   import("./seal.mjs").then((m) => m.seal("watchfire", f.token, f, `Watchfire: ${kind} on $${st.symbol || "?"}`)).catch(() => {});
+  // everyone who pinned the coin hears it at once: inbox and Telegram
+  const owners = pinned.get(lc(st.token)) || [];
+  if (owners.length) import("./inbox.mjs").then(async (m) => { for (const o of owners) await m.addInbox(o, { kind: "watchfire", title: `Watchfire FIRE: $${st.symbol || "?"}`, body: `${detail}. troya.codes/agent#/token/${f.token}`, data: { watchfire: f } }).catch(() => {}); }).catch(() => {});
   store?.update("watchfire.json", {}, (s) => { s.fires = [f, ...(s.fires || [])].slice(0, 300); return s; }).catch(() => {});
 }
 
@@ -260,6 +263,7 @@ export function watchfireState(token) {
   return st?.ready ? { level: st.level, why: st.why, lastFire: st.lastFire } : null;
 }
 const MAX_WATCH = 150;
+let pinned = new Map();                                 // token → owners who pinned it (Treasury)
 async function syncArena() {
   const d = await store.readJson("arena.json", {}).catch(() => ({}));
   const open = new Set((d.positions || []).filter((p) => p.status === "open").map((p) => lc(p.token)));
@@ -268,8 +272,12 @@ async function syncArena() {
   const ag = await store.readJson("aegis.json", {}).catch(() => ({}));
   const guarded = new Set(Object.keys(ag.coins || {}).map(lc).filter((t) => isAddress(t)));
   for (const t of guarded) if (W.size < MAX_WATCH || W.has(t)) watch(t, "aegis");
+  // V8 F46 Treasury: coins holders pinned to Watchfire
+  pinned = await import("./treasury.mjs").then((m) => m.allPins()).catch(() => pinned);
+  for (const t of pinned.keys()) if (W.size < MAX_WATCH || W.has(t)) watch(t, "pin");
   for (const [t, st] of W) {
     if (!guarded.has(t)) st.reasons.delete("aegis");
+    if (!pinned.has(t)) st.reasons.delete("pin");
     if (!open.has(t)) st.reasons.delete("arena");
     if (st.reasons.has("ask") && Date.now() > st.until) st.reasons.delete("ask");
     if (!st.reasons.size && !st.loading) W.delete(t);

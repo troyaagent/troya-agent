@@ -64,8 +64,11 @@ export const PONS_SITE = "https://ponsfamily.com/launchpad/";
 
 class RpcError extends Error { constructor(msg, code, data) { super(msg); this.code = code; this.data = data; } }
 const failedAt = new Map(); // upstream → time it last failed
+const hits = new Map();     // upstream host → requests sent since the server started (infra watch reads it for quotas)
+export const rpcHits = () => Object.fromEntries(hits);
 
 async function post(url, payload, timeoutMs) {
+  try { const h = new URL(url).host; hits.set(h, (hits.get(h) || 0) + (Array.isArray(payload) ? payload.length : 1)); } catch {}
   const res = await fetch(url, {
     method: "POST", headers: { "content-type": "application/json", accept: "application/json", "user-agent": "troya-agent/0.2" },
     body: JSON.stringify(payload), signal: AbortSignal.timeout(timeoutMs),

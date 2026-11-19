@@ -833,51 +833,97 @@ const setLast = (k, v) => { LAST.delete(k); LAST.set(k, v); lastDirty = true; if
 
 // candles for a Robinhood token's main pool, in USD: [{time(sec), open, high, low, close, volume}]
 const GT_TF = { "5m": ["minute", 5], "15m": ["minute", 15], "1h": ["hour", 1], "4h": ["hour", 4], "1d": ["day", 1] };
-// Candles straight from the chain for a coin still on its Pons curve: the curve's own Buy and Sell events (ETH and tokens
-// per trade, each log carrying its block time), read through our own RPC. GeckoTerminal (free and rate-limited: its 429s
-// held a chart for ~50 s on 20 Nov 2026) stays for graduated coins and other pools.
-//   Buy  data: quoteIn (gross ETH), tokensOut, fee, creatorTax      Sell data: tokensIn, quoteOut, fee, creatorTax
+// Candles straight from the chain for Pons coins: the curve's own Buy and Sell events while the coin is on its curve,
+// and its Uniswap v4 pool's Swap events after it graduates, read through our own RPC. GeckoTerminal (free and
+// rate-limited: its 429s held charts for 40-50 s on 20 Nov 2026) stays for every other pool.
+//   curve Buy  data: quoteIn (gross ETH), tokensOut, fee, creatorTax      curve Sell data: tokensIn, quoteOut, fee, creatorTax
+//   v4 Swap (PoolManager) topics: id, sender; data: amount0 (ETH), amount1 (token), sqrtPriceX96, liquidity, tick, fee
+// Wide log reads go to the official RPC, which leaves blockTimestamp at 0: block times come from exact reads of up to
+// 80 anchor blocks per pass (cached for good), interpolated between them.
 const T_CBUY = "0xec36bf571f136799e8dc0b0b8bea4b04d8bd3d43de838aab0d5fc21d4cbfc455";
 const T_CSELL = "0x8113d738abdcb6b38357e9d53a54a7157861a09031b453651f0fe7fe151f59df";
+const T_V4SWAP = "0x40e9cecb9f5f1f1c5b9c97dec2917b7ee92e57ba5563708daca94dd84ad7112f";
 const IV_S = { "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400 };
-const CURVES = new Map();      // token -> { curve, last, dec, trades: [[unix s, ETH per token, ETH volume]], busy }
+const CHAINC = new Map();      // token -> { curve, poolId, last, dec, trades: [[unix s, ETH per token, ETH volume]], busy }
+const BLOCK_TS = new Map();    // block -> unix s
 const rhHex = (n) => "0x" + n.toString(16);
-async function curveTrades(a) {
+const s256 = (v) => (v >= 2n ** 255n ? v - 2n ** 256n : v);
+async function blockTimes(blocks) {
+  const uniq = [...new Set(blocks)].sort((x, y) => x - y);
+  if (!uniq.length) return new Map();
+  const want = uniq.length <= 80 ? uniq : [...new Set([...Array.from({ length: 79 }, (_, k) => uniq[Math.floor((k * (uniq.length - 1)) / 78)]), uniq[uniq.length - 1]])];
+  const todo = want.filter((b) => !BLOCK_TS.has(b));
+  for (let k = 0; k < todo.length; k += 10) {
+    await Promise.all(todo.slice(k, k + 10).map(async (b) => {
+      const blk = await rhRpc("robinhood", "eth_getBlockByNumber", [rhHex(b), false]).catch(() => null);
+      if (blk?.timestamp) BLOCK_TS.set(b, Number(BigInt(blk.timestamp)));
+    }));
+  }
+  while (BLOCK_TS.size > 60_000) BLOCK_TS.delete(BLOCK_TS.keys().next().value);
+  const anchors = uniq.filter((b) => BLOCK_TS.has(b));
+  const out = new Map();
+  let ai = 0;
+  for (const b of uniq) {
+    if (BLOCK_TS.has(b)) { out.set(b, BLOCK_TS.get(b)); continue; }
+    while (ai < anchors.length - 1 && anchors[ai + 1] < b) ai++;
+    const lo = anchors[ai], hi = anchors.find((x) => x > b);
+    if (lo == null || lo > b) { if (hi != null) out.set(b, BLOCK_TS.get(hi)); continue; }
+    if (hi == null) { out.set(b, BLOCK_TS.get(lo)); continue; }
+    const tl = BLOCK_TS.get(lo), th = BLOCK_TS.get(hi);
+    out.set(b, Math.round(tl + ((th - tl) * (b - lo)) / (hi - lo)));
+  }
+  return out;
+}
+async function chainTrades(a) {
   const ps = await memo(`rh:curveps:${a}`, 60_000, () => ponsState(a)).catch(() => null);
-  if (!ps?.curve || ps.graduated) return null;
-  let c = CURVES.get(a);
-  if (!c || lc(c.curve) !== lc(ps.curve)) {
+  const poolId = ps?.graduated && /^0x[0-9a-f]{64}$/i.test(ps?.poolId || "") ? ps.poolId : null;
+  if (!ps?.curve && !poolId) return null;
+  let c = CHAINC.get(a);
+  if (!c || lc(c.curve || "") !== lc(ps.curve || "") || (poolId && c.poolId !== poolId)) {
     const head0 = Number(BigInt(await rhRpc("robinhood", "eth_blockNumber", [])));
     const { findLaunchTx } = await import("./ringradar.mjs");
     const l = await findLaunchTx(a).catch(() => null);
     const decHex = await rhRpc("robinhood", "eth_call", [{ to: a, data: "0x313ce567" }, "latest"]).catch(() => null);
-    c = { curve: ps.curve, last: l?.block ? l.block - 1 : Math.max(0, head0 - 3_000_000), dec: decHex && decHex !== "0x" ? Number(BigInt(decHex)) : 18, trades: [], busy: null };
-    CURVES.set(a, c);
-    while (CURVES.size > 400) CURVES.delete(CURVES.keys().next().value);
+    c = { curve: ps.curve || null, poolId, last: l?.block ? l.block - 1 : Math.max(0, head0 - 8_000_000), dec: decHex && decHex !== "0x" ? Number(BigInt(decHex)) : 18, trades: [], busy: null };
+    CHAINC.set(a, c);
+    while (CHAINC.size > 400) CHAINC.delete(CHAINC.keys().next().value);
   }
   if (!c.busy) c.busy = (async () => {
-    const head = Number(BigInt(await rhRpc("robinhood", "eth_blockNumber", [])));
+    // the official RPC runs a few blocks behind our node: stay 100 blocks (~10 s) under the head
+    const head = Number(BigInt(await rhRpc("robinhood", "eth_blockNumber", []))) - 100;
     if (head <= c.last) return;
-    // one topic per query: the official RPC takes a wide range only with a single value per topic position
-    const q = (t) => rhRpc("robinhood", "eth_getLogs", [{ address: c.curve, topics: [t], fromBlock: rhHex(c.last + 1), toBlock: rhHex(head) }], { only: RH_CHAINS.robinhood.wide, timeoutMs: 20_000 });
-    const [buys, sells] = await Promise.all([q(T_CBUY), q(T_CSELL)]);
-    const logs = [...(buys || []), ...(sells || [])].sort((x, y) => Number(BigInt(x.blockNumber)) - Number(BigInt(y.blockNumber)) || Number(BigInt(x.logIndex)) - Number(BigInt(y.logIndex)));
+    // one topic value per position: the official RPC takes a wide range only that way
+    const q = (address, topics) => rhRpc("robinhood", "eth_getLogs", [{ address, topics, fromBlock: rhHex(c.last + 1), toBlock: rhHex(head) }], { only: RH_CHAINS.robinhood.wide, timeoutMs: 25_000 });
+    const [buys, sells, swaps] = await Promise.all([
+      c.curve ? q(c.curve, [T_CBUY]) : [], c.curve ? q(c.curve, [T_CSELL]) : [], c.poolId ? q(RH.poolManager, [T_V4SWAP, c.poolId]) : [],
+    ]);
+    const logs = [...(buys || []), ...(sells || []), ...(swaps || [])].sort((x, y) => Number(BigInt(x.blockNumber)) - Number(BigInt(y.blockNumber)) || Number(BigInt(x.logIndex)) - Number(BigInt(y.logIndex)));
+    const ts = await blockTimes(logs.filter((l) => !(Number(l.blockTimestamp) > 0)).map((l) => Number(BigInt(l.blockNumber))));
     for (const l of logs) {
       const w = (l.data.slice(2).match(/.{64}/g) || []).map((x) => BigInt("0x" + x));
+      const t = Number(l.blockTimestamp) > 0 ? Number(BigInt(l.blockTimestamp)) : ts.get(Number(BigInt(l.blockNumber)));
+      if (!t) continue;
+      if (l.topics[0] === T_V4SWAP) {
+        if (w.length < 3) continue;
+        const sq = Number(w[2]) / 2 ** 96, tokPerEth = sq * sq * 10 ** (18 - c.dec);
+        const eth = Math.abs(Number(s256(w[0]))) / 1e18;
+        if (tokPerEth > 0) c.trades.push([t, 1 / tokPerEth, eth]);
+        continue;
+      }
       if (w.length < 4) continue;
       const buy = l.topics[0] === T_CBUY;
       const eth = buy ? w[0] - w[2] - w[3] : w[1] + w[2] + w[3], tok = buy ? w[1] : w[0];
       if (tok <= 0n || eth <= 0n) continue;
-      const ethF = Number(eth) / 1e18, tokF = Number(tok) / 10 ** c.dec;
-      c.trades.push([Number(BigInt(l.blockTimestamp)), ethF / tokF, ethF]);
+      const ethF = Number(eth) / 1e18;
+      c.trades.push([t, ethF / (Number(tok) / 10 ** c.dec), ethF]);
     }
     c.last = head;
   })().finally(() => { c.busy = null; });
   await c.busy;
   return c;
 }
-async function curveCandles(a, iv) {
-  const c = await curveTrades(a);
+async function chainCandles(a, iv) {
+  const c = await chainTrades(a);
   if (!c || !c.trades.length) return null;
   const step = IV_S[iv], ethUsd = await getEthUsd().catch(() => null);
   if (!ethUsd) return null;
@@ -892,11 +938,12 @@ async function curveCandles(a, iv) {
   let prev = null;
   for (let b = Math.max(first, endB - 299 * step); b <= endB; b += step) {
     const k = by.get(b);
-    if (k) { if (prev != null) k.open = prev; out.push(k); prev = k.close; }
+    if (k) { if (prev != null) { k.open = prev; k.high = Math.max(k.high, prev); k.low = Math.min(k.low, prev); } out.push(k); prev = k.close; }
     else if (prev != null) out.push({ time: b, open: prev, high: prev, low: prev, close: prev, volume: 0 });
     else { const before = c.trades.filter(([t]) => t < b).pop(); if (before) { prev = before[1] * ethUsd; out.push({ time: b, open: prev, high: prev, low: prev, close: prev, volume: 0 }); } }
   }
-  return { candles: out, interval: iv, source: "Pons curve (on-chain)", unit: "USD", trades: c.trades.length, updatedAt: Date.now() };
+  const src = c.poolId ? (c.curve ? "On-chain: Pons curve + Uniswap v4 pool" : "On-chain: Uniswap v4 pool") : "On-chain: Pons curve";
+  return { candles: out, interval: iv, source: `${src}, USD at today's ETH price`, unit: "USD", trades: c.trades.length, updatedAt: Date.now() };
 }
 
 // bg: a background job (the Record back-fill, smart DCA sizing) waits behind people loading a chart or a range
@@ -904,7 +951,7 @@ export async function getRobinhoodCandles(address, interval = "1h", { bg = false
   if (!ADDR_RE.test(String(address || ""))) throw httpErr(400, "That is not a valid token address.");
   const iv = GT_TF[interval] ? interval : "1h";
   const a = lc(address);
-  if (!bg) { const cc = await memo(`rh:ccandles:${a}:${iv}`, 10_000, () => curveCandles(a, iv)).catch(() => null); if (cc?.candles?.length) return cc; }
+  if (!bg) { const cc = await memo(`rh:ccandles:${a}:${iv}`, 10_000, () => chainCandles(a, iv)).catch(() => null); if (cc?.candles?.length) return cc; }
   const lastC = bg ? null : LAST.get(`c:${a}:${iv}`);
   const freshC = memo(`rh:candles:${a}:${iv}`, iv === "5m" || iv === "15m" ? 2 * 60_000 : 5 * 60_000, async () => {
     let pool = board.rows.get(a)?.pool;
@@ -1151,6 +1198,10 @@ export async function searchCoins(q, limit = 12) {
 }
 
 export async function register(r) {
+  // the $TROYA chart is the most opened one: read its curve and pool history once at start, so nobody waits for it
+  setTimeout(() => {
+    try { const ca = (readFileSync(new URL("../public/config.js", import.meta.url), "utf8").match(/\bca:\s*"(0x[0-9a-fA-F]{40})"/) || [])[1]; if (ca) chainTrades(lc(ca)).catch(() => {}); } catch { /* no config */ }
+  }, 15_000).unref?.();
   r.get("/api/search/coins", ({ query }) => searchCoins(query.q, query.limit), { weight: 1, perMin: 240 });
   r.get("/api/market/robinhood/holders", async ({ query }) => {
     const a = lc(query.address);

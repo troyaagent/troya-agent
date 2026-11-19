@@ -420,6 +420,17 @@ html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color:
 .dk-assay-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
 .dk-assay-foot { margin: 0; }
 @media (max-width: 520px) { .dk-assay-facts { grid-template-columns: 1fr; } .dk-assay-facts dd { margin-bottom: 6px; } }
+/* V7 Athena box under the Assay: Ring Radar, Oath, smart money, Quantum-Ready, Aegis, and the Council */
+.dk-athena .dk-assay-facts dd span.af-red b { color: var(--down); }
+.dk-athena .dk-assay-facts dd span.af-amber b { color: var(--warn, #e0a33a); }
+.dk-athena .dk-assay-facts dd span.af-clear b { color: var(--up); }
+.dk-athena .dk-gate-a { margin-top: 10px; }
+.dk-council:empty { display: none; }
+.dk-council { margin-top: 12px; display: grid; gap: 10px; font-size: 13px; }
+.dk-council p { margin: 0; }
+.dk-cl b { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.dk-cl ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.dk-cl.cl-bull li::marker { color: var(--up); } .dk-cl.cl-bear li::marker, .dk-cl.cl-counsel li::marker { color: var(--down); } .dk-cl.cl-risk li::marker { color: var(--warn, #e0a33a); }
 
 /* F16: Lighter on Robinhood Chain */
 .lt-acct { display: grid; gap: 10px; padding: 14px 16px; margin-bottom: 14px; }

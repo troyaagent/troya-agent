@@ -50,6 +50,41 @@ function assayBox(addr, compact) {
   return box;
 }
 
+/* ---------- V7 Athena on every coin: Ring Radar, Oath, smart money, Quantum-Ready, Aegis, and the Council on demand ---------- */
+function athenaBox(addr) {
+  const dl = h("dl", { class: "dk-assay-facts" });
+  const rows = {};
+  const row = (k, label) => { const dd = h("dd", {}, h("span", { class: "fine" }, "reading…")); rows[k] = dd; dl.append(h("dt", {}, label), dd); };
+  row("ring", "Ring Radar"); row("oath", "Oath"); row("smart", "Smart money"); row("quantum", "Quantum-Ready"); row("aegis", "Aegis");
+  const set = (k, ...nodes) => { if (rows[k]) clear(rows[k], ...nodes); };
+  const council = h("div", { class: "dk-council" });
+  const councilBtn = h("button", { class: "btn sm", type: "button" }, icon("spark"), "Ask the Council");
+  councilBtn.addEventListener("click", async () => {
+    councilBtn.disabled = true;
+    clear(council, h("div", { class: "dk-assay-b" }, h("span", { class: "ag-spin" }), h("span", { class: "fine" }, "Three analysts are reading Troya's facts on this coin (up to a minute)…")));
+    let c;
+    try { c = await api.get(`/api/council/${addr}`); } catch (e) { clear(council, h("p", { class: "fine" }, `The Council could not sit: ${e.message}`)); councilBtn.disabled = false; return; }
+    const list = (title, xs, cls) => (xs?.length ? h("div", { class: `dk-cl ${cls}` }, h("b", {}, title), h("ul", {}, xs.map((x) => h("li", {}, x)))) : null);
+    clear(council,
+      h("p", {}, h("span", { class: `dk-v v-${c.verdict === "pass" ? "passed" : c.verdict === "avoid" ? "failed" : "caution"}` }, `Council: ${c.verdict}`), c.debate?.summary ? h("span", { class: "fine" }, ` ${c.debate.summary}`) : null),
+      list("Three reasons not to buy", c.counsel.map((r) => r.reason), "cl-counsel"),
+      list("Bull", c.debate?.bull, "cl-bull"), list("Bear", c.debate?.bear, "cl-bear"), list("Risk", c.debate?.risk, "cl-risk"),
+      h("p", { class: "fine" }, "Every point cites Troya's own facts; nothing from X or websites reaches the analysts. ", c.receipt ? h("a", { class: "link", href: `/api/seal/r/${c.receipt}`, target: "_blank", rel: "noopener" }, "Sealed receipt") : null));
+  });
+  const box = h("section", { class: "dk-assay dk-athena" },
+    h("div", { class: "dk-assay-h" }, h("b", {}, "Athena"), h("span", { class: "fine" }, "V7: rigged launches, dev pledges, smart money, after-buy guard")),
+    h("div", { class: "dk-assay-b" }, dl), h("div", { class: "dk-gate-a" }, councilBtn, h("a", { class: "btn sm", href: "#/agent/aegis" }, icon("shield"), "Guard my coins")), council);
+  const get = (u) => api.get(u).catch((e) => ({ error: e.message }));
+  setTimeout(async () => {
+    get(`/api/ring/${addr}`).then((r) => set("ring", r.error ? h("span", { class: "fine" }, "unavailable") : r.verdict === "unknown" ? h("span", { class: "fine" }, "not a recent Pons launch") : h("span", { class: `af-${r.verdict === "red" ? "red" : r.verdict === "amber" ? "amber" : "clear"}` }, h("b", {}, r.verdict), ` · ${(r.reasons || []).slice(0, 2).join("; ")}`)));
+    get(`/api/oath/${addr}`).then((o) => set("oath", o.status === "none" || o.error ? h("span", { class: "fine" }, "no Oath taken · ", h("a", { class: "link", href: "/oath" }, "devs sign here")) : h("span", {}, h("b", {}, o.status === "kept" ? "kept" : "broken"), ` · max ${o.pledge.maxSellPctPerDay}% a day${o.pledge.feeLockDays ? `, fees locked ${o.pledge.feeLockDays}d` : ""}${o.breaches?.length ? ` · ${o.breaches.length} breach${o.breaches.length > 1 ? "es" : ""}` : ""}`)));
+    get(`/api/radar/smart/${addr}`).then((s) => set("smart", h("span", {}, s.summary || s.note || "unavailable")));
+    get(`/api/quantum/token/${addr}`).then((q) => set("quantum", h("span", {}, q.summary || "unavailable")));
+    get(`/api/aegis/token/${addr}`).then((g) => set("aegis", h("span", {}, g.guarded ? `guarded${g.sellTest ? ` · last sell test ${g.sellTest.ok ? `passed, tax ${Number(g.sellTest.tax || 0).toFixed(1)}%` : "failed"}` : ""}${g.events?.[0] ? ` · ${g.events[0].level}: ${g.events[0].text}` : ""}` : "nobody guards it yet")));
+  }, 120);
+  return box;
+}
+
 export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
   const SITE = window.SITE || {};
   const input = h("input", { class: "input dk-gate-in", type: "text", spellcheck: "false", autocomplete: "off", placeholder: "Search a coin (TROYA, NVDA…) or paste its address", "aria-label": "Coin name, ticker or address", maxlength: "80" });
@@ -116,6 +151,7 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
       r.curve && r.curve.progressPct != null ? h("div", { class: "dk-curve" }, h("span", {}, `Pons curve · ${Number(r.curve.raised || 0).toFixed(2)} ${r.curve.pair || "ETH"} raised`), h("div", { class: "dk-bar", style: { "--p": `${Math.min(100, r.curve.progressPct)}%` } }, h("i")), h("span", { class: "fine" }, `${r.curve.progressPct.toFixed(1)}% to graduation`)) : null,
       h("p", { class: `note dk-gate-note v-${r.verdict}` }, r.reason && r.verdict !== "passed" ? r.reason : NOTE[r.verdict] || ""),
       assayBox(a, compact),
+      compact || example ? null : athenaBox(a),
       h("div", { class: "dk-gate-a" },
         failed ? null : h("a", { class: "btn primary sm", href: `#/swap?out=${a}` }, icon("swap"), "Swap"),
         failed ? null : h("a", { class: "btn sm dk-fomo", href: `https://fomo.family/tokens/robinhood/${a}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/fomo.png", alt: "", width: 18, height: 18 }), "Buy on Fomo"),

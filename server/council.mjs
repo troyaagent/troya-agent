@@ -44,7 +44,7 @@ async function facts(token) {
   if (sm?.summary) add("M0", `Smart money: ${sm.summary}${sm.baseRate != null ? ` (base rate of early buyers: ${Math.round(sm.baseRate * 100)}% of graded coins reached 2x)` : ""}`);
   const st = rec?.stats;
   if (st?.graded) {
-    add("S0", `Base rate from The Record: of ${st.graded} coins Troya Sentry called and graded after 24 hours, ${Math.round((st.winRate || 0) * 100)}% were higher; the median 24 h change was ${st.median24h != null ? (st.median24h * 100).toFixed(0) + "%" : "unknown"}`);
+    add("S0", `Base rate from The Record: of ${st.graded} coins Troya Sentry called and graded after 24 hours, ${Math.round((st.winRate || 0) * 100)}% were higher; the median 24 h change was ${st.median24h != null ? Number(st.median24h).toFixed(0) + "%" : "unknown"}`);
     if (st.reachedOf) add("S1", `Base rate: ${st.reached2x} of ${st.reachedOf} called coins ever reached 2x their call price`);
   }
   return { token: t, symbol: g?.quote?.tokenOut?.symbol || ring?.symbol || null, facts: F, raw: { gateVerdict: g ? verdict(g).v : null, ring: ring?.verdict || null, assayRed: (a?.flags || []).filter((f) => f.level === "red").length } };
@@ -53,7 +53,8 @@ async function facts(token) {
 // Counsel: ranked from the facts alone, no model needed
 function counsel(fs) {
   const score = (f) => (/fail|red|honeypot|cannot be sold|reverted/i.test(f.text) ? 100 : (/warn|amber|caution|exempt|bundle|decoy/i.test(f.text) || /sold (?!0(\.0+)?%)\d/i.test(f.text)) ? 60 : /Base rate/.test(f.text) ? 40 : /impact/i.test(f.text) ? 30 : /exposed/i.test(f.text) ? 15 : 0);
-  return fs.filter((f) => score(f) > 0 && !/: pass\b|verdict for a 0\.01 ETH buy: passed/.test(f.text)).sort((a, b) => score(b) - score(a)).slice(0, 3).map((f) => ({ fact: f.id, reason: f.text }));
+  // a clear reading ("Ring Radar: clear", "No exempt wallets…", "No wallet from the smart board…") is never a reason not to buy
+  return fs.filter((f) => score(f) > 0 && !/: pass\b|verdict for a 0\.01 ETH buy: passed|: clear\b|: No |Smart money/.test(f.text)).sort((a, b) => score(b) - score(a)).slice(0, 3).map((f) => ({ fact: f.id, reason: f.text }));
 }
 
 async function debate(pack) {

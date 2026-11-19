@@ -137,7 +137,7 @@ export function tradePanel(t, address) {
       const aw = await api.get("agent-wallet");
       st.aw = aw?.address ? aw : null;
       if (st.aw) {
-        const b = await api.get("agent-wallet/balances").catch(() => null);
+        const b = await api.get(`agent-wallet/balances?tokens=${address}`).catch(() => null);
         st.eth = b?.robinhoodEth ?? null;
         st.bal = Number((b?.robinhoodTokens || []).find((x) => String(x.address).toLowerCase() === address)?.amount || 0);
         mode.textContent = `From your Agent Wallet${st.eth != null ? ` (${st.eth.toFixed(4)} ETH)` : ""}: one tap arms, a second tap sends. The Gate and your caps run on the server before anything is sent.`;

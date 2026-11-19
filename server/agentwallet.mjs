@@ -421,11 +421,13 @@ export async function register(r, ctx) {
     return pub(out);
   });
 
-  r.get("/api/agent-wallet/balances", async ({ req }) => {
+  r.get("/api/agent-wallet/balances", async ({ req, query }) => {
     const s = requireSession(req);
     const w = await rec(s.address);
     if (!w) throw new HttpError(404, "No Agent Wallet yet.");
-    return getBalances(w.address);
+    // ?tokens=0x…,0x… reads those coins too (the War Table's sell buttons ask for the coin on the page)
+    const extra = String(query?.tokens || "").split(",").map((x) => x.trim()).filter((x) => /^0x[0-9a-fA-F]{40}$/.test(x)).slice(0, 10);
+    return getBalances(w.address, extra);
   });
 
   r.post("/api/agent-wallet/settings", async ({ req, body }) => {
@@ -498,7 +500,11 @@ export async function register(r, ctx) {
     if (!w) throw new HttpError(404, "No Agent Wallet yet.");
     let bal = null;
     try { bal = await getBalances(w.address); } catch {}
-    const dust = (bal?.robinhoodEth || 0) > 0.00001 || (bal?.robinhoodTokens || []).length > 0 || (bal?.hyperliquid?.accountValueUsd || 0) > 0.5;
+    // every coin it holds, not only WETH/USDG (Blockscout's token list, the same one Portfolio shows): a wallet holding only
+    // memecoins counted as empty and the guard never fired (found 20 Nov 2026)
+    let coins = [];
+    try { coins = await (await import("./portfolio.mjs")).walletTokens(w.address); } catch {}
+    const dust = (bal?.robinhoodEth || 0) > 0.00001 || (bal?.robinhoodTokens || []).length > 0 || (coins || []).some((c) => Number(c.amount) > 0) || (bal?.hyperliquid?.accountValueUsd || 0) > 0.5;
     if (dust && !w.exportedAt && body.force !== true) throw new HttpError(409, "This Agent Wallet still holds funds and its key was never exported. Withdraw or export first.");
     await store.update("agentwallets.json", {}, (all) => { delete all[k(s.address)]; });
     await logAction({ address: s.address, kind: "agent-wallet.delete", summary: `Agent Wallet ${w.address} deleted`, source: "app" });

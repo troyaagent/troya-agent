@@ -378,9 +378,24 @@ export async function backtest(token, fromBlock, toBlock) {
   return { token: getAddress(t), fromBlock, toBlock, transfers: logs.length, signals: found };
 }
 
+// real-money test of the Arena's live exit (owner-approved, 20 Nov 2026): data/watchfire-test.json { token, nonce }
+// written by the operator fires Watchfire's hook on that coin once, exactly as a real fire would
+let testNonce = null;
+async function testFire() {
+  const t = await store.readJson("watchfire-test.json", null).catch(() => null);
+  if (!t?.token || !t.nonce || t.nonce === testNonce || !isAddress(t.token)) return;
+  if (testNonce === null) { testNonce = t.nonce; if (t.done) return; }
+  testNonce = t.nonce;
+  const f = { token: getAddress(t.token), symbol: t.symbol || null, kind: "test", detail: "real-money test of the live exit: a simulated fire", block: 0, at: Date.now() };
+  console.log(`[watchfire] fire TEST on ${f.token}: simulated, to test the Arena's live exit`);
+  await import("./arena.mjs").then((m) => m.watchfireFire?.(t.token, f)).catch((e) => console.warn("[watchfire] test", e.message));
+  await store.update("watchfire-test.json", {}, (x) => ({ ...x, done: Date.now() })).catch(() => {});
+}
+
 export async function register(r, ctx) {
   store = ctx.store;
   connect();
+  setInterval(() => testFire().catch(() => {}), 10_000).unref?.();
   setInterval(() => syncArena().catch(() => {}), 15_000).unref?.();
   setInterval(() => poll().catch(() => {}), 1_500).unref?.();
   setTimeout(() => syncArena().catch(() => {}), 5_000);

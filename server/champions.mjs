@@ -57,7 +57,7 @@ export async function onArenaClose(list) {
       let out = "";
       try {
         const w = await aw.getAgentWallet(x.owner);
-        const b = w?.address ? await (await import("./tools.mjs")).getBalances(w.address) : null;
+        const b = w?.address ? await (await import("./tools.mjs")).getBalances(w.address, [x.token]) : null;
         const have = Number((b?.robinhoodTokens || []).find((t) => lc(t.address) === lc(x.token))?.amount || 0);
         if (have > 0) {
           const amountIn = (have * 0.999).toPrecision(12).replace(/\.?0+$/, "");

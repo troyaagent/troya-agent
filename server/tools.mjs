@@ -205,10 +205,12 @@ export async function quoteSwap({ tokenIn = "ETH", tokenOut, amountIn, slippageP
     amountOut: n(q.amountOut), priceImpactPct: q.priceImpact != null ? n(q.priceImpact) * 100 : null, feePct: n(q.feePct), route: q.route?.label || q.venue };
 }
 
-export async function getBalances(address) {
+// extra: token addresses to read too (the chain reader only knows WETH and USDG by itself; 20 Nov 2026 the War Table's
+// sell buttons and Champions' exits found no coin to sell until the coin was asked for by address)
+export async function getBalances(address, extra = []) {
   if (!isAddress(String(address || ""))) throw new HttpError(400, "A wallet address is required.");
   const a = getAddress(address);
-  const [b, s] = await Promise.allSettled([chain.getBalances(a), hlState(a.toLowerCase())]);
+  const [b, s] = await Promise.allSettled([chain.getBalances(a, (extra || []).filter((t) => isAddress(String(t || ""))).slice(0, 20)), hlState(a.toLowerCase())]);
   const st = s.status === "fulfilled" ? s.value : null;
   const list = b.status === "fulfilled" ? b.value.balances : [];
   const eth = list.find((x) => x.address === "native");

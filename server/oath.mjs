@@ -91,6 +91,37 @@ async function watch() {
   finally { busy = false; }
 }
 
+/* ---------- tier 3: coins locked in the Troya Oath Vault (contracts/src/TroyaOathVault.sol), read on chain ----------
+   Off until OATH_VAULT holds the deployed vault's address. Each Locked event for the coin whose beneficiary is the coin's
+   dev side counts: how much is locked, what has unlocked by now, the rate per day and the cliff. */
+const VAULT = process.env.OATH_VAULT || "";
+const T_LOCKED = keccakId("Locked(uint256,address,address,uint256,uint64,uint256)");
+const VAULT_IF = new Interface(["function locks(uint256) view returns (address token, address beneficiary, uint128 amount, uint128 withdrawn, uint64 cliff, uint128 ratePerDay)", "function available(uint256) view returns (uint256)"]);
+const vaultMemo = new Map();
+export async function vaultOf(token) {
+  if (!isAddress(VAULT)) return null;
+  const t = lc(token), hit = vaultMemo.get(t);
+  if (hit && Date.now() - hit.at < 5 * 60_000) return hit.v;
+  const logs = await rpc("robinhood", "eth_getLogs", [{ address: VAULT, topics: [T_LOCKED, null, zeroPadValue(t, 32)], fromBlock: hex(Number(process.env.OATH_VAULT_BLOCK || 0)), toBlock: "latest" }], { timeoutMs: 20_000, only: CHAINS.robinhood.upstreams[0] }).catch(() => null);
+  if (!logs) return null;
+  const ps = await ponsState(t).catch(() => null);
+  const dev = new Set([ps?.deployer, ps?.creatorFeeRecipient].filter(Boolean).map(lc));
+  const out = [];
+  for (const l of logs) {
+    const id = BigInt(l.topics[1]);
+    const r = await rpc("robinhood", "eth_call", [{ to: VAULT, data: VAULT_IF.encodeFunctionData("locks", [id]) }, "latest"]).catch(() => null);
+    if (!r) continue;
+    const [, beneficiary, amount, withdrawn, cliff, rate] = VAULT_IF.decodeFunctionResult("locks", r);
+    out.push({ id: Number(id), beneficiary: getAddress(beneficiary), dev: dev.has(lc(beneficiary)), amount: amount.toString(), withdrawn: withdrawn.toString(), cliff: Number(cliff) * 1000, ratePerDay: rate.toString(), tx: l.transactionHash });
+  }
+  const supply = BigInt(await rpc("robinhood", "eth_call", [{ to: t, data: ERC20.encodeFunctionData("totalSupply") }, "latest"]).catch(() => "0x0"));
+  const devLocks = out.filter((x) => x.dev);
+  const locked = devLocks.reduce((s2, x) => s2 + BigInt(x.amount) - BigInt(x.withdrawn), 0n);
+  const v = { vault: getAddress(VAULT), locks: out, devLockedPct: supply > 0n ? Number((locked * 10_000n) / supply) / 100 : null };
+  vaultMemo.set(t, { at: Date.now(), v });
+  return v;
+}
+
 const view = (o) => ({ token: o.token, status: o.status, pledge: { maxSellPctPerDay: o.maxSellBps / 100, feeLockDays: o.feeLockDays, wallets: o.wallets },
   signer: o.signer, takenAt: o.takenAt, breaches: o.breaches, checkedBlock: o.checkedBlock,
   feeLockUntil: o.feeLockDays ? o.takenAt + o.feeLockDays * 86_400_000 : null, tier: "watched" });
@@ -110,7 +141,15 @@ export async function brokeOath(wallets) {
   return hit;
 }
 
-export async function oathOf(token) { const d = await store.readJson(FILE, {}); const o = d.oaths?.[lc(token)]; return o ? view(o) : null; }
+export async function oathOf(token) {
+  const d = await store.readJson(FILE, {});
+  const o = d.oaths?.[lc(token)];
+  if (!o) return null;
+  const v = view(o);
+  const vault = await vaultOf(token).catch(() => null);
+  if (vault?.locks?.some((x) => x.dev)) { v.vault = vault; v.tier = "vault"; }
+  return v;
+}
 
 export async function register(r, ctx) {
   store = ctx.store;

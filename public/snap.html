@@ -74,6 +74,21 @@
       <p class="lead rv">For each transaction, the Snap sends the target contract, the calldata and the chain to the Troya Gate API at troya.codes and shows the answer. Your wallet address, balances, keys and seed phrase stay in MetaMask. Every Gate verdict Troya publishes is also signed and listed on <a class="link" href="/seal">Seal</a>, and the Gate itself is tested with real money on <a class="link" href="/verify">Verify</a>.</p>
     </div>
   </section>
+  <section class="ip" aria-labelledby="faq-h" id="faq">
+    <div class="eyebrow-line"><span>03 / Questions</span></div>
+    <div class="split" style="margin-bottom:28px">
+      <h2 id="faq-h" class="h2 words" data-words>Before you install</h2>
+      <p class="lead rv">Short answers about the Troya Gate Snap. Anything else: ask in <a class="link" href="https://t.me/troyaagent" target="_blank" rel="noopener">the Troya community</a> or send a report at <a class="link" href="/community">troya.codes/community</a>.</p>
+    </div>
+    <div class="steps">
+      <article class="step rv"><span class="n">FUNDS</span><h3>Can it touch my money?</h3><p>No. It only reads the transaction you are about to sign and shows Troya Gate's verdict. It has no access to your keys or seed phrase, and it cannot sign, send or approve anything. You always decide with MetaMask's own Confirm or Cancel.</p></article>
+      <article class="step rv"><span class="n">VERDICT</span><h3>What do the verdicts mean?</h3><p><b>Passed</b>: the buy and a test sell simulate fine and nothing in taxes, depth or owner powers stands out. <b>Caution</b>: something deserves a look, with the reason shown. <b>Failed</b>: a check failed, such as a sell that would not go through; MetaMask shows it as critical. It is a snapshot from Troya Gate, never a safe stamp.</p></article>
+      <article class="step rv"><span class="n">CHAINS</span><h3>Which transactions does it check?</h3><p>Transactions on Robinhood Chain (chain 4663) that touch a coin: swaps on any app, buys on a Pons curve, approvals. On other chains it stays quiet. Unlimited approvals get a warning on their own.</p></article>
+      <article class="step rv"><span class="n">FLASK</span><h3>Why MetaMask Flask for now?</h3><p>MetaMask reviews every Snap that uses internet access before regular MetaMask can install it. Troya Gate has been submitted to the MetaMask Snaps Directory; until it is listed, it runs in Flask, MetaMask's developer build.</p></article>
+      <article class="step rv"><span class="n">DATA</span><h3>What is sent to Troya?</h3><p>The target contract, the calldata and the chain of the transaction you are about to sign, to get the verdict. Not your balances, not your keys, nothing else from your wallet.</p></article>
+      <article class="step rv"><span class="n">REMOVE</span><h3>How do I remove it?</h3><p>In MetaMask: menu, Snaps, Troya Gate, Remove. It takes effect at once and leaves nothing behind.</p></article>
+    </div>
+  </section>
 </main>
 
 <script type="module">

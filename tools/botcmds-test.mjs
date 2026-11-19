@@ -28,7 +28,7 @@ ok(r && ["/trade", "/wallet", "/gate", "/price", "/sentry", "/badge", "/perks", 
 r = await ask("/sentry");
 ok(r && /Troya Sentry/.test(r.text) && r.reply_markup?.inline_keyboard?.[0]?.[0]?.url === "https://t.me/troyasentry", "/sentry answers with the channel button");
 r = await ask("/perks", "supergroup");
-ok(r && /1,000,000 \$TROYA/.test(r.text) && /2026-11-16 12:00 UTC/.test(r.text) && /200 assistant messages/.test(r.text), "/perks: threshold, switch-on time, perks");
+ok(r && /1,000,000 \$TROYA/.test(r.text) && /2026-11-16 12:00 UTC|Live now/.test(r.text) && /200 assistant messages/.test(r.text), "/perks: threshold, switch-on time (or live now), perks");
 r = await ask("/badge", "supergroup");
 ok(r && /\/badge 0x/.test(r.text) && /troya\.codes\/badge/.test(r.reply_markup?.inline_keyboard?.[0]?.[0]?.url || ""), "/badge without an address explains it");
 r = await ask(`/badge ${CA}`, "supergroup");

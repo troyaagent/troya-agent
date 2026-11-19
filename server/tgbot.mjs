@@ -48,6 +48,7 @@ Or just write it: "long ETH $20 at 3x" gets you a ticket to confirm.
 /oath 0x… · the dev's Oath for a coin: kept or broken
 /aegis 0x… · what Aegis caught on a coin (dev and whale sells, sell test)
 /smart · wallets that keep buying winners early · /smart 0x… for one coin
+/raid · the latest Troya post on X with Like, Repost and Reply buttons
 /price NVDA · live price (a symbol or a 0x address)
 /gas · live gas cost of a swap, approval or send
 /sentry · the latest launches through the Gate
@@ -130,6 +131,22 @@ async function councilCmd(arg) {
   const c = await m.council(a).catch((e) => null);
   if (!c) return "The Council could not sit on this coin right now. Try again in a minute.";
   return `<b>Troya Council</b> · <code>${a}</code>\n${esc(m.councilText(c))}`;
+}
+// /raid: holders asked for a raid tool (Telegram, 15 and 18 Nov). The latest Troya post with one-tap buttons; once every
+// 5 minutes per chat so the group is not flooded, and no promise of anything for taking part
+const raidAt = new Map();
+async function raidCmd(chatId) {
+  const last = raidAt.get(String(chatId)) || 0;
+  if (Date.now() - last < 5 * 60_000) return { text: "A raid was posted here a few minutes ago: scroll up and join that one." };
+  const posts = await (await import("./xsocial.mjs")).latestPosts(1).catch(() => []);
+  const p = posts[0];
+  if (!p) return { text: "Could not read Troya's latest X post right now. Follow x.com/Troyaagent and boost the newest post from there." };
+  raidAt.set(String(chatId), Date.now());
+  const url = `https://x.com/Troyaagent/status/${p.id}`;
+  const snippet = esc(p.text.replace(/https:\/\/t\.co\/\S+/g, "").replace(/\s+/g, " ").trim().slice(0, 220));
+  const stats = p.likes != null ? `\n${p.likes} likes · ${p.reposts} reposts · ${p.replies} replies so far` : "";
+  return { text: `<b>Raid: the latest Troya post on X</b>\n${snippet}${stats}\n\nLike, repost and reply from your own account. A real reply in your own words beats copy-paste.`,
+    markup: { inline_keyboard: [[{ text: "Open the post", url }], [{ text: "Like", url: `https://x.com/intent/like?tweet_id=${p.id}` }, { text: "Repost", url: `https://x.com/intent/retweet?tweet_id=${p.id}` }, { text: "Reply", url: `https://x.com/intent/tweet?in_reply_to=${p.id}` }]] } };
 }
 async function smartCmd(arg) {
   const m = await import("./smartmoney.mjs");
@@ -523,7 +540,7 @@ export async function handleBotMessage(m, tg, me) {
   const [, cmdRaw, at, arg = ""] = cm;
   if (at && me?.username && at.toLowerCase() !== me.username.toLowerCase()) return;
   const cmd = cmdRaw.toLowerCase();
-  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "oath", "aegis", "smart", "rules", "sentry", "badge", "perks", "reports", "flywheel"].includes(cmd)) return;
+  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "oath", "aegis", "smart", "raid", "rules", "sentry", "badge", "perks", "reports", "flywheel"].includes(cmd)) return;
   // one answer per person every 3 s keeps the group readable
   const who = `${chatId}:${m.from?.id}`;
   if (Date.now() - (lastReply.get(who) || 0) < 3000) return;
@@ -582,6 +599,7 @@ Nobody from Troya DMs first or asks for a seed phrase or private key.` });
     else if (cmd === "oath") { text = await oathCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else if (cmd === "aegis") { text = await aegisCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
     else if (cmd === "smart") { text = await smartCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
+    else if (cmd === "raid") { const r = await raidCmd(m.chat?.id ?? "dm"); text = r.text; if (r.markup) markup = r.markup; }
     else { text = await gate(arg); if (coinOf(arg) && !/no contract|Usage/i.test(text)) markup = coinKb(coinOf(arg)); }
   } catch (e) { text = `Could not read that right now (${esc(String(e.message || e).slice(0, 80))}). Try again in a moment.`; }
   await tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: m.message_id, allow_sending_without_reply: true }, ...(markup ? { reply_markup: markup } : {}) });

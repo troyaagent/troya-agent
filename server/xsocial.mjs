@@ -384,6 +384,18 @@ export async function postTweet(text, { mediaIds = [], replyTo = null } = {}) {
   await store.update("x-log.json", [], (l) => [...l, { id: id || "post", at: Date.now(), author: "(team post)", text: "", status: "posted", reply: String(text), replyId: id, manual: true }].slice(-300));
   return id;
 }
+// /raid in Telegram: Troya's own latest posts (no replies, no reposts), one read every 10 minutes at most
+let postsMemo = null;
+export async function latestPosts(n = 3) {
+  if (postsMemo && Date.now() - postsMemo.at < 10 * 60_000) return postsMemo.v.slice(0, n);
+  const bot = await botTokens();
+  if (!bot?.access || !bot.id || !(await spend("reads"))) return postsMemo?.v?.slice(0, n) || [];
+  const p = await xApi(`/2/users/${bot.id}/tweets?max_results=5&exclude=replies,retweets&tweet.fields=created_at,public_metrics`, { token: bot.access });
+  const v = (p?.data || []).map((t) => ({ id: t.id, text: String(t.text || ""), at: t.created_at ? Date.parse(t.created_at) : null, likes: t.public_metrics?.like_count ?? null, reposts: t.public_metrics?.retweet_count ?? null, replies: t.public_metrics?.reply_count ?? null }));
+  postsMemo = { at: Date.now(), v };
+  return v.slice(0, n);
+}
+
 // Project check (projectcheck.mjs): one public profile read, inside the daily "users" budget
 export async function userProfile(username) {
   const bot = await botTokens();

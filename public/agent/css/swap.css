@@ -89,3 +89,35 @@
 .sw-solw-row img { border-radius: 6px; }
 
 .tp-extra .badge-s.warn { color: #f0c46e; border-color: rgba(240, 196, 110, .45); background: rgba(240, 196, 110, .1); }
+
+/* one balance, every chain: pay for this coin with ETH on another chain (one signature there, LI.FI bridges and buys) */
+.sw-xc { width: min(460px, 100%); padding: 0; overflow: hidden; }
+.sw-xc[hidden] { display: none; }
+.sw-xc-t { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 14px; text-align: left; min-width: 0; }
+.sw-xc-t:hover { background: var(--bg-2); }
+.sw-xc-t .chev { width: 13px; height: 13px; flex: none; margin-left: auto; opacity: .7; transition: transform .2s var(--ease); }
+.sw-xc-t[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.sw-xc-logos { display: inline-flex; flex: none; }
+.sw-xc-logos > * + * { margin-left: -5px; }
+.sw-xc-tt { display: grid; gap: 2px; min-width: 0; }
+.sw-xc-tt b { font-weight: 500; font-size: 13.5px; }
+.sw-xc-tt small { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.sw-xc-b { display: grid; gap: 10px; padding: 0 12px 12px; }
+.sw-xc-b[hidden] { display: none; }
+.sw-xc-src:empty { display: none; }
+.sw-xc-seg { width: 100%; }
+.sw-xc-seg button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.sw-xc-leg .sw-leg-main { gap: 8px; }
+.sw-xc-in { flex: 1; min-width: 0; height: 38px; border: 0; background: transparent; outline: none; font-size: 24px; font-weight: 500; letter-spacing: -0.02em; color: var(--fg); font-variant-numeric: tabular-nums; padding: 0; }
+.sw-xc-in::placeholder { color: var(--faint); }
+.sw-xc-unit { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: 13px; white-space: nowrap; }
+.sw-xc-unit b { font-weight: 500; }
+.sw-xc-unit small { font-size: 11px; }
+.sw-xc-out { display: grid; gap: 8px; }
+.sw-xc-out > .btn { width: 100%; justify-content: center; white-space: normal; text-align: center; min-height: 40px; height: auto; }
+.sw-xc-out .rows > div > span:last-child { min-width: 0; text-align: right; overflow-wrap: anywhere; }
+.sw-xc-out .warn-t { color: var(--warn); }
+.sw-xc-st { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
+.sw-xc-st svg { width: 14px; height: 14px; }
+.sw-xc-fine { margin: 0; font-size: 11.5px; line-height: 1.5; }
+@media (max-width: 420px) { .sw-xc-unit small { display: none; } .sw-xc-in { font-size: 21px; } }

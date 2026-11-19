@@ -1082,6 +1082,52 @@ export async function hlFundQuote({ address, amountWei, toAddress }) {
   };
 }
 
+/* One balance, every chain (community, 19 Nov 2026): ETH on one chain buys a coin on another in ONE transaction signed on
+   the source chain. LI.FI bridges and swaps for exactly that buy, no manual bridge step. Pairs: Robinhood Chain ⇄ Base and
+   Robinhood Chain ⇄ Arbitrum. The coin goes through the destination chain's Troya Gate first (Robinhood: gateCheck; Base and
+   Arbitrum: the F11 Gate in evmswap.mjs); a failed Gate returns no route. The route is checked to be signed on the source
+   chain and to deliver that exact coin on the destination chain to the same wallet. Progress: /api/bridge/status. */
+const CROSS_NET = { 8453: "base", 42161: "arbitrum" };
+export async function crossBuyQuote({ fromChain, toChain, toToken, address, amountWei, slippage = 0.03 }) {
+  fromChain = Number(fromChain); toChain = Number(toChain);
+  const pairOk = (fromChain === CHAIN_ID && CROSS_NET[toChain]) || (toChain === CHAIN_ID && CROSS_NET[fromChain]);
+  if (!pairOk) throw new HttpError(400, "Cross-chain buys run between Robinhood Chain and Base, or Robinhood Chain and Arbitrum.");
+  const who = addr(address, "wallet address");
+  const coin = addr(toToken, "coin address");
+  const amount = BigInt(amountWei || 0);
+  if (amount <= 0n) throw new HttpError(400, "Enter a positive amount.");
+  if (amount > parseUnits("2", 18)) throw new HttpError(400, "A cross-chain buy is limited to 2 ETH at a time.");
+  const slip = Math.min(0.1, Math.max(0.005, Number(slippage) || 0.03));
+  // the Gate on the destination chain, for about the ETH that arrives there (the bridge keeps a little on the way)
+  const ethIn = formatUnits((amount * 97n) / 100n, 18);
+  let g;
+  if (toChain === CHAIN_ID) g = await gateCheck({ tokenIn: "ETH", tokenOut: coin, amountIn: ethIn, slippageBps: Math.round(slip * 10000) });
+  else g = await (await import("./evmswap.mjs")).evmGate({ chain: CROSS_NET[toChain], tokenIn: "native", tokenOut: coin, amountIn: ethIn, slippageBps: Math.round(slip * 10000) });
+  const checks = (g.checks || []).map((c) => ({ key: c.key, status: c.status, label: c.label, detail: c.detail }));
+  const fail = checks.find((c) => c.status === "fail");
+  const warn = checks.find((c) => c.status === "warn");
+  const gate = { verdict: fail ? "failed" : warn ? "caution" : "passed", passed: checks.filter((c) => c.status === "pass").length, total: checks.filter((c) => c.status !== "skip").length,
+    why: fail ? `${fail.label}: ${fail.detail}` : warn ? `${warn.label}: ${warn.detail}` : null, checks };
+  if (fail || !g.pass) throw new HttpError(409, `Troya Gate stopped this buy on ${LIFI_CHAINS[toChain]}: ${gate.why || "a check failed"}`, { gate });
+  const q = await lifi(`/quote?fromChain=${fromChain}&toChain=${toChain}&fromToken=${ZERO}&toToken=${coin}&fromAddress=${who}&toAddress=${who}&fromAmount=${amount}&integrator=troya-agent&slippage=${slip}`);
+  const e = q.estimate || {}, tx = q.transactionRequest, a = q.action || {};
+  if (!tx?.to || !tx?.data) throw new HttpError(502, "The route came back without a transaction to sign.");
+  if (Number(tx.chainId || fromChain) !== fromChain) throw new HttpError(502, "The route asked for a transaction on another chain.");
+  if (Number(a.toChainId) !== toChain) throw new HttpError(502, `The route does not end on ${LIFI_CHAINS[toChain]}.`);
+  if (String(a.toToken?.address || "").toLowerCase() !== coin.toLowerCase()) throw new HttpError(502, "The route does not end in that coin.");
+  if (String(a.toAddress || who).toLowerCase() !== who.toLowerCase()) throw new HttpError(502, "The route would deliver to a different wallet.");
+  if (String(a.fromToken?.address || ZERO).toLowerCase() !== ZERO.toLowerCase()) throw new HttpError(502, "The route does not start from ETH.");
+  const usd = (l) => (l || []).reduce((s, x) => s + (Number(x?.amountUSD) || 0), 0);
+  return {
+    fromChain, toChain, fromName: LIFI_CHAINS[fromChain], toName: LIFI_CHAINS[toChain], tool: String(q.toolDetails?.name || q.tool || "unknown"),
+    fromAmount: String(amount), toAmount: String(e.toAmount || 0), toAmountMin: String(e.toAmountMin || 0),
+    fromSymbol: "ETH", toSymbol: a.toToken?.symbol || "?", toDecimals: Number(a.toToken?.decimals ?? 18), toToken: getAddress(coin), toAddress: who,
+    executionSec: Number(e.executionDuration || 0), feeUsd: usd(e.feeCosts), gasUsd: usd(e.gasCosts), fromAmountUsd: Number(e.fromAmountUSD || 0), toAmountUsd: Number(e.toAmountUSD || 0),
+    gate, slippage: slip,
+    tx: { to: tx.to, data: tx.data, value: String(BigInt(tx.value || 0)), gasLimit: String(BigInt(tx.gasLimit || 800000)), chainId: fromChain },
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* Pons launch                                                         */
 /* ------------------------------------------------------------------ */
@@ -1288,6 +1334,8 @@ export async function register(r, ctx) {
   r.get("/api/bridge/quote", ({ query }) => bridgeQuote({ fromChain: query.fromChain, toChain: query.toChain, address: query.address, amountWei: query.amountWei }), { perMin: 60 });
   // Fund Hyperliquid from your own wallet: always to the same address on Hyperliquid
   r.get("/api/bridge/hl-quote", ({ query }) => hlFundQuote({ address: query.address, amountWei: query.amountWei }), { perMin: 60 });
+  // one balance, every chain: ETH on Robinhood Chain buys a Base or Arbitrum coin (or the other way), signed once on the source chain
+  r.get("/api/bridge/cross-buy", ({ query }) => crossBuyQuote({ fromChain: query.fromChain, toChain: query.toChain, toToken: query.toToken, address: query.address, amountWei: query.amountWei, slippage: query.slippage }), { weight: 3, perMin: 30 });
   r.get("/api/bridge/status", async ({ query }) => {
     if (!/^0x[0-9a-fA-F]{64}$/.test(query.txHash || "")) throw new HttpError(400, "Bad transaction hash.");
     const st = await lifi(`/status?txHash=${query.txHash}&fromChain=${Number(query.fromChain)}&toChain=${Number(query.toChain || CHAIN_ID)}`);

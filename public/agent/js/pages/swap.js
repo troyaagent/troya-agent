@@ -4,7 +4,7 @@
 import { h, clear, pageHead, seg, icon, modal, review, toast, tokenIcon, chainLogo, venueLogo, padLogo, tiny, num, amount, price, short, useCss, debounce, infoTip } from "../ui.js";
 import { wallet, onWallet, openConnect, CHAINS } from "../wallet.js";
 import { api } from "../api.js";
-import { ETH, isNative, balanceOf, toRaw, fromRaw, inputNum, rawInput, sendTx, waitReceipt, errText, journal } from "../chain.js";
+import { ETH, isNative, balanceOf, toRaw, fromRaw, inputNum, rawInput, sendTx, waitReceipt, errText, journal, addTransfer, updateTransfer } from "../chain.js";
 import { sol, onSol, connectSol, restoreSol, signAndSendSol, solWallets } from "../solana.js";
 
 const SLIPS = [{ value: 100, label: "1%" }, { value: 300, label: "3%" }, { value: 500, label: "5%" }];
@@ -129,8 +129,161 @@ export async function mount(view, ctx) {
   });
 
   function render() {
-    clear(body, card, note);
+    clear(body, card, xcBox, note);
     paint();
+  }
+
+  /* ---------- one balance, every chain: buy this coin with ETH that sits on another chain, one signature there ----------
+     Robinhood coin: pay from Base or Arbitrum. Base or Arbitrum coin: pay with ETH on Robinhood Chain. LI.FI bridges and
+     buys for exactly this amount; the server runs this chain's Troya Gate on the coin first and refuses a route if it fails. */
+  const XC_SRC = { robinhood: [{ key: "base", id: 8453, name: "Base" }, { key: "arbitrum", id: 42161, name: "Arbitrum" }], base: [{ key: "robinhood", id: 4663, name: "Robinhood Chain" }], arbitrum: [{ key: "robinhood", id: 4663, name: "Robinhood Chain" }] };
+  const XC_GAS = 3n * 10n ** 14n; // 0.0003 ETH left on the source chain for the transaction's own gas
+  const xc = { open: false, src: null, amount: "", bal: null, q: null, qAt: 0, err: null, gate: null, loading: false, seq: 0, busy: false, key: "", status: null };
+  const xcBox = h("section", { class: "panel sw-xc", hidden: true });
+  const xcToggle = h("button", { class: "sw-xc-t", type: "button", "aria-expanded": "false", onclick: () => { xc.open = !xc.open; xcToggle.setAttribute("aria-expanded", String(xc.open)); xcBody.hidden = !xc.open; if (xc.open) { xcBal(); xcQuote(); } xcPaint(); } });
+  const xcSrcRow = h("div", { class: "sw-xc-src" });
+  const xcInput = h("input", { class: "sw-xc-in", inputmode: "decimal", placeholder: "0.0", autocomplete: "off", spellcheck: "false", "aria-label": "ETH to pay on the other chain" });
+  const xcBalBtn = h("button", { class: "sw-bal", type: "button", onclick: () => xcMax() });
+  const xcUnit = h("span", { class: "sw-xc-unit" });
+  const xcOut = h("div", { class: "sw-xc-out" });
+  const xcBody = h("div", { class: "sw-xc-b", hidden: true }, xcSrcRow,
+    h("div", { class: "sw-leg sw-xc-leg" }, h("div", { class: "sw-leg-top" }, h("span", {}, "You pay"), xcBalBtn), h("div", { class: "sw-leg-main" }, xcInput, xcUnit)), xcOut);
+  xcInput.addEventListener("input", () => {
+    const v = xcInput.value.replace(/,/g, ".").replace(/[^\d.]/g, "");
+    const fixed = v.split(".").length > 2 ? v.slice(0, v.lastIndexOf(".")) : v;
+    if (fixed !== xcInput.value) xcInput.value = fixed;
+    xc.amount = fixed; xc.q = null; xc.err = null; xc.gate = null; xc.seq++;
+    xcPaint(); xcQuote();
+  });
+  const xcSrcs = () => XC_SRC[st.chain] || [];
+  const xcSrc = () => xcSrcs().find((x) => x.key === xc.src) || xcSrcs()[0];
+  const xcDest = () => ({ key: st.chain, id: CHAINS[st.chain]?.id, name: st.chain === "robinhood" ? "Robinhood Chain" : CHAINS[st.chain]?.name || st.chain });
+  const xcCoin = () => (!isSolNet() && XC_SRC[st.chain] && st.buy && !isNative(st.buy) && /^0x[0-9a-fA-F]{40}$/.test(st.buy.address || "") && isNative(st.sell) ? st.buy : null);
+  function syncXc() {
+    const coin = xcCoin();
+    xcBox.hidden = !coin;
+    if (!coin) return;
+    const key = `${st.chain}:${coin.address.toLowerCase()}`;
+    if (key === xc.key) return;
+    Object.assign(xc, { key, src: xcSrcs()[0].key, q: null, err: null, gate: null, bal: null, status: null }); xc.seq++;
+    const srcs = xcSrcs();
+    clear(xcToggle, h("span", { class: "sw-xc-logos" }, srcs.map((x) => chainLogo(x.key, 16))),
+      h("span", { class: "sw-xc-tt" }, h("b", {}, srcs.length > 1 ? "Pay from Base or Arbitrum" : "Pay with ETH on Robinhood Chain"), h("small", {}, `$${coin.symbol} lands on ${xcDest().name}. One signature, no manual bridge.`)),
+      icon("arrowRight", "chev"));
+    clear(xcBox, xcToggle, xcBody);
+    if (xc.open) { xcBal(); xcQuote(); }
+    xcPaint();
+  }
+  async function xcBal() {
+    xc.bal = null;
+    if (!wallet.address || !xcCoin()) return;
+    const s = xcSrc(), k = xc.key;
+    try { const b = await balanceOf(wallet.address, ETH, s.key); if (k === xc.key && s.key === xcSrc().key) xc.bal = b; } catch {}
+    if (alive) xcPaint();
+  }
+  function xcMax() {
+    if (!xc.bal) return;
+    const raw = xc.bal.raw > XC_GAS ? xc.bal.raw - XC_GAS : 0n;
+    xcInput.value = rawInput(raw, 18, 6);
+    xcInput.dispatchEvent(new Event("input"));
+  }
+  const xcQuote = debounce(async () => {
+    const coin = xcCoin(), raw = toRaw(xc.amount, 18);
+    if (!coin || !xc.open || !raw || raw <= 0n || !wallet.address) { xc.loading = false; xcPaint(); return; }
+    const seq = ++xc.seq, s = xcSrc(), d = xcDest();
+    xc.loading = true; xc.err = null; xc.gate = null; xcPaint();
+    try {
+      const q = await api.get(`bridge/cross-buy?${new URLSearchParams({ fromChain: String(s.id), toChain: String(d.id), toToken: coin.address, address: wallet.address, amountWei: raw.toString(), slippage: String(Math.max(st.slip, 300) / 10000) })}`);
+      if (seq !== xc.seq || !alive) return;
+      xc.q = q; xc.qAt = Date.now(); xc.gate = q.gate;
+    } catch (e) { if (seq === xc.seq) { xc.err = e.message; xc.gate = e?.data?.gate || null; } }
+    if (seq === xc.seq && alive) { xc.loading = false; xcPaint(); }
+  }, 600);
+  function xcPaint() {
+    if (xcBox.hidden || !xc.open) return;
+    const coin = xcCoin(), s = xcSrc(), d = xcDest(), q = xc.q, srcs = xcSrcs();
+    if (!coin) return;
+    clear(xcSrcRow, srcs.length > 1 ? h("div", { class: "seg sm sw-xc-seg", role: "group", "aria-label": "Pay from" }, srcs.map((x) => h("button", { type: "button", "aria-pressed": String(x.key === s.key),
+      onclick: () => { if (x.key === xc.src) return; xc.src = x.key; xc.q = null; xc.err = null; xc.gate = null; xc.seq++; xcBal(); xcQuote(); xcPaint(); } }, chainLogo(x.key, 14), x.name))) : null);
+    clear(xcUnit, chainLogo(s.key, 16), h("b", {}, "ETH"), h("small", { class: "muted" }, `on ${s.name}`));
+    if (wallet.address && xc.bal) { clear(xcBalBtn, `Balance ${amount(xc.bal.amount)} ETH`); xcBalBtn.disabled = false; }
+    else { clear(xcBalBtn, wallet.address ? "Balance …" : ""); xcBalBtn.disabled = true; }
+    const g = xc.gate;
+    const gateRow = g ? h("div", {}, h("span", {}, `Troya Gate on ${d.name}`), h("span", { class: g.verdict === "failed" ? "down" : g.verdict === "caution" ? "warn-t" : "up" }, `${g.verdict === "failed" ? "Blocked" : g.verdict === "caution" ? "Passed with notes" : "Passed"} · ${g.passed}/${g.total}`)) : null;
+    const rows = q ? h("div", { class: "rows sw-rows" },
+      h("div", {}, h("span", {}, "You get (est.)"), h("span", {}, `${amount(Number(fromRaw(q.toAmount, q.toDecimals)))} ${q.toSymbol}`)),
+      h("div", {}, h("span", {}, "Minimum"), h("span", {}, `${amount(Number(fromRaw(q.toAmountMin, q.toDecimals)))} ${q.toSymbol}`)),
+      h("div", {}, h("span", {}, "Route"), h("span", {}, `${q.tool} via LI.FI`)),
+      h("div", {}, h("span", {}, "Time"), h("span", {}, q.executionSec ? `about ${q.executionSec < 90 ? `${Math.max(1, Math.round(q.executionSec))} s` : `${Math.round(q.executionSec / 60)} min`}` : "a few minutes")),
+      h("div", {}, h("span", {}, "Route fees"), h("span", {}, `$${num(q.feeUsd + q.gasUsd, 2)}`)),
+      gateRow,
+      h("div", {}, h("span", {}, "Troya fee"), h("span", {}, "None"))) : g ? h("div", { class: "rows sw-rows" }, gateRow) : null;
+    const notes = [];
+    if (xc.err) notes.push(h("div", { class: "alert error" }, xc.err));
+    else if (g?.verdict === "caution" && g.why) notes.push(h("div", { class: "alert warn" }, g.why));
+    const raw = toRaw(xc.amount, 18);
+    let label = `Buy $${coin.symbol} with ETH on ${s.name}`, disabled = false;
+    if (!wallet.address) label = "Connect wallet";
+    else if (!raw || raw <= 0n) { label = "Enter an amount"; disabled = true; }
+    else if (xc.bal && raw + XC_GAS > xc.bal.raw) { label = `Not enough ETH on ${s.name}`; disabled = true; }
+    else if (xc.loading) { label = `Checking $${coin.symbol} and finding a route…`; disabled = true; }
+    else if (!q) { label = xc.err ? (g?.verdict === "failed" ? "Blocked by Troya Gate" : "No route") : "Finding a route…"; disabled = true; }
+    if (xc.busy) { label = xc.busy; disabled = true; }
+    const btnX = h("button", { class: "btn primary", type: "button", disabled, onclick: () => xcAct() }, label);
+    clear(xcOut, rows, ...notes, btnX, xc.status,
+      h("p", { class: "fine muted sw-xc-fine" }, `One transaction on ${s.name}, signed in your wallet. LI.FI moves the ETH and buys $${coin.symbol} on ${d.name} for this amount only, delivered to your same address. Troya adds no fee.`));
+  }
+  async function xcAct() {
+    if (!wallet.address) { await openConnect(); xcBal(); xcQuote(); return; }
+    const coin = xcCoin(), s = xcSrc(), d = xcDest(), raw = toRaw(xc.amount, 18);
+    if (!coin || !raw || raw <= 0n || !xc.q) return;
+    try {
+      // a quote older than 45 s is fetched again: the Gate and the route are checked once more on the coin as it is now
+      if (Date.now() - xc.qAt > 45_000) {
+        xc.busy = "Running Troya Gate again…"; xcPaint();
+        const q2 = await api.get(`bridge/cross-buy?${new URLSearchParams({ fromChain: String(s.id), toChain: String(d.id), toToken: coin.address, address: wallet.address, amountWei: raw.toString(), slippage: String(Math.max(st.slip, 300) / 10000) })}`);
+        xc.q = q2; xc.qAt = Date.now(); xc.gate = q2.gate; xc.busy = false; xcPaint();
+      }
+      const q = xc.q, amt = fromRaw(raw), got = Number(fromRaw(q.toAmount, q.toDecimals)), min = Number(fromRaw(q.toAmountMin, q.toDecimals));
+      const ok = await review({ title: "Review cross-chain buy", summary: `${tiny(amt)} ETH on ${s.name} → about ${amount(got)} ${q.toSymbol} on ${d.name}`, confirmLabel: `Buy in wallet`,
+        rows: [["You pay", `${tiny(amt)} ETH on ${s.name}`], ["You receive (est.)", `${amount(got)} ${q.toSymbol} on ${d.name}`], ["Minimum", `${amount(min)} ${q.toSymbol}`], ["Troya Gate", `${q.gate.verdict === "caution" ? "Passed with notes" : "Passed"} · ${q.gate.passed}/${q.gate.total} on ${d.name}`],
+          ["Route", `${q.tool} via LI.FI`], ["Time", q.executionSec ? `about ${Math.max(1, Math.round(q.executionSec))} s` : "a few minutes"], ["Route fees", `$${num(q.feeUsd + q.gasUsd, 2)}`], ["Recipient", `${short(wallet.address)} (you) on ${d.name}`], ["Contract", short(q.tx.to)]],
+        warn: `Sent through a third-party route (LI.FI${q.tool ? `, ${q.tool}` : ""}): Troya cannot reverse it once it is sent.${q.gate.verdict === "caution" && q.gate.why ? ` Gate note: ${q.gate.why}` : ""}` });
+      if (!ok) return;
+      xc.busy = `Confirm in your wallet on ${s.name}…`; xcPaint();
+      const hash = await sendTx(s.key, { to: q.tx.to, data: q.tx.data, value: q.tx.value, gasLimit: (BigInt(q.tx.gasLimit) * 13n) / 10n });
+      addTransfer({ kind: "lifi", hash, amount: amt, sym: "ETH", from: s.key, fromId: s.id, to: d.key, toId: d.id, at: Date.now(), status: "sent", address: wallet.address, buy: { token: q.toToken, symbol: q.toSymbol } });
+      journal({ kind: "bridge", direction: "cross-buy", chain: s.key, hash, amount: amt, route: q.tool, tokenOut: q.toToken, rationale: `Cross-chain buy of $${q.toSymbol} on ${d.name} with ETH on ${s.name}, from the Swap page` });
+      toast(`Sent. $${q.toSymbol} usually lands on ${d.name} within a minute.`, "ok", 6000);
+      xc.amount = ""; xcInput.value = ""; xc.q = null; xc.gate = null; xc.busy = false;
+      xcTrack(hash, s, d, q.toSymbol);
+    } catch (e) {
+      toast(errText(e), "error", 6000);
+    } finally {
+      xc.busy = false;
+      if (alive) { xcPaint(); xcBal(); }
+    }
+  }
+  async function xcTrack(hash, s, d, sym) {
+    const line = (cls, ...kids) => { xc.status = h("div", { class: `alert ${cls} sw-xc-st` }, ...kids); xcPaint(); };
+    const link = h("a", { class: "mono link", href: `${CHAINS[s.key].explorer}/tx/${hash}`, target: "_blank", rel: "noopener" }, short(hash, 6));
+    line("", `Sent on ${s.name} · `, link, " · waiting for it to confirm…");
+    const rc = await waitReceipt(s.key, hash, { timeoutMs: 240_000 });
+    if (!rc) return line("warn", `Still waiting for ${s.name}. It is not lost: keep the hash `, link, ". The Bridge page tracks it too.");
+    updateTransfer(hash, { status: rc.status === 1 ? "confirmed" : "failed" });
+    if (rc.status !== 1) return line("error", "The transaction reverted on ", s.name, ". Only the network fee was spent.");
+    line("", `Confirmed on ${s.name} · `, link, ` · buying $${sym} on ${d.name}…`);
+    for (let i = 0; i < 120 && alive; i++) {
+      const r = await api.get(`bridge/status?${new URLSearchParams({ txHash: hash, fromChain: String(s.id), toChain: String(d.id) })}`).catch(() => null);
+      if (r?.status === "DONE") {
+        updateTransfer(hash, { status: "done" });
+        toast(`$${sym} is in your wallet on ${d.name}`, "ok", 6000);
+        if (st.chain === d.key) refreshBal();
+        return line("ok", icon("check"), ` Done: $${sym} is in your wallet on ${d.name} · `, link);
+      }
+      if (r?.status === "FAILED") { updateTransfer(hash, { status: "failed" }); return line("error", `The route failed after it left ${s.name}. LI.FI refunds to your wallet; check the hash `, link, "."); }
+      await new Promise((res) => setTimeout(res, 5000));
+    }
   }
   // a long quote shrinks to fit its box (down to 20px) instead of being cut mid-number
   function fitOut() {
@@ -190,6 +343,7 @@ export async function mount(view, ctx) {
     paintGate();
     paintRoute();
     syncChart();
+    syncXc();
     // button state
     const amt = toRaw(st.amount, st.sell?.decimals ?? 18);
     let label = "Review swap", disabled = false;

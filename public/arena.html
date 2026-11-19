@@ -151,7 +151,9 @@ async function load() {
   const rows = (d.recent || []).slice(0, 30);
   $("[data-ar-trades]").innerHTML = `<div class="ar-tr"><span>Type</span><span>Trader</span><span>Coin</span><span>Result</span><span>When</span></div>` + (rows.length ? rows.map((p) => {
     const r = p.status === "open" ? (p.valueEth != null ? p.valueEth - p.amountEth : null) : p.pnlEth;
-    const tx = p.tx ? ` <a href="https://robinhoodchain.blockscout.com/tx/${esc(p.tx)}" target="_blank" rel="noopener">tx</a>` : "";
+    // proof on every row: live trades link their transactions, every trade links its signed Seal receipt
+    const L = (href, t) => ` <a href="${href}" target="_blank" rel="noopener">${t}</a>`;
+    const tx = (p.txBuy ? L(`https://robinhoodchain.blockscout.com/tx/${esc(p.txBuy)}`, "buy tx") : "") + (p.txSell ? L(`https://robinhoodchain.blockscout.com/tx/${esc(p.txSell)}`, "sell tx") : "") + (!p.txBuy && !p.txSell && p.tx ? L(`https://robinhoodchain.blockscout.com/tx/${esc(p.tx)}`, "tx") : "") + (p.seal ? L(`/api/seal/r/${esc(p.seal)}`, "receipt") : "");
     return `<div class="ar-tr"><span><span class="ar-tag${p.mode === "live" ? " live" : ""}">${p.mode === "live" ? "LIVE" : "PAPER"}</span></span><span>${short(p.agent)}</span><span>$${esc(p.symbol)} · ${p.status === "open" ? "open" : esc(p.reason || "closed")}${tx}</span><span class="${cls(r)}">${r == null ? "open" : eth(r, 5)}</span><span>${ago(p.closedAt || p.openedAt)}</span></div>`;
   }).join("") : '<div class="ar-tr"><span></span><span></span><span>No trades yet</span><span></span><span></span></div>');
 }

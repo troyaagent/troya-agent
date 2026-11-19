@@ -41,6 +41,8 @@ async function facts(token) {
     (ring.reasons || []).slice(0, 4).forEach((r, i) => add(`R${i + 1}`, `Ring Radar: ${r}`));
   }
   if (q) add("Q0", `Quantum-Ready: ${q.summary}`);
+  const app = await import("./radar.mjs").then((m) => m.appStatus(t)).catch(() => null);
+  if (app?.listed) add("P0", `Robinhood app: this coin is ${app.tradable ? "tradable in the Robinhood app" : "shown in the Robinhood app with a price, not tradable there"}`);
   if (sm?.summary) add("M0", `Smart money: ${sm.summary}${sm.baseRate != null ? ` (base rate of early buyers: ${Math.round(sm.baseRate * 100)}% of graded coins reached 2x)` : ""}`);
   const st = rec?.stats;
   if (st?.graded) {

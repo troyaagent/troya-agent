@@ -55,7 +55,7 @@ function athenaBox(addr) {
   const dl = h("dl", { class: "dk-assay-facts" });
   const rows = {};
   const row = (k, label) => { const dd = h("dd", {}, h("span", { class: "fine" }, "reading…")); rows[k] = dd; dl.append(h("dt", {}, label), dd); };
-  row("ring", "Ring Radar"); row("oath", "Oath"); row("smart", "Smart money"); row("quantum", "Quantum-Ready"); row("aegis", "Aegis");
+  row("ring", "Ring Radar"); row("app", "Robinhood app"); row("oath", "Oath"); row("smart", "Smart money"); row("quantum", "Quantum-Ready"); row("aegis", "Aegis");
   const set = (k, ...nodes) => { if (rows[k]) clear(rows[k], ...nodes); };
   const council = h("div", { class: "dk-council" });
   const councilBtn = h("button", { class: "btn sm", type: "button" }, icon("spark"), "Ask the Council");
@@ -77,6 +77,7 @@ function athenaBox(addr) {
   const get = (u) => api.get(u).catch((e) => ({ error: e.message }));
   setTimeout(async () => {
     get(`/api/ring/${addr}`).then((r) => set("ring", r.error ? h("span", { class: "fine" }, "unavailable") : r.verdict === "unknown" ? h("span", { class: "fine" }, "not a recent Pons launch") : h("span", { class: `af-${r.verdict === "red" ? "red" : r.verdict === "amber" ? "amber" : "clear"}` }, h("b", {}, r.verdict), ` · ${(r.reasons || []).slice(0, 2).join("; ")}`)));
+    get(`/api/radar/app/${addr}`).then((x) => set("app", h("span", {}, x.error ? "unavailable" : x.listed ? h("b", {}, x.tradable ? "tradable in the Robinhood app" : "shown in the Robinhood app (price only)") : "not in the Robinhood app")));
     get(`/api/oath/${addr}`).then((o) => set("oath", o.status === "none" || o.error ? h("span", { class: "fine" }, "no Oath taken · ", h("a", { class: "link", href: "/oath" }, "devs sign here")) : h("span", {}, h("b", {}, o.status === "kept" ? "kept" : "broken"), ` · max ${o.pledge.maxSellPctPerDay}% a day${o.pledge.feeLockDays ? `, fees locked ${o.pledge.feeLockDays}d` : ""}${o.breaches?.length ? ` · ${o.breaches.length} breach${o.breaches.length > 1 ? "es" : ""}` : ""}`)));
     get(`/api/radar/smart/${addr}`).then((s) => set("smart", h("span", {}, s.summary || s.note || "unavailable")));
     get(`/api/quantum/token/${addr}`).then((q) => set("quantum", h("span", {}, q.summary || "unavailable")));

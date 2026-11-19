@@ -56,15 +56,16 @@ async function getLogs(tokens, from, to) {
     for (let x = a; x <= b; x += step) {
       const y = Math.min(b, x + step - 1);
       const q = [{ address: tokens, topics: [T_TRANSFER], fromBlock: hex(x), toBlock: hex(y) }];
-      let r = null;
-      if (step > 3_000) r = await rpc("robinhood", "eth_getLogs", q, { timeoutMs: 20_000, only: CHAINS.robinhood.wide }).catch(() => null);
-      else r = await rpc("robinhood", "eth_getLogs", q, { timeoutMs: 15_000 }).catch(() => null);
+      // the paid Chainstack node first (up to 10,000 blocks a call); the free official RPC only when it fails, so a burst
+      // of coin loads never runs the official RPC into its rate limit (20 Nov: one 429 on the flywheel scan)
+      let r = await rpc("robinhood", "eth_getLogs", q, { timeoutMs: 15_000 }).catch(() => null);
+      if (!Array.isArray(r) && step > 3_000) r = await rpc("robinhood", "eth_getLogs", q, { timeoutMs: 20_000, only: CHAINS.robinhood.wide }).catch(() => null);
       if (Array.isArray(r)) out.push(...r);
       else if (step > 500) await piece(x, y, step > 3_000 ? 2_500 : Math.floor(step / 5));
       else throw new Error("could not read transfers");
     }
   };
-  await piece(from, to, to - from > 3_000 ? 25_000 : 2_500);
+  await piece(from, to, to - from > 3_000 ? 9_000 : 2_500);
   return out;
 }
 async function load(st) {

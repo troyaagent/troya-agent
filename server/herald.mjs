@@ -223,6 +223,18 @@ const pubBounty = (b, subs) => ({ id: b.id, kind: b.kind, kindLabel: KINDS[b.kin
   submissions: subs.filter((s) => s.bounty === b.id).length });
 const pubSub = (s, bounties) => ({ id: s.id, bounty: s.bounty, bountyTitle: bounties.find((b) => b.id === s.bounty)?.title || s.bounty, link: s.link, note: s.note, status: s.status, at: s.at, adminNote: s.adminNote || "" });
 
+// For the automatic weekly payouts (server/payouts.mjs): last week's Cup with each strategy's owner wallet (one entry per
+// wallet: its best strategy), and every referrer's rewards so far with the wallet they go to. Read-only, nothing is sent.
+export async function payoutInputs() {
+  const prev = await cup(1, null);
+  const base = cupMemo.get(prev.season);
+  const seen = new Set(), cupRows = [];
+  for (const r of base?.ranked || []) { const o = lc(r.owner); if (!o || seen.has(o)) continue; seen.add(o); cupRows.push({ owner: o, strategy: r.id, pnlPct: r.pnlPct, closed: r.closed }); }
+  const act = await activity();
+  const refs = [...act.by.entries()].map(([by, s]) => ({ referrer: lc(by), ...rewards(s), referred: s.referred, active: s.active }));
+  return { season: prev.season, start: prev.start, end: prev.end, cup: cupRows, referrals: refs, refBps: refBps(), refDays: refDays(), capPct: feeCapPct(), admins: admins() };
+}
+
 export async function register(r, ctx) {
   store = ctx.store;
 

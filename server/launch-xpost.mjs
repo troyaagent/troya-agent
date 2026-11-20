@@ -6,7 +6,8 @@
 // Rails:
 //   · once per coin (data/launch-xpost.json keeps what was posted or skipped and why)
 //   · the team's own test coins are skipped (a "test" name or ticker, or a creator in X_ADMINS / TROYA_ADMINS / the test wallet)
-//   · it waits for the Gate verdict (a few minutes) and skips a coin the Gate fails or warns on
+//   · it waits for the Gate verdict (a few minutes) and skips a coin the Gate fails or warns on ("failed", "caution");
+//     "passed" and "untested" coins are posted, a coin still "launching" after 45 minutes is skipped
 //   · posted a minute or so after launch, once the Gate has a verdict (checked every minute)
 //   · at most LAUNCH_XPOST_DAY posts a UTC day (default 24), at least LAUNCH_XPOST_GAP_MIN minutes apart (default 3),
 //     oldest first, and a coin older than 24 hours is dropped instead of posted late
@@ -18,6 +19,9 @@
 const STATE = "launch-xpost.json";
 const TEST_WALLETS = ["0x12a05719851c8375342de65c9105329c81f57054"];   // the team's test wallet (Robinhood Chain)
 const MAX_AGE = 24 * 3600_000, MIN_AGE = 60_000, GATE_WAIT = 45 * 60_000;
+// Gate verdicts that keep a coin off X, and the ones that may be posted (an untested coin says its sell test is still to come)
+const GATE_SKIP = new Set(["failed", "caution", "fail", "warn", "danger"]);
+const GATE_POST = new Set(["passed", "untested", "nobuys"]);
 const lc = (s) => String(s || "").toLowerCase();
 const admins = () => String(`${process.env.X_ADMINS || ""},${process.env.TROYA_ADMINS || ""}`).split(",").map((a) => lc(a.trim())).filter((a) => /^0x[0-9a-f]{40}$/.test(a));
 const team = () => new Set([...TEST_WALLETS, ...admins()]);
@@ -40,10 +44,14 @@ export function verdictFor(c, rec, { now = Date.now(), teamSet = team() } = {}) 
   if (teamSet.has(lc(c.creator || rec?.owner))) return "launched by a team wallet";
   if (!born || now - born > MAX_AGE) return "older than 24 hours";
   if (now - born < MIN_AGE) return "wait";
+  // the board's words (bornGate in launch.mjs, from sentry.verdict): "passed", "caution", "failed", "untested" (sentry's
+  // "nobuys": the sell test waits for the first buys) and "launching" (the snipe tax still runs, checked again in 30 s).
+  // The older words fail/warn/danger are still skipped, so a caller that sends them can never get a coin posted.
   const v = c.gate?.verdict;
-  if (v === "fail" || v === "warn" || v === "danger") return `Troya Gate: ${v}${c.gate?.why ? ` (${c.gate.why})` : ""}`;
-  if (v !== "pass" && v !== "untested") return now - born > GATE_WAIT ? "no Gate verdict in time" : "wait";
-  return null;
+  if (GATE_SKIP.has(v)) return `Troya Gate: ${v}${c.gate?.why ? ` (${c.gate.why})` : ""}`;
+  if (GATE_POST.has(v)) return null;
+  // launching, no verdict yet, or a word this file does not know: wait for a real verdict, and give up after GATE_WAIT
+  return now - born > GATE_WAIT ? "no Gate verdict in time" : "wait";
 }
 
 const tweetIdOf = (rec) => { const m = /^x:(\d{5,25})$/.exec(String(rec?.ref || "")); return m ? m[1] : null; };
@@ -55,7 +63,7 @@ export function textFor(c, rec, handle) {
   const by = handle ? `by @${handle} ` : "";
   const how = c.source === "x" ? `Launched ${by}from a post on X.` : c.source === "tg" ? `Launched ${by}from Telegram.` : `Launched ${by}on troya.codes.`;
   const g = c.gate || {};
-  const gate = g.verdict === "pass" ? "Troya Gate: passed at birth." : `Troya Gate: ${g.passed ?? "?"} of ${g.total ?? "?"} checks passed, the sell test runs after the first buys.`;
+  const gate = g.verdict === "passed" ? "Troya Gate: passed at birth." : `Troya Gate: ${g.passed ?? "?"} of ${g.total ?? "?"} checks passed, the sell test runs after the first buys.`;
   const quote = c.source === "x" && tweetIdOf(rec) ? `\n\nhttps://x.com/i/status/${tweetIdOf(rec)}` : "";
   return `Born through Troya: ${title}\n${how}\n\nCA ${c.token}\n${gate}\n\nTrade it: https://troya.codes/agent#/token/${lc(c.token)}${quote}`;
 }

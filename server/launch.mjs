@@ -720,6 +720,24 @@ async function dexOrders(token) {
   dsOrders.set(k, { at: Date.now(), v });
   return v;
 }
+// The team's own test coins stay on the board (owner, 18 Nov: every coin born through Troya visible), marked teamTest so the
+// board labels them and offers no Buy: $TGtestTROYA carries the on-chain name "Troya Agent", the real $TROYA's. The rule is
+// launch-xpost's verdictFor, which keeps the same coins off X: a "test" name or ticker (the record's or the chain's), a
+// creator in TEST_WALLETS, X_ADMINS or TROYA_ADMINS, or a record flagged teamTest. $TROYA itself never is one, although
+// its creator is an admin wallet.
+export const TEST_WALLETS = ["0x12a05719851c8375342de65c9105329c81f57054"];   // the team's test wallet (Robinhood Chain)
+const teamWallets = () => new Set([...TEST_WALLETS,
+  ...String(`${process.env.X_ADMINS || ""},${process.env.TROYA_ADMINS || ""}`).split(",").map((a) => lc(a.trim())).filter((a) => /^0x[0-9a-f]{40}$/.test(a))]);
+/** Why a launch record (or a board row) is a team test coin: "flag", "name" or "wallet"; null when it is a real coin. */
+export function teamTestWhy(rec, { teamSet = teamWallets(), names = [] } = {}) {
+  if (!rec || rec.source === "origin") return null;
+  if (rec.teamTest) return "flag";
+  if ([rec.symbol, rec.name, ...names].some((s) => /test/i.test(String(s || "")))) return "name";
+  if (teamSet.has(lc(rec.owner || rec.creator))) return "wallet";
+  return null;
+}
+export const isTeamTest = (rec, opts) => !!teamTestWhy(rec, opts);
+
 export const ALMOST_PCT = 50;                  // a curve at least this full counts as almost bonded
 let boardMemo = null;
 async function bornRecords() {
@@ -748,6 +766,7 @@ async function boardItem(rec, handles) {
     rec.source !== "origin" && rec.owner ? holderInfo(rec.owner).catch(() => null) : null, gmgnFlags(rec.token).catch(() => null), bornGateNow(rec.token, rec.at)]);
   const t = d?.token || {}, p = d?.pons || null;
   const graduated = !!p?.graduated || (rec.source === "origin" && !p);
+  const testWhy = teamTestWhy(rec, { names: [t.symbol, t.name] });
   return {
     token: getAddress(rec.token), name: t.name || rec.name || "", symbol: t.symbol || rec.symbol || "", image: t.image || t.logoUri || rec.logo || null,
     source: rec.source, at: rec.at || t.createdAt || null, creator: rec.owner ? getAddress(rec.owner) : null, 
@@ -762,6 +781,8 @@ async function boardItem(rec, handles) {
     socials: socialLinks(t),
     // the creator holds 1M $TROYA right now (main wallet + Agent Wallet)
     devHolder: !!hold?.holder, devTroya: hold ? Math.floor(hold.balance) : null,
+    // a team test coin: shown with a "Team test" tag and no Buy, below the real coins (isTeamTest above)
+    teamTest: !!testWhy, teamTestWhy: testWhy,
   };
 }
 // stale-while-revalidate: a visitor never waits for the on-chain reads (they took 5-75 s on a busy RPC); only the very first

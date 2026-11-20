@@ -3,7 +3,17 @@ import { h, clear, useCss, pageHead, seg, table, sparkline, pctEl, usd, tiny, co
 import { api, cached } from "../api.js";
 import { LAUNCHPADS, padName, tokenCell, priceCell, ethAmount, usdCell, mcapCell, ageText, updatedText, fmtFunding, fmtApr, perpPrice } from "../marketlib.js";
 // phones: price on top, market cap under it (instead of the ETH price), so the board stays three columns wide
-const priceMcCell = (t) => h("div", { class: "pcell" }, h("span", {}, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"), h("span", { class: "sub" }, t.mcapUsd > 0 ? `MC ${usd(t.mcapUsd, { compact: true })}` : "MC –"));
+const priceMcCell = (t) => h("div", { class: "pcell" }, h("span", {}, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"), h("span", { class: "sub" }, t.mcapUsd > 0 ? `MC ${usd(t.mcapUsd, { compact: true })}` : "MC –"), staleNote(t));
+// Liquidity is the money side of a coin's pools (ETH, USDG or stock tokens): what a seller can take out. The pool total
+// also counts the coin at the pool's own price (MOW: $18.6M on 0.81 ETH), so it only shows in the tooltip.
+const liqTip = (t) => (t.liquidityUsd != null ? (t.realLiquidityUsd != null ? `${usd(t.liquidityUsd, { compact: true })} incl. the coin side` : `Pool total ${usd(t.liquidityUsd, { compact: true })} incl. the coin side; the ETH or USDG side is not read yet`) : "");
+const liqCell = (t) => h("div", { class: "pcell", title: liqTip(t) }, h("span", {}, t.realLiquidityUsd != null ? usd(t.realLiquidityUsd, { compact: true }) : "–"));
+// a price the index has not refreshed for 15 minutes is dimmed and says how old it is (server clock: board.now)
+let boardNow = 0;
+const STALE_MS = 15 * 60_000;
+const ageOf = (t) => (t.priceAt ? (boardNow || Date.now()) - t.priceAt : 0);
+const ageWords = (ms) => (ms < 3600_000 ? `${Math.max(1, Math.round(ms / 60_000))} min` : `${Math.floor(ms / 3600_000)} h`);
+const staleNote = (t) => (ageOf(t) > STALE_MS ? h("span", { class: "sub warnc" }, `price ${ageWords(ageOf(t))} old`) : null);
 
 const PAGE = 50;
 const NARROW = matchMedia("(max-width: 720px)").matches;
@@ -44,7 +54,7 @@ export async function mount(view, { go, query }) {
 /* ---------------- Robinhood Chain ---------------- */
 function robinhoodTab(box, go, query) {
   const state = { q: query.q || "", launchpad: query.pad || "all", sort: (!query.cat || query.cat === "picks") ? "picks" : "volume", dir: "desc", offset: 0, showAll: false, cat: ["picks", "trending", "new", "bonding", "all"].includes(query.cat) ? query.cat : "picks" };
-  const CATS = [["picks", "Troya picks", "Picked by Troya from live data: a real pool, real buyers, holders spread out, volume the pool can carry and listed socials. A read of the data, not advice. Run the Gate before you buy."], ["trending", "Trending", "Real trading today: $1K+ volume and 20+ trades in 24 hours"], ["new", "New", "Born in the last 72 hours, off a bonding curve: just graduated, or launched straight into a pool"], ["bonding", "Bonding", "Still on a Pons bonding curve, before graduation"], ["all", "All", "Every coin Troya can route"]];
+  const CATS = [["picks", "Troya picks", "Picked by Troya from live data: at least $10K of real liquidity (the ETH, USDG or stock-token side of its pools), 40+ trades and $2K+ volume today, volume under 25 times that liquidity, the 10 largest wallets under 80% and not down 40% today; real buyers, spread-out holders and listed socials rank it higher. A read of the data, not advice. Run the Gate before you buy."], ["trending", "Trending", "Real trading today: $1K+ volume and 20+ trades in 24 hours"], ["new", "New", "Born in the last 72 hours, off a bonding curve: just graduated, or launched straight into a pool"], ["bonding", "Bonding", "Still on a Pons bonding curve, before graduation"], ["all", "All", "Every coin Troya can route"]];
   const catBar = h("div", { class: "mk2-cats", role: "tablist" });
   const catNote = h("p", { class: "fine muted mk2-catnote" });
   const paintCats = (counts) => {
@@ -69,11 +79,11 @@ function robinhoodTab(box, go, query) {
     cols: [
       { key: "rank", label: "#", render: (t, i) => h("span", { class: "rank" }, state.offset + i + 1), cls: "rank", hide: NARROW },
       { key: "token", label: "Token", align: "l", render: (t) => (state.cat === "picks" && t.pick?.why?.length ? h("div", { class: "mk2-pick" }, tokenCell(t, { flagUntradable: true }), h("p", { class: "mk2-why" }, t.pick.why.join(" · "))) : tokenCell(t, { flagUntradable: true })) },
-      { key: "price", label: NARROW ? "Price · MC" : "Price", sort: true, render: (t) => (NARROW ? priceMcCell(t) : priceCell(t.priceEth, t.priceUsd)) },
+      { key: "price", label: NARROW ? "Price · MC" : "Price", sort: true, render: (t) => { if (NARROW) return priceMcCell(t); const c = priceCell(t.priceEth, t.priceUsd), n = staleNote(t); if (n) c.append(n); return c; } },
       { key: "chart", label: NARROW ? "24h" : "24h chart", render: (t) => (NARROW ? h("div", { class: "mk-spark-c" }, sparkline(t.spark, { w: 56, h: 22 }), pctEl(t.change24h)) : sparkline(t.spark, { w: 96, h: 30 })), cls: "mk-spark" },
       { key: "change", label: "24h", sort: true, render: (t) => pctEl(t.change24h), hide: NARROW },
       { key: "volume", label: "24h volume", sort: true, render: (t) => usdCell(t.volume24hUsd, t.volume24hEth), hide: NARROW },
-      { key: "liquidity", label: "Liquidity", sort: true, render: (t) => usdCell(t.liquidityUsd, null), hide: NARROW },
+      { key: "liquidity", label: "Liquidity", sort: true, render: (t) => liqCell(t), hide: NARROW },
       { key: "mcap", label: "Mkt cap", sort: true, render: (t) => mcapCell(t), hide: NARROW },
       { key: "holders", label: "Holders", sort: true, render: (t) => (t.holders != null ? h("div", { class: "pcell" }, h("span", {}, compact(t.holders, 1).replace(/\.0(?=[KMB]$)/, "")), t.top10Pct != null ? h("span", { class: `sub ${t.top10Pct > 60 ? "warnc" : ""}`, title: "Share held by the 10 largest wallets" }, `top 10 ${t.top10Pct.toFixed(0)}%`) : null) : h("span", { class: "muted" }, "–")), hide: NARROW },
       { key: "txns", label: "Trades 24h", sort: true, render: (t) => (t.txns24h != null ? compact(t.txns24h, 1) : "–"), hide: NARROW },
@@ -85,7 +95,7 @@ function robinhoodTab(box, go, query) {
   const paintTop = (rows) => clear(topBox, rows.slice(0, 4).map((t, i) => h("a", { class: "mk2-card", href: `#/token/${t.address}` },
     h("div", { class: "mk2-c-h" }, tokenIcon({ ...t, chain: "robinhood" }), h("span", {}, h("b", {}, t.symbol), h("small", {}, i === 0 ? "Busiest today" : t.launchpad ? padName(t.launchpad) : "Robinhood Chain")), h("span", { class: "mk2-rank" }, `#${i + 1}`)),
     h("div", { class: "mk2-c-p" }, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"),
-    h("div", { class: "mk2-c-f" }, pctEl(t.change24h), h("span", {}, `vol ${t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : "–"}`), h("span", {}, `liq ${t.liquidityUsd != null ? usd(t.liquidityUsd, { compact: true }) : "–"}`)),
+    h("div", { class: "mk2-c-f" }, pctEl(t.change24h), h("span", {}, `vol ${t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : "–"}`), h("span", { title: liqTip(t) }, `liq ${t.realLiquidityUsd != null ? usd(t.realLiquidityUsd, { compact: true }) : "–"}`)),
     h("i", { class: "mk2-bar", style: { "--w": `${Math.min(100, Math.abs(t.change24h || 0))}%` }, "data-dir": (t.change24h || 0) >= 0 ? "up" : "down" }))));
   clear(box, topBox, catBar, catNote, h("div", { class: "mk-filters" }, search, chips), notice, h("div", { class: "panel mk-panel" }, tbl), pager, h("div", { class: "mk-sub" }, untradable), foot);
 
@@ -103,17 +113,24 @@ function robinhoodTab(box, go, query) {
       const named = state.q && !/0x[0-9a-fA-F]{40}/.test(state.q) && state.offset === 0 && state.launchpad === "all";
       const [d, s] = await Promise.all([api.get(`market/robinhood?${qs}`), named ? api.get(`search/coins?${new URLSearchParams({ q: state.q, limit: "20" })}`).catch(() => null) : null]);
       if (id !== reqId) return;
+      boardNow = d.now || 0;
       renderChips(d.counts);
       paintCats(d.catCounts);
       let rows = d.tokens || [];
       if (s?.coins?.length) {
         const by = new Map(rows.map((t) => [String(t.address).toLowerCase(), t]));
-        const first = s.coins.filter((c) => c.kind !== "major").map((c) => by.get(c.address) || { address: c.address, symbol: c.symbol, name: c.name, image: c.image, priceUsd: c.priceUsd, liquidityUsd: c.liquidityUsd, volume24hUsd: c.volume24hUsd, change24h: c.change24h, launchpad: c.launchpad, stock: c.kind === "stock", tradable: c.tradable });
+        const first = s.coins.filter((c) => c.kind !== "major").map((c) => by.get(c.address) || { address: c.address, symbol: c.symbol, name: c.name, image: c.image, priceUsd: c.priceUsd, liquidityUsd: c.liquidityUsd, realLiquidityUsd: c.realLiquidityUsd ?? null, volume24hUsd: c.volume24hUsd, change24h: c.change24h, launchpad: c.launchpad, stock: c.kind === "stock", tradable: c.tradable });
         const seen = new Set(first.map((t) => String(t.address).toLowerCase()));
         rows = [...first, ...rows.filter((t) => !seen.has(String(t.address).toLowerCase()))];
         d.total = Math.max(d.total || 0, rows.length);
       }
       tbl.setRows(rows);
+      // rows whose price is over 15 minutes old are dimmed (the price cell says how old); the table helper has no row class
+      tbl.querySelectorAll("tbody > tr").forEach((tr, i) => {
+        const t = rows[i], old = t && ageOf(t) > STALE_MS;
+        tr.style.opacity = old ? ".55" : "";
+        tr.title = old ? `This price is ${ageWords(ageOf(t))} old: no source has refreshed this coin since.` : "";
+      });
       if (!state.q && state.offset === 0 && state.launchpad === "all") {
         const top = state.cat === "all" && state.sort === "volume" && state.dir === "desc" ? d : await api.get("market/robinhood?cat=all&sort=volume&dir=desc&limit=12&tradable=1").catch(() => null);
         if (id !== reqId) return;
@@ -130,9 +147,11 @@ function robinhoodTab(box, go, query) {
         h("button", { class: "btn sm", type: "button", disabled: state.offset === 0, onclick: () => { state.offset = Math.max(0, state.offset - PAGE); load(); scrollTo(0, 0); } }, "Previous"),
         h("span", {}, `${from.toLocaleString()}–${to.toLocaleString()} of ${Number(d.total).toLocaleString()}`),
         h("button", { class: "btn sm", type: "button", disabled: to >= d.total, onclick: () => { state.offset += PAGE; load(); scrollTo(0, 0); } }, "Next"));
+      // how many coins carry a price read in the last 10 minutes (the old "updated just now" spoke for the board, not its rows)
+      const freshLine = d.fresh10 != null && d.freshOf ? ` · ${Number(d.fresh10).toLocaleString()} of ${Number(d.freshOf).toLocaleString()} updated in the last 10 min.` : ` · ${updatedText(d.updatedAt)}.`;
       clear(foot,
-        h("p", {}, state.q ? `${rows.length} result${rows.length === 1 ? "" : "s"} for "${state.q}"` : `${Number(d.counts?.all ?? d.total).toLocaleString()} coins on the board`, d.volume24hUsd ? ` · 24h volume across tracked pools ${usd(d.volume24hUsd, { compact: true })}` : "", ` · ${updatedText(d.updatedAt)}.`),
-        h("p", {}, "Pools and prices from GeckoTerminal, Pons curve state read on chain. Pools with almost no liquidity are left out, and volume that a pool's liquidity could not carry (wash trading) is not counted. Many coins copy popular symbols: check the address on robinhoodchain.blockscout.com before you buy."));
+        h("p", {}, state.q ? `${rows.length} result${rows.length === 1 ? "" : "s"} for "${state.q}"` : `${Number(d.counts?.all ?? d.total).toLocaleString()} coins on the board`, d.volume24hUsd ? ` · 24h volume across tracked pools ${usd(d.volume24hUsd, { compact: true })}` : "", freshLine),
+        h("p", {}, "Prices from GeckoTerminal pools; a coin not refreshed for 5 minutes takes DexScreener's price, and Pons coins are priced on chain (the curve's reserves, or the Uniswap v4 pool after graduation). Market cap is price times supply; for Pons coins the supply is read on chain, after burns. Liquidity is the ETH, USDG or stock-token side of a coin's pools, the money a seller can take out; the pool total, which also counts the coin at its own price, is in the tooltip. Pools under $500 are left out, and a pool's volume above 300 times its liquidity, or above $50K a trade, is not counted. Many coins copy popular symbols: check the address on robinhoodchain.blockscout.com before you buy."));
     } catch (e) {
       if (id !== reqId) return;
       tbl.setRows([]);

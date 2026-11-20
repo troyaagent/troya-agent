@@ -1,6 +1,7 @@
 // API router. Every module in MODULES exports `register(r, ctx)` and adds routes with r.get / r.post / r.del.
 // Routes are served under /api/* and mirrored under /agent/api/* (the public REST base).
 import { initStore } from "./store.mjs";
+import { interactive } from "./kyber.mjs";
 
 const MODULES = [
   "./market.mjs",      // Robinhood Chain board (GeckoTerminal + Pons), tokenized stocks, Hyperliquid markets, brief, signals
@@ -72,6 +73,11 @@ const MODULES = [
 
 const routes = [];
 const ctx = {};
+// A person is waiting on these answers (the Swap page and the app's quote, Gate and build calls, on Robinhood Chain, Base,
+// Arbitrum and Solana through ?chain=, and the cross-chain buy, which runs the destination chain's Gate), so their
+// KyberSwap calls take the priority lane: served before Sentry, Arena, Autopilot, Aegis and Gate API background work, and
+// failing fast to a fallback route instead of queueing behind it (kyber.mjs).
+const INTERACTIVE = new Set(["GET /api/swap/quote", "GET /api/swap/gate", "POST /api/swap/build", "GET /api/bridge/cross-buy"]);
 
 const r = {
   get: (path, fn, opts) => routes.push({ method: "GET", ...compile(path), fn, opts: opts || {} }),
@@ -170,7 +176,8 @@ export async function handleApi(req, res, url) {
   const params = Object.fromEntries(hit.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
   try {
     const body = method === "POST" || method === "DELETE" ? await readBody(req, hit.opts.maxBody) : {};
-    const out = await hit.fn({ req, res, url, params, query: Object.fromEntries(url.searchParams), body, ip, ctx });
+    const run = () => hit.fn({ req, res, url, params, query: Object.fromEntries(url.searchParams), body, ip, ctx });
+    const out = await (INTERACTIVE.has(`${hit.method} ${hit.path}`) ? interactive(run) : run());
     if (out === undefined) { if (!res.writableEnded) send(res, 204, {}); }
     else if (!res.headersSent) send(res, 200, out);
   } catch (e) {

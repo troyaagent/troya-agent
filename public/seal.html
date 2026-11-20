@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Troya Agent | Seal</title>
-<meta name="description" content="Every decision Troya makes gets a receipt signed twice, ECDSA and post-quantum ML-DSA, chained by hash and anchored on Robinhood Chain every day. Plus the properties of Troya's own contracts, proven for every input.">
+<meta name="description" content="Every Gate API check, Council verdict, red Aegis alert, Arena trade and Record call gets a receipt signed twice, ECDSA and post-quantum ML-DSA, chained by hash and anchored on Robinhood Chain every day. Plus 16 properties of Troya's three contracts, proven for every input.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Troya Agent">
 <meta property="og:title" content="Troya Agent | Seal">
-<meta property="og:description" content="Signed, chained receipts for every Troya decision, and contract properties proven for every input.">
+<meta property="og:description" content="Signed, chained receipts for every Gate API check, Council verdict, Aegis alert, Arena trade and Record call, and 16 contract properties proven for every input.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@Troyaagent">
 <link rel="canonical" href="https://troya.codes/seal">
@@ -48,24 +48,25 @@
 <main id="main">
   <section class="page-hero" aria-labelledby="ph">
     <canvas class="rain" data-rain aria-hidden="true"></canvas>
-    <span class="eyebrow"><i class="dot"></i>V7 · F35 Seal</span>
+    <span class="eyebrow"><i class="dot"></i>Proof · Seal</span>
     <h1 id="ph" class="words" data-words>Receipts, not promises</h1>
-    <p class="lead rv">Every decision Troya makes gets a receipt: each Gate check, each paid check over x402 or Virtuals, each call on The Record, and soon each Council verdict, Aegis exit and Arena trade. A receipt is signed twice, by the Troya attestor (ECDSA) and with a post-quantum ML-DSA-65 key, and chained to the one before it. Once a day the chain is anchored on Robinhood Chain, so a closed day cannot be rewritten, by Troya or anyone else.</p>
+    <p class="lead rv">Troya seals what it decides in public. Today that is every Gate API check (paid over x402 and Virtuals ACP too), Council verdict, red Aegis alert, Arena strategy and trade, and Sentry call on The Record, plus Ring Radar flags, Watchfire fires, Oaths taken and broken, War Table callouts, Owl journals and the public randomness draws. A receipt is signed twice, by the Troya attestor (ECDSA) and with a post-quantum ML-DSA-65 key, and chained to the one before it. Once a day the chain is anchored on Robinhood Chain, so a closed day cannot be rewritten, by Troya or anyone else.</p>
   </section>
 
   <section class="ip" aria-labelledby="live-h">
     <div class="eyebrow-line"><span>01 / The chain, live</span></div>
     <div class="split" style="margin-bottom:40px">
-      <h2 id="live-h" class="h2 words" data-words>Every decision, sealed</h2>
+      <h2 id="live-h" class="h2 words" data-words>Sealed as it happens</h2>
       <p class="lead rv">Read straight from <a class="link" href="/api/seal" target="_blank" rel="noopener">/api/seal</a>. Each receipt opens as JSON with its own check: the hash, both signatures and the link to the receipt before it.</p>
     </div>
     <div class="steps four" data-seal-stats>
-      <article class="step rv"><span class="n">RECEIPTS</span><h3 data-seal-seq>…</h3><p>sealed since 19 Nov 2026</p></article>
-      <article class="step rv"><span class="n">TODAY</span><h3 data-seal-today>…</h3><p>receipts in the last UTC day</p></article>
-      <article class="step rv"><span class="n">HEAD</span><h3 class="mono" data-seal-head style="font-size:18px;word-break:break-all;text-transform:none;letter-spacing:0">…</h3><p>one hash that commits the whole history</p></article>
+      <article class="step rv"><span class="n">RECEIPTS</span><h3 data-seal-seq>…</h3><p>sealed since 18 Nov 2026 (UTC)</p></article>
+      <article class="step rv"><span class="n">TODAY</span><h3 data-seal-today>…</h3><p>receipts so far today (UTC)</p></article>
+      <article class="step rv"><span class="n">HEAD</span><h3 class="mono seal-hash" data-seal-head>…</h3><p>one hash that commits the whole history</p></article>
       <article class="step rv"><span class="n">LAST ANCHOR</span><h3 data-seal-anchor>…</h3><p>the day's last hash, written on Robinhood Chain</p></article>
     </div>
-    <div class="code rv" style="margin-top:32px">
+    <p class="seal-kinds" data-seal-kinds aria-live="polite"></p>
+    <div class="code rv seal-list">
       <div class="code-h">Latest receipts</div>
       <pre data-seal-list>Loading…</pre>
     </div>
@@ -74,8 +75,8 @@
   <section class="ip" aria-labelledby="proven-h">
     <div class="eyebrow-line"><span>02 / Proven contracts</span></div>
     <div class="split" style="margin-bottom:40px">
-      <h2 id="proven-h" class="h2 words" data-words>11 properties, proven for every input</h2>
-      <p class="lead rv">Troya's two contracts on Robinhood Chain, <a class="link" href="https://robinhoodchain.blockscout.com/address/0x266323d6ce63E4dfE62cC87bD14cA6C97BB2F525" target="_blank" rel="noopener">TroyaFeeSplitterFactory 0x2663…F525</a> and <a class="link" href="https://robinhoodchain.blockscout.com/address/0x439EBc38c756f4F729c1474ED8DE337cFe3Aa77E" target="_blank" rel="noopener">TroyaPass 0x439E…a77E</a>, were checked with Halmos, a16z's symbolic prover. A fuzz test tries random values; Halmos proves each property for all of them. Run it yourself: <code>uvx --python 3.12 halmos --match-path 'test/halmos/*'</code> in the repo's contracts folder. These are proofs of the listed properties, not a claim that the code has no other bugs.</p>
+      <h2 id="proven-h" class="h2 words" data-words>16 properties, proven for every input</h2>
+      <p class="lead rv">Troya's three contracts on Robinhood Chain, <a class="link" href="https://robinhoodchain.blockscout.com/address/0x266323d6ce63E4dfE62cC87bD14cA6C97BB2F525" target="_blank" rel="noopener">TroyaFeeSplitterFactory 0x2663…F525</a>, <a class="link" href="https://robinhoodchain.blockscout.com/address/0x439EBc38c756f4F729c1474ED8DE337cFe3Aa77E" target="_blank" rel="noopener">TroyaPass 0x439E…a77E</a> and <a class="link" href="https://robinhoodchain.blockscout.com/address/0x6Bb959367a71d07F5bBCb91eb41b62949440a4e8" target="_blank" rel="noopener">TroyaOathVault 0x6Bb9…a4e8</a>, were checked with Halmos, a16z's symbolic prover. A fuzz test tries random values; Halmos proves each property for all of them. Run it yourself: <code>uvx --python 3.12 halmos --match-path 'test/halmos/*'</code> in the repo's contracts folder. These are proofs of the listed properties, not a claim that the code has no other bugs.</p>
     </div>
     <div class="steps">
       <article class="step rv"><span class="n">01 · TroyaFeeSplitter</span><h3>Every split adds up</h3><p>For any amount and any allowed share, the treasury gets exactly amount × share ÷ 10,000, the creator gets the rest, and nothing stays behind.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaFeeSplitter.halmos.t.sol" target="_blank" rel="noopener">check_splitAddsUpExactly</a></p></article>
@@ -89,6 +90,11 @@
       <article class="step rv"><span class="n">09 · TroyaPass</span><h3>Soulbound</h3><p>No transfer path moves a pass: not by its holder, not by anyone else, to any address.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaPass.halmos.t.sol" target="_blank" rel="noopener">check_cannotBeTransferred</a></p></article>
       <article class="step rv"><span class="n">10 · TroyaPass</span><h3>No approvals</h3><p>approve and setApprovalForAll always fail, so nobody can ever be allowed to move a pass.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaPass.halmos.t.sol" target="_blank" rel="noopener">check_noApprovals</a></p></article>
       <article class="step rv"><span class="n">11 · TroyaPass</span><h3>Only the holder burns</h3><p>Anyone else's burn changes nothing; the holder's burn removes the pass.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaPass.halmos.t.sol" target="_blank" rel="noopener">check_onlyHolderBurns</a></p></article>
+      <article class="step rv"><span class="n">12 · TroyaOathVault</span><h3>Nothing leaves before the cliff</h3><p>Before a lock's cliff, every withdrawal fails, whatever amount is asked.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaOathVault.halmos.t.sol" target="_blank" rel="noopener">check_nothingBeforeCliff</a></p></article>
+      <article class="step rv"><span class="n">13 · TroyaOathVault</span><h3>Never faster than the rate</h3><p>A withdrawal never takes more than the daily rate has unlocked by then, so a dev can never sell faster than its Oath allows.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaOathVault.halmos.t.sol" target="_blank" rel="noopener">check_neverFasterThanTheRate</a></p></article>
+      <article class="step rv"><span class="n">14 · TroyaOathVault</span><h3>Only the beneficiary</h3><p>Only the wallet the coins are locked for can take them out or change the terms. The vault has no owner and no admin.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaOathVault.halmos.t.sol" target="_blank" rel="noopener">check_onlyBeneficiary</a></p></article>
+      <article class="step rv"><span class="n">15 · TroyaOathVault</span><h3>Terms only get stricter</h3><p>After any change, the cliff is no earlier and the daily rate no higher than before.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaOathVault.halmos.t.sol" target="_blank" rel="noopener">check_termsOnlyTighten</a></p></article>
+      <article class="step rv"><span class="n">16 · TroyaOathVault</span><h3>Never more than was locked</h3><p>Everything taken out of a lock, over two withdrawals at any times, stays within what was locked, and the vault always holds exactly the rest.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/test/halmos/TroyaOathVault.halmos.t.sol" target="_blank" rel="noopener">check_totalWithinLock</a> <a class="ulink" href="/verify#oath-vault">Real-money test, step 32</a></p></article>
     </div>
   </section>
 
@@ -100,7 +106,7 @@
     </div>
     <div class="code rv">
       <div class="code-h">ML-DSA-65 public key (SPKI, base64)<button type="button" data-copy-block>COPY</button></div>
-      <pre data-seal-pq style="white-space:pre-wrap;word-break:break-all">Loading…</pre>
+      <pre class="seal-key" data-seal-pq>Loading…</pre>
     </div>
   </section>
 
@@ -110,28 +116,41 @@
       <h2 id="check-h" class="h2 words" data-words>Paste one, get the verdict</h2>
       <p class="lead rv">Paste a receipt's JSON. Troya recomputes the hash, checks the ECDSA signature against the attestor, checks the ML-DSA signature against the key above, and looks up the receipt it points to.</p>
     </div>
-    <textarea data-seal-in rows="7" style="width:100%;font:13px/1.5 var(--mono,monospace);background:transparent;color:inherit;border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:14px" placeholder='{"v":1,"seq":1,"at":...,"hash":"0x...","sig":{...}}'></textarea>
-    <p style="margin-top:12px"><button class="pn-pill" type="button" data-seal-go>Check it</button> <span data-seal-out style="margin-left:12px"></span></p>
+    <label class="sr" for="seal-in">Receipt JSON</label>
+    <textarea id="seal-in" class="seal-in" data-seal-in rows="7" spellcheck="false" placeholder='{"v":1,"seq":1,"at":...,"hash":"0x...","sig":{...}}'></textarea>
+    <p class="seal-act"><button class="pn-pill" type="button" data-seal-go>Check it</button><span class="seal-out" data-seal-out aria-live="polite"></span></p>
   </section>
-</main>
 </main>
 
 <footer class="pn-foot" data-pn-foot></footer>
 <div class="toasts" aria-live="polite" data-toasts></div>
 <script type="module">
 const $ = (s) => document.querySelector(s);
-const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+// receipts carry coin tickers, which are free text: escape quotes too, since some values land inside attributes
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// what each receipt kind is, in words (server/seal.mjs callers); an unknown kind shows as its own name
+const KIND = {
+  gate: "Gate API checks", "x402-payment": "x402 payments", "record-call": "Sentry calls on The Record", "record-born": "launches on The Record",
+  council: "Council verdicts", aegis: "red Aegis alerts", "arena-strategy": "Arena strategies", "arena-open": "Arena paper buys", "arena-close": "Arena paper sells",
+  "arena-live-open": "Arena live buys", "arena-live-close": "Arena live sells", "arena-ant-open": "Anthropic Round calls", "arena-ant-close": "Anthropic Round closes",
+  ring: "Ring Radar flags", watchfire: "Watchfire fires", callout: "War Table callouts", "oath-taken": "Oaths taken", "oath-broken": "Oaths broken",
+  owl: "Owl journals", beacon: "randomness draws",
+};
 try {
   const s = await (await fetch("/api/seal")).json();
   $("[data-seal-seq]").textContent = (s.seq || 0).toLocaleString("en-US");
   $("[data-seal-today]").textContent = (s.today || 0).toLocaleString("en-US");
+  // today's mix, read from the same answer: the proof that each kind named above is really sealed
+  const d0 = (s.days || [])[0], todayUtc = new Date().toISOString().slice(0, 10);
+  const mix = d0 && d0.day === todayUtc ? Object.entries(d0.kinds || {}).sort((x, y) => y[1] - x[1]) : [];
+  $("[data-seal-kinds]").innerHTML = mix.length ? `Sealed so far today (UTC): ${mix.map(([k, n]) => `${esc(KIND[k] || k)} <b>${Number(n).toLocaleString("en-US")}</b>`).join(" · ")}.` : "Nothing sealed yet today (UTC).";
   $("[data-seal-head]").textContent = s.head ? s.head.slice(0, 18) + "…" : "none yet";
   const a = s.lastAnchor;
   $("[data-seal-anchor]").innerHTML = a ? `<a class="link" href="https://robinhoodchain.blockscout.com/tx/${esc(a.tx)}" target="_blank" rel="noopener">${esc(a.day)}</a>` : "first one after 00:00 UTC";
   $("[data-seal-pq]").textContent = s.keys?.mldsa?.spkiBase64 || "";
   const r = await (await fetch("/api/seal/receipts?limit=12")).json();
   $("[data-seal-list]").innerHTML = (r.receipts || []).map((x) => `#${x.seq}  ${new Date(x.at).toISOString().slice(11, 19)}  ${esc(x.kind.padEnd(13))} ${esc(String(x.subject).slice(0, 14))}…  ${esc(x.ref || "")}\n      <a class="link" href="/api/seal/r/${esc(x.hash)}" target="_blank" rel="noopener">${esc(x.hash)}</a>`).join("\n") || "No receipts yet today.";
-} catch { $("[data-seal-list]").textContent = "Could not load the seal right now."; }
+} catch { $("[data-seal-list]").textContent = "Could not load the seal right now."; $("[data-seal-kinds]").textContent = ""; }
 $("[data-seal-go]").addEventListener("click", async () => {
   const out = $("[data-seal-out]");
   let rec; try { rec = JSON.parse($("[data-seal-in]").value); } catch { out.textContent = "That is not valid JSON."; return; }

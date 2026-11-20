@@ -48,44 +48,121 @@
 <main id="main">
   <section class="page-hero" aria-labelledby="ph">
     <canvas class="rain" data-rain aria-hidden="true"></canvas>
-    <span class="eyebrow"><i class="dot"></i>V7 · F32 Oath</span>
+    <span class="eyebrow"><i class="dot"></i>Safety · Oath</span>
     <h1 id="ph" class="words" data-words>Oath kept, or Oath broken</h1>
-    <p class="lead rv">A dev signs a public pledge for a Pons coin: how much of the supply the team sells per day at most, how long creator fees stay unclaimed, and which wallets it controls. Troya watches the chain every ten minutes and shows the result live, with the transaction that broke it if one ever does. This is tier 1, watched in public; an Oath Vault that enforces the limit in code comes next.</p>
+    <p class="lead rv">A dev signs a public pledge for a Pons coin: how much of the supply the team sells per day at most, how long creator fees stay unclaimed, and which wallets it controls. Troya holds the dev to it in three tiers, all live: watched in public, held by Troya's rules, and locked in code in the Oath Vault, a contract proven with Halmos and tested with real coins (<a class="link" href="/verify#oath-vault">Verify, step 32</a>).</p>
   </section>
 
   <section class="ip" aria-labelledby="list-h">
     <div class="eyebrow-line"><span>01 / Every Oath</span></div>
-    <div class="code rv"><div class="code-h">Live from /api/oath</div><pre data-oath-list>Loading…</pre></div>
+    <div class="split oath-head">
+      <h2 id="list-h" class="h2 words" data-words>Kept or broken, live</h2>
+      <p class="lead rv">Read from <a class="link" href="/api/oath" target="_blank" rel="noopener">/api/oath</a> each time this page opens. A broken Oath links to the transaction that broke it, and every card's evidence opens as JSON.</p>
+    </div>
+    <div class="oath-grid rv" data-oath-list aria-live="polite"><p class="oath-empty">Loading…</p></div>
+  </section>
+
+  <section class="ip" aria-labelledby="tiers-h">
+    <div class="eyebrow-line"><span>02 / Three tiers</span></div>
+    <div class="split oath-head">
+      <h2 id="tiers-h" class="h2 words" data-words>Watched, held, locked</h2>
+      <p class="lead rv">Every Oath is watched from the moment it is signed, and Troya's rules apply to it on their own. The Oath Vault is for devs who want the limit enforced by a contract instead of by Troya.</p>
+    </div>
+    <div class="steps">
+      <article class="step rv"><span class="n">TIER 1 · WATCHED</span><h3>In public</h3><p>Every ten minutes Troya reads what the dev and the wallets it named sold into the Pons curve or the pool that UTC day, and any creator-fee claim during the lock. Each Oath shows as kept or broken, with the transaction that broke it.</p></article>
+      <article class="step rv"><span class="n">TIER 2 · TROYA'S RULES</span><h3>With a cost</h3><p>A broken Oath turns the coin's Gate verdict and its Sentry post to caution, and the wallets behind it cannot launch through Troya for 30 days.</p></article>
+      <article class="step rv"><span class="n">TIER 3 · THE OATH VAULT</span><h3>In code</h3><p>The dev locks coins in the TroyaOathVault contract: nothing leaves before a cliff, then at most a set amount a day, and only the wallet they are locked for can take them out. It has no owner and no admin. Five of its properties are proven for every input with Halmos, and it passed a real-money test on 19 Nov 2026.</p><p class="vlinks"><a class="ulink" href="/verify#oath-vault">Real-money test, step 32</a> <a class="ulink" href="/seal#proven-h">The five proofs</a> <a class="ulink" href="https://robinhoodchain.blockscout.com/address/0x6Bb959367a71d07F5bBCb91eb41b62949440a4e8" target="_blank" rel="noopener">The vault</a></p></article>
+    </div>
   </section>
 
   <section class="ip" aria-labelledby="take-h">
-    <div class="eyebrow-line"><span>02 / Take the Oath</span></div>
-    <div class="split" style="margin-bottom:24px">
+    <div class="eyebrow-line"><span>03 / Take the Oath</span></div>
+    <div class="split oath-head">
       <h2 id="take-h" class="h2 words" data-words>For devs: sign it with the launch wallet</h2>
       <p class="lead rv">Connect the coin's Pons deployer or creator-fee wallet. Signing costs nothing and sends nothing; it is an EIP-712 message (domain "Troya Oath" v1, chain 4663). Once taken, an Oath cannot be edited or removed.</p>
     </div>
-    <div class="steps">
-      <article class="step rv"><span class="n">COIN</span><h3>Token address</h3><p><input data-o-token placeholder="0x…" style="width:100%;font:14px var(--mono,monospace);background:transparent;color:inherit;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:10px"></p></article>
-      <article class="step rv"><span class="n">SELL CAP</span><h3>Max % of supply sold per day</h3><p><input data-o-cap type="number" min="0" max="100" step="0.1" value="5" style="width:100%;font:14px var(--mono,monospace);background:transparent;color:inherit;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:10px"></p></article>
-      <article class="step rv"><span class="n">FEE LOCK</span><h3>Days creator fees stay unclaimed</h3><p><input data-o-lock type="number" min="0" max="365" value="14" style="width:100%;font:14px var(--mono,monospace);background:transparent;color:inherit;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:10px"></p></article>
-      <article class="step rv"><span class="n">WALLETS</span><h3>Team and exempt wallets, one per line</h3><p><textarea data-o-wallets rows="3" style="width:100%;font:13px var(--mono,monospace);background:transparent;color:inherit;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:10px"></textarea></p></article>
+    <div class="steps two">
+      <article class="step rv"><span class="n">COIN</span><h3><label for="o-token">Token address</label></h3><p><input id="o-token" class="oath-in" data-o-token placeholder="0x…" autocomplete="off" spellcheck="false"></p></article>
+      <article class="step rv"><span class="n">SELL CAP</span><h3><label for="o-cap">Max % of supply sold per day</label></h3><p><input id="o-cap" class="oath-in" data-o-cap type="number" inputmode="decimal" min="0" max="100" step="0.1" value="5"></p></article>
+      <article class="step rv"><span class="n">FEE LOCK</span><h3><label for="o-lock">Days creator fees stay unclaimed</label></h3><p><input id="o-lock" class="oath-in" data-o-lock type="number" inputmode="numeric" min="0" max="365" value="14"></p></article>
+      <article class="step rv"><span class="n">WALLETS</span><h3><label for="o-wallets">Team and exempt wallets, one per line</label></h3><p><textarea id="o-wallets" class="oath-in" data-o-wallets rows="3" spellcheck="false" placeholder="0x…"></textarea></p></article>
     </div>
-    <p style="margin-top:16px"><button class="pn-pill" type="button" data-o-go>Connect and sign the Oath</button> <span data-o-out style="margin-left:12px"></span></p>
+    <p class="oath-act"><button class="pn-pill" type="button" data-o-go>Connect and sign the Oath</button><span class="oath-out" data-o-out aria-live="polite"></span></p>
   </section>
-</main>
-</main>
 </main>
 
 <footer class="pn-foot" data-pn-foot></footer>
 <div class="toasts" aria-live="polite" data-toasts></div>
 <script type="module">
 const $ = (s) => document.querySelector(s);
-const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+// Oaths come from devs and tickers are free text: escape everything (quotes too, some values land in attributes), and
+// check addresses and transaction hashes by shape before they go into a link
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ADDR = /^0x[0-9a-fA-F]{40}$/, TX = /^0x[0-9a-fA-F]{64}$/;
+const SCAN = "https://robinhoodchain.blockscout.com";
+const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+const date = (t) => (t ? new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "");
+const pct = (n) => `${(Number(n) || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}%`;
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+// Troya's own test coins, tagged so nobody takes a test breach for a real dev's
+const TESTS = { "0x01e1313d5b74eb39c55160f653ed59f18a0ee968": { text: "Troya test (real-money test, steps 32–33)", href: "/verify#oath-vault" } };
+const MAX = 48;                                   // cards drawn; every Oath stays in /api/oath
+
+function breachLine(b) {
+  const when = date(b.day ? Date.parse(`${b.day}T00:00:00Z`) : b.at);
+  const what = b.kind === "sell" ? `sold ${pct(b.soldPct)} of the supply in a day, over its cap of ${pct(b.capPct)}`
+    : b.kind === "fee-claim" ? "claimed creator fees during the lock" : esc(b.note || b.kind || "broke the pledge");
+  const tx = TX.test(String(b.tx || "")) ? ` · <a href="${SCAN}/tx/${b.tx}" target="_blank" rel="noopener">The breaking transaction</a>` : "";
+  return `<li>${esc(when)}: ${what}${tx}</li>`;
+}
+
+// one card per Oath: status, ticker, short address, the pledge, its breaches and the evidence
+function card(o) {
+  const t = o.token, p = o.pledge || {}, br = o.breaches || [], broken = o.status === "broken";
+  const test = TESTS[t.toLowerCase()];
+  const lock = p.feeLockDays ? `${plural(p.feeLockDays, "day")}, ${o.feeLockUntil && o.feeLockUntil < Date.now() ? "ended" : "until"} ${date(o.feeLockUntil)}` : "None";
+  const named = (p.wallets || []).length;
+  return `<article class="oath-card ${broken ? "broken" : "kept"}" data-oath="${t}">
+    <header class="oath-top"><span class="oath-pill ${broken ? "broken" : "kept"}">${broken ? "Broken" : "Kept"}</span><a class="oath-coin" href="/agent#/token/${t}" data-oath-sym>$…</a><a class="oath-addr" href="${SCAN}/token/${t}" target="_blank" rel="noopener" title="${t}">${short(t)}</a></header>
+    ${test ? `<p class="oath-test"><a href="${test.href}">${esc(test.text)}</a></p>` : ""}
+    <dl class="oath-terms">
+      <div><dt>Sell cap</dt><dd>${pct(p.maxSellPctPerDay)} of supply a day</dd></div>
+      <div><dt>Fee lock</dt><dd>${esc(lock)}</dd></div>
+      <div><dt>Breaches</dt><dd${br.length ? ' class="bad"' : ""}>${br.length || "None"}</dd></div>
+      <div><dt>Tier</dt><dd data-oath-tier>1 and 2, watched</dd></div>
+    </dl>
+    ${br.length ? `<ul class="oath-breaches">${br.slice(-3).reverse().map(breachLine).join("")}</ul>` : ""}
+    <p class="oath-foot"><span>Taken ${esc(date(o.takenAt))}${named ? ` · ${plural(named, "wallet")} named` : ""}</span><a href="/api/oath/${t}" target="_blank" rel="noopener">Evidence (JSON)</a></p>
+  </article>`;
+}
+
+// the list answer has no ticker and no vault reading: fill both in per card afterwards, quietly, so a slow lookup never
+// holds the list back
+async function fill(el, t) {
+  const [meta, one] = await Promise.all([
+    fetch(`/api/token/meta?address=${t}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    fetch(`/api/oath/${t}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  ]);
+  const sym = String(meta?.symbol || "").trim().slice(0, 24);
+  el.querySelector("[data-oath-sym]").textContent = sym ? `$${sym}` : "Coin page";
+  const v = one?.tier === "vault" ? one.vault : null;
+  if (v && ADDR.test(String(v.vault || ""))) {
+    el.querySelector("[data-oath-tier]").innerHTML = `3, <a href="${SCAN}/address/${v.vault}" target="_blank" rel="noopener">Oath Vault</a>${v.devLockedPct != null ? `: ${pct(v.devLockedPct)} of supply locked` : ""}`;
+  }
+}
+
 async function list() {
+  const box = $("[data-oath-list]");
   try {
     const d = await (await fetch("/api/oath")).json();
-    $("[data-oath-list]").innerHTML = (d.oaths || []).map((o) => `${o.status === "kept" ? "KEPT  " : "BROKEN"}  <a class="link" href="/api/oath/${esc(o.token)}" target="_blank" rel="noopener">${esc(o.token)}</a>  max ${o.pledge.maxSellPctPerDay}%/day${o.pledge.feeLockDays ? `, fees locked ${o.pledge.feeLockDays}d` : ""}${o.breaches.length ? `  · ${o.breaches.length} breach${o.breaches.length > 1 ? "es" : ""}` : ""}`).join("\n") || "No Oaths yet. The first one appears here as soon as a dev signs.";
-  } catch { $("[data-oath-list]").textContent = "Could not load Oaths right now."; }
+    const all = (d.oaths || []).filter((o) => ADDR.test(String(o?.token || ""))).sort((a, b) => (b.takenAt || 0) - (a.takenAt || 0));
+    if (!all.length) { box.innerHTML = `<p class="oath-empty">No Oaths yet. The first one appears here as soon as a dev signs.</p>`; return; }
+    const shown = all.slice(0, MAX);
+    box.innerHTML = shown.map(card).join("") + (all.length > MAX ? `<p class="oath-empty">And ${all.length - MAX} more in <a class="link" href="/api/oath" target="_blank" rel="noopener">/api/oath</a>.</p>` : "");
+    // four cards at a time: each fill reads the vault on chain once (cached for 5 minutes on the server)
+    const els = [...box.querySelectorAll("[data-oath]")];
+    (async () => { for (let i = 0; i < els.length; i += 4) await Promise.all(els.slice(i, i + 4).map((el) => fill(el, el.dataset.oath))); })();
+  } catch { box.innerHTML = `<p class="oath-empty">Could not load Oaths right now.</p>`; }
 }
 list();
 $("[data-o-go]").addEventListener("click", async () => {
@@ -95,7 +172,7 @@ $("[data-o-go]").addEventListener("click", async () => {
   const token = $("[data-o-token]").value.trim();
   if (!/^0x[0-9a-fA-F]{40}$/.test(token)) { out.textContent = "Enter the coin's address."; return; }
   const pledge = { token, maxSellBps: Math.round(Number($("[data-o-cap]").value || 0) * 100), feeLockDays: Math.round(Number($("[data-o-lock]").value || 0)),
-    wallets: $("[data-o-wallets]").value.split(/\s+/).filter((w) => /^0x[0-9a-fA-F]{40}$/.test(w)), issuedAt: Math.floor(Date.now() / 1000) };
+    wallets: $("[data-o-wallets]").value.split(/[\s,]+/).filter((w) => ADDR.test(w)), issuedAt: Math.floor(Date.now() / 1000) };
   try {
     const [from] = await eth.request({ method: "eth_requestAccounts" });
     const typed = { domain: { name: "Troya Oath", version: "1", chainId: 4663 }, primaryType: "Oath",

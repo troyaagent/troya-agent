@@ -12,6 +12,7 @@
 //               sellers as buyers in 2 minutes                                                                  → red
 //   · weight    one holder with at least 10% of the supply, or at least 40% of what holders hold bought through
 //               one router                                                                                     → amber
+//               (only on coins read from their launch: an older coin's balances come from a 6-hour sample)
 // Live feed: a WebSocket logs subscription (ROBINHOOD_WSS) for every watched coin, plus an HTTP poll that fills any gap
 // (every 1.5 s when the socket is quiet). Watched: coins the Arena holds, and coins asked for at /api/watchfire/:token
 // (for 30 minutes).
@@ -174,14 +175,21 @@ function evaluate(st, B) {
   const soldPct = held > 0 ? (100 * sold60) / (held + sold60) : 0;
   const velocity = soldPct >= RULES.velocityPct && sellers >= RULES.velocitySellers && sellers >= 2 * Math.max(1, buyers);
   if (velocity) why.push(`holders sold ${soldPct.toFixed(1)}% of what they hold in the last minute (${sellers} sellers, ${buyers} buyers in 2 minutes)`);
-  // weight: one big holder, or a crowd from one router
+  // weight: one big holder, or a crowd from one router. Balances are summed from the transfers Watchfire read, so for a
+  // coin older than its 6-hour window they are what each wallet bought or sold in that window, not what it holds
+  // (20 Nov: $TROYA showed amber "weight in few hands" from 6 such wallets, while Blockscout listed 148 holders, the
+  // largest at 3.56%). Those coins are not judged on weight; the figures stay in metrics, labelled as the last 6 h.
+  // Fire and red keep running on every coin: they read the live transfers.
+  const partial = st.fullHistory === false;            // set by load(); the back-test reads its own range in full
   const top = hs[0];
   const topPct = top && st.supply > 0 ? (100 * top[1]) / st.supply : 0;
-  if (topPct >= RULES.topPct) why.push(`one wallet holds ${topPct.toFixed(1)}% of the supply`);
+  const heavy = !partial && topPct >= RULES.topPct;
+  if (heavy) why.push(`one wallet holds ${topPct.toFixed(1)}% of the supply`);
   const byRouter = new Map(); for (const [w, v] of hs) { const r = st.via.get(w); if (r && r !== "direct") byRouter.set(r, (byRouter.get(r) || 0) + v); }
   const herd = [...byRouter.entries()].sort((a, b) => b[1] - a[1])[0];
   const herdPct = herd && held > 0 ? (100 * herd[1]) / held : 0;
-  if (herdPct >= RULES.herdPct) why.push(`${herdPct.toFixed(0)}% of what holders hold was bought through one trading router`);
+  const herded = !partial && herdPct >= RULES.herdPct;
+  if (herded) why.push(`${herdPct.toFixed(0)}% of what holders hold was bought through one trading router`);
   // sticky levels: a fire stays 10 minutes, red 3 minutes
   const now = Date.now();
   if (kind) {
@@ -192,7 +200,7 @@ function evaluate(st, B) {
   if (velocity) st.redAt = now;
   if (level !== "fire" && st.fireAt && now - st.fireAt < FIRE_MS) level = "fire";
   else if (level !== "fire" && (velocity || (st.redAt && now - st.redAt < RED_MS))) level = "red";
-  else if (level === "clear" && (topPct >= RULES.topPct || herdPct >= RULES.herdPct)) level = "amber";
+  else if (level === "clear" && (heavy || herded)) level = "amber";
   st.level = level;
   st.why = [...(st.lastFire && level === "fire" ? [st.lastFire.detail] : []), ...why];
   st.metrics = { holders: hs.length, heldPct: st.supply ? +((100 * held) / st.supply).toFixed(2) : null, topPct: +topPct.toFixed(2), herdPct: +herdPct.toFixed(1), soldLastMinPct: +soldPct.toFixed(2), sellers2m: sellers, buyers2m: buyers, block: B };
@@ -200,6 +208,10 @@ function evaluate(st, B) {
 }
 const pctOf = (a, s) => (s > 0 ? ((100 * a) / s).toFixed(1) : "?");
 const short = (a) => `${getAddress(a).slice(0, 6)}…${a.slice(-4)}`;
+// a coin older than the 6-hour window: what its figures cover and what is not judged, on every answer that shows them
+const partialNote = (st) => (st.fullHistory === false
+  ? "This coin is older than 6 hours, so Watchfire read only its last 6 hours of transfers: the holder figures show what wallets bought and sold in that window, not what they hold, and how concentrated the holders are is not judged. Dump and fast-selling signals still read every live transfer."
+  : null);
 
 let fireHook = null;                                   // the back-test collects fires instead of acting on them
 function onFire(st, kind, detail, block) {
@@ -244,7 +256,9 @@ export function board(token) {
   const hs = holders(st).slice(0, 50).map(([w, v]) => ({ wallet: getAddress(w), pct: pct(v), tags: tagsOf(st, w), via: st.via.get(w) && st.via.get(w) !== "direct" ? getAddress(st.via.get(w)) : null }));
   const counts = {}; for (const k of ["dev", "insider", "sniper", "bundler", "ring", "whale", "bot"]) counts[k] = 0;
   for (const w of new Set([...st.trades.map((e) => e.wallet), ...st.early.map((e) => e.wallet)])) for (const k of tagsOf(st, w)) counts[k]++;
+  const note = partialNote(st);
   return { token: getAddress(st.token), symbol: st.symbol, level: st.level, why: st.why, metrics: st.metrics, lastFire: st.lastFire, fullHistory: !!st.fullHistory,
+    note: note ? `${note} The Holders tab lists the largest wallets, from Blockscout.` : null,
     trades, early, holders: hs, counts, devs: [...st.dev].map((w) => getAddress(w)), at: Date.now() };
 }
 
@@ -406,7 +420,7 @@ export async function register(r, ctx) {
     if (!st?.ready) return { token: getAddress(params.token), level: "loading", why: ["Reading this coin's transfers. Ask again in a few seconds."] };
     return { name: "Troya Watchfire", token: getAddress(st.token), symbol: st.symbol, level: st.level, why: st.why, metrics: st.metrics, top: st.top, lastFire: st.lastFire,
       watching: [...st.reasons], live: !!(ws && ws.readyState === 1 && subId), rules: RULES, fullHistory: !!st.fullHistory,
-      note: `Watchfire reads patterns, not proof. It cannot sell ahead of a dump inside one block.${st.fullHistory ? "" : " This coin is older than 6 hours: holder figures cover the transfers of the last 6 hours only."}` };
+      note: `Watchfire reads patterns, not proof. It cannot sell ahead of a dump inside one block.${partialNote(st) ? ` ${partialNote(st)}` : ""}` };
   }, { weight: 2, perMin: 30 });
   r.get("/api/watchfire/:token/board", async ({ params }) => {
     if (!isAddress(String(params.token || ""))) throw new HttpError(400, "That is not a token address.");

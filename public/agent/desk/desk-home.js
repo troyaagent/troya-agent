@@ -146,10 +146,19 @@ export async function mount(view, { go, ask: askDrawer }) {
     h("div", { class: "panel-h" }, h("h2", {}, "Hyperliquid movers", infoTip("Perps with more than $1M of 24h volume, sorted by the size of the 24h move.")), h("a", { class: "link fine", href: "#/market?tab=perps" }, "All perps")),
     h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Market"), h("th", { class: "hide-s" }, ""), h("th", {}, "Price"), h("th", {}, "24h"), h("th", { class: "hide-s" }, "Funding/yr"), h("th", { class: "hide-s" }, "Volume"))), hlBody)));
   const rhTable = h("section", { class: "panel movers" },
-    h("div", { class: "panel-h" }, h("h2", {}, "Hot on Robinhood Chain", infoTip("Robinhood Chain coins with the most volume in the last 24 hours, from GeckoTerminal pools (wash-traded pools left out).")), h("a", { class: "link fine", href: "#/market" }, "Full market")),
-    h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Token"), h("th", {}, "Price"), h("th", {}, "24h"), h("th", { class: "hide-s" }, "Volume"))), rhBody)));
+    h("div", { class: "panel-h" }, h("h2", {}, "Hot on Robinhood Chain", infoTip("Robinhood Chain coins with the most volume in the last 24 hours (wash-traded pools left out), with the same price as the Market and each coin's page. Liquidity is the ETH, USDG or stock-token side of its pools, the money a seller can take out.")), h("a", { class: "link fine", href: "#/market" }, "Full market")),
+    h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Token"), h("th", {}, "Price"), h("th", {}, "24h"), h("th", { class: "hide-s" }, "Volume"), h("th", { class: "hide-s" }, "Liquidity"))), rhBody)));
   hlBody.append(...skel(6, 6));
-  rhBody.append(...skel(6, 4));
+  rhBody.append(...skel(6, 5));
+  // the money side of a coin's pools; the pool total (which also counts the coin at its own price) only in the tooltip
+  const liqCell = (t) => h("div", { class: "pcell", title: t.liquidityUsd != null ? (t.realLiquidityUsd != null ? `${usd(t.liquidityUsd, { compact: true })} incl. the coin side` : `Pool total ${usd(t.liquidityUsd, { compact: true })} incl. the coin side; the ETH or USDG side is not read yet`) : "" },
+    h("span", {}, t.realLiquidityUsd != null ? usd(t.realLiquidityUsd, { compact: true }) : "–"));
+  // a price no source refreshed for 15 minutes says how old it is, as on the Market (server clock: d.now)
+  const hotPrice = (t, now) => {
+    const c = priceCell(t.priceEth, t.priceUsd), age = t.priceAt ? now - t.priceAt : 0;
+    if (age > 15 * 60_000) c.append(h("span", { class: "sub warnc" }, `price ${age < 3600_000 ? `${Math.round(age / 60_000)} min` : `${Math.floor(age / 3600_000)} h`} old`));
+    return c;
+  };
 
   /* ---------- Sentry: latest results ---------- */
   const senBody = h("div", { class: "dk-sentry-b" }, h("div", { class: "sk", style: { height: "120px" } }));
@@ -306,11 +315,12 @@ export async function mount(view, { go, ask: askDrawer }) {
   stops.push(every(30000, async () => {
     try {
       const d = await cached("market/robinhood?sort=volume&limit=7", 15000);
-      clear(rhBody, d.tokens.slice(0, 7).map((t) => h("tr", { class: "click", onclick: () => go(`#/token/${t.address}`) },
+      const now = d.now || Date.now();
+      clear(rhBody, d.tokens.slice(0, 7).map((t) => h("tr", { class: "click", onclick: () => go(`#/token/${t.address}`), style: t.priceAt && now - t.priceAt > 15 * 60_000 ? { opacity: ".55" } : null },
         h("td", { class: "l" }, tokenCell(t)),
-        h("td", {}, priceCell(t.priceEth, t.priceUsd)), h("td", {}, pctEl(t.change24h)), h("td", { class: "hide-s" }, usdCell(t.volume24hUsd, null)))));
-      if (!d.tokens.length) clear(rhBody, h("tr", {}, h("td", { colspan: 4, class: "l muted" }, "No Robinhood Chain coins returned.")));
-    } catch (e) { clear(rhBody, h("tr", {}, h("td", { colspan: 4, class: "l muted" }, `The Robinhood Chain board is unavailable: ${e.message}`))); }
+        h("td", {}, hotPrice(t, now)), h("td", {}, pctEl(t.change24h)), h("td", { class: "hide-s" }, usdCell(t.volume24hUsd, null)), h("td", { class: "hide-s" }, liqCell(t)))));
+      if (!d.tokens.length) clear(rhBody, h("tr", {}, h("td", { colspan: 5, class: "l muted" }, "No Robinhood Chain coins returned.")));
+    } catch (e) { clear(rhBody, h("tr", {}, h("td", { colspan: 5, class: "l muted" }, `The Robinhood Chain board is unavailable: ${e.message}`))); }
   }));
   stops.push(every(60000, async () => {
     try {

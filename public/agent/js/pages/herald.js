@@ -11,6 +11,8 @@ const pct = (v) => (v == null ? "–" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Ma
 const eth = (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(4)} ETH`;
 const left = (ms) => { const m = Math.max(0, Math.round(ms / 60000)); return m < 60 ? `${m} min` : m < 1440 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${Math.floor(m / 1440)} d ${Math.floor((m % 1440) / 60)} h`; };
 const n = (v) => Number(v || 0).toLocaleString("en-US");
+// AI traders carry their model maker's mark, the same self-hosted SVGs (and the same map) the Arena uses in agent.js
+const AI_LOGOS = { "ai-claude": "claude", "ai-gpt": "gpt", "ai-gemini": "gemini", "ai-deepseek": "deepseek", "ai-qwen": "qwen" };
 
 export async function mount(view) {
   useCss("herald");
@@ -22,7 +24,8 @@ export async function mount(view) {
   const boardBox = h("section", { class: "panel hr-board" });
   const jump = h("nav", { class: "hr-jump", "aria-label": "Sections" },
     [["Your link", linkBox], ["Leaderboard", lbBox], ["Arena Cup", cupBox], ["Contributor board", boardBox]].map(([t, el]) => h("a", { href: "#", onclick: (e) => { e.preventDefault(); el.scrollIntoView({ behavior: "smooth", block: "start" }); } }, t)));
-  clear(view, h("div", { class: "hr" },
+  // "hr-page", not "hr": app.css styles .hr as a 1 px divider, which collapsed this wrapper and let the footer show through
+  clear(view, h("div", { class: "hr-page" },
     pageHead("Herald", "Bring people to Troya with your own link. Share cards for Gate verdicts, Watchfire alerts and your PnL carry it. A weekly Arena Cup ranks paper strategies by PnL %, not volume, and the contributor board pays for real work, never for posts."),
     jump, linkBox, h("div", { class: "hr-grid" }, lbBox, cupBox), boardBox));
 
@@ -147,7 +150,9 @@ export async function mount(view) {
     if (!d) { clear(cupBox, head, st.cupErr ? h("div", { class: "alert error hr-pad" }, st.cupErr) : h("div", { class: "sk hr-pad", style: { height: "160px" } })); return; }
     const when = d.final ? `Final standings, ${new Date(d.start).toUTCString().slice(5, 11)} to ${new Date(d.end - 1).toUTCString().slice(5, 11)}` : `Ends in ${left(d.endsIn)} (Monday 00:00 UTC)`;
     const rows = (list, ranked) => h("tbody", {}, list.map((r) => h("tr", { class: r.mine ? "mine" : "" },
-      h("td", {}, ranked ? String(r.rank) : "–"), h("td", { class: r.model ? "" : "mono" }, r.name, r.mine ? h("span", { class: "badge-s blue hr-you" }, "you") : null),
+      h("td", {}, ranked ? String(r.rank) : "–"), h("td", { class: r.model ? "" : "mono" },
+        AI_LOGOS[r.id] ? h("img", { class: "hr-logo", src: `/img/logos/ai/${AI_LOGOS[r.id]}.svg`, alt: "", width: 14, height: 14, loading: "lazy", decoding: "async" }) : null,
+        r.name, r.mine ? h("span", { class: "badge-s blue hr-you" }, "you") : null),
       h("td", { class: `b ${r.pnlPct > 0 ? "up" : r.pnlPct < 0 ? "down" : ""}` }, pct(r.pnlPct)), h("td", {}, eth(r.pnlEth)), h("td", {}, String(r.closed)), h("td", {}, r.closed ? `${Math.round((r.wins / r.closed) * 100)}%` : "–"))));
     const thead = () => h("thead", {}, h("tr", {}, ["#", "Trader", "PnL %", "PnL", "Closed", "Won"].map((x) => h("th", {}, x))));
     clear(cupBox, head,

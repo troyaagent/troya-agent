@@ -116,11 +116,13 @@ async function aiDaily(d) {
    Each AI trader has its own budget inside it (ARENA_LIVE_BUDGET_ETH, 0.01 ETH by default): a buy is at most
    ARENA_LIVE_BUY_ETH and never more than what the trader has left after its open positions and realized losses.
    Live positions follow their paper twin: opened on the same launch, closed when the paper one closes. */
-const LIVE = () => process.env.ARENA_LIVE === "1" && isAddr(process.env.ARENA_LIVE_OWNER);
+// LIVE and LIVE_PAUSED are exported for Champions (V8 F43): a trader the Arena itself may not buy for with real money
+// must not buy for its followers either, so champions.mjs reads the same switches.
+export const LIVE = () => process.env.ARENA_LIVE === "1" && isAddr(process.env.ARENA_LIVE_OWNER);
 // traders whose real-money twin is paused (ARENA_LIVE_PAUSE=ai-qwen,...): paper keeps trading, no new live buys, open live
 // positions still close with their paper twin. 19 Nov 2026: Qwen's three live trades were all hit by coordinated dumps;
 // paused until Ring Radar catches clusters that sell together (owner's decision).
-const LIVE_PAUSED = () => String(process.env.ARENA_LIVE_PAUSE || "").split(",").map((s) => s.trim()).filter(Boolean);
+export const LIVE_PAUSED = () => String(process.env.ARENA_LIVE_PAUSE || "").split(",").map((s) => s.trim()).filter(Boolean);
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(String(a || ""));
 const LIVE_BUDGET = () => Number(process.env.ARENA_LIVE_BUDGET_ETH || 0.01);
 const LIVE_BUY = () => Number(process.env.ARENA_LIVE_BUY_ETH || 0.002);
@@ -214,7 +216,8 @@ export async function onLaunch(r) {
     pos.sealOpen = (await import("./seal.mjs").then((s) => s.seal("arena-open", pos.token, { agent: ag.id, ...pos }, `${ag.name || ag.id} bought $${pos.symbol}`)).catch(() => null))?.hash || null;
   }
   if (opened.length) await store.update(FILE, {}, (x) => { x.positions = [...(x.positions || []), ...opened]; return x; });
-  // V8 F43 Champions: followers of these traders buy the same coin from their own Agent Wallets (not awaited)
+  // V8 F43 Champions: followers of these traders buy the same coin from their own Agent Wallets, only while the trader
+  // qualifies (5+ live trades in profit, not paused: qualify() in champions.mjs) (not awaited)
   const papers = opened.filter((p) => p.mode !== "live");
   if (papers.length) import("./champions.mjs").then((m) => m.onArenaOpen(papers)).catch((e) => console.warn("[champions] open", e.message));
 }

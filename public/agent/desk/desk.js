@@ -1,9 +1,9 @@
 // Troya Desk (concept shell). Same pages, same API and wallet modules as /agent; only the frame changes:
-// grouped sidebar, top bar with Ask, an agent drawer that stays open beside any page, and a new Desk home.
+// grouped sidebar, top bar with Search (⌘K), an agent drawer that stays open beside any page, and a new Desk home.
 // Pages live in /agent/js/pages/<name>.js (unchanged). Desk home and Gate live next to this file.
-import { h, $, clear, icon, toast, modal, short, store, chainLogo, tokenIcon, setBorn, price } from "/agent/js/ui.js";
+import { h, $, clear, icon, toast, modal, short, store, chainLogo, tokenIcon, setBorn, price, seg } from "/agent/js/ui.js";
 import { padName } from "/agent/js/marketlib.js";
-import { wallet, onWallet, openConnect, restore, disconnect, signIn, CHAINS, chainById } from "/agent/js/wallet.js";
+import { wallet, onWallet, openConnect, restore, disconnect, signIn, ensureChain, CHAINS, chainById } from "/agent/js/wallet.js";
 import { api } from "/agent/js/api.js";
 import { chromeIcon } from "./chrome-icons.js";
 import { mountGuide } from "./guide.js";
@@ -69,7 +69,8 @@ export const GROUPS = [
   ["Discover", [["Gate a coin", "#/gate", "gate"], ["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["Create coin", "#/create", "create"], ["Creator desk", "#/creator", "creator"], ["All launches", "#/launch", "launch"], ["Leaderboard", "#/leaderboard", "leaderboard"], ["Herald", "#/herald", "herald"], ["Treasury", "#/treasury", "treasury"], ["Agent registry", "#/registry", "agent"]]],
   ["Agent", [["Chat", "#/agent", "chat"], ["Scepter", "#/agent/scepter", "scepter"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Sentry Autopilot", "#/agent/sentry", "sentry"], ["Aegis", "#/agent/aegis", "aegis"], ["Arena", "#/agent/arena", "arena"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Audited rail", "#/rail", "rail"]]],
   ["You", [["Portfolio", "#/portfolio", "portfolio"], ["Inbox", "#/portfolio/inbox", "inbox"], ["History", "#/portfolio/history", "history"], ["Social", "#/social", "social"]]],
-  ["Help", [["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Is it safe?", "/safety", "verify"], ["Verify", "/verify", "verify"], ["The Record", "/record", "record"], ["$TROYA flywheel", "#/flywheel", "flywheel"]]],
+  // Help also points at the public pages people ask for most: what shipped, what each tier unlocks, and where a bug goes
+  ["Help", [["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["What's new", "/roadmap#v8", "news"], ["Plans and tiers", "/plans", "plans"], ["Is it safe?", "/safety", "verify"], ["Verify", "/verify", "proof"], ["The Record", "/record", "record"], ["$TROYA flywheel", "#/flywheel", "flywheel"], ["Report a bug", "/community", "bug"]]],
 ];
 const FLAT = GROUPS.flatMap(([g, items]) => items.map(([t, href, ic]) => ({ g, t, href, ic })));
 // route table: first path segment → page module (same as /agent) plus the Desk's own Gate page
@@ -106,7 +107,23 @@ function activeItem(path) {
   }
   return best;
 }
-const isChat = (r) => (r.name === "agent" || r.name === "assistant") && !["wallet", "autopilot", "sentry", "aegis", "arena", "playbooks"].includes(r.parts[0]);
+// only the chat tab itself counts: an exclusion list went stale when Scepter arrived and hid the Ask orb there
+const isChat = (r) => (r.name === "agent" || r.name === "assistant") && (!r.parts[0] || r.parts[0] === "chat");
+// the top-bar trail: [label, href?] from the outside in; the last one is the page you are on
+function crumbsFor(r, act, page) {
+  if (!page) return [["Not found"]];
+  if (page === "token") return [["Market", "#/market"], ["Coin"]];
+  const sub = SUBTITLES[r.path];
+  // a page that shares a sidebar item gets its own last crumb (Discover / Create coin / Launch from X)
+  if (act && sub && sub !== act.t) return [[act.g], [act.t, act.href], [sub]].filter(([t]) => t);
+  if (act) return [[act.g], [act.t]].filter(([t]) => t);
+  return [[page[0].toUpperCase() + page.slice(1)]];
+}
+function renderCrumbs(list) {
+  const last = list.length - 1;
+  clear($("[data-crumb]"), list.map(([t, href], i) => i === last ? h("b", { "aria-current": "page" }, t)
+    : href ? h("a", { href }, t) : h("span", { class: "g" }, t)));
+}
 
 async function route() {
   const id = ++routeId;
@@ -121,8 +138,9 @@ async function route() {
     if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   }
   revealActive();
-  clear($("[data-crumb]"), act?.g ? h("span", {}, act.g) : null, h("b", {}, act?.t || (page ? page[0].toUpperCase() + page.slice(1) : "Desk")));
+  renderCrumbs(crumbsFor(r, act, page));
   closeSide();
+  closePop();
   // the full chat page and the drawer are the same chat: never show both
   const chat = isChat(r);
   document.body.classList.toggle("on-chat", chat);
@@ -131,7 +149,7 @@ async function route() {
   cleanup = null;
   view.classList.toggle("wide", page === "perps" || page === "hippodrome");   // hippodrome = the Troya Launches module
   view.dataset.page = page || "";
-  if (!page) { clear(view, h("div", { class: "empty", style: { padding: "120px 0" } }, h("b", {}, "This page does not exist."), h("a", { class: "link", href: "#/" }, "Back to the Desk"))); return; }
+  if (!page) { notFound(r); return; }
   clear(view, h("div", { style: { padding: "60px 0" } }, h("div", { class: "sk", style: { height: "40px", width: "240px" } })));
   let mod;
   try { mod = await import(LOCAL[page] || `/agent/js/pages/${page}.js`); }
@@ -151,6 +169,30 @@ async function route() {
   // left before it finished loading: its timers stop now, never on the next page's watch
   if (id !== routeId) { try { cu?.(); } catch {} return; }
   cleanup = cu;
+}
+
+// a mistyped or retired address: say so plainly, offer a search for its words and the four places people go most
+const LOST = [
+  ["Swap", "#/swap", "swap", "Coins and stock tokens, checked by the Gate"],
+  ["Market", "#/market", "market", "Every coin on Robinhood Chain with a real pool"],
+  ["Gate a coin", "#/gate", "gate", "Seven checks before you buy"],
+  ["Troya Launches", "#/troya-launches", "hippodrome", "Coins born through Troya"],
+];
+function notFound(r) {
+  // the tab must not keep the last page's title
+  document.title = "Not found · Troya Agent";
+  // "#/stock-desk/nvda" → "stock desk nvda"; a pasted contract address stays whole, so the palette offers the Gate for it
+  const words = r.path.replace(/[\/_+-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+  clear(view, h("section", { class: "d-404", "aria-labelledby": "d-404-h" },
+    h("p", { class: "dk-eyebrow" }, "Error 404"),
+    h("h1", { id: "d-404-h" }, "This page ", h("em", {}, "does not exist.")),
+    h("p", { class: "d-404-sub" }, "Nothing lives at ", h("code", {}, `#/${r.path}`), ". The link may have a typo, or the page has moved."),
+    h("div", { class: "d-404-act" },
+      h("button", { class: "btn primary", type: "button", onclick: () => openAsk(words) }, si("search"), words ? `Search for “${words}”` : "Search the Desk"),
+      h("a", { class: "btn", href: "#/" }, "Back to the Desk")),
+    h("nav", { class: "d-404-links", "aria-label": "Popular pages" }, LOST.map(([t, href, ic, d]) =>
+      h("a", { href }, h("span", { class: "d-404-ic" }, si(ic)), h("span", { class: "d-404-t" }, h("b", {}, t), h("small", {}, d)), h("i", { "aria-hidden": "true" }, "→"))))));
+  window.scrollTo(0, 0);
 }
 
 /* ---------- the room: soft chrome light behind every page (dark theme) ---------- */
@@ -180,7 +222,9 @@ function revealActive() {
   const a = side.querySelector("[data-nav] a[aria-current]");
   if (!a) return;
   const ar = a.getBoundingClientRect(), sr = side.getBoundingClientRect();
-  if (ar.top < sr.top + 90 || ar.bottom > sr.bottom - 110) side.scrollTop += ar.top - sr.top - (side.clientHeight - ar.height) / 2;
+  // the brand and Search stay pinned at the top of the sidebar, so an item under them counts as hidden too
+  const pinned = side.querySelector(".d-side-top")?.offsetHeight || 90;
+  if (ar.top < sr.top + pinned + 8 || ar.bottom > sr.bottom - 110) side.scrollTop += ar.top - sr.top - (side.clientHeight - ar.height) / 2;
 }
 function openSide() { side.classList.add("open"); scrim.hidden = false; revealActive(); }
 function closeSide() { side.classList.remove("open"); scrim.hidden = true; }
@@ -209,10 +253,56 @@ function setTheme(t) {
   renderRight();
   requestAnimationFrame(() => silk?.resume());
 }
+/* the chain chip: a real button. Not connected or already on Robinhood Chain: a small card says where Troya trades.
+   Connected elsewhere: a warning tint, and a click asks the wallet to switch (the wallet shows its own prompt; nothing is signed or sent). */
+const MAIN = CHAINS.robinhood;
+let pop = null;
+function closePop() {
+  if (!pop) return;
+  pop.el.remove(); pop.anchor?.setAttribute("aria-expanded", "false");
+  document.removeEventListener("pointerdown", pop.outside, true);
+  removeEventListener("resize", closePop);
+  pop = null;
+}
+function chainPop(anchor) {
+  if (pop) { const again = pop.anchor === anchor; closePop(); if (again) return; }
+  const on = !!wallet.address;
+  const el = h("div", { class: "d-pop", role: "dialog", "aria-label": "Network", id: "d-chain-pop" },
+    h("div", { class: "d-pop-h" }, chainLogo("robinhood", 22), h("b", {}, `Troya trades on ${MAIN.name} (${MAIN.id})`)),
+    h("p", {}, on ? `Your wallet is on ${MAIN.name}, where swaps, launches and the Gate run. A trade on another network asks your wallet to switch first.`
+      : "Connect a wallet and Troya adds the network for you the first time a trade needs it. Nothing is signed until you approve it in your wallet."),
+    h("div", { class: "d-pop-a" },
+      on ? h("a", { class: "btn", href: "#/bridge" }, "Bridge ETH in")
+        : h("button", { class: "btn primary", type: "button", onclick: () => { closePop(); openConnect(); } }, "Connect wallet"),
+      h("a", { class: "link", href: MAIN.explorer, target: "_blank", rel: "noopener" }, "Explorer")));
+  document.body.append(el);
+  const r = anchor.getBoundingClientRect(), w = el.offsetWidth;
+  el.style.top = `${r.bottom + 8}px`;
+  el.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.right - w))}px`;
+  const outside = (e) => { if (!el.contains(e.target) && !anchor.contains(e.target)) closePop(); };
+  pop = { el, anchor, outside };
+  anchor.setAttribute("aria-expanded", "true");
+  document.addEventListener("pointerdown", outside, true);
+  addEventListener("resize", closePop);
+  el.addEventListener("click", (e) => { if (e.target.closest("a")) closePop(); });
+}
+async function switchToMain(btn) {
+  btn.disabled = true;
+  try { await ensureChain("robinhood"); toast(`Wallet switched to ${MAIN.name}`, "ok"); }
+  catch (e) { toast(e?.code === 4001 || /reject|denied|cancel/i.test(e?.message || "") ? "Network switch cancelled in the wallet." : (e?.message || "Could not switch the network."), "error"); }
+  finally { btn.disabled = false; }
+}
 function renderRight() {
   const c = chainById(wallet.chainId);
-  const chip = h("span", { class: `chain-chip ${wallet.address ? "" : "off"}`, title: wallet.address ? `Wallet network: ${c?.name || "chain " + wallet.chainId}` : "Main network" },
-    chainLogo(wallet.address ? (c?.key || "") : "robinhood", 16), wallet.address ? (c?.name || `Chain ${wallet.chainId}`) : "Robinhood Chain");
+  const elsewhere = !!wallet.address && wallet.chainId != null && Number(wallet.chainId) !== MAIN.id;
+  const name = c?.name || `Chain ${wallet.chainId}`;
+  const chip = h("button", { class: `chain-chip${wallet.address ? "" : " off"}${elsewhere ? " warn" : ""}`, type: "button",
+    title: elsewhere ? `Your wallet is on ${name}. Click to switch to ${MAIN.name}.` : wallet.address ? `Your wallet is on ${MAIN.name}` : `Troya trades on ${MAIN.name}`,
+    "aria-label": elsewhere ? `Wallet on ${name}. Switch to ${MAIN.name}` : `Network: ${MAIN.name}`,
+    ...(elsewhere ? {} : { "aria-haspopup": "dialog", "aria-expanded": "false", "aria-controls": "d-chain-pop" }),
+    onclick: (e) => (elsewhere ? switchToMain(e.currentTarget) : chainPop(e.currentTarget)) },
+    chainLogo(wallet.address ? (c?.key || "") : "robinhood", 16), wallet.address ? name : MAIN.name);
+  if (pop) closePop();          // the chip is drawn anew, so a card left open would point at nothing
   const bell = h("a", { class: "icon-btn", href: "#/portfolio/inbox", "aria-label": "Inbox" }, si("inbox"), inboxCount ? h("span", { class: "badge" }, inboxCount > 9 ? "9+" : inboxCount) : null);
   const wbtn = wallet.address
     ? h("button", { class: "wallet-btn on", type: "button", onclick: walletMenu }, h("i", { class: "av" }), short(wallet.address))
@@ -240,10 +330,14 @@ function openSettings() {
   const p = prefs.get();
   const slip = h("input", { class: "input", type: "number", min: "0.1", max: "20", step: "0.1", value: p.slippage, style: { width: "90px" } });
   const lang = h("select", { class: "select" }, [["auto", "Same as my message"], ["en", "English"]].map(([v, t]) => h("option", { value: v, selected: p.lang === v }, t)));
+  // the top-bar sun/moon is hidden on small phones, so the theme lives here too; it applies at once, no Save needed
+  const look = seg([{ value: "dark", label: "Dark" }, { value: "light", label: "Light" }], document.documentElement.dataset.theme === "light" ? "light" : "dark", (v) => setTheme(v), "d-look");
+  look.setAttribute("aria-label", "Appearance");
   const m = modal({ title: "Settings", body: h("div", { style: { display: "grid", gap: "14px" } },
+    h("div", { class: "field" }, h("span", {}, "Appearance"), look),
     h("label", { class: "field" }, h("span", {}, "Default swap slippage (%)"), slip),
     h("label", { class: "field" }, h("span", {}, "Assistant reply language"), lang),
-    h("p", { class: "note" }, "Slippage and language are kept in this browser only."),
+    h("p", { class: "note" }, "Appearance, slippage and language are kept in this browser only."),
     telegramBlock(),
     h("div", { class: "row", style: { justifyContent: "flex-end" } }, h("button", { class: "btn primary", type: "button", onclick: () => {
       const s = Math.min(20, Math.max(0.1, Number(slip.value) || 1));
@@ -339,10 +433,11 @@ function closeDrawer() {
 }
 $("[data-ask-fab]").addEventListener("click", () => openDrawer());
 
-/* ---------- Ask palette (⌘K): ask the agent, gate a pasted coin, or jump to any page ---------- */
+/* ---------- Search palette (⌘K): find a coin or a page, gate a pasted address, or hand a question to Ask Troya ---------- */
+// it is called Search everywhere; "Ask Troya" names only the chat panel, so the two never get mixed up
 const ASKS = ["What is moving on Robinhood Chain right now?", "Show funding extremes on Hyperliquid", "What should I watch today?"];
 function openAsk(prefill = "") {
-  const input = h("input", { class: "d-pal-in", placeholder: matchMedia("(max-width: 560px)").matches ? "Ask, paste a coin or find a page" : "Ask Troya anything, paste a coin address, or type a page name", value: prefill, "aria-label": "Ask Troya", autocomplete: "off", spellcheck: "false" });
+  const input = h("input", { class: "d-pal-in", placeholder: matchMedia("(max-width: 560px)").matches ? "Search coins and pages" : "Search coins and pages, paste an address, or type a question", value: prefill, "aria-label": "Search", autocomplete: "off", spellcheck: "false" });
   let sel = 0, flat = [], coins = [], coinQ = "", coinSeq = 0, coinTimer = 0;
   const opts = h("div", { class: "d-pal-list", role: "listbox" });
   // coins by symbol, name or ticker: the server searches the whole chain (index, stock tokens, DexScreener)
@@ -410,18 +505,20 @@ function openAsk(prefill = "") {
   });
   const foot = h("div", { class: "d-pal-foot" }, h("span", {}, h("kbd", {}, "↑"), h("kbd", {}, "↓"), " move"), h("span", {}, h("kbd", {}, "↵"), " open"), h("span", {}, h("kbd", {}, "esc"), " close"),
     h("span", { class: "d-pal-note" }, "Answers open beside the page you are on"));
-  const m = modal({ body: h("div", { class: "d-pal" }, h("div", { class: "d-pal-top" }, h("span", { class: "d-pal-spark" }, si("spark")), input), opts, foot) });
+  const m = modal({ body: h("div", { class: "d-pal" }, h("div", { class: "d-pal-top" }, h("span", { class: "d-pal-spark" }, si("search")), input), opts, foot) });
   m.box.classList.add("palette", "d-pal-box");
   m.body.style.padding = "0";
   render();
+  if (prefill) findCoins();          // opened with words already in it (the 404 page): look for coins too, as if they were typed
   setTimeout(() => input.focus(), 30);
 }
 for (const b of document.querySelectorAll("[data-ask]")) b.addEventListener("click", () => openAsk());
-for (const b of document.querySelectorAll(".d-ask-ico")) b.append(si("spark"));
+for (const b of document.querySelectorAll(".d-ask-ico")) b.append(si("search"));   // the sidebar button is Search now; the spark stays with Ask Troya
 // Troya Guide on every page: what it is for, a walk-through, questions for the agent (answered in the drawer)
 mountGuide({ askFn: (q) => openDrawer(q) });
 addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openAsk(); }
+  else if (e.key === "Escape" && pop) { const a = pop.anchor; closePop(); a?.focus(); }
   else if (e.key === "Escape" && document.body.classList.contains("drawer-open") && !document.querySelector(".modal-bg")) closeDrawer();
 });
 window.troya = { go, openAsk, openConnect, signIn, CHAINS, ask: openDrawer };

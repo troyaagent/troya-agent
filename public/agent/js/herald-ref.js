@@ -1,5 +1,7 @@
 // V8 F42 Herald: a referral code from the link (troya.codes/agent?ref=CODE, or #/…?ref=CODE) is kept in this browser
 // and sent once, after the wallet signs in. The first link wins; the server refuses a wallet's own code.
+// On a phone, wallet.js reads this same key (troya.ref, { code, sent }) and adds the unsent code to the "Open in <wallet>"
+// links, because the wallet app's browser has its own storage. Change the key or its shape there too.
 import { wallet, onWallet } from "./wallet.js";
 import { api } from "./api.js";
 

@@ -19,8 +19,18 @@ const SOURCE = { x: ["X", X_ICON], tg: ["Telegram", TG_ICON], web: ["Web", WEB_I
 // CTO: a group of people; Dex Paid: a blue verified badge
 const PEOPLE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.25 6.75a3.75 3.75 0 1 1 7.5 0 3.75 3.75 0 0 1-7.5 0zM15.75 9.75a3 3 0 1 1 6 0 3 3 0 0 1-6 0zM2.25 9.75a3 3 0 1 1 6 0 3 3 0 0 1-6 0zM6.31 15.12A6.75 6.75 0 0 1 12 12a6.75 6.75 0 0 1 6.71 7.5.75.75 0 0 1-.37.57A12.7 12.7 0 0 1 12 21.75c-2.3 0-4.47-.61-6.34-1.68a.75.75 0 0 1-.37-.57 6.79 6.79 0 0 1 1.02-4.38zM5.08 14.25a8.29 8.29 0 0 0-1.3 5.14 9.7 9.7 0 0 1-1.77-.44l-.11-.04a.56.56 0 0 1-.38-.49l-.01-.12a3.75 3.75 0 0 1 3.57-4.05zM20.23 19.39a8.29 8.29 0 0 0-1.31-5.14 3.75 3.75 0 0 1 3.57 4.05l-.01.12a.56.56 0 0 1-.37.49l-.12.04c-.56.2-1.15.35-1.76.44z"/></svg>';
 const FIRE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12.96 2.29a.75.75 0 0 0-1.07-.14 9.74 9.74 0 0 0-3.54 6.18 7.55 7.55 0 0 1-1.7-1.72.75.75 0 0 0-1.16-.08A9 9 0 1 0 15.68 4.53a7.46 7.46 0 0 1-2.72-2.24zM15.75 14.25a3.75 3.75 0 1 1-7.31-1.17c.63.46 1.35.81 2.13 1a6 6 0 0 1 1.93-3.55 3.75 3.75 0 0 1 3.25 3.72z"/></svg>';
-// V6 F30: Troya Gate's shield, coloured by the coin's live verdict
-const SHIELD = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 2l8.2 3.1v6.6c0 5-3.5 9.2-8.2 10.6-4.7-1.4-8.2-5.6-8.2-10.6V5.1zm3.6 6.6l-4.9 4.9-2.3-2.3-1.3 1.3 3.6 3.6 6.2-6.2z"/></svg>';
+// V6 F30: Troya Gate's shield, coloured by the coin's live verdict, with its own glyph cut out of it and a short word beside
+// it, so a tick only ever means passed and the verdict reads without hovering (a blue tick on an untested coin read as "verified")
+const SHIELD_PATH = "M12 2l8.2 3.1v6.6c0 5-3.5 9.2-8.2 10.6-4.7-1.4-8.2-5.6-8.2-10.6V5.1z";
+const shield = (glyph) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="${SHIELD_PATH}${glyph}"/></svg>`;
+const GATE_MARK = {
+  passed: [shield("M15.6 8.6l-4.9 4.9-2.3-2.3-1.3 1.3 3.6 3.6 6.2-6.2z"), "OK"],                                          // a tick
+  caution: [shield("M11 6.8h2v6.4h-2zM12 14.6a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6z"), "WARN"],                        // !
+  failed: [shield("M9.7 15.92 12 13.63 14.3 15.92 15.92 14.3 13.63 12 15.92 9.7 14.3 8.08 12 10.37 9.7 8.08 8.08 9.7 10.37 12 8.08 14.3z"), "FAIL"],   // ×
+  // a clock: a round face cut out, its hands left standing (the sell test or the snipe tax still to come)
+  untested: [shield("M12 7.2a4.8 4.8 0 1 1 0 9.6 4.8 4.8 0 0 1 0-9.6zM11.25 8.8h1.5v2.45h2.4v1.5h-3.9z"), "NEW"],
+};
+GATE_MARK.launching = GATE_MARK.untested;
 const VERIFIED = '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="vb" d="M8.6 3.8A4.5 4.5 0 0 1 12 2.25c1.36 0 2.57.6 3.4 1.55a4.5 4.5 0 0 1 3.5 1.3 4.5 4.5 0 0 1 1.3 3.5A4.5 4.5 0 0 1 21.75 12a4.5 4.5 0 0 1-1.55 3.4 4.5 4.5 0 0 1-1.3 3.5 4.5 4.5 0 0 1-3.5 1.3A4.5 4.5 0 0 1 12 21.75a4.5 4.5 0 0 1-3.4-1.55 4.5 4.5 0 0 1-3.5-1.3 4.5 4.5 0 0 1-1.3-3.5A4.5 4.5 0 0 1 2.25 12c0-1.36.6-2.57 1.55-3.4a4.5 4.5 0 0 1 1.3-3.5 4.5 4.5 0 0 1 3.5-1.3z"/><path class="vc" d="M8.4 12.3l2.4 2.4 4.8-5.2"/></svg>';
 // besides Troya (Buy, through the Gate), each coin opens on the venues people already trade on
 const VENUES = [
@@ -47,6 +57,16 @@ const EXTRA_CSS = `
 .hp-soc svg { width: 11px; height: 11px; display: block; }
 .hp-soc a:not(.web) svg { fill: currentColor; }
 .hp-soc a.web svg { width: 12px; height: 12px; }
+.hp-tag.hp-gate.lbl { padding: 0 7px 0 4px; gap: 3px; }
+.hp-gate-t { font-weight: 650; font-size: 9.5px; letter-spacing: .07em; }
+/* the verdict is now a word too, so on the light Desk it takes deeper tones that stay legible on paper */
+html[data-theme="light"] .hp-tag.hp-gate.passed { color: #1d7a45; }
+html[data-theme="light"] .hp-tag.hp-gate.caution { color: #8a5a00; border-color: rgba(138, 90, 0, .4); }
+html[data-theme="light"] .hp-tag.hp-gate.failed { color: #b42d2d; }
+html[data-theme="light"] .hp-tag.hp-gate.untested, html[data-theme="light"] .hp-tag.hp-gate.launching { color: #1f6f8f; border-color: rgba(31, 111, 143, .35); }
+.hp-tag.team { color: var(--muted, #8a979c); border-color: var(--line-2, rgba(255, 255, 255, .14)); background: rgba(138, 151, 156, .1); letter-spacing: .03em; }
+/* a team test coin offers no Buy: a quiet, disabled button that still shows why on hover */
+.btn.hp-testbtn, .btn.hp-testbtn:disabled { padding: 0 11px; opacity: 1; pointer-events: auto; cursor: not-allowed; color: var(--muted, #8a979c); background: none; border: 1px dashed var(--line-2, rgba(255, 255, 255, .14)); box-shadow: none; transform: none; }
 `;
 function extraCss() {
   if (document.getElementById("hp-extra-css")) return;
@@ -111,6 +131,10 @@ export async function mount(view, ctx) {
     const pct = Math.max(0, Math.min(100, Number(c.progressPct) || 0));
     // tags appear only when they are true for this coin
     const tags = [];
+    // the team's own test coins stay visible (owner, 18 Nov) but say so first, and offer no Buy (teamTest from launch.mjs)
+    if (c.teamTest) tags.push(tipOn(h("span", { class: "hp-tag team" }, "Team test"), "Team test",
+      c.teamTestWhy === "name" ? "Its name or ticker marks it as a test launch. It stays on the board so every launch is visible, but it is not a project and Troya offers no Buy for it."
+        : "The Troya team launched it to test the launch flow. It stays on the board so every launch is visible, but it is not a project and Troya offers no Buy for it."));
     // V6 F30 Born at the gate: the coin's live Troya Gate verdict (a 0.01 ETH buy and its sell simulated, every 10 minutes)
     if (c.gate?.verdict) {
       const G = { passed: ["Gate: passed", `Troya Gate passed it: ${c.gate.passed} of ${c.gate.total} checks clean, the buy and the sell simulated.`, "green"],
@@ -118,7 +142,8 @@ export async function mount(view, ctx) {
         failed: ["Gate: failed", `Troya Gate would stop a trade right now. ${c.gate.why || ""}`, "red"],
         untested: ["Gate: not tested yet", "Nobody has sold yet, so the sell can't be simulated. Troya checks again every 10 minutes.", "blue"],
         launching: ["Gate: launching", "Its first minutes carry Pons's snipe tax, so the Gate waits for it to settle. Checked again in 30 seconds.", "blue"] }[c.gate.verdict];
-      if (G) tags.push(tipOn(h("span", { class: `hp-tag hp-gate ${c.gate.verdict} ic` }, svg(SHIELD, "hp-tag-ic")), G[0], `${G[1].trim()} Checked ${ago(c.gate.checkedAt)}.`, G[2]));
+      const M = GATE_MARK[c.gate.verdict];
+      if (G && M) tags.push(tipOn(h("span", { class: `hp-tag hp-gate ${c.gate.verdict} ic lbl` }, svg(M[0], "hp-tag-ic"), h("b", { class: "hp-gate-t" }, M[1])), G[0], `${G[1].trim()} Checked ${ago(c.gate.checkedAt)}.`, G[2]));
     }
     if (c.og) tags.push(tipOn(h("span", { class: "hp-tag og" }, "OG"), "OG", c.badgesFrom === "gmgn" ? "Flagged as an OG token on GMGN." : "The original $TROYA, the coin Troya is built around.", "green"));
     if (c.cto) tags.push(tipOn(h("span", { class: "hp-tag cto ic on" }, svg(PEOPLE, "hp-tag-ic")), "Community takeover", "The community runs this coin.", "yellow"));
@@ -162,7 +187,8 @@ export async function mount(view, ctx) {
         h("div", { class: "hp-meta" },
           src ? h("span", { class: "hp-src", title: `Launched from ${src[0]}` }, svg(src[1], "hp-src-ic")) : null,
           c.at ? h("span", {}, ago(c.at)) : null,
-          c.creator ? h("span", { class: "mono" }, short(c.creator)) : null,
+          // the creator's wallet, named as such so it isn't read as the coin's address (the copy button beside the name copies that)
+          c.creator ? h("span", { class: "hp-st hp-dev", title: `Creator wallet ${c.creator}` }, h("i", {}, "dev"), h("span", { class: "mono" }, short(c.creator))) : null,
           stat("Holders", c.holders != null ? compact(c.holders, 0) : "–"), stat("Txns", c.txns24h != null ? compact(c.txns24h, 0) : "–"),
           stat("Tax", `${taxOf(c.creatorTaxBps)}%`, taxTip(c.creatorTaxBps)), c.initialBuyEth ? stat("Dev buy", `${c.initialBuyEth} ETH`) : null)),
       h("div", { class: "hp-side" },
@@ -172,8 +198,10 @@ export async function mount(view, ctx) {
         lane === "migrated" ? h("div", { class: "hp-grad" }, h("span", {}, "Graduated"), h("small", {}, c.liquidityUsd != null ? `Pool ${usd(c.liquidityUsd, { compact: true })}` : "Uniswap v4"))
           : h("div", { class: "hp-bar", title: `${pct.toFixed(1)}% of the curve filled` }, h("i", { style: { width: `${pct}%` } }), h("span", {}, pct < 0.05 ? "Just started" : `${pct.toFixed(pct < 10 ? 1 : 0)}% bonded`, c.raisedEth != null && c.raisedEth >= 0.0005 ? ` · ${c.raisedEth.toFixed(c.raisedEth < 1 ? 3 : 2)} ETH` : "")),
         h("div", { class: "hp-act" },
-          h("a", { class: "btn hp-buy", href: `#/swap?in=eth&out=${c.token}`, onclick: stop, title: "Buy on Troya, through the Gate" },
-            h("img", { src: "/img/logo-3d-128.png", alt: "", width: 16, height: 16 }), "Buy"),
+          c.teamTest
+            ? h("button", { class: "btn hp-buy hp-testbtn", type: "button", disabled: true, title: "A team test coin: Troya offers no Buy for it", "aria-label": `${c.symbol || "This coin"} is a team test coin: no Buy on Troya` }, "Test coin")
+            : h("a", { class: "btn hp-buy", href: `#/swap?in=eth&out=${c.token}`, onclick: stop, title: "Buy on Troya, through the Gate" },
+              h("img", { src: "/img/logo-3d-128.png", alt: "", width: 16, height: 16 }), "Buy"),
           VENUES.map(([name, logo, url]) =>
             h("a", { class: "hp-venue", href: url(c), target: "_blank", rel: "noopener", title: `Trade on ${name}`, "aria-label": `Trade ${c.symbol} on ${name}`, onclick: stop },
               logo ? h("img", { src: `/img/logos/${logo}`, alt: "", width: 16, height: 16 }) : h("b", { class: "hp-venue-txt" }, name.slice(0, 2)))))));
@@ -192,9 +220,11 @@ export async function mount(view, ctx) {
     if (!st.chosen && !d[st.lane]?.length) { const first = LANES.find((l) => d[l.key]?.length); if (first) st.lane = first.key; }
     clear(tabs, LANES.map((l) => h("button", { class: `hp-tab ${l.tone}`, type: "button", role: "tab", "aria-selected": String(st.lane === l.key), onclick: () => { st.lane = l.key; st.chosen = true; paint(); } },
       h("i", {}), l.title, h("small", {}, String(d[l.key].length)))));
+    // team test coins sink below every real coin of a lane (the sort is stable, so the board's own order holds otherwise)
+    const listOf = (k) => d[k].slice().sort((a, b) => !!a.teamTest - !!b.teamTest);
     clear(lanes, LANES.map((l) => h("section", { class: `panel hp-lane ${l.tone}${st.lane === l.key ? " on" : ""}`, "aria-label": l.title },
       h("header", {}, h("i", { class: "hp-dot" }), h("b", {}, l.title), h("span", { class: "hp-count" }, String(d[l.key].length)), h("small", {}, l.hint)),
-      h("div", { class: "hp-list" }, d[l.key].length ? d[l.key].map((c) => card(c, l.key))
+      h("div", { class: "hp-list" }, d[l.key].length ? listOf(l.key).map((c) => card(c, l.key))
         : h("div", { class: "hp-empty" }, h("p", {}, l.empty))))));
   }
 

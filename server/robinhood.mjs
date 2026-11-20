@@ -559,13 +559,23 @@ const liquidityFor = async (token) => {
 // test sell) pass _sim to go wider; nothing a client sends can.
 export const MAX_SLIPPAGE_BPS = Math.max(10, Math.min(5000, Number(process.env.MAX_SLIPPAGE_BPS) || 500));
 export const capSlippage = (bps, sim = false) => Math.min(sim ? 5000 : MAX_SLIPPAGE_BPS, Math.max(1, Math.round(Number(bps) || 100)));
+// Raw amounts from a client: plain digits only, at most 78 of them (a uint256). BigInt alone would also take "0x10", " 12 ",
+// "-5" or "true", and a too-long number crashed the calldata encoder (a 500 instead of a 400).
+const given = (v) => v != null && v !== "";
+function rawUnits(v, label) {
+  const s = String(v);
+  if (!/^[0-9]{1,78}$/.test(s)) throw new HttpError(400, `${label} must be a whole number of token units.`);
+  const x = BigInt(s);
+  // Uniswap v4 carries amounts as int128, so past 2^127 no swap could be built (parseAmount applies the same cap)
+  if (x >= 2n ** 127n) throw new HttpError(400, `That ${label} is too large.`);
+  return x;
+}
 // A client may ask for MORE price protection than the quote's own minimum, never less (minOut=0 is ignored).
 export function floorMinOut(quoteMin, requested, sim = false) {
   const q = BigInt(quoteMin);
-  if (requested == null || requested === "") return q;
-  let r;
-  try { r = BigInt(requested); } catch { throw new HttpError(400, "minOutRaw must be a whole number of token units."); }
-  if (sim) return r < 0n ? 0n : r;
+  if (!given(requested)) return q;
+  const r = rawUnits(requested, "minOutRaw");
+  if (sim) return r;
   return r > q ? r : q;
 }
 // KyberSwap fallback quote. Impact = how much worse the full size fills than a 1% probe; fees and spread come from the probe's
@@ -598,14 +608,22 @@ async function kyberQuote(tin, tout, amt, coin, ethUsd, warnings, light = false)
     plan: { venue: "kyber", routeSummary: full.routeSummary, router: full.router },
   };
 }
-export async function quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps = 100, from, _sim = false }) {
+// the two tokens and the raw amount in, checked: a malformed raw amount is refused before any chain read
+async function swapInput({ tokenIn, tokenOut, amountIn, amountInRaw }) {
   const tin = isNative(tokenIn) ? ZERO : addr(tokenIn, "input token");
   const tout = isNative(tokenOut) ? ZERO : addr(tokenOut, "output token");
   if (lower(tin) === lower(tout)) throw new HttpError(400, "Pick two different tokens.");
+  const raw = given(amountInRaw) ? rawUnits(amountInRaw, "amountInRaw") : null;
   const [mi, mo] = await Promise.all([metaOf(tin), metaOf(tout)]);
-  if (amountInRaw != null && amountInRaw !== "" && !/^\d+$/.test(String(amountInRaw))) throw new HttpError(400, "Enter a valid amount.");
-  const amt = amountInRaw != null && amountInRaw !== "" ? BigInt(amountInRaw) : parseAmount(amountIn, mi.decimals);
+  const amt = raw ?? parseAmount(amountIn, mi.decimals);
   if (amt <= 0n) throw new HttpError(400, "Enter a positive amount.");
+  return { tin, tout, mi, mo, amt };
+}
+// How long Troya waits for KyberSwap to beat its own route. Kyber's queue is shared and slow under load (a 0.05 ETH $TROYA
+// quote waited 52 to 65 s on it on 20 Nov 2026), so past this the route Troya already has stands.
+const KYBER_RACE_MS = 1500;
+export async function quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps = 100, from, _sim = false }) {
+  const { tin, tout, mi, mo, amt } = await swapInput({ tokenIn, tokenOut, amountIn, amountInRaw });
   const slip = capSlippage(slippageBps, _sim);
   const side = tin === ZERO ? "buy" : tout === ZERO ? "sell" : "swap";
   const warnings = [];
@@ -674,10 +692,17 @@ export async function quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slip
   let feePct = c.venue === "v3" ? c.hops.reduce((s, h) => s + h.fee / 10000, 0) : c.hops.reduce((s, h) => s + (h.key.fee < 0x800000 ? h.key.fee / 10000 : 0), 0);
   if (ps?.graduated) feePct += Number(ps.feeBps + ps.taxBps) / 100; // the Pons hook keeps the 1% fee + creator tax after graduation
   // best execution: when Troya's own route is poor (a thin or odd pool: big impact or fees), ask KyberSwap too and take
-  // whichever gives more. A healthy Pons or Uniswap route is kept as it is.
-  if (KYBER_ON && ((r.impact ?? 0) > 0.02 || feePct > 3)) {
-    const kq = await kyberQuote(tin, tout, amt, coin, ethUsd, warnings, _sim).catch(() => null);
-    if (kq && kq.out * 1000n > r.best.out * 1005n) return finish(kq);
+  // whichever gives more. A healthy Pons or Uniswap route is kept as it is. Kyber is not asked when it cannot win: a
+  // graduated Pons coin trades in its own Pons-hook pool, which is all Kyber could route through too, and when Troya's
+  // router reaches a single pool that pool is the coin's market. Otherwise Kyber gets KYBER_RACE_MS, then Troya's route stands.
+  const ownPool = !!(ps?.graduated && ps.poolId) && c.venue === "v4" && c.hops.some((h) => lower(h.key.id || poolIdOf(h.key)) === lower(ps.poolId));
+  if (KYBER_ON && !ownPool && r.ranked.length > 1 && ((r.impact ?? 0) > 0.02 || feePct > 3)) {
+    const kw = []; // Kyber's own notes, kept only if its route is used (a late answer must not touch this quote)
+    const kq = await Promise.race([
+      kyberQuote(tin, tout, amt, coin, ethUsd, kw, _sim).catch(() => null),
+      new Promise((ok) => setTimeout(() => ok(null), KYBER_RACE_MS)),
+    ]);
+    if (kq && kq.out * 1000n > r.best.out * 1005n) { warnings.push(...kw); return finish(kq); }
   }
   const row = await liquidityFor(coin || tout);
   const depthEth = row?.liquidityUsd && ethUsd ? row.liquidityUsd / ethUsd / 2 : null;
@@ -695,14 +720,48 @@ async function isPonsEither(a, b) {
   return ZERO;
 }
 
+// One swap asks for the same quote up to four times within seconds: the Swap page's quote, the Gate, the Gate again at the
+// click, then /swap/build. The Gate and the build reuse the server's own quote for the identical request (pair, raw amount,
+// slippage, wallet) for 30 s, and callers asking at the same moment share one computation. A Pons curve quote lives 8 s,
+// as ponsState does: a young curve moves fast. Only the quote is reused. The Gate's simulation and test sell, and the
+// approvals, always run fresh, and the swap is bounded by the quote's minOut, so a price that moved since makes the
+// transaction revert, never fill below the minimum the user saw. Internal simulations (_sim) never use it.
+const QUOTE_TTL_MS = 30_000, CURVE_QUOTE_TTL_MS = 8_000, QUOTE_CACHE_MAX = 500;
+const quoteCache = new Map(); // key → { p: Promise<quote>, q: quote once it is in }
+const quoteFresh = (q) => Date.now() - q.quotedAt < (q.venue === "pons-curve" ? CURVE_QUOTE_TTL_MS : QUOTE_TTL_MS);
+// each caller gets its own copy, so nobody's warnings end up in somebody else's quote
+const ownCopy = (q) => ({ ...q, warnings: [...q.warnings] });
+async function sharedQuote({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps, from }, { fresh = false } = {}) {
+  const { tin, tout, amt } = await swapInput({ tokenIn, tokenOut, amountIn, amountInRaw });
+  const sb = slippageBps === undefined ? 100 : slippageBps; // quoteSwap's own default
+  const who = from && isAddress(from) ? lower(from) : "";   // quoteSwap reads an invalid wallet as none
+  const key = [lower(tin), lower(tout), amt, capSlippage(sb), Math.round(Number(sb) || 0) > MAX_SLIPPAGE_BPS ? "capped" : "", who].join("|");
+  const hit = quoteCache.get(key);
+  // in flight (always fresh), or answered recently and the caller does not insist on a new one
+  if (hit && (!hit.q || (!fresh && quoteFresh(hit.q)))) return ownCopy(await hit.p);
+  const e = { p: quoteSwap({ tokenIn: tin, tokenOut: tout, amountInRaw: amt.toString(), slippageBps: sb, from }), q: null };
+  quoteCache.set(key, e);
+  e.p.then((q) => { e.q = q; }, () => { if (quoteCache.get(key) === e) quoteCache.delete(key); }); // errors are never kept
+  if (quoteCache.size > QUOTE_CACHE_MAX) {
+    for (const [k, x] of quoteCache) if (x.q && !quoteFresh(x.q)) quoteCache.delete(k);
+    while (quoteCache.size > QUOTE_CACHE_MAX) quoteCache.delete(quoteCache.keys().next().value);
+  }
+  return ownCopy(await e.p);
+}
+
 /**
  * buildSwapTx({ from, tokenIn, tokenOut, amountIn | amountInRaw, slippageBps, minOutRaw? })
  * → { chainId, from, to, data, value, deadline, quote, approvals:[{kind,token,spender,amount,needed,tx}], approval }
- * Always re-quotes on the server: calldata is never built from a client-supplied route.
+ * Quotes on the server: calldata is never built from a client-supplied route. _reuse (only the /api/swap/build route, where
+ * a person just saw the quote and the Gate) may take the server's own quote of the last 30 s for the identical request (see
+ * sharedQuote). Server-side callers (the Agent Wallet: Arena, Champions, Aegis, Autopilot) always quote fresh: one wallet can
+ * buy the same coin for the same amount twice within seconds (Arena traders), and a stale quote would make the second
+ * transaction revert, or an exit on a falling coin revert for the cache's lifetime.
  */
-export async function buildSwapTx({ from, tokenIn, tokenOut, amountIn, amountInRaw, minOutRaw, slippageBps, deadlineSec = 1200, _quote, _sim = false, _gate = false }) {
+export async function buildSwapTx({ from, tokenIn, tokenOut, amountIn, amountInRaw, minOutRaw, slippageBps, deadlineSec = 1200, _quote, _sim = false, _gate = false, _reuse = false }) {
   const who = addr(from, "wallet address");
-  const q = _quote?.plan ? _quote : await quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps, from: who });
+  if (given(minOutRaw)) rawUnits(minOutRaw, "minOutRaw"); // a malformed minimum is refused before any quote is made
+  const q = _quote?.plan ? _quote : await sharedQuote({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps, from: who }, { fresh: !_reuse });
   const amt = BigInt(q.amountInRaw);
   const min = floorMinOut(q.minOutRaw, minOutRaw, _sim);
   const deadline = Math.floor(Date.now() / 1000) + Math.max(60, Math.min(3600, Number(deadlineSec) || 1200));
@@ -897,13 +956,20 @@ export async function gateCheck({ tokenIn, tokenOut, amountIn, amountInRaw, from
   const checks = [];
   const add = (key, status, label, detail) => checks.push({ key, status, label, detail });
   let q;
-  try { q = await quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps, from }); add("route", "pass", "Route", q.route.label); }
+  try { q = await sharedQuote({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps, from }); add("route", "pass", "Route", q.route.label); }
   catch (e) { add("route", "fail", "Route", e.message); return { pass: false, checks }; }
   const imp = q.priceImpact;
   add("impact", imp == null ? "skip" : imp > 0.15 ? "fail" : imp > 0.05 ? "warn" : "pass", "Price impact", imp == null ? "Not measurable" : `${(imp * 100).toFixed(2)}%`);
   const d = q.poolLiquidity || {};
+  // A Pons curve is never failed on depth: every coin starts at zero raised, so a depth floor would block each new coin
+  // (all of those born through Troya) for its first buyers. It is said plainly instead, as Sentry's verdict treats it.
+  const curve = q.venue === "pons-curve";
+  const ethTxt = (x) => `${x < 1 ? x.toFixed(3) : x.toFixed(2)} ETH`;
   if (q.venue === "wrap") add("depth", "skip", "Pool depth", "Not a pool: the WETH contract");
-  else if (d.eth != null) add("depth", d.eth < 0.05 ? "fail" : d.eth < 0.5 ? "warn" : "pass", "Pool depth", `${d.eth < 1 ? d.eth.toFixed(3) : d.eth.toFixed(2)} ETH${q.venue === "pons-curve" ? " raised on the curve" : ""}`);
+  else if (curve && d.eth != null && d.eth < 0.05) add("depth", "warn", "Pool depth", q.side === "buy"
+    ? `Young curve: you would be one of the first buyers; selling back can return at most what buyers have put in (${ethTxt(d.eth)} so far)`
+    : `Young curve: selling can return at most what buyers have put in (${ethTxt(d.eth)} so far)`);
+  else if (d.eth != null) add("depth", d.eth < 0.05 ? "fail" : d.eth < 0.5 ? "warn" : "pass", "Pool depth", `${ethTxt(d.eth)}${curve ? " raised on the curve" : ""}`);
   else if (d.pair != null) add("depth", "pass", "Pool depth", `${d.pair.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${d.pairSymbol} raised on the curve`);
   else add("depth", "skip", "Pool depth", d.note || "Not indexed");
   if (q.feePct != null) add("fee", q.feePct > 10 ? "fail" : q.feePct > 5 ? "warn" : "pass", "Fees and taxes", `${q.feePct.toFixed(2)}%${q.feeNote ? ` (${q.feeNote})` : ""}`);
@@ -945,7 +1011,8 @@ export async function gateCheck({ tokenIn, tokenOut, amountIn, amountInRaw, from
   }
   // a Kyber route is simulated above, but nobody gets its calldata to sign until KYBER_LIVE is on
   if (q.venue === "kyberswap" && !KYBER_LIVE) tx = null;
-  return { pass: !checks.some((c) => c.status === "fail"), checks, quote: q, tx, checkedAt: Date.now() };
+  // pass as sentry.verdict() reads it: on a curve the depth line informs, it never decides
+  return { pass: !checks.some((c) => c.status === "fail" && !(curve && c.key === "depth")), checks, quote: q, tx, checkedAt: Date.now() };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1315,8 +1382,10 @@ export async function register(r, ctx) {
   }
 
   const slipOf = (query) => query.slippageBps ?? (query.slippage ? Number(query.slippage) * 100 : 100);
-  r.get("/api/swap/quote", ({ query }) => isSol(query.chain) ? sol().then((m) => m.solQuote({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query) })) : isEvm(query.chain) ? evm().then((m) => m.evmQuote({ chain: query.chain, tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query) })) : quoteSwap({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query), from: query.from }), { perMin: 240 });
-  r.post("/api/swap/build", ({ body }) => { const b = body || {}; if (isSol(b.chain)) return sol().then((m) => m.solBuild({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, slippageBps: b.slippageBps })); if (isEvm(b.chain)) return evm().then((m) => m.evmBuild({ chain: b.chain, from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps })); return buildSwapTx({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps }); }, { perMin: 120 });
+  // a quote is made fresh here (or joins an identical one in flight); it is kept so the Gate and the build that follow the
+  // same request can reuse it
+  r.get("/api/swap/quote", ({ query }) => isSol(query.chain) ? sol().then((m) => m.solQuote({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query) })) : isEvm(query.chain) ? evm().then((m) => m.evmQuote({ chain: query.chain, tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query) })) : sharedQuote({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query), from: query.from }, { fresh: true }), { perMin: 240 });
+  r.post("/api/swap/build", ({ body }) => { const b = body || {}; if (isSol(b.chain)) return sol().then((m) => m.solBuild({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, slippageBps: b.slippageBps })); if (isEvm(b.chain)) return evm().then((m) => m.evmBuild({ chain: b.chain, from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps })); return buildSwapTx({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps, _reuse: true }); }, { perMin: 120 });
   r.get("/api/swap/gate", ({ query }) => isSol(query.chain) ? sol().then((m) => m.solGate({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) })) : isEvm(query.chain) ? evm().then((m) => m.evmGate({ chain: query.chain, tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) })) : gateCheck({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) }), { perMin: 90 });
 
   r.get("/api/token/health", ({ query }) => tokenHealth(query.address), { perMin: 120 });

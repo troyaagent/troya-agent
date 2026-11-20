@@ -36,7 +36,11 @@ const G = {
   social: `<path d="M4.2 3.5h11.6a2.2 2.2 0 0 1 2.2 2.2v7.1a2.2 2.2 0 0 1-2.2 2.2H9.2L5 18.6V15H4.2A2.2 2.2 0 0 1 2 12.8V5.7a2.2 2.2 0 0 1 2.2-2.2z"/><path d="M20 8h.4A1.6 1.6 0 0 1 22 9.6v6.3a1.6 1.6 0 0 1-1.6 1.6H20V20l-3.2-2.5H13l2.2-2.2H18a2 2 0 0 0 2-2z"/>`,
   start: `<path fill-rule="evenodd" d="M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19zM10 7.8v8.4l6.4-4.2z"/>`,
   docs: `<path fill-rule="evenodd" d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.6V8h4.4zM8 12v1.8h8V12zm0 4v1.8h6V16z"/>`,
-  verify: `<path d="M12 2l8.2 3.1v6.6c0 5-3.5 9.2-8.2 10.6-4.7-1.4-8.2-5.6-8.2-10.6V5.1z"/>`,
+  verify: `<path d="M12 2l8.2 3.1v6.6c0 5-3.5 9.2-8.2 10.6-4.7-1.4-8.2-5.6-8.2-10.6V5.1z"/>`,   // the shield: "Is it safe?" and the Gate tag
+  proof: `<path fill-rule="evenodd" d="M12 2.8l2.7 2.7h3.8v3.8l2.7 2.7-2.7 2.7v3.8h-3.8L12 21.2l-2.7-2.7H5.5v-3.8L2.8 12l2.7-2.7V5.5h3.8zM7.4 12.1l1.6-1.6 2 2 4.1-4.1 1.6 1.6-5.7 5.7z"/>`,   // Verify: a seal with a tick, not the safety shield
+  news: `<rect x="4" y="2.5" width="2.2" height="19" rx="1.1"/><path d="M7.2 3.6h12.6l-3 4.7 3 4.7H7.2z"/>`,   // What's new: the milestone flag on the roadmap
+  plans: `<path d="M12 2.5l10 5.1-10 5.1-10-5.1z"/><path d="M4.4 11l7.6 3.9 7.6-3.9 2.4 1.2-10 5.1-10-5.1z"/><path d="M4.4 15.6l7.6 3.9 7.6-3.9 2.4 1.2-10 5.1-10-5.1z"/>`,   // Plans and tiers: three stacked tiers
+  bug: `<path d="M8.4 9.4a3.6 3.6 0 0 1 7.2 0z"/><path d="M8.3 3.3l2.3 2.6-1.2 1-2.3-2.6zM15.7 3.3l-2.3 2.6 1.2 1 2.3-2.6z"/><path fill-rule="evenodd" d="M7 10.6h10v4.2a5 5 0 0 1-10 0zm4.5 1.2v6.6h1v-6.6z"/><rect x="2.4" y="12" width="3.8" height="1.8" rx=".9"/><rect x="17.8" y="12" width="3.8" height="1.8" rx=".9"/><rect x="2.4" y="15.3" width="3.8" height="1.8" rx=".9"/><rect x="17.8" y="15.3" width="3.8" height="1.8" rx=".9"/>`,   // Report a bug: legs sit between the chrome slices so they stay whole
   rail: `<path d="M9.2 2h1.6L6.4 22H3.6z"/><path d="M13.2 2h1.6l5.6 20h-2.8z"/><rect x="8" y="5.6" width="8" height="1.8" rx=".6"/><rect x="6.6" y="10.9" width="10.8" height="2.2" rx=".7"/><rect x="5" y="16.6" width="14" height="2.6" rx=".8"/>`,
   record: `<rect x="3.5" y="2" width="3" height="20" rx="1.2"/><path fill-rule="evenodd" d="M8 2h10.5a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8zm2.6 5v1.8h6.8V7zm0 4.2V13h6.8v-1.8zm0 4.2v1.8h4.4v-1.8z"/>`,
   flywheel: `<path d="M12 3a9 9 0 0 1 8.4 5.8h-2.6A6.6 6.6 0 0 0 5.4 12H3a9 9 0 0 1 9-9z"/><path d="M21 3.4V10h-6.6z"/><path d="M12 21a9 9 0 0 1-8.4-5.8h2.6A6.6 6.6 0 0 0 18.6 12H21a9 9 0 0 1-9 9z"/><path d="M3 20.6V14h6.6z"/>`,

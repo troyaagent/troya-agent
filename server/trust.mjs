@@ -5,6 +5,10 @@
 // instead of promises. Nothing here is a guarantee; every number links to where it comes from.
 const REPO = process.env.GITHUB_REPO || "troyaagent/troya-agent";
 const TTL = 10 * 60_000;
+// The one place the Safety page's roadmap status comes from. safety.html carries no version number on purpose, so the page
+// can never show two chapters at once; move this (and the fallback in public/home/safety.js) the day a chapter goes live.
+// Audit, 20 Nov 2026: this still said "V7 Athena shipped" while every V8 phase was already running on the live site.
+const ROADMAP = { now: "V8 Agamemnon live", next: "V9 Achilles", named: "V9 to V14", url: "/roadmap" };
 let store = null, memo = null, memoAt = 0, inflight = null;
 
 async function github(path) {
@@ -35,7 +39,7 @@ async function build() {
     launches: launches ? { born: launches.length } : null,
     burn: fly?.burned ? { total: fly.burned.total, pctOfMinted: fly.burned.pctOfMinted, burns: (fly.burned.burns || []).length } : null,
     sentry: posted ? { symbol: posted.symbol || null, at: posted.at || null } : null,
-    roadmap: { now: "V7 Athena shipped", next: "V8 Agamemnon", named: "V8 to V14", url: "/roadmap" },
+    roadmap: { ...ROADMAP },
     updatedAt: Date.now(),
   };
 }

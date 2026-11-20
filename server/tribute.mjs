@@ -13,7 +13,10 @@
 //              (market.mjs fold() rules, plus the real money).
 // Verdict: "fake" (a red check), "caution" (an amber one), "clear" (measured, nothing found), "unknown" (nothing to read).
 // Read-only: never trades, never moves money.
-//   GET /api/tribute/:token   one coin (cached 10 min)
+//   GET /api/tribute/:token   one coin (cached 10 min; an older reading is answered at once while a new one is made)
+import { readFile, writeFile, rename } from "node:fs/promises";
+import { writeFileSync, renameSync } from "node:fs";
+import { join } from "node:path";
 import { Interface, getAddress, isAddress, id as keccakId } from "ethers";
 import { rpc, ADDR, CHAINS, ponsState } from "./robinhood.mjs";
 import { dsPairs, getEthUsd, blockscoutApi, hasBlockscout, isStock } from "./market.mjs";
@@ -32,6 +35,10 @@ const HARD = new Set([ZERO, WETH, USDG, CBBTC]);              // real money on t
 const T_TRANSFER = keccakId("Transfer(address,address,uint256)");
 const WINDOW = 9_900_000;          // blocks read back (~11 days at ~0.1 s); the official RPC answers 10M blocks per call
 const CACHE_MS = 10 * 60_000, BUDGET_MS = 18_000;
+// a reading older than its time to live is still answered at once (and remade in the background) for up to an hour; older
+// than that the asker waits for a new one: backing and volume can change in an hour, and a stale "real" is not worth the speed
+const MAX_STALE_MS = 60 * 60_000;
+const TROYA = "0x1fa81ddaaac83240803b3f2d20595e40edc1a074";   // the most asked coin: measured at boot so its page opens at once
 const RULES = {
   creatorRed: 50, creatorAmber: 20, ownCoinAmber: 50,           // % of the traced income
   backRed: 400, backRedMinCap: 1e6, backRedLoose: 2000, backMinCap: 1e5, backAmber: 200, backAmberMinCap: 2.5e5,
@@ -87,7 +94,8 @@ async function isPool(a) {   // a pool answers token0()
   return POOL.get(a);
 }
 // The official RPC answers 429 when pressed (the rest of the server reads it too): two reads at a time across all checks,
-// and a busy answer waits and retries (0.5 s, 1 s, 2 s)
+// and a busy answer waits and retries (0.5 s, 1 s, 2 s). S.throttled marks a read that was still busy after its retries
+// (one 429 that a retry got past is not a reason to skip the holder scan or to call the reading throttled)
 let wideBusy = 0;
 const wideQ = [];
 async function wideLogs(q, S, retries = 3) {
@@ -98,18 +106,18 @@ async function wideLogs(q, S, retries = 3) {
       try { return (await rpc("robinhood", "eth_getLogs", [q], { only: W(), timeoutMs: 15_000 })) || []; }
       catch (e) {
         const busy = /429|rate/i.test(e.message);
-        if (busy) S.throttled = true;
-        if (i >= retries || !busy || S.left() < 5000) throw e;
+        if (i >= retries || !busy || S.left() < 5000) { if (busy) S.throttled = true; throw e; }
         await sleep(500 * 2 ** i);
       }
     }
   } finally { wideBusy--; wideQ.shift()?.(); }
 }
 // logs of one contract over up to 10M blocks (the official RPC's limit with one address and one value per topic; it
-// returns 10,000 logs at most). Too many: halve the range, three times at most. split=false gives up instead (null)
+// returns 10,000 logs at most). Too many: halve the range, three times at most. split=false gives up instead (null),
+// after two retries on a busy answer (the holder scan used to give up on the first 429 and lose all 8 wallets)
 async function logs(S, address, topics, { split = true, depth = 0, from = S.from, to = S.head } = {}) {
   try {
-    return await wideLogs({ address, topics, fromBlock: hex(from), toBlock: hex(to) }, S, split ? 3 : 0);
+    return await wideLogs({ address, topics, fromBlock: hex(from), toBlock: hex(to) }, S, split ? 3 : 2);
   } catch (e) {
     if (!split) { const many = /10000|exceed/i.test(e.message); S.cut(`skipped ${short(lc(topics[2] ? at(topics[2]) : address))}: ${many ? "too many transfers" : String(e.message).slice(0, 60)}`, many); return null; }
     if (depth < 3 && to > from && /10000|exceed|too many/i.test(e.message)) {
@@ -135,6 +143,29 @@ async function ethMoves(S, addr, dir, { internal = true, soft = false } = {}) {
       out.push({ from: lc(x.from?.hash), to: lc(x.to?.hash), asset: ZERO, v, tx: x.transaction_hash || x.hash, method: x.method || null });
     }
     if (d.next_page_params && (d.items || []).length && Number(d.items.at(-1).block_number) >= S.from) S.cut(`ETH moves of ${short(addr)}: newest 50 only`, soft);   // one page per kind
+  }
+  return out;
+}
+// who sent WETH, USDG (and the deep pool's other money) to a wallet in the window, as Map(asset -> senders), from
+// Blockscout PRO's token transfers (already paid for, and not the free RPC's 10M-block log scan that answers 429 when
+// pressed). One page of its newest 50 incoming ERC-20 transfers first: when that reaches back past the window it is the
+// whole story. A busy wallet is asked again per asset (newest 50 each, plenty to see a distributor). null when Blockscout
+// cannot answer or does not filter as asked: the caller reads the logs instead
+async function bsSenders(S, wallet) {
+  const inWindow = (x) => { const blk = Number(x.block_number || 0), ts = x.timestamp ? Date.parse(x.timestamp) : 0; return blk ? blk >= S.from : !ts || ts >= S.fromTs; };
+  const tokenOf = (x) => lc(x.token?.address_hash || x.token?.address);
+  const page = async (q) => { const d = await bs(`/addresses/${wallet}/token-transfers?type=ERC-20&filter=to${q}`); return d && Array.isArray(d.items) ? d : null; };
+  const more = (d) => !!d.next_page_params && d.items.length > 0 && inWindow(d.items.at(-1));
+  const out = new Map(S.payAssets.map((a) => [a, []]));
+  const take = (d) => { for (const x of d.items) { const f = lc(x.from?.hash); if (out.has(tokenOf(x)) && lc(x.to?.hash) === wallet && inWindow(x) && isAddress(f)) out.get(tokenOf(x)).push(f); } };
+  const all = await page("");
+  if (!all || all.items.some((x) => !tokenOf(x))) return null;   // rows that do not say which coin cannot be sorted
+  if (!more(all)) { take(all); return out; }
+  for (const a of S.payAssets) {
+    const d = await page(`&token=${a}`);
+    if (!d || d.items.some((x) => tokenOf(x) && tokenOf(x) !== a)) return null;   // the token filter was not applied
+    take(d);
+    if (more(d)) S.cut(`incoming ${a === USDG ? "USDG" : a === WETH ? "WETH" : short(a)} of ${short(wallet)}: newest 50 only`, true);
   }
   return out;
 }
@@ -273,16 +304,24 @@ async function findPayers(S) {
   }
   // WETH and USDG into the biggest wallets: one sender paying several of them is a distributor (skipped when a known
   // payout contract already pays them: the time goes to tracing its income instead)
+  // Blockscout first (it does not lean on the busy RPC), the logs when it cannot answer
   if (payers.some((p) => p.kind !== "creator") || S.hk) S.cut("holder scan skipped: a payout contract was found", true);
-  else if (S.throttled) S.cut("holder scan skipped: the RPC is busy");
+  else if (S.throttled && !hasBlockscout()) { S.cut("holder scan skipped: the RPC is busy"); }
   else if (S.left() > 9000) {
     const eoas = S.holders.filter((h) => !h.contract && !S.creators.has(h.a) && h.a !== DEAD).slice(0, RULES.scanHolders).map((h) => h.a);
     const seen = new Map(), read = new Set();
-    await pmap(eoas.flatMap((h) => S.payAssets.map((a) => [a, h])), 6, async ([a, h]) => {
-      const ls = await logs(S, a, [T_TRANSFER, null, pad(h)], { split: false });
-      if (!ls) return;                              // a busy trading wallet: skipped (noted in window.cut)
-      read.add(h);
-      for (const l of ls) { const f = at(l.topics[1]); if (f === ZERO || f === h || VENUES.has(f) || S.poolSet.has(f)) continue; const k = seen.get(f) || new Set(); k.add(h); seen.set(f, k); }
+    // two wallets at a time: Blockscout's client paces its own reads, and the logs share two RPC slots with every other check
+    const note = (h, senders) => { for (const f of senders) { if (f === ZERO || f === h || VENUES.has(f) || S.poolSet.has(f)) continue; const k = seen.get(f) || new Set(); k.add(h); seen.set(f, k); } };
+    await pmap(eoas, 2, async (h) => {
+      if (S.left() < 4000) { S.cut("no time for the whole holder scan"); return; }
+      const byAsset = await bsSenders(S, h);
+      if (byAsset) { read.add(h); for (const senders of byAsset.values()) note(h, senders); return; }
+      for (const a of S.payAssets) {
+        if (S.throttled) { S.cut(`skipped ${short(h)}: the RPC is busy`); return; }   // no more tries on a busy RPC
+        const ls = await logs(S, a, [T_TRANSFER, null, pad(h)], { split: false });
+        if (!ls) continue;                          // a busy trading wallet: skipped (noted in window.cut)
+        read.add(h); note(h, ls.map((l) => at(l.topics[1])));
+      }
     });
     S.scanned = read.size;
     const cands = [...seen.entries()].filter(([, s]) => s.size >= RULES.payees).sort((x, y) => y[1].size - x[1].size).slice(0, 4);
@@ -417,8 +456,10 @@ async function marketChecks(S) {
     return { pool, dex: `${p.dexId || "?"}${p.labels?.[0] ? " " + p.labels[0] : ""}`, quote: p.quoteToken?.symbol || "?", hard, realUsd: real, source: src, liquidityUsd: Number(L.usd) || 0,
       base: Number(L.base) || 0, volumeUsd: Number(p.volume?.h24) || 0, trades: (tx.buys || 0) + (tx.sells || 0), mc: Number(p.marketCap ?? p.fdv) || 0, priceUsd: price };
   }));
-  // a Pons coin still on its curve: the curve's real quote reserve
-  if (S.ps && !S.ps.graduated && S.ps.realQuote > 0n && !rows.some((r) => r.pool === lc(S.ps.curve))) {
+  // a Pons coin still on its curve: the curve's real quote reserve (an empty curve too: its price comes from the virtual
+  // reserves, and "the curve holds no buyers' ETH yet" says more than "no pools were found")
+  const onCurve = !!(S.ps && !S.ps.graduated);
+  if (onCurve && S.ps.realQuote >= 0n && !rows.some((r) => r.pool === lc(S.ps.curve))) {
     const pairUsd = lc(S.ps.pair) === ZERO || lc(S.ps.pair) === WETH ? S.ethUsd : lc(S.ps.pair) === USDG ? 1 : null;
     if (pairUsd) {
       const px = S.ps.tokenReserve > 0n ? (units(S.ps.quoteReserve, S.ps.pairDecimals) / units(S.ps.tokenReserve, 18)) * pairUsd : 0;
@@ -439,6 +480,8 @@ async function marketChecks(S) {
   });
   const ratio = hardUsd > 0 ? mc / hardUsd : Infinity, softRatio = softUsd > 0 ? mc / softUsd : Infinity;
   const qs = [...new Set(rows.filter((r) => r.hard).map((r) => r.quote))].join("/") || "ETH/USDG";
+  const curveMoney = onCurve && lc(S.ps.pair) !== ZERO && lc(S.ps.pair) !== WETH ? S.ps.pairSymbol || "money" : "ETH";
+  const where = onCurve && main.dex === "pons curve" ? "on its curve" : "in its pools";
   if (!(mc > 0)) B.status = "unknown";
   else if ((mc >= RULES.backRedMinCap && ratio >= RULES.backRed) || (mc >= RULES.backMinCap && ratio >= RULES.backRedLoose && !(softRatio < RULES.backAmber))) {
     B.status = "red";
@@ -451,9 +494,25 @@ async function marketChecks(S) {
     reasons.push({ level: "amber", text: hardUsd > 0
       ? `Its ${usd(mc)} market cap has ${usd(hardUsd)} of real money (${qs}) in its pools: only ${pctS((hardUsd / mc) * 100)} of it could be sold.`
       : `Its pools hold no ETH, USDG or stock tokens: the other side is ${usd(softUsd)} of ${[...new Set(rows.map((r) => r.quote))].join("/")}, another coin whose own value may not be real.` });
-  } else {
+  } else if (hardUsd + softUsd <= 0) {
+    // too small for the rules above, but there is nothing on the other side of any pool: no ratio to call normal, nothing
+    // a seller could take out. Not measured, so not "real" (a $3k coin with $0 behind it was stamped real, 20 Nov 2026)
+    B.status = "unknown";
+    reasons.push({ level: "amber", text: onCurve ? `The curve holds no buyers' ${curveMoney} yet, so nothing could be sold right now.` : "No ETH or USDG is in its pools yet, so nothing could be sold right now." });
+  } else if (hardUsd <= 0) {
+    B.status = "unknown";
+    reasons.push({ level: "amber", text: `Its pools hold no ETH, USDG or stock tokens: the other side is ${usd(softUsd)} of ${[...new Set(rows.filter((r) => !r.hard).map((r) => r.quote))].join("/")}, another coin whose own value may not be real.` });
+  } else if (ratio >= RULES.backRedLoose) {
+    // dust: a few dollars against the whole market cap is no backing, whatever the size of the coin
+    B.status = "unknown";
+    reasons.push({ level: "amber", text: `Only ${usd(hardUsd)} of real money (${qs}) is ${where}: at most ${pctS((hardUsd / mc) * 100)} of its ${usd(mc)} market cap could be sold right now.` });
+  } else if (ratio < RULES.backAmber) {
     B.status = "ok";
-    reasons.push({ level: "ok", text: `Its ${usd(mc)} market cap has ${usd(hardUsd + softUsd)} of real money in its pools (${pctS(Math.min(100, ((hardUsd + softUsd) / mc) * 100))} of the market cap could be sold), a normal ratio.` });
+    reasons.push({ level: "ok", text: `Its ${usd(mc)} market cap has ${usd(hardUsd)} of real money (${qs}) ${where}${softUsd > 0 ? ` and ${usd(softUsd)} of other coins` : ""} (${pctS((hardUsd / mc) * 100)} of the market cap could be sold), a normal ratio.` });
+  } else {
+    // thin, but under the market caps the rules flag at: said as it is, never called normal
+    B.status = "ok";
+    reasons.push({ level: "info", text: `Its ${usd(mc)} market cap has ${usd(hardUsd)} of real money (${qs}) ${where}: only ${pctS((hardUsd / mc) * 100)} of it could be sold. That is thin, though common for a coin this small, so it is not flagged.` });
   }
   // volume: few huge trades, a round total, more than the pool could carry
   let vol = 0, trades = 0, scripted = 0, amber = false;
@@ -523,6 +582,7 @@ async function measure(t) {
   if (hk?.dropBox) S.doorSet.add(hk.dropBox);
   const [b0, b1] = await Promise.all([S.from, S.head].map((n) => rpc("robinhood", "eth_getBlockByNumber", [hex(n), false], { timeoutMs: 10_000 }).catch(() => null)));
   S.days = b0 && b1 ? Math.max(1, Math.round((Number(b1.timestamp) - Number(b0.timestamp)) / 86400)) : 11;
+  S.fromTs = b0 ? Number(b0.timestamp) * 1000 : Date.now() - S.days * 86_400_000;   // Blockscout rows carry a time
 
   const market = marketChecks(S).catch((e) => ({ B: { status: "unknown" }, V: { status: "unknown" }, reasons: [{ level: "info", text: `Pools could not be read (${e.message}).` }] }));
   const [creators, holders] = await Promise.all([creatorsOf(S), bs(`/tokens/${t}/holders`)]);
@@ -539,8 +599,11 @@ async function measure(t) {
   all.sort((a, b) => (a.rank ?? rank[a.level]) - (b.rank ?? rank[b.level]));
   for (const x of all) reasons.push(x.text);
   const levels = [I.status, M.B.status, M.V.status, ...iR.map((x) => x.level)];
-  const measured = [I.status, M.B.status, M.V.status].some((s) => s === "ok" || s === "none" || s === "red" || s === "amber");
-  const verdict = levels.includes("red") ? "fake" : levels.includes("amber") ? "caution" : measured && (M.B.status !== "unknown" || I.status !== "none") ? "clear" : "unknown";
+  // "clear" (the app's Real stamp) only when all three checks ran and found nothing: income traced in full (or no payer at
+  // all), backing and volume measured (or not applicable, for a stock token). Anything not measured, or an income trace cut
+  // short (every hard cut is an income read), leaves it unknown
+  const ran = (s) => s === "ok" || s === "none" || s === "n/a";
+  const verdict = levels.includes("red") ? "fake" : levels.includes("amber") ? "caution" : ran(I.status) && !S.partial && ran(M.B.status) && ran(M.V.status) ? "clear" : "unknown";
   if (S.partial) reasons.push("Some reads were cut short (busy history or a slow source), so this check saw part of the window.");
   if (!hasBlockscout()) reasons.push("Blockscout was unavailable, so creators, holders and ETH payments were read only in part.");
   return {
@@ -551,7 +614,7 @@ async function measure(t) {
         byKind: I.byKind ? Object.fromEntries(Object.entries(I.byKind).map(([k, v]) => [k, +v.toPrecision(4)])) : undefined, creators: (I.creators || []).map((a) => getAddress(a)),
         payers: (I.payers || []).map((p) => ({ ...p, address: getAddress(p.address) })) },
       backing: M.B, volume: M.V,
-      window: { fromBlock: S.from, toBlock: S.head, days: S.days, partial: S.partial, cut: S.cuts.length ? S.cuts : undefined },
+      window: { fromBlock: S.from, toBlock: S.head, days: S.days, partial: S.partial, throttled: S.throttled || undefined, cut: S.cuts.length ? S.cuts : undefined },
     },
     note: "Read from the chain, Blockscout and DexScreener. Fake means a check found money that is not what it looks like; clear means nothing was found in what was measured.",
   };
@@ -566,34 +629,83 @@ async function limit(fn) {
   try { return await fn(); } finally { running--; waiting.shift()?.(); }
 }
 
-/** Is this coin's revenue, rewards or market cap real? Cached 10 minutes per coin. */
-export async function tributeCheck(token) {
-  if (!isAddress(String(token || ""))) throw new HttpError(400, "That is not a valid token address.");
-  const t = lc(token);
-  const hit = memo.get(t);
-  if (hit && Date.now() - hit.at < hit.ttl) return hit.res;
+// measure one coin now (one at a time per coin) and keep the reading
+function remeasure(t) {
   if (!inflight.has(t)) {
-    // an incomplete read (busy RPC, out of time) is kept one minute, so the next ask tries again
     inflight.set(t, limit(() => measure(t)).then((res) => {
-      const done = !res.checks?.window?.partial && res.checks?.income?.status !== "unknown";
-      memo.set(t, { at: Date.now(), res, ttl: done ? CACHE_MS : 60_000 });
+      // an incomplete read (out of time, a slow source) is kept one minute, so the next ask makes a new one. One cut short
+      // by a busy RPC is kept the full 10 minutes: asking it again every minute only keeps the RPC busy
+      const w = res.checks?.window, done = !w?.partial && res.checks?.income?.status !== "unknown";
+      memo.delete(t);                               // re-inserted last: the 500 kept are the most recently measured
+      memo.set(t, { at: Date.now(), res, ttl: done || w?.throttled ? CACHE_MS : 60_000 });
       if (memo.size > 500) memo.delete(memo.keys().next().value);
+      dirty = true;
       return res;
     })
-      // the chain or a source did not answer: say so, keep nothing, the next ask tries again
-      .catch((e) => ({ token: getAddress(t), symbol: null, verdict: "unknown", reasons: [`The check could not finish (${String(e.message).slice(0, 120)}). Ask again in a minute.`], checks: {}, at: Date.now() }))
+      // the chain or a source did not answer: say so, keep what was kept before (the next ask tries again)
+      .catch((e) => usable(memo.get(t))?.res || { token: getAddress(t), symbol: null, verdict: "unknown", reasons: [`The check could not finish (${String(e.message).slice(0, 120)}). Ask again in a minute.`], checks: {}, at: Date.now() })
       .finally(() => inflight.delete(t)));
   }
   return inflight.get(t);
 }
+const usable = (hit) => (hit && Date.now() - hit.at < MAX_STALE_MS ? hit : null);
+
+/** Is this coin's revenue, rewards or market cap real? Cached 10 minutes per coin; a reading past that (up to an hour) is
+ *  answered at once while a new one is made in the background, so only the first ask for a coin waits. */
+export async function tributeCheck(token) {
+  if (!isAddress(String(token || ""))) throw new HttpError(400, "That is not a valid token address.");
+  const t = lc(token);
+  const hit = usable(memo.get(t));
+  if (!hit) return remeasure(t);
+  if (Date.now() - hit.at >= hit.ttl) remeasure(t);   // stale while revalidate: never awaited, never throws
+  return hit.res;
+}
 
 /** Tribute flags in The Assay's shape, from the cache only (never computes), for the Gate and the app. */
 export function tributeFlags(token) {
-  const hit = memo.get(lc(token));
+  const hit = usable(memo.get(lc(token)));
   if (!hit || hit.res.verdict === "clear" || hit.res.verdict === "unknown") return [];
   return [{ key: "tribute", level: hit.res.verdict === "fake" ? "red" : "amber", title: hit.res.verdict === "fake" ? "Tribute: revenue or market cap not real" : "Tribute: revenue or market cap needs a closer look", detail: hit.res.reasons.slice(0, 2).join(" ") }];
 }
 
-export async function register(r) {
+/* ---------- the readings survive a restart (data/tribute.json) ---------- */
+// a deploy used to empty the cache, so every coin page waited 4 to 8 s again. Saved every minute when something changed,
+// and once more, synchronously, when the server is stopped
+let file = null, dirty = false;
+const snapshot = () => JSON.stringify({ v: 1, savedAt: Date.now(), items: [...memo].filter(([, h]) => usable(h)) });
+async function loadMemo() {
+  try {
+    const j = JSON.parse(await readFile(file, "utf8"));
+    for (const [t, h] of Array.isArray(j?.items) ? j.items : []) {
+      if (isAddress(t) && usable(h) && h.res?.verdict && h.ttl > 0 && !memo.has(lc(t))) memo.set(lc(t), { at: h.at, ttl: h.ttl, res: h.res });
+    }
+  } catch {}                                        // no file yet, or a broken one: start empty
+}
+async function saveMemo() {
+  if (!file || !dirty) return;
+  dirty = false;
+  try { await writeFile(file + ".tmp", snapshot(), { mode: 0o600 }); await rename(file + ".tmp", file); } catch { dirty = true; }
+}
+function saveMemoNow() {
+  if (!file || !dirty) return;
+  try { writeFileSync(file + ".tmp", snapshot(), { mode: 0o600 }); renameSync(file + ".tmp", file); dirty = false; } catch {}
+}
+// save on stop, then let the signal do what it would have done: a listener on SIGTERM replaces Node's exit, so with no
+// other listener left the signal is raised again (systemd sees the same stop as before)
+function onStop(sig) {
+  saveMemoNow();
+  if (process.listenerCount(sig) === 0) process.kill(process.pid, sig);
+}
+
+export async function register(r, ctx = {}) {
+  if (ctx.dataDir) {
+    file = join(ctx.dataDir, "tribute.json");
+    await loadMemo();
+    setInterval(() => saveMemo(), 60_000).unref?.();
+    for (const sig of ["SIGTERM", "SIGINT"]) process.once(sig, onStop);
+    process.once("exit", saveMemoNow);              // and when some other part of the server ends the process itself
+  }
+  // $TROYA measured shortly after boot (or answered from the saved reading and remade in the background when it is old)
+  if (process.env.TRIBUTE_WARM !== "0") setTimeout(() => tributeCheck(TROYA).catch(() => {}), 30_000).unref?.();
   r.get("/api/tribute/:token", async ({ params }) => tributeCheck(params.token), { weight: 2, perMin: 30 });
 }

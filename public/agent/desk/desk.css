@@ -52,6 +52,13 @@ body.desk { display: block; min-height: 100vh; background: var(--bg); }
 .d-social a { color: var(--faint); }
 .d-social a:hover { color: var(--fg); }
 .d-scrim { position: fixed; inset: 0; z-index: 79; background: rgba(0, 0, 0, .6); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+/* brand and Search stay pinned while the nav scrolls under them, so opening a page low in the list never scrolls the logo away.
+   The negative margins pull the block over the sidebar's own padding (18px 12px from desk2.css) so its background
+   reaches the edges; the bottom pair keeps the 16px gap to the nav exactly as before. top is -18px, not 0, because
+   Chrome and Safari measure a sticky offset from inside the scroller's padding: this pins the block flush to the edge. */
+.d-side { scroll-padding-top: 140px; }
+.d-side-top { position: sticky; top: -18px; z-index: 1; flex: none; display: flex; flex-direction: column; gap: inherit;
+  margin: -18px -12px -10px; padding: 18px 12px 10px; background: inherit; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
 
 .d-shell { container: shell / inline-size; margin-left: var(--side); min-height: 100vh; display: flex; flex-direction: column; transition: margin-right .3s var(--ease); }
 .d-top { position: sticky; top: 0; z-index: 60; height: var(--top); display: grid; grid-template-columns: minmax(180px, 1fr) minmax(240px, 500px) auto; align-items: center; gap: 16px; padding: 0 24px; border-bottom: 1px solid var(--line); }
@@ -61,6 +68,13 @@ body.desk { display: block; min-height: 100vh; background: var(--bg); }
 .d-crumb { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 13px; color: var(--faint); white-space: nowrap; }
 .d-crumb span::after { content: "/"; margin-left: 8px; color: var(--line-3); }
 .d-crumb b { font-weight: 500; color: var(--fg); overflow: hidden; text-overflow: ellipsis; }
+/* a parent crumb that is a page of its own is a link (Create coin, Market). When the trail is too long the parents give
+   way first (they shrink fifty times faster), so the page you are on keeps its whole name */
+.d-crumb > span, .d-crumb > a { flex: 0 50 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.d-crumb b { flex: 0 1 auto; min-width: 0; }
+.d-crumb a { color: var(--faint); transition: color .2s; }
+.d-crumb a:hover { color: var(--fg); }
+.d-crumb a::after { content: "/"; margin-left: 8px; color: var(--line-3); }
 .d-search { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 8px 0 13px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--bg-1); color: var(--faint); font-size: 13px; text-align: left; transition: border-color .2s; }
 .d-search:hover { border-color: var(--line-3); color: var(--muted); }
 .d-search-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -129,6 +143,12 @@ body.drawer-open .d-fab, body.on-chat .d-fab { opacity: 0; pointer-events: none;
 .dk-agent-b { margin-left: 8px !important; margin-right: 8px !important; }
 .dk-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .d-right .chain-chip, .d-right .wallet-btn { white-space: nowrap; }
+/* the chain chip is a button: a card about the network, or (wallet on another chain) a warm tint and a switch on click */
+.d-right .chain-chip { cursor: pointer; transition: border-color .3s, color .3s, background .3s; }
+.d-right .chain-chip:hover, .d-right .chain-chip[aria-expanded="true"] { border-color: var(--line-3); color: var(--fg); }
+.d-right .chain-chip.warn { border-color: rgba(240, 196, 110, .42); background: var(--warn-bg); color: var(--warn); }
+.d-right .chain-chip.warn:hover { border-color: var(--warn); }
+.d-right .chain-chip[disabled] { opacity: .6; cursor: progress; }
 .dk-eyebrow { display: inline-flex; align-items: center; gap: 9px; margin: 0 0 14px; font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .dk-head { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 520px); gap: 28px 40px; align-items: end; padding: 28px 0 10px; isolation: isolate; }
 .dk-head h1, .dk-pagehead h1 { margin: 0; font-size: clamp(32px, 3.2vw, 46px); font-weight: 500; letter-spacing: -0.035em; line-height: 1.02; max-width: 13em; }
@@ -242,7 +262,53 @@ body.drawer-open .d-fab, body.on-chat .d-fab { opacity: 0; pointer-events: none;
 .dk-how p { margin: 2px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .dk-how > .note { margin-top: 16px; }
 
+/* the network card under the chain chip */
+.d-pop { position: fixed; z-index: 120; width: min(300px, calc(100vw - 16px)); padding: 14px; border-radius: 14px; border: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--bg-1) 96%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .45); animation: d-pop-in .18s var(--ease) both; }
+@keyframes d-pop-in { from { opacity: 0; transform: translateY(-4px); } }
+.d-pop-h { display: flex; align-items: center; gap: 10px; }
+.d-pop-h .chain-logo { flex: none; }
+.d-pop-h b { font-size: 13.5px; font-weight: 600; line-height: 1.3; }
+.d-pop p { margin: 8px 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.d-pop-a { display: flex; align-items: center; gap: 14px; }
+.d-pop-a .link { font-size: 12.5px; }
+
+/* Settings: Appearance */
+.d-look { width: 100%; }
+.d-look button { flex: 1; }
+
+/* the 404 page: what happened, a search for the words of the address, and the four places people go most */
+.d-404 { max-width: 760px; margin: 0 auto; padding: 88px 0 40px; display: grid; justify-items: center; text-align: center; }
+.d-404 h1 { margin: 0; font-size: clamp(32px, 4vw, 52px); font-weight: 500; letter-spacing: -0.035em; line-height: 1.04; }
+.d-404 h1 em { font: italic 400 1.08em/1 var(--serif); letter-spacing: -0.01em; }
+.d-404-sub { margin: 14px 0 0; max-width: 40em; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.d-404-sub code { padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg-2); font: 12.5px/1.4 var(--mono); color: var(--fg-2); word-break: break-all; }
+.d-404-act { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 26px; }
+.d-404-act .btn { height: 42px; padding: 0 18px; max-width: 100%; }
+.d-404-act .btn svg { width: 16px; height: 16px; flex: none; }
+.d-404-links { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 44px; text-align: left; }
+.d-404-links a { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px;
+  border: 1px solid var(--line); background: var(--bg-1); transition: border-color .3s, background .3s; }
+.d-404-links a:hover { border-color: rgba(142, 223, 245, .35); }
+.d-404-ic { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, .03); }
+.d-404-ic svg { width: 19px; height: 19px; }
+.d-404-t { min-width: 0; }
+.d-404-t b { display: block; font-size: 13.5px; font-weight: 600; color: var(--fg); }
+.d-404-t small { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-404-links i { font-style: normal; color: var(--faint); transition: transform .3s, color .3s; }
+.d-404-links a:hover i { color: var(--fg); transform: translateX(2px); }
+@media (max-width: 560px) {
+  .d-404 { padding-top: 48px; }
+  .d-404-links { grid-template-columns: minmax(0, 1fr); margin-top: 32px; }
+}
+
 /* ---------- responsive ---------- */
+/* three crumbs need about 270px of a top bar that also holds a 500px search: below this width drop the group name
+   (Create coin / Launch from X); the full trail returns on wide screens */
+@container shell (max-width: 1300px) {
+  .d-crumb .g:has(+ a) { display: none; }
+}
 /* the page area narrows when the agent drawer is docked: lay the Desk out by its own width, not the window's */
 @container shell (max-width: 1060px) {
   .dk-head { grid-template-columns: 1fr; align-items: start; }
@@ -262,6 +328,7 @@ body.drawer-open .d-fab, body.on-chat .d-fab { opacity: 0; pointer-events: none;
   .dk-ask { max-width: 680px; }
 }
 @media (max-width: 1100px) {
+  .d-crumb .g { display: none; }   /* the crumb has ~140px here: the page name alone (Spot (Hyperliquid), Start in 60 seconds) */
   .d-side { transform: translateX(-102%); transition: transform .28s var(--ease); box-shadow: 30px 0 80px rgba(0, 0, 0, .5); }
   .d-side.open { transform: none; }
   .d-shell { margin-left: 0; }
@@ -328,6 +395,10 @@ html[data-theme="light"] {
 html[data-theme="light"] ::selection { background: rgba(10, 126, 163, .2); }
 html[data-theme="light"] .d-side { background: var(--bg-1); }
 html[data-theme="light"] .d-brand img { filter: drop-shadow(0 3px 8px rgba(10, 126, 163, .18)); }
+html[data-theme="light"] .d-right .chain-chip.warn { border-color: rgba(154, 100, 0, .35); background: var(--warn-bg); }
+html[data-theme="light"] .d-pop { box-shadow: 0 18px 44px rgba(20, 18, 16, .14); }
+html[data-theme="light"] .d-404-links a:hover { border-color: var(--line-3); }
+html[data-theme="light"] .d-404-ic { background: var(--bg-2); }
 html[data-theme="light"] .d-top::before { background: rgba(245, 243, 238, .86); }
 html[data-theme="light"] .d-connect, html[data-theme="light"] .btn.primary { color: #fff; }
 html[data-theme="light"] .d-connect:hover, html[data-theme="light"] .btn.primary:hover { background: #000; border-color: #000; }
@@ -351,7 +422,7 @@ html[data-theme="light"] .d-side, html[data-theme="light"] .d-drawer { scrollbar
 .d-mode svg { width: 17px; height: 17px; }
 html[data-theme="light"] .ask-fab { background: rgba(255, 255, 255, .94); color: var(--fg); box-shadow: 0 10px 30px rgba(20, 18, 16, .12); }
 
-/* ---------- Ask palette (⌘K) ---------- */
+/* ---------- Search palette (⌘K) ---------- */
 .d-pal-box { width: min(640px, calc(100vw - 24px)); padding: 0; overflow: hidden; border-radius: 14px; }
 .d-pal { display: flex; flex-direction: column; max-height: min(620px, calc(100dvh - 80px)); }
 .d-pal svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }

@@ -93,18 +93,32 @@ export function disconnect() {
   emit();
 }
 
+// Switches the wallet to `key`, then reads the chain back before anything is signed. A wallet can resolve
+// wallet_switchEthereumChain or wallet_addEthereumChain without moving (the network is added but the switch is declined,
+// or the request is only acknowledged), and a curve buy, a router call or a bridge must never go out on another network.
+const chainNow = async () => Number(await wallet.eip.request({ method: "eth_chainId" }));
+const switchTo = (c) => wallet.eip.request({ method: "wallet_switchEthereumChain", params: [{ chainId: c.hex }] });
+// 4902 is the standard "unknown chain"; MetaMask Mobile wraps it in an internal error
+const unknownChain = (e) => e?.code === 4902 || e?.data?.originalError?.code === 4902 || /unrecognized|not been added|unknown chain|not added/i.test(e?.message || "");
 export async function ensureChain(key) {
   const c = CHAINS[key];
+  if (!c) throw new Error("Unknown network.");
   if (!wallet.eip) throw new Error("Connect a wallet first.");
-  if (Number(await wallet.eip.request({ method: "eth_chainId" })) === c.id) return;
+  if ((await chainNow()) === c.id) return;
   try {
-    await wallet.eip.request({ method: "wallet_switchEthereumChain", params: [{ chainId: c.hex }] });
+    await switchTo(c);
   } catch (e) {
-    if (e.code !== 4902 && !/unrecognized|not been added|unknown chain|not added/i.test(e.message || "")) throw e;
+    if (!unknownChain(e)) throw e;
     await addChain(key);
+    // some wallets add the network without moving to it: ask for the switch once more (a refusal shows as a cancel)
+    if ((await chainNow()) !== c.id) await switchTo(c);
   }
-  wallet.chainId = c.id;
+  // a phone wallet can report the new chain a moment after the request resolves, so give it about a second
+  let now = await chainNow();
+  for (let i = 0; i < 4 && now !== c.id; i++) { await new Promise((r) => setTimeout(r, 250)); now = await chainNow(); }
+  wallet.chainId = now;
   emit();
+  if (now !== c.id) throw new Error(`Switch your wallet to ${c.name} to continue.`);
 }
 export async function addChain(key) {
   const c = CHAINS[key];
@@ -115,11 +129,16 @@ export async function addChain(key) {
   }] });
 }
 
-// signer for a chain: switches first, then returns an ethers Signer
+// signer for a chain: switches and checks first, then returns an ethers Signer whose transactions carry that chain's id.
+// If the wallet moves to another network between the check and the prompt, it refuses the request instead of signing it
+// there. sendTransaction (and every Contract call) goes through sendUncheckedTransaction, so this one override covers all.
 export async function signerFor(key) {
   await ensureChain(key);
   const provider = new BrowserProvider(wallet.eip, "any");
-  return provider.getSigner(wallet.address);
+  const signer = await provider.getSigner(wallet.address);
+  const send = signer.sendUncheckedTransaction.bind(signer);
+  signer.sendUncheckedTransaction = (tx) => send({ ...tx, chainId: CHAINS[key].id });
+  return signer;
 }
 
 /* ---------- sign-in (session for chat, inbox, agent wallet, playbooks) ---------- */
@@ -150,10 +169,22 @@ const KNOWN = [
 ];
 // a phone browser (Safari, Chrome) has no wallet inside it: these links open this same page in the wallet app's own browser
 const OPEN_IN = [
-  { name: "MetaMask", href: () => `https://metamask.app.link/dapp/${location.host}${location.pathname}${location.hash}` },
-  { name: "Coinbase Wallet", href: () => `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(location.href)}` },
-  { name: "OKX Wallet", href: () => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(location.href)}` },
+  { name: "MetaMask", href: (u) => `https://metamask.app.link/dapp/${u.host}${u.pathname}${u.search}${u.hash}` },
+  { name: "Coinbase Wallet", href: (u) => `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(u.href)}` },
+  { name: "OKX Wallet", href: (u) => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(u.href)}` },
+  { name: "Rabby", href: (u) => `https://go.rabby.io/mobile/?_cmd=open-dapp&dapp=${encodeURIComponent(u.href)}` },
 ];
+// The page to open in the wallet app. The app's browser keeps its own storage, so a referral code that herald-ref.js took
+// out of the address bar (and kept in this browser) rides along as ?ref=, or it would never reach sign-in there. It is
+// read from storage here rather than imported, because herald-ref.js imports this module.
+function dappUrl() {
+  const u = new URL(location.href);
+  let r = null;
+  try { r = JSON.parse(localStorage.getItem("troya.ref") || "null"); } catch { r = null; }
+  const code = String(r?.code || "");
+  if (r && !r.sent && /^[a-z0-9]{4,12}$/.test(code)) u.searchParams.set("ref", code);
+  return u;
+}
 const onPhone = () => matchMedia("(pointer: coarse)").matches && !matchMedia("(hover: hover)").matches;
 export function openConnect() {
   return new Promise((resolve) => {
@@ -165,7 +196,7 @@ export function openConnect() {
             catch (e) { toast(e?.message?.includes("rejected") ? "Request cancelled in the wallet." : (e.message || "Could not connect"), "error"); }
           } }, walletLogo(d.info.name, d.info.icon), h("span", {}, d.info.name || "Browser wallet"), h("em", {}, "Detected"))))
         : onPhone()
-          ? h("div", {}, h("div", { class: "wl" }, OPEN_IN.map((k) => h("a", { class: "wl-item", href: k.href(), rel: "noopener" }, walletLogo(k.name), h("span", {}, `Open in ${k.name}`), h("em", {}, "App")))),
+          ? h("div", {}, h("div", { class: "wl" }, OPEN_IN.map((k) => h("a", { class: "wl-item", href: k.href(dappUrl()), rel: "noopener" }, walletLogo(k.name), h("span", {}, `Open in ${k.name}`), h("em", {}, "App")))),
               h("p", { class: "note" }, "This browser has no wallet inside it. Each link opens this page in the wallet app's own browser, where Connect works. No wallet app yet? Install one from your app store first."))
           : h("div", {}, h("div", { class: "wl" }, KNOWN.map((k) => h("a", { class: "wl-item", href: k.install, target: "_blank", rel: "noopener" }, walletLogo(k.name), h("span", {}, k.name), h("em", {}, "Install")))),
             h("p", { class: "note" }, "No browser wallet was found. Install one, reload this page, then connect.")),

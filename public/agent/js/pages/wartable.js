@@ -38,6 +38,8 @@ export function watchfirePanel() {
   const sub = h("p", { class: "fine muted wt-sub" }, LVL.loading[1]);
   const why = h("ul", { class: "wt-why" });
   const met = h("div", { class: "wt-met" });
+  // what the figures cover, for a coin older than the 6 hours Watchfire reads back (board.note)
+  const note = h("p", { class: "fine muted wt-foot wt-note", hidden: true });
   const live = h("span", { class: "wt-live", title: "Live feed of every transfer" });
   // V8 F46: pin the coin, and every Watchfire fire on it reaches your inbox and Telegram
   let token = null;
@@ -48,7 +50,7 @@ export function watchfirePanel() {
   } }, icon("bell"), "Pin");
   const el = h("section", { class: "panel wt-wf" },
     h("div", { class: "panel-h" }, h("h2", {}, "Watchfire"), live),
-    h("div", { class: "wt-wf-b" }, badge, sub), why, met,
+    h("div", { class: "wt-wf-b" }, badge, sub), why, met, note,
     h("p", { class: "fine muted wt-foot" }, "Reads every transfer of this coin: coins gathered into one wallet, a 5%+ sale, fast selling, weight in few hands. Patterns, not proof; nobody can sell ahead of a dump inside one block."),
     h("div", { class: "wt-foot" }, pin, h("a", { class: "link fine", href: "#/treasury" }, "Pins by tier")));
   el.update = (b) => {
@@ -58,12 +60,20 @@ export function watchfirePanel() {
     sub.textContent = b?.lastFire && k === "fire" ? `${LVL[k][1]} ${Math.max(0, Math.round((Date.now() - b.lastFire.at) / 1000))}s ago.` : LVL[k][1];
     clear(why, (b?.why || []).slice(0, 4).map((x) => h("li", {}, x)));
     const m = b?.metrics;
+    // a coin older than 6 hours: the balances behind these tiles are what wallets bought and sold in the last 6 h, not
+    // what they hold, so the tiles carry a "last 6 h" caption and the largest one is a buyer, not a holder (the Holders
+    // tab has the holders). One caption over the four, so "Sellers / buyers 2m" does not also read "last 6 h".
+    const part = !!m && b.fullHistory === false;
+    const tile = (k, v) => h("div", {}, h("small", {}, k), h("b", {}, v));
     clear(met, m ? [
-      h("div", {}, h("small", {}, "Largest holder"), h("b", {}, `${(m.topPct ?? 0).toFixed(1)}%`)),
-      h("div", {}, h("small", {}, "Bought via one bot"), h("b", {}, `${Math.round(m.herdPct ?? 0)}%`)),
-      h("div", {}, h("small", {}, "Sold last minute"), h("b", {}, `${(m.soldLastMinPct ?? 0).toFixed(1)}%`)),
-      h("div", {}, h("small", {}, "Sellers / buyers 2m"), h("b", {}, `${m.sellers2m ?? 0} / ${m.buyers2m ?? 0}`)),
+      part ? h("small", { class: "wt-met-cap", style: { gridColumn: "1 / -1" } }, "Last 6 h of transfers") : null,
+      tile(part ? "Largest buyer" : "Largest holder", `${(m.topPct ?? 0).toFixed(1)}%`),
+      tile("Bought via one bot", `${Math.round(m.herdPct ?? 0)}%`),
+      tile("Sold last minute", `${(m.soldLastMinPct ?? 0).toFixed(1)}%`),
+      tile("Sellers / buyers 2m", `${m.sellers2m ?? 0} / ${m.buyers2m ?? 0}`),
     ] : []);
+    note.textContent = part ? b.note || "This coin is older than 6 hours: these figures cover only its last 6 hours of transfers." : "";
+    note.hidden = !part;
     live.className = `wt-live${b?.level && b.level !== "loading" ? " on" : ""}`;
     live.textContent = b?.level && b.level !== "loading" ? "Live" : "";
   };

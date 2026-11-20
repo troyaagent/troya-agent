@@ -59,6 +59,10 @@ export async function usedTodayBy(address) {
 // V8 F44 Scepter: the jobs that act on their own. The trust ladder applies to them, never to a trade the user taps.
 export const AUTO_JOBS = ["autopilot", "playbook", "aegis", "champions"];
 export const TRUST = ["watch", "approve", "auto"];
+// A wallet that never picked a step starts on Approve: every automated trade waits for the owner's yes until they climb
+// to Auto themselves. Until 20 Nov 2026 an unset ladder meant Auto, so a brand-new user's jobs traded on their own while
+// Scepter said "Climb at your pace". An explicit choice (stored by POST /api/policy) is always kept as it is.
+export const DEFAULT_TRUST = "approve";
 
 // Effective limits = the stricter of operator and user values.
 export async function getPolicy(address) {
@@ -82,7 +86,7 @@ export async function getPolicy(address) {
       maxPriceImpactPct: op.maxPriceImpactPct,
       minPoolLiquidityEth: op.minPoolLiquidityEth,
       dryRun: u.dryRun == null ? !!op.mcpDryRunDefault : !!u.dryRun,
-      trust: TRUST.includes(u.trust) ? u.trust : "auto",
+      trust: TRUST.includes(u.trust) ? u.trust : DEFAULT_TRUST,
       jobCaps: u.jobCaps || {},
     },
     usedTodayUsd: address ? await usedToday(address) : 0,
@@ -96,7 +100,7 @@ export async function checkAction(address, { kind, usd = 0, leverage = 1, market
   const e = p.effective;
   const reasons = [];
   if (e.killSwitch) reasons.push("The operator kill switch is on: all execution is stopped.");
-  if (e.paused) reasons.push("You paused the agent. Resume it in Agent → Autopilot or Risk settings.");
+  if (e.paused) reasons.push("You paused the agent. Resume it in Agent → Scepter.");
   if (usd > 0 && usd > e.perTradeUsd) reasons.push(`This is about $${usd.toFixed(2)}, above your per-trade cap of $${e.perTradeUsd}.`);
   if (usd > 0 && p.usedTodayUsd + usd > e.dailyUsd) reasons.push(`This would take today's total to $${(p.usedTodayUsd + usd).toFixed(2)}, above your daily cap of $${e.dailyUsd}.`);
   if (kind === "perp") {

@@ -577,7 +577,8 @@ async function autoTick() {
       try {
         const x = await api.post("agent-wallet/execute", { proposalId: p.id, source: "autopilot" });
         autoNote(`${p.summary}: ${x.executed ? "executed" : x.blocked ? "blocked, " + x.reasons.join(" ") : x.result?.note || "built"}`, x.executed ? "ok" : x.blocked ? "error" : "");
-      } catch (e) { autoNote(`${p.summary}: ${e.message}`, "error"); }
+      // held by the trust ladder (409 held: Approve or Watch in Scepter): a neutral note, not an error; it waits for your tap
+      } catch (e) { autoNote(`${p.summary}: ${e.message}`, e?.data?.held ? "" : "error"); }
     }
     if (!due.length) autoNote("Checked: nothing due.");
   } catch (e) { autoNote(`Check failed: ${e.message}`, "error"); }
@@ -808,24 +809,32 @@ function mountArena(box) {
           link(`${SCAN}/token/${p.token}`, "Coin"))),
       h("span", { class: `ag-ar-pnl ${p.status === "open" ? "" : cls(p.pnlEth)}` }, p.status === "open" ? (p.valueEth != null ? `${ethf(p.valueEth - p.amountEth)} so far` : "open") : ethf(p.pnlEth)));
 
-    // V8 F43 Champions: follow a proven trader into your own capped Agent Wallet
+    // V8 F43 Champions: follow a proven trader into your own capped Agent Wallet. Traders that do not qualify (paused by
+    // Troya, fewer than 5 live trades in profit, a loss on paper) are listed greyed out with the reason and Follow off;
+    // a follow you already saved on one stays saved but buys nothing, and Unfollow stays open so you can drop it.
     const follows = myChamps?.follows || {};
+    const champOk = (champs?.champions || []).filter((c) => c.followable !== false);
+    const champOff = [...(champs?.champions || []).filter((c) => c.followable === false), ...(champs?.others || [])];
+    const champRow = (c) => {
+      const f = follows[c.id], can = c.followable !== false;
+      const amt = h("input", { class: "sc-in", type: "text", inputmode: "decimal", value: String(f?.buyEth ?? champs.buy?.def ?? 0.002), "aria-label": `ETH a trade when following ${c.name}` });
+      const rec = [c.live ? `Live ${ethf(c.live.pnlEth + (c.live.openPnlEth || 0))} · ${c.live.closed} closed` : null, `Paper ${ethf(c.paper?.pnlEth)} · ${c.paper?.closed || 0} closed`].filter(Boolean).join(" · ");
+      return h("div", { class: `ch-row${f?.on && can ? " on" : ""}` },
+        h("div", { class: "ch-who", style: can ? null : { opacity: ".55" } }, AI_LOGOS[c.id] ? h("img", { class: "ag-ar-logo", src: `/img/logos/ai/${AI_LOGOS[c.id]}.svg`, alt: "", width: 22, height: 22 }) : null,
+          h("div", {}, h("b", {}, c.name), h("div", { class: "faint" }, `${rec} · ${c.followers} following`),
+            can ? null : h("div", { class: "faint" }, f?.on ? `${c.reason}. Your follow is saved but buys nothing until it qualifies again.` : c.reason))),
+        wallet.session ? h("div", { class: "ch-act" }, can ? [amt, h("span", { class: "faint" }, "ETH a trade")] : null,
+          h("button", { class: `btn sm ${f?.on || !can ? "" : "primary"}`, type: "button", disabled: !can && !f?.on, title: can ? null : c.reason, onclick: async () => {
+            try { await api.post("champions/follow", { agentId: c.id, buyEth: Number(amt.value), on: !f?.on }); toast(f?.on ? `Stopped following ${c.name}.` : `Following ${c.name}. Each trade passes the Gate, your caps and your trust ladder (Agent → Scepter).`, "ok"); render(); }
+            catch (e) { toast(e.message, "error"); }
+          } }, f?.on ? "Unfollow" : "Follow")) : null);
+    };
     const champPanel = champs ? h("div", { class: "panel ag-panel ch-panel" },
       h("div", { class: "ag-ar-top" }, h("h3", {}, "Champions"), h("span", { class: "faint" }, "Follow a proven trader")),
       h("p", { class: "faint", style: { margin: "0 0 10px" } }, champs.rule),
-      champs.champions?.length ? h("div", { class: "ch-list" }, champs.champions.map((c) => {
-        const f = follows[c.id];
-        const amt = h("input", { class: "sc-in", type: "text", inputmode: "decimal", value: String(f?.buyEth ?? champs.buy?.def ?? 0.002), "aria-label": `ETH a trade when following ${c.name}` });
-        const rec = c.live ? `Live ${ethf(c.live.pnlEth + (c.live.openPnlEth || 0))} · ${c.live.closed} closed` : `Paper ${ethf(c.paper?.pnlEth)} · ${c.paper?.closed || 0} closed`;
-        return h("div", { class: `ch-row${f?.on ? " on" : ""}` },
-          h("div", { class: "ch-who" }, AI_LOGOS[c.id] ? h("img", { class: "ag-ar-logo", src: `/img/logos/ai/${AI_LOGOS[c.id]}.svg`, alt: "", width: 22, height: 22 }) : null,
-            h("div", {}, h("b", {}, c.name), h("div", { class: "faint" }, `${rec} · ${c.followers} following${c.livePaused ? " · live paused" : ""}`))),
-          wallet.session ? h("div", { class: "ch-act" }, amt, h("span", { class: "faint" }, "ETH a trade"),
-            h("button", { class: `btn sm ${f?.on ? "" : "primary"}`, type: "button", onclick: async () => {
-              try { await api.post("champions/follow", { agentId: c.id, buyEth: Number(amt.value), on: !f?.on }); toast(f?.on ? `Stopped following ${c.name}.` : `Following ${c.name}. Each trade passes the Gate, your caps and your trust ladder (Agent → Scepter).`, "ok"); render(); }
-              catch (e) { toast(e.message, "error"); }
-            } }, f?.on ? "Unfollow" : "Follow")) : null);
-      })) : h("p", { class: "faint", style: { margin: 0 } }, "No trader can be followed yet: AI traders need a real-money record, user strategies need to finish proving."),
+      champOk.length ? h("div", { class: "ch-list" }, champOk.map(champRow))
+        : h("p", { class: "faint", style: { margin: champOff.length ? "0 0 10px" : 0 } }, "No trader can be followed yet: AI traders need 5 live trades in profit and a profit on paper, user strategies need to finish proving in profit."),
+      champOff.length ? h("div", { class: "ch-list", style: champOk.length ? { marginTop: "8px" } : null }, champOff.map(champRow)) : null,
       (myChamps?.trades || []).length ? h("div", { class: "ch-mine" }, h("h4", {}, "Your follow trades"), h("ul", { class: "sc-list" }, myChamps.trades.slice(0, 8).map((t) => h("li", {},
         h("div", {}, h("b", {}, `$${t.symbol}`), h("div", { class: "faint" }, `${nameOf(t.agent)} · ${t.result || ""}${t.exit ? ` · ${t.exit}` : ""}`)), h("span", { class: `sc-st s-${t.status === "open" ? "executed" : t.status === "skipped" ? "blocked" : "closed"}` }, t.status))))) : null,
       !wallet.session ? needSignIn(main, "Sign in to follow a champion.") : null) : null;

@@ -1,7 +1,9 @@
 // V6 F27 · Launch in Telegram: launch a coin from a private chat with the Troya bot, from the Agent Wallet.
 //   /launch                       step by step: name → ticker → image → creator tax → initial buy → preview → Confirm
 //   photo + caption "/launch Wooden Horse $HORSE tax 2% buy 0.01"   the quick way, straight to the preview
+//   /skip                         launch without an image (at the image step)
 //   /cancel                       drop the launch being prepared
+//   Confirm lasts 90 seconds; a later Confirm re-checks the plan and the balance and sends a fresh preview (20 Nov)
 // Open to everyone (holders of 1M $TROYA keep the whole creator fee; others keep 0.6% of volume, Troya 0.1%), with the
 // same rules as every Troya launch (launch.mjs plan()). Off / test (admin wallets only) / live, switched by an admin.
 import { randomBytes } from "node:crypto";
@@ -27,7 +29,9 @@ const lc = (s) => String(s || "").toLowerCase();
 const why = (e, n = 220) => esc(String(e?.message || e || "").replace(/[.\s]*Nothing was spent[.\s]*$/i, "").replace(/[.\s]+$/, "").slice(0, n));
 function issue(p, ttl) {
   const now = Date.now();
-  for (const [k, v] of pend) if (v.exp < now) pend.delete(k);
+  // an expired button is kept a while longer, so a late Confirm is still recognised (and re-checked) instead of being
+  // lost the moment anyone else's chat gets a button
+  for (const [k, v] of pend) if (v.exp + LATE_WINDOW < now) pend.delete(k);
   const id = randomBytes(6).toString("hex");
   pend.set(id, { ...p, exp: now + ttl });
   return `tl:${id}`;
@@ -79,14 +83,16 @@ Your Agent Wallet pays the Pons launch fee (0.0005 ETH today) and your initial b
 
 Then send /launch again.`;
 const appBtn = (path) => ({ inline_keyboard: [[{ text: /#\/start/.test(path) ? "Finish setup" : "Open Troya", url: SITE + path }]] });
-const guideBtn = () => ({ inline_keyboard: [[{ text: "Read the guide", url: `${SITE}/launch-on-x` }]] });
+// straight to the guide's Telegram section, not the top of a page about posting on X
+const guideBtn = () => ({ inline_keyboard: [[{ text: "Read the guide", url: `${SITE}/launch-on-x#telegram` }]] });
 
 async function agentBalance(address) {
   const { rpc, launchMenu } = await import("./robinhood.mjs");
   const [bal, menu] = await Promise.all([rpc("robinhood", "eth_getBalance", [address, "latest"]), launchMenu(true).catch(() => ({ launchFeeEth: 0.0005 }))]);
   return { eth: Number(BigInt(bal)) / 1e18, fee: Number(menu.launchFeeEth) || 0.0005 };
 }
-async function preview(L, s) {
+// recheck: the card that replaces a Confirm pressed after its 90 seconds, so it says the numbers are fresh
+async function preview(L, s, { recheck = false } = {}) {
   const p = await L.plan({ owner: s.owner, creatorTaxBps: s.taxBps, name: s.name, symbol: s.symbol, source: "tg" });
   const b = await agentBalance(s.wallet).catch(() => null);
   const need = b ? b.fee + s.buyEth + 0.0002 : 0;
@@ -104,8 +110,9 @@ Initial buy: ${s.buyEth ? `${s.buyEth} ETH from your Agent Wallet` : "none"}
 Creator fee: ${fee}
 Cost: the Pons launch fee (${b ? b.fee : 0.0005} ETH) from your Agent Wallet${b ? `, which holds ${b.eth.toFixed(5)} ETH` : ""}; Troya pays the gas
 
-Name, ticker, image and tax are final once launched. Confirm within 90 seconds.`;
-  return { text, plan: p, markup: { inline_keyboard: [[{ text: "Confirm launch", callback_data: issue({ chat: s.chat, act: "confirm" }, CONFIRM_TTL) }, { text: "Cancel", callback_data: issue({ chat: s.chat, act: "cancel" }, SESSION_TTL) }]] } };
+Name, ticker, image and tax are final once launched. ${recheck ? "Prices and limits re-checked, confirm within 90 seconds." : "Confirm within 90 seconds."}`;
+  // the Confirm is tied to this very setup (ses), so a card from an earlier /launch can never launch a newer one
+  return { text, plan: p, markup: { inline_keyboard: [[{ text: "Confirm launch", callback_data: issue({ chat: s.chat, act: "confirm", ses: s }, CONFIRM_TTL) }, { text: "Cancel", callback_data: issue({ chat: s.chat, act: "cancel" }, SESSION_TTL) }]] } };
 }
 const taxKb = (chat) => ({ inline_keyboard: [TAXES.map((t) => ({ text: t ? `${t / 100}%` : "No tax", callback_data: issue({ chat, act: "tax", v: t }, SESSION_TTL) }))] });
 const buyKb = (chat) => ({ inline_keyboard: [BUYS.map((b) => ({ text: b ? `${b} ETH` : "No buy", callback_data: issue({ chat, act: "buy", v: b }, SESSION_TTL) }))] });
@@ -227,9 +234,9 @@ export async function handleMessage(m, tg, st) {
   return true;
 }
 
-async function showPreview(L, tg, s, say) {
+async function showPreview(L, tg, s, say, opts) {
   try {
-    const pv = await preview(L, s);
+    const pv = await preview(L, s, opts);
     s.step = "preview";
     const sent = await say(pv.text, pv.markup);
     s.card = sent?.result?.message_id || null;
@@ -244,16 +251,33 @@ async function showPreview(L, tg, s, say) {
 export async function handleCallback(cq, tg) {
   if (!String(cq?.data || "").startsWith("tl:")) return false;
   const ans = (text, alert = false) => tg("answerCallbackQuery", { callback_query_id: cq.id, text, show_alert: alert }).catch(() => {});
-  const p = pend.get(cq.data.slice(3));
+  const id = cq.data.slice(3), p = pend.get(id);
   const chat = cq.message?.chat?.id, mid = cq.message?.message_id;
-  if (!p || p.exp < Date.now()) { await ans("This button expired. Send /launch to start again.", true); return true; }
-  if (String(cq.from?.id) !== String(p.chat) || String(chat) !== String(p.chat)) { await ans("These buttons belong to someone else's chat."); return true; }
-  const s = sessions.get(chat);
-  if (!s) { await ans("This launch was dropped. Send /launch to start again.", true); return true; }
+  const mine = !!p && String(cq.from?.id) === String(p.chat) && String(chat) === String(p.chat);
+  const s = mine ? sessions.get(chat) : null;
   const say = (t, markup) => tg("sendMessage", { chat_id: chat, text: t, parse_mode: "HTML", link_preview_options: { is_disabled: true }, ...(markup ? { reply_markup: markup } : {}) }).catch(() => null);
   const edit = (t, markup) => tg("editMessageText", { chat_id: chat, message_id: mid, text: t, parse_mode: "HTML", link_preview_options: { is_disabled: true }, ...(markup ? { reply_markup: markup } : {}) }).catch(() => null);
+  if (!p || p.exp < Date.now()) {
+    // a Confirm pressed after its 90 seconds, while the launch is still set up (the setup lives 30 minutes): instead of
+    // "start again", read the plan, the daily limits, the launch fee and the Agent Wallet balance again and send a fresh
+    // preview. Nothing launches here: the new card needs its own Confirm within 90 seconds. Only this setup's own card
+    // counts, and its old Confirm is spent here, so a stale card can never launch.
+    if (mine && p.act === "confirm" && s?.step === "preview" && s.exp > Date.now() && !busy.has(chat) && p.ses === s) {
+      pend.delete(id);
+      await ans("That Confirm expired. Prices and limits re-checked, see the new preview.");
+      await tg("editMessageReplyMarkup", { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [] } }).catch(() => null);
+      s.exp = Date.now() + SESSION_TTL;
+      await showPreview(await import("./launch.mjs"), tg, s, say, { recheck: true });
+      return true;
+    }
+    await ans("This button expired. Send /launch to start again.", true); return true;
+  }
+  if (!mine) { await ans("These buttons belong to someone else's chat."); return true; }
+  if (!s) { await ans("This launch was dropped. Send /launch to start again.", true); return true; }
   const L = await import("./launch.mjs");
-  pend.delete(cq.data.slice(3));
+  pend.delete(id);
+  // a tap is an answer too: the setup lives 30 minutes from the last one, buttons included
+  s.exp = Date.now() + SESSION_TTL;
   if (p.act === "cancel") { sessions.delete(chat); await ans("Dropped"); await edit("Launch dropped. Send /launch to start again."); return true; }
   if (p.act === "tax" && s.step === "tax") {
     s.taxBps = p.v; s.step = "buy"; await ans();
@@ -268,6 +292,7 @@ export async function handleCallback(cq, tg) {
     return true;
   }
   if (p.act === "confirm" && s.step === "preview") {
+    if (p.ses !== s) { await ans("This preview was replaced by a newer one. Use the newest preview.", true); return true; }
     if (busy.has(chat)) { await ans("Already launching one. Wait for it to finish."); return true; }
     busy.add(chat); sessions.delete(chat);
     await ans("Launching…");
@@ -289,12 +314,20 @@ export async function handleCallback(cq, tg) {
         const ca = out.launch.token, ib = out.launch.initialBuy;
         const mc = await L.marketCapUsd(ca).catch(() => null);
         const mcTxt = mc ? `$${mc >= 1e6 ? (mc / 1e6).toFixed(2) + "M" : mc >= 1e3 ? (mc / 1e3).toFixed(1) + "K" : mc.toFixed(0)}` : null;
+        // "Sell here" exists only while trading in Telegram is on (TG_TRADE=1), so the sentence names the button that is
+        // really below: otherwise the sale is on troya.codes (Launch from X → Your launches)
+        const tgTrade = process.env.TG_TRADE === "1";
+        const coinUrl = `${SITE}/agent#/token/${lc(ca)}`;
         const lines = [`<b>$${esc(s.symbol)} is live.</b>${mcTxt ? ` Market cap ~${mcTxt}.` : ""}`];
-        if (ib) lines.push(ib.executed ? `Initial buy of ${ib.eth} ETH done. To sell it, tap "Sell here" below (25%, 50% or 100%, from your Agent Wallet).` : `Initial buy not sent: ${esc(String(ib.reasons?.[0] || "it was refused").slice(0, 120))}.`);
+        if (ib) lines.push(ib.executed ? `Initial buy of ${ib.eth} ETH done. ${tgTrade ? `To sell it, tap "Sell here" below (25%, 50% or 100%, from your Agent Wallet).` : `To sell it, open Launch from X → Your launches on troya.codes (the "Your launches" button below; 25%, 50% or 100%, from your Agent Wallet).`}` : `Initial buy not sent: ${esc(String(ib.reasons?.[0] || "it was refused").slice(0, 120))}.`);
         if (!s.logo) lines.push("No image was attached, so the coin has none.");
-        lines.push(`Creator fee: ${out.launch.split ? `0.6% of volume${s.taxBps ? ` plus your ${s.taxBps / 100}% tax` : ""} to you, 0.1% to Troya` : "all yours"}.`, "", `CA: <code>${ca}</code>`);
-        await edit(lines.join("\n"), { inline_keyboard: [[{ text: "Trade it on Troya", url: `${SITE}/agent#/token/${lc(ca)}` }],
-          ...(process.env.TG_TRADE === "1" ? [[{ text: ib?.executed ? "Sell here" : "Buy or sell here", url: `https://t.me/${BOT}?start=t_${lc(ca)}` }]] : []),
+        lines.push(`Creator fee: ${out.launch.split ? `0.6% of volume${s.taxBps ? ` plus your ${s.taxBps / 100}% tax` : ""} to you, 0.1% to Troya` : "all yours"}.`, "", `CA: <code>${ca}</code>`, "", "Send /launch to launch another.");
+        // the share step: a ready post with the ticker, the full CA and the coin's page (one cashtag, the creator posts it)
+        const share = `https://x.com/intent/post?text=${encodeURIComponent(`$${s.symbol} is live on Robinhood Chain\nCA ${ca}\n${coinUrl}`)}`;
+        const sell = tgTrade ? [[{ text: ib?.executed ? "Sell here" : "Buy or sell here", url: `https://t.me/${BOT}?start=t_${lc(ca)}` }]]
+          : ib?.executed ? [[{ text: "Your launches", url: `${SITE}/agent#/launch/x` }]] : [];
+        await edit(lines.join("\n"), { inline_keyboard: [[{ text: "Trade it on Troya", url: coinUrl }], ...sell,
+          [{ text: "Share on X", url: share }, { text: "Creator desk", url: `${SITE}/agent#/creator` }],
           [{ text: "Troya Launches", url: `${SITE}/agent#/troya-launches` }]] });
       } catch (e) {
         await edit(`<b>Not launched:</b> ${why(e, 200)}. Nothing was spent.`, guideBtn());

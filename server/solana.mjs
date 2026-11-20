@@ -23,7 +23,7 @@ const STABLE = new Set(["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "Es9vMFr
 const fmt = (raw, d) => { const s = BigInt(raw).toString().padStart(d + 1, "0"); const w = s.slice(0, -d) || "0", f = s.slice(-d).replace(/0+$/, ""); return d ? (f ? `${w}.${f}` : w) : s; };
 function toRaw(v, d) {
   const s = String(v ?? "").trim();
-  if (!/^\d*\.?\d+$/.test(s)) throw new HttpError(400, "Enter a valid amount.");
+  if (s.length > 80 || !/^\d*\.?\d+$/.test(s)) throw new HttpError(400, "Enter a valid amount.");
   const [w, f = ""] = s.split(".");
   return BigInt(w || "0") * 10n ** BigInt(d) + BigInt((f + "0".repeat(d)).slice(0, d) || "0");
 }
@@ -105,12 +105,18 @@ async function mintTraps(address) {
 
 /* ---------- quote ---------- */
 const pub = (m) => (m.address === "native" ? NATIVE : { address: m.address, symbol: m.symbol, name: m.name, decimals: m.decimals, image: m.image || null });
+// raw amounts from a client: plain digits only, at most 78 of them, checked before any lookup and before BigInt() (which
+// would also take "0x10" or " 12 ", and spends CPU on a huge one)
+const RAW_RE = /^[0-9]{1,78}$/;
 export async function solQuote({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps = 100, _sim = false }) {
+  const raw = amountInRaw != null && amountInRaw !== "";
+  if (raw && !RAW_RE.test(String(amountInRaw))) throw new HttpError(400, "Enter a valid amount: amountInRaw must be a whole number of token units.");
   const [mi, mo] = await Promise.all([solTokenMeta(tokenIn), solTokenMeta(tokenOut)]);
   const inMint = mintOf(mi.address === "native" ? null : mi.address), outMint = mintOf(mo.address === "native" ? null : mo.address);
   if (inMint === outMint) throw new HttpError(400, "Pick two different tokens.");
-  if (amountInRaw != null && amountInRaw !== "" && !/^\d+$/.test(String(amountInRaw))) throw new HttpError(400, "Enter a valid amount.");
-  const amt = amountInRaw != null && amountInRaw !== "" ? BigInt(amountInRaw) : toRaw(amountIn, mi.decimals);
+  const amt = raw ? BigInt(String(amountInRaw)) : toRaw(amountIn, mi.decimals);
+  // Jupiter takes a u64 amount: past that no route can exist
+  if (amt >= 2n ** 64n) throw new HttpError(400, "That amount is too large.");
   if (amt <= 0n) throw new HttpError(400, "Enter a positive amount.");
   const slip = Math.min(_sim ? 5000 : MAX_SLIP, Math.max(1, Math.round(Number(slippageBps) || 100)));
   const side = inMint === SOL_MINT ? "buy" : outMint === SOL_MINT ? "sell" : "swap";

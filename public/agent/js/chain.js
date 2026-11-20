@@ -1,7 +1,7 @@
 // Browser chain helpers for Swap / Bridge / Create coin on Robinhood Chain. Reads go through the same-origin relay (wallet.js reader),
 // writes go through the user's wallet (signerFor). Nothing here holds a key.
 import { Contract, Interface, formatUnits, parseUnits } from "ethers";
-import { reader, signerFor, wallet } from "./wallet.js";
+import { CHAINS, reader, signerFor, wallet } from "./wallet.js";
 import { api } from "./api.js";
 import { store } from "./ui.js";
 
@@ -48,10 +48,12 @@ export function inputNum(v, maxDp = 6) {
 
 /** Sends a transaction through the connected wallet on `chain`; returns the hash as soon as the wallet sends it.
  *  sendUncheckedTransaction skips ethers' wait for the wallet's own RPC to show the transaction (retries up to 4 s
- *  apart, which could add most of a minute); waitReceipt then watches for it through Troya's relay. */
+ *  apart, which could add most of a minute); waitReceipt then watches for it through Troya's relay.
+ *  signerFor has already read the wallet's chain back; the chainId in the request makes the wallet itself refuse it
+ *  if the network changed after that check. */
 export async function sendTx(chain, tx) {
   const signer = await signerFor(chain);
-  return signer.sendUncheckedTransaction({ to: tx.to, data: tx.data, value: BigInt(tx.value || 0), ...(tx.gasLimit ? { gasLimit: BigInt(tx.gasLimit) } : {}) });
+  return signer.sendUncheckedTransaction({ to: tx.to, data: tx.data, value: BigInt(tx.value || 0), chainId: CHAINS[chain].id, ...(tx.gasLimit ? { gasLimit: BigInt(tx.gasLimit) } : {}) });
 }
 
 /** Polls a receipt through the relay until mined or timeout. Returns the receipt or null. */

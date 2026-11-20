@@ -1,7 +1,7 @@
 // Swap (#/swap?chain=&in=&out=): Robinhood Chain (Pons curves, Uniswap v3 / v4, the other launchpads through KyberSwap),
 // Base and Arbitrum (KyberSwap). The network picker sits above the card; ?chain=base|arbitrum opens on that network.
 // Quotes and the Troya Gate come from the server; every transaction is signed in the user's wallet.
-import { h, clear, pageHead, seg, icon, modal, review, toast, tokenIcon, chainLogo, venueLogo, padLogo, tiny, num, amount, price, short, useCss, debounce, infoTip } from "../ui.js";
+import { h, clear, pageHead, seg, icon, modal, review, toast, tokenIcon, chainLogo, venueLogo, padLogo, tiny, num, amount, price, usd, pctEl, short, useCss, debounce, infoTip } from "../ui.js";
 import { wallet, onWallet, openConnect, CHAINS } from "../wallet.js";
 import { api } from "../api.js";
 import { ETH, isNative, balanceOf, toRaw, fromRaw, inputNum, rawInput, sendTx, waitReceipt, errText, journal, addTransfer, updateTransfer } from "../chain.js";
@@ -16,18 +16,47 @@ const GAS_KEEP = 10n ** 14n; // 0.0001 ETH left for gas by Max (a swap costs wel
 // the tokens a multi-hop route passes through, so the middle of the route shows their logo too
 const HOP = { USDG: "0x5fc5360d0400a0fd4f2af552add042d716f1d168", WETH: "0x0bd7d308f8e1639fab988df18a8011f41eacad73", USDC: null };
 // launchpad and venue ids as people know them (the picker badge)
-const PAD_NAME = { uniswap: "Uniswap", ramses: "Ramses", pons: "Pons", long: "Long.xyz", frontier: "Frontier", clanker: "Clanker", bankr: "Bankr", virtuals: "Virtuals", mintclub: "Mint Club", pancake: "PancakeSwap", sushi: "SushiSwap", aerodrome: "Aerodrome", pumpfun: "pump.fun", "pump.fun": "pump.fun", raydium: "Raydium", meteora: "Meteora", bonk: "Bonk", kyber: "KyberSwap" };
+const PAD_NAME = { uniswap: "Uniswap", ramses: "Ramses", pons: "Pons", long: "Long.xyz", frontier: "Frontier", o1: "o1 Launchpad", clank: "Clank.trade", easya: "EasyA", hoodit: "Hoodit", clanker: "Clanker", bankr: "Bankr", virtuals: "Virtuals", mintclub: "Mint Club", pancake: "PancakeSwap", sushi: "SushiSwap", aerodrome: "Aerodrome", pumpfun: "pump.fun", "pump.fun": "pump.fun", raydium: "Raydium", meteora: "Meteora", bonk: "Bonk", kyber: "KyberSwap" };
 const padName = (id) => { const k = String(id || "").toLowerCase(); return PAD_NAME[k] || (k ? k.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : ""); };
 const padBadge = (id) => h("span", { class: "badge-s sw-pad" }, padLogo(id, 12), padName(id));
+const TROYA = "0x1fa81ddaaac83240803b3f2d20595e40edc1a074";
+// a dollar price only for tokens known by address: coin names are free, so a coin called "USDC" is never priced at $1
+const WETHS = new Set(["0x0bd7d308f8e1639fab988df18a8011f41eacad73", "0x4200000000000000000000000000000000000006", "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"]);
+const USD1 = new Set(["0x5fc5360d0400a0fd4f2af552add042d716f1d168", "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", "0xaf88d065e77c8cc2239327c5edb3a432268e5831", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"]); // USDG · USDC Base · USDC, USDT Arbitrum · USDC, USDT Solana
+const akey = (a) => (/^0x/i.test(String(a || "")) ? String(a).toLowerCase() : String(a || ""));
+const MAJOR = /^(USDG|WETH|USDC|USDT)$/i;
+/** A typed or pasted amount as a plain decimal. "2,767,478.18" (commas next to a point, or more than one comma) keeps
+ *  every digit; a lone comma is a decimal point, as many keyboards type it. A second point is dropped while typing. */
+function cleanAmt(s) {
+  let v = String(s ?? "").replace(/[\s _'’]/g, "");
+  const commas = (v.match(/,/g) || []).length;
+  v = (commas && v.includes(".")) || commas > 1 ? v.replace(/,/g, "") : v.replace(/,/g, ".");
+  v = v.replace(/[^\d.]/g, "");
+  return v.split(".").length > 2 ? v.slice(0, v.lastIndexOf(".")) : v;
+}
+/** "about 40 s" under a minute and a half, "about 10 min" from there (route times from LI.FI). */
+const secText = (s) => (s ? `about ${s < 90 ? `${Math.max(1, Math.round(s))} s` : `${Math.round(s / 60)} min`}` : "a few minutes");
+/** The Gate's own count: a check that did not run ("skip") is neither passed nor failed, so the ring and the tally leave it out. */
+function gateCount(g) {
+  const cs = g?.checks || [];
+  const n = (s) => cs.filter((c) => c.status === s).length;
+  const passed = n("pass"), failed = n("fail"), notes = n("warn"), skipped = n("skip");
+  // "6 passed · 1 not measured" reads clearer than "6 of 7 passed" next to a Passed verdict (the Gate card's wording)
+  const tally = [`${passed} passed`, failed ? `${failed} failed` : "", notes ? `${notes} to note` : "", skipped ? `${skipped} not measured` : ""].filter(Boolean).join(" · ");
+  return { passed, failed, notes, skipped, total: cs.length - skipped, tally };
+}
+const GATE_COPY = "Pick a coin and an amount. Troya runs its checks (seven on Robinhood Chain), a simulated swap and a test sell included, before your wallet can sign.";
 
 export async function mount(view, ctx) {
   useCss("swap");
   let alive = true;
   const st = {
     sell: ETH, buy: null, amount: "", slip: Math.round((ctx.prefs.get().slippage || 1) * 100),
-    quote: null, quoteErr: null, loading: false, gate: null, gateAt: 0, gating: false, bal: null, busy: false, seq: 0,
+    quote: null, quoteErr: null, loading: false, loadAt: 0, gate: null, gateAt: 0, gating: false, bal: null, busy: false, seq: 0, ethUsd: null,
     chain: NETS.some((n) => n.key === ctx.query.chain) ? ctx.query.chain : "robinhood",
   };
+  const blocked = () => !!(st.gate && !st.gate.pass);
   // Solana uses its own wallet (Wallet Standard) and SOL as the native coin; the EVM chains share the connected EVM wallet
   const isSolNet = () => st.chain === "solana";
   const nativeOf = () => (isSolNet() ? SOLT : ETH);
@@ -70,43 +99,67 @@ export async function mount(view, ctx) {
   }
   paintNets();
   const body = h("div", { class: "sw-body" });
+  // with no coin chosen yet, the right column offers a few to start from instead of an empty Gate
+  const popCard = h("section", { class: "panel sw2-route sw2-pop", hidden: true });
   const gateCard = h("section", { class: "panel sw2-gate" });
   const routeCard = h("section", { class: "panel sw2-route" });
   const chartCard = h("section", { class: "panel sw2-chart", hidden: true });
   clear(view,
     h("div", { class: "sw2" },
       h("div", { class: "sw2-l" }, h("div", { class: "sw-net" }, netChip), body),
-      h("div", { class: "sw2-r" }, gateCard, routeCard, chartCard)));
+      h("div", { class: "sw2-r" }, popCard, gateCard, routeCard, chartCard)));
 
   // sell leg
   const sellInput = h("input", { class: "sw-amt", inputmode: "decimal", placeholder: "0", autocomplete: "off", spellcheck: "false", "aria-label": "Amount to sell", value: st.amount });
   const sellTok = h("button", { class: "sw-tok", type: "button", onclick: () => pick("sell") });
   const sellBal = h("button", { class: "sw-bal", type: "button", onclick: () => setMax() });
   const quick = h("div", { class: "sw-quick" });
+  const payUsd = h("div", { class: "sw-sub" });
   // buy leg
   const buyOut = h("div", { class: "sw-amt out", "aria-live": "polite" }, "0");
   const buyTok = h("button", { class: "sw-tok", type: "button", onclick: () => pick("buy") });
   const buySub = h("div", { class: "sw-sub" });
-  const flip = h("button", { class: "sw-flip", type: "button", "aria-label": "Switch tokens", onclick: () => { [st.sell, st.buy] = [st.buy || nativeOf(), st.sell]; if (isNative(st.sell) && isNative(st.buy)) st.buy = null; st.amount = ""; sellInput.value = ""; reset(); paint(); refreshBal(); } }, icon("swap"));
+  const getUsd = h("div", { class: "sw-sub" });
+  const flip = h("button", { class: "sw-flip", type: "button", "aria-label": "Switch tokens", onclick: () => flipPair() }, icon("swap"));
+  // the two boxes trade places: what you would get becomes what you pay (the typed number when there is no quote yet),
+  // kept only when the new balance covers it, so a flip never leaves an amount the wallet cannot pay
+  async function flipPair() {
+    const q = st.quote;
+    const carry = q?.amountOutRaw ? { raw: BigInt(q.amountOutRaw) } : st.amount ? { text: st.amount } : null;
+    [st.sell, st.buy] = [st.buy || nativeOf(), st.sell];
+    if (isNative(st.sell) && isNative(st.buy)) st.buy = null;
+    st.amount = ""; sellInput.value = ""; reset(); paint();
+    const s = st.sell;
+    await refreshBal();
+    if (!alive || !carry || st.sell !== s || st.amount || !st.bal) return;
+    const dec = s?.decimals ?? 18;
+    const raw = carry.raw ?? toRaw(carry.text, dec);
+    if (!raw || raw <= 0n || raw > st.bal.raw) return;
+    sellInput.value = carry.raw != null ? rawInput(raw, dec, 8) : carry.text;
+    sellInput.dispatchEvent(new Event("input"));
+  }
   const slipSeg = seg(SLIPS, st.slip, (v) => { st.slip = v; const p = ctx.prefs.get(); ctx.prefs.set({ ...p, slippage: v / 100 }); reset(); requote(); });
   slipSeg.classList.add("sm");
   const rows = h("div", { class: "rows sw-rows" });
   const warnBox = h("div", { class: "sw-warn" });
   const btn = h("button", { class: "btn primary big", type: "button", onclick: () => act() });
+  // what the page is doing right now (finding a route, running the checks), under the button as well as in the Gate card
+  const statusLine = h("p", { class: "sw2-sign sw-status", hidden: true });
   const txBox = h("div", { class: "sw-tx" });
 
   const card = h("div", { class: "sw-card panel" },
     h("div", { class: "sw-leg" },
       h("div", { class: "sw-leg-top" }, h("span", {}, "You pay"), sellBal),
       h("div", { class: "sw-leg-main" }, sellInput, sellTok),
-      quick),
+      payUsd, quick),
     h("div", { class: "sw-mid" }, flip),
     h("div", { class: "sw-leg" },
       h("div", { class: "sw-leg-top" }, h("span", {}, "You get"), buySub),
-      h("div", { class: "sw-leg-main" }, buyOut, buyTok)),
+      h("div", { class: "sw-leg-main" }, buyOut, buyTok), getUsd),
     h("div", { class: "sw-meta" }, h("span", { class: "muted" }, "Slippage"), slipSeg,
       infoTip("The most the price may move against you between quote and inclusion. If it moves further, the swap reverts and only the network fee is spent.", "Slippage")),
-    warnBox, btn, h("p", { class: "sw2-sign" }, "Your wallet signs. Troya never holds your funds."), rows, txBox);
+    warnBox, btn, statusLine,
+    h("p", { class: "sw2-sign" }, "Your wallet signs. Troya never holds your funds. ", h("span", { class: "badge-s", title: "Troya adds no fee of its own to any swap" }, "Troya fee 0%")), rows, txBox);
   const note = h("p", { class: "note sw-note" });
   function paintNote() {
     if (isSolNet()) return clear(note, "Solana: Troya routes through Jupiter (pump.fun and every other Solana launchpad and pool) and runs a Solana Troya Gate: who can freeze or mint the coin, Token-2022 traps, the exact swap simulated from your address and a sell route back to SOL. You sign in your own Solana wallet (Phantom, Solflare, Backpack or MetaMask). Troya adds no fee of its own.");
@@ -119,8 +172,7 @@ export async function mount(view, ctx) {
   paintNote();
 
   sellInput.addEventListener("input", () => {
-    const v = sellInput.value.replace(/,/g, ".").replace(/[^\d.]/g, "");
-    const fixed = v.split(".").length > 2 ? v.slice(0, v.lastIndexOf(".")) : v;
+    const fixed = cleanAmt(sellInput.value);
     if (fixed !== sellInput.value) sellInput.value = fixed;
     st.amount = fixed;
     reset();
@@ -138,7 +190,7 @@ export async function mount(view, ctx) {
      buys for exactly this amount; the server runs this chain's Troya Gate on the coin first and refuses a route if it fails. */
   const XC_SRC = { robinhood: [{ key: "base", id: 8453, name: "Base" }, { key: "arbitrum", id: 42161, name: "Arbitrum" }], base: [{ key: "robinhood", id: 4663, name: "Robinhood Chain" }], arbitrum: [{ key: "robinhood", id: 4663, name: "Robinhood Chain" }] };
   const XC_GAS = 3n * 10n ** 14n; // 0.0003 ETH left on the source chain for the transaction's own gas
-  const xc = { open: false, src: null, amount: "", bal: null, q: null, qAt: 0, err: null, gate: null, loading: false, seq: 0, busy: false, key: "", status: null };
+  const xc = { open: false, src: null, amount: "", bal: null, q: null, qAt: 0, err: null, gate: null, loading: false, seq: 0, busy: false, key: "", status: null, auto: "" };
   const xcBox = h("section", { class: "panel sw-xc", hidden: true });
   const xcToggle = h("button", { class: "sw-xc-t", type: "button", "aria-expanded": "false", onclick: () => { xc.open = !xc.open; xcToggle.setAttribute("aria-expanded", String(xc.open)); xcBody.hidden = !xc.open; if (xc.open) { xcBal(); xcQuote(); } xcPaint(); } });
   const xcSrcRow = h("div", { class: "sw-xc-src" });
@@ -149,8 +201,7 @@ export async function mount(view, ctx) {
   const xcBody = h("div", { class: "sw-xc-b", hidden: true }, xcSrcRow,
     h("div", { class: "sw-leg sw-xc-leg" }, h("div", { class: "sw-leg-top" }, h("span", {}, "You pay"), xcBalBtn), h("div", { class: "sw-leg-main" }, xcInput, xcUnit)), xcOut);
   xcInput.addEventListener("input", () => {
-    const v = xcInput.value.replace(/,/g, ".").replace(/[^\d.]/g, "");
-    const fixed = v.split(".").length > 2 ? v.slice(0, v.lastIndexOf(".")) : v;
+    const fixed = cleanAmt(xcInput.value);
     if (fixed !== xcInput.value) xcInput.value = fixed;
     xc.amount = fixed; xc.q = null; xc.err = null; xc.gate = null; xc.seq++;
     xcPaint(); xcQuote();
@@ -161,10 +212,12 @@ export async function mount(view, ctx) {
   const xcCoin = () => (!isSolNet() && XC_SRC[st.chain] && st.buy && !isNative(st.buy) && /^0x[0-9a-fA-F]{40}$/.test(st.buy.address || "") && isNative(st.sell) ? st.buy : null);
   function syncXc() {
     const coin = xcCoin();
-    xcBox.hidden = !coin;
-    if (!coin) return;
+    // a coin the Gate blocked here is not offered through another chain either (the server would refuse it too)
+    const was = xcBox.hidden;
+    xcBox.hidden = !coin || blocked();
+    if (xcBox.hidden) return;
     const key = `${st.chain}:${coin.address.toLowerCase()}`;
-    if (key === xc.key) return;
+    if (key === xc.key) { if (was) xcPaint(); return; }
     Object.assign(xc, { key, src: xcSrcs()[0].key, q: null, err: null, gate: null, bal: null, status: null }); xc.seq++;
     const srcs = xcSrcs();
     clear(xcToggle, h("span", { class: "sw-xc-logos" }, srcs.map((x) => chainLogo(x.key, 16))),
@@ -214,7 +267,7 @@ export async function mount(view, ctx) {
       h("div", {}, h("span", {}, "You get (est.)"), h("span", {}, `${amount(Number(fromRaw(q.toAmount, q.toDecimals)))} ${q.toSymbol}`)),
       h("div", {}, h("span", {}, "Minimum"), h("span", {}, `${amount(Number(fromRaw(q.toAmountMin, q.toDecimals)))} ${q.toSymbol}`)),
       h("div", {}, h("span", {}, "Route"), h("span", {}, `${q.tool} via LI.FI`)),
-      h("div", {}, h("span", {}, "Time"), h("span", {}, q.executionSec ? `about ${q.executionSec < 90 ? `${Math.max(1, Math.round(q.executionSec))} s` : `${Math.round(q.executionSec / 60)} min`}` : "a few minutes")),
+      h("div", {}, h("span", {}, "Time"), h("span", {}, secText(q.executionSec))),
       h("div", {}, h("span", {}, "Route fees"), h("span", {}, `$${num(q.feeUsd + q.gasUsd, 2)}`)),
       gateRow,
       h("div", {}, h("span", {}, "Troya fee"), h("span", {}, "None"))) : g ? h("div", { class: "rows sw-rows" }, gateRow) : null;
@@ -247,7 +300,7 @@ export async function mount(view, ctx) {
       const q = xc.q, amt = fromRaw(raw), got = Number(fromRaw(q.toAmount, q.toDecimals)), min = Number(fromRaw(q.toAmountMin, q.toDecimals));
       const ok = await review({ title: "Review cross-chain buy", summary: `${tiny(amt)} ETH on ${s.name} → about ${amount(got)} ${q.toSymbol} on ${d.name}`, confirmLabel: `Buy in wallet`,
         rows: [["You pay", `${tiny(amt)} ETH on ${s.name}`], ["You receive (est.)", `${amount(got)} ${q.toSymbol} on ${d.name}`], ["Minimum", `${amount(min)} ${q.toSymbol}`], ["Troya Gate", `${q.gate.verdict === "caution" ? "Passed with notes" : "Passed"} · ${q.gate.passed}/${q.gate.total} on ${d.name}`],
-          ["Route", `${q.tool} via LI.FI`], ["Time", q.executionSec ? `about ${Math.max(1, Math.round(q.executionSec))} s` : "a few minutes"], ["Route fees", `$${num(q.feeUsd + q.gasUsd, 2)}`], ["Recipient", `${short(wallet.address)} (you) on ${d.name}`], ["Contract", short(q.tx.to)]],
+          ["Route", `${q.tool} via LI.FI`], ["Time", secText(q.executionSec)], ["Route fees", `$${num(q.feeUsd + q.gasUsd, 2)}`], ["Recipient", `${short(wallet.address)} (you) on ${d.name}`], ["Contract", short(q.tx.to)]],
         warn: `Sent through a third-party route (LI.FI${q.tool ? `, ${q.tool}` : ""}): Troya cannot reverse it once it is sent.${q.gate.verdict === "caution" && q.gate.why ? ` Gate note: ${q.gate.why}` : ""}` });
       if (!ok) return;
       xc.busy = `Confirm in your wallet on ${s.name}…`; xcPaint();
@@ -285,6 +338,47 @@ export async function mount(view, ctx) {
       await new Promise((res) => setTimeout(res, 5000));
     }
   }
+  /* ---------- not enough ETH on Robinhood Chain: pay from Base or Arbitrum, or bridge in ----------
+     Base and Arbitrum ETH are read once per connected address. The panel only opens and fills an amount: the person
+     still reviews the route and signs on the other chain, and the server runs this chain's Troya Gate first. */
+  const xb = { addr: "", base: null, arbitrum: null, p: null };
+  function readOtherEth() {
+    if (!wallet.address || xb.addr === wallet.address) return xb.p;
+    const a = wallet.address;
+    Object.assign(xb, { addr: a, base: null, arbitrum: null });
+    xb.p = Promise.all(["base", "arbitrum"].map((k) => balanceOf(a, ETH, k).then((b) => { if (xb.addr === a) xb[k] = b; }).catch(() => {})))
+      .then(() => { if (alive && xb.addr === a) paint(); });
+    return xb.p;
+  }
+  // the ETH shortfall on Robinhood Chain for this buy (0n when there is none or it is not an ETH buy there)
+  const ethShort = () => {
+    if (st.chain !== "robinhood" || !isNative(st.sell) || !st.bal || !wallet.address) return 0n;
+    const amt = toRaw(st.amount, 18);
+    return amt && amt > st.bal.raw ? amt - st.bal.raw : 0n;
+  };
+  // the source chain holding the most ETH above its own gas, or null
+  const richSrc = () => xcSrcs().map((x) => ({ k: x.key, raw: xb[x.key]?.raw ?? 0n })).filter((x) => x.raw > XC_GAS).sort((a, b) => (b.raw > a.raw ? 1 : -1))[0]?.k || null;
+  function openXc(src) {
+    syncXc();
+    if (xcBox.hidden) return false;
+    if (src && src !== xc.src) { xc.src = src; xc.q = null; xc.err = null; xc.gate = null; xc.seq++; }
+    if (!xc.open) { xc.open = true; xcToggle.setAttribute("aria-expanded", "true"); xcBody.hidden = false; }
+    xcBal(); xcPaint();
+    // the amount they meant to pay, when that chain holds it plus gas
+    const raw = toRaw(st.amount, 18), b = xb[xc.src];
+    if (!xc.amount && raw && b && raw + XC_GAS <= b.raw) { xcInput.value = st.amount; xcInput.dispatchEvent(new Event("input")); }
+    else xcQuote();
+    return true;
+  }
+  async function addEth() {
+    await readOtherEth();
+    if (!alive) return;
+    const src = richSrc();
+    if (src && openXc(src)) { xcBox.scrollIntoView({ behavior: "smooth", block: "nearest" }); setTimeout(() => xcInput.focus(), 350); return; }
+    // neither chain holds ETH: the Bridge page, with the missing amount (rounded up, plus a little for gas) filled in
+    const need = ethShort() + GAS_KEEP, step = 10n ** 12n;
+    location.hash = `#/bridge?amount=${rawInput(((need + step - 1n) / step) * step, 18, 6)}`;
+  }
   // a long quote shrinks to fit its box (down to 20px) instead of being cut mid-number
   function fitOut() {
     buyOut.style.fontSize = "";
@@ -310,17 +404,24 @@ export async function mount(view, ctx) {
       clear(sellBal, `Balance ${amount(st.bal.amount)} ${st.sell.symbol}`);
       sellBal.disabled = false;
     } else { clear(sellBal, who() ? "Balance …" : ""); sellBal.disabled = true; }
+    const keep = isSolNet() ? SOL_KEEP : GAS_KEEP;
+    // the chip matching the amount in the box is shown pressed
+    const on = (v) => String(!!st.amount && v === st.amount);
     clear(quick, isNative(st.sell)
-      ? [...(isSolNet() ? ["0.05", "0.1", "0.5", "1"] : ["0.005", "0.01", "0.05", "0.1"]).map((v) => h("button", { type: "button", class: "chip", onclick: () => { sellInput.value = v; sellInput.dispatchEvent(new Event("input")); } }, `${v} ${nativeOf().symbol}`)),
-        who() && st.bal?.raw > (isSolNet() ? SOL_KEEP : GAS_KEEP) ? h("button", { type: "button", class: "chip", title: `Everything but a little ${nativeOf().symbol} kept for fees`, onclick: () => setMax() }, "Max") : null]
-      : who() && st.bal?.raw > 0n ? [25, 50, 75, 100].map((p) => h("button", { type: "button", class: "chip", onclick: () => setPct(p) }, p === 100 ? "Max" : `${p}%`)) : []);
+      ? [...(isSolNet() ? ["0.05", "0.1", "0.5", "1"] : ["0.005", "0.01", "0.05", "0.1"]).map((v) => h("button", { type: "button", class: "chip", "aria-pressed": String(!!st.amount && Number(st.amount) === Number(v)), onclick: () => { sellInput.value = v; sellInput.dispatchEvent(new Event("input")); } }, `${v} ${nativeOf().symbol}`)),
+        who() && st.bal?.raw > keep ? h("button", { type: "button", class: "chip", "aria-pressed": on(maxStr()), title: `Everything but a little ${nativeOf().symbol} kept for fees`, onclick: () => setMax() }, "Max") : null]
+      : who() && st.bal?.raw > 0n ? [25, 50, 75, 100].map((p) => h("button", { type: "button", class: "chip", "aria-pressed": on(pctStr(p)), onclick: () => setPct(p) }, p === 100 ? "Max" : `${p}%`)) : []);
     // output
     const q = st.quote;
     clear(buyOut, q ? amount(Number(q.amountOut)) : st.loading ? h("span", { class: "sk sw-sk" }) : "0");
     buyOut.title = q ? `${amount(Number(q.amountOut))} ${q.tokenOut.symbol}` : "";
     buyOut.classList.toggle("dim", !q);
     fitOut();
-    clear(buySub, q && q.side === "buy" ? `≈ ${amount(Number(q.amountOut) / Number(q.amountIn))} per ${nativeOf().symbol}` : q?.ethUsd && q.side === "sell" ? `≈ $${price(Number(q.amountOut) * q.ethUsd)}` : "");
+    clear(buySub, q && q.side === "buy" ? `≈ ${amount(Number(q.amountOut) / Number(q.amountIn))} per ${nativeOf().symbol}` : "");
+    const u = usdLegs();
+    clear(payUsd, u.pay != null ? `≈ ${usd(u.pay)}` : "");
+    clear(getUsd, u.get != null ? `≈ ${usd(u.get)}` : "");
+    getUsd.title = u.derived ? "What the coins are worth at today's price, after fees, taxes and price impact" : "";
     // rows
     if (q) {
       const outSym = q.tokenOut.symbol, inSym = q.tokenIn.symbol;
@@ -339,17 +440,23 @@ export async function mount(view, ctx) {
     const warns = [...(q?.warnings || [])];
     if (st.quoteErr) warns.unshift(st.quoteErr);
     clear(warnBox, warns.map((w) => h("div", { class: `alert ${st.quoteErr === w ? "error" : "warn"}` }, w)));
-    // gate, route, chart
+    // popular coins (no coin yet), gate, route, chart
+    paintPop();
     paintGate();
+    routeCard.hidden = !st.buy;
     paintRoute();
     syncChart();
     syncXc();
+    // the first time this coin meets an ETH shortfall here, "Pay from Base or Arbitrum" opens on the chain that holds ETH
+    const lack = ethShort();
+    if (lack > 0n && !xcBox.hidden && xc.auto !== xc.key) { readOtherEth(); const src = richSrc(); if (src) { xc.auto = xc.key; openXc(src); } }
     // button state
     const amt = toRaw(st.amount, st.sell?.decimals ?? 18);
     let label = "Review swap", disabled = false;
     if (!who()) label = isSolNet() ? "Connect a Solana wallet" : "Connect wallet";
     else if (!st.buy || !st.sell) { label = "Select a token"; disabled = true; }
     else if (!amt || amt <= 0n) { label = "Enter an amount"; disabled = true; }
+    else if (lack > 0n) { if (blocked()) { label = "Blocked by Troya Gate"; disabled = true; } else label = "Add ETH to buy"; }
     else if (st.bal && amt > st.bal.raw) { label = `Not enough ${st.sell.symbol}`; disabled = true; }
     else if (st.loading) { label = "Getting a quote…"; disabled = true; }
     else if (!q) { label = st.quoteErr ? "No route" : "Getting a quote…"; disabled = true; }
@@ -357,12 +464,50 @@ export async function mount(view, ctx) {
     if (st.busy) { label = st.busy; disabled = true; }
     btn.textContent = label;
     btn.disabled = disabled;
+    tickBusy();
+  }
+  // ≈ dollars on both legs. A side known by address (ETH, WETH, a dollar stablecoin) is priced directly, at the quote's
+  // ETH price; the other side follows through the quote's own fees and price impact, so "You get" is what the coins are
+  // worth at today's price. Nothing is shown when neither side has a known price.
+  function usdLegs() {
+    const q = st.quote, eu = q?.ethUsd || st.ethUsd;
+    const unit = (t) => {
+      if (!t) return null;
+      const a = akey(t.address);
+      if (USD1.has(a)) return 1;
+      if (isSolNet()) return null;                     // SOL has no price in the quote
+      return (isNative(t) || WETHS.has(a)) && eu > 0 ? eu : null;
+    };
+    const typed = Number(st.amount) || 0;
+    let pay = typed > 0 && unit(st.sell) != null ? typed * unit(st.sell) : null, get = null, derived = false;
+    if (q) {
+      const ui = unit(q.tokenIn), uo = unit(q.tokenOut);
+      if (ui != null) pay = Number(q.amountIn) * ui;
+      if (uo != null) get = Number(q.amountOut) * uo;
+      const keep = q.feePct != null && q.priceImpact != null ? (1 - Number(q.feePct) / 100) * (1 - Number(q.priceImpact)) : null;
+      if (keep > 0 && keep <= 1) {
+        if (get == null && pay != null) { get = pay * keep; derived = true; }
+        else if (pay == null && get != null) pay = get / keep;
+      }
+    }
+    const ok = (v) => (v != null && isFinite(v) && v > 0 ? v : null);
+    return { pay: ok(pay), get: ok(get), derived: derived && ok(get) != null };
+  }
+  const busyLine = () => (st.loading ? `Finding the best route… ${Math.max(0, Math.floor((Date.now() - st.loadAt) / 1000))}s` : st.gating ? "Running the checks…" : "");
+  function tickBusy() {
+    const t = st.busy ? "" : busyLine();
+    if (statusLine.textContent !== t) statusLine.textContent = t;
+    statusLine.hidden = !t;
+    const el = gateCard.querySelector("[data-busy]");
+    if (el && t && el.textContent !== t) el.textContent = t;
   }
 
   const RC = 2 * Math.PI * 50;
-  function ringEl(passed, total, verdict) {
-    const el = h("span", { class: `dk-ring sw2-ring v-${verdict}`, role: "img", "aria-label": `${passed} of ${total} checks passed` });
-    el.innerHTML = `<svg viewBox="0 0 120 120"><circle class="ra" cx="60" cy="60" r="50"/><circle class="rb" cx="60" cy="60" r="50" style="stroke-dasharray:0 ${RC}"/></svg><span class="sw2-ring-c"><b>${passed}/${total}</b><small>passed</small></span>`;
+  // the ring is drawn over the checks that ran; before a result it shows what the page is doing instead of a "0/7"
+  function ringEl(passed, total, verdict, center) {
+    const [big, small] = center || [`${passed}/${total}`, "passed"];
+    const el = h("span", { class: `dk-ring sw2-ring v-${verdict}`, role: "img", "aria-label": center ? `Troya Gate: ${small}` : `${passed} of ${total} checks passed` });
+    el.innerHTML = `<svg viewBox="0 0 120 120"><circle class="ra" cx="60" cy="60" r="50"/><circle class="rb" cx="60" cy="60" r="50" style="stroke-dasharray:0 ${RC}"/></svg><span class="sw2-ring-c"><b>${big}</b><small>${small}</small></span>`;
     requestAnimationFrame(() => requestAnimationFrame(() => { const c = el.querySelector(".rb"); if (c) c.style.strokeDasharray = `${total ? (passed / total) * RC : 0} ${RC}`; }));
     return el;
   }
@@ -370,31 +515,102 @@ export async function mount(view, ctx) {
   function paintGate() {
     const g = st.gate;
     const sym = st.buy && !isNative(st.buy) ? st.buy.symbol : st.sell && !isNative(st.sell) ? st.sell.symbol : null;
-    const key = g ? `${st.gateAt}` : st.gating ? "gating" : st.quote ? "quote" : `idle:${sym}`;
+    const key = g ? `${st.gateAt}` : !st.buy ? `none:${sym}` : st.gating ? "gating" : st.loading ? "loading" : st.quote ? "quote" : `idle:${sym}`;
     if (key === lastGateKey) return;
     lastGateKey = key;
     const title = h("p", { class: "sw2-mic" }, `The Gate${sym ? ` · $${sym}` : ""}`);
+    // no coin chosen yet: what the Gate does, without an empty ring
+    if (!g && !st.buy) { clear(gateCard, h("div", { class: "sw2-gh" }, title, h("span", { class: "dk-v" }, "Waiting")), h("p", { class: "sw2-wait" }, GATE_COPY)); return; }
     if (!g) {
-      clear(gateCard, h("div", { class: "sw2-gh" }, title, h("span", { class: "dk-v" }, st.gating ? "Checking…" : "Waiting")),
-        h("div", { class: "sw2-gb" }, ringEl(0, 7, "idle"),
-          h("p", { class: "sw2-wait" }, st.gating ? "Simulating the exact swap from your address and a test sell…" : "Pick a coin and an amount. Troya runs seven checks here, a simulated swap and a test sell included, before your wallet can sign.")));
+      const busy = st.loading || st.gating;
+      clear(gateCard, h("div", { class: "sw2-gh" }, title, h("span", { class: "dk-v" }, st.gating ? "Checking…" : st.loading ? "Routing…" : "Waiting")),
+        h("div", { class: "sw2-gb" }, ringEl(0, 0, "idle", st.gating ? ["…", "checking"] : st.loading ? ["…", "routing"] : ["–", "waiting"]),
+          h("div", {},
+            busy ? h("p", { class: "sw2-wait", "data-busy": "" }, busyLine()) : null,
+            h("p", { class: busy ? "fine muted" : "sw2-wait" }, st.gating ? "Simulating the exact swap from your address and a test sell…"
+              : st.loading ? "Then Troya runs its checks (seven on Robinhood Chain) before your wallet can sign." : GATE_COPY))));
       return;
     }
-    const passed = g.checks.filter((c) => c.status === "pass").length;
-    const verdict = g.pass ? (g.checks.some((c) => c.status === "warn") ? "caution" : "passed") : "failed";
+    const c = gateCount(g);
+    const verdict = g.pass ? (c.notes ? "caution" : "passed") : "failed";
     clear(gateCard,
       h("div", { class: "sw2-gh" }, title, st.gateAt ? h("span", { class: "fine muted", "data-gate-age": "" }, gateAge()) : null,
         h("span", { class: `dk-v v-${verdict}` }, g.pass ? (verdict === "caution" ? "Passed with notes" : "Passed") : "Blocked")),
-      h("div", { class: "sw2-gb" }, ringEl(passed, g.checks.length, verdict),
-        h("ul", { class: "sw2-checks" }, g.checks.map((c) => h("li", { class: `c-${c.status}` },
-          h("span", { class: "dk-ck" }, c.status === "pass" ? icon("check") : c.status === "fail" ? icon("close") : h("b", {}, c.status === "warn" ? "!" : "–")),
-          h("span", { class: "l" }, c.label), h("span", { class: "d", title: c.detail || "" }, c.status === "skip" ? (c.detail || "Skipped") : c.detail || ""))))),
-      h("p", { class: "fine muted sw2-gnote" }, "Runs again the moment you press Swap, on the pool as it is then."));
+      h("div", { class: "sw2-gb" }, ringEl(c.passed, c.total, verdict),
+        h("ul", { class: "sw2-checks" }, g.checks.map((x) => h("li", { class: `c-${x.status}` },
+          h("span", { class: "dk-ck" }, x.status === "pass" ? icon("check") : x.status === "fail" ? icon("close") : h("b", {}, x.status === "warn" ? "!" : "–")),
+          h("span", { class: "l" }, x.label), h("span", { class: "d", title: x.detail || "" }, x.status === "skip" ? (x.detail || "Skipped") : x.detail || ""))))),
+      h("p", { class: "fine muted sw2-gnote" }, `${c.tally}. Runs again the moment you press Swap, on the pool as it is then.`));
+  }
+  /* ---------- Popular now: a few coins to start from while none is chosen ----------
+     Robinhood Chain: $TROYA, the top five Troya picks (a read of live data, never advice) and three stock tokens.
+     Base, Arbitrum and Solana: the same popular list the token picker opens with. */
+  const pop = { chain: "", rows: null, loading: false, seq: 0 };
+  async function loadPop() {
+    const chain = st.chain, my = ++pop.seq;
+    Object.assign(pop, { chain, rows: null, loading: true });
+    let rows = [];
+    try {
+      if (chain === "robinhood") {
+        const [tr, pk, sk] = await Promise.all([
+          api.get(`market/robinhood?${new URLSearchParams({ q: TROYA, limit: "3", tradable: "1" })}`).catch(() => null),
+          api.get(`market/robinhood?${new URLSearchParams({ cat: "picks", sort: "picks", limit: "8", tradable: "1" })}`).catch(() => null),
+          (stocksCache ||= api.get("market/stocks").catch(() => ({ stocks: [] }))),
+        ]);
+        const troya = (tr?.tokens || []).find((t) => akey(t.address) === TROYA) || { address: TROYA, symbol: "TROYA", name: "Troya Agent" };
+        const seen = new Set([TROYA]);
+        const take = (t) => !!t?.address && !seen.has(akey(t.address)) && !!seen.add(akey(t.address));
+        const picks = (pk?.tokens || []).filter(take).slice(0, 5);
+        const stocks = (sk?.stocks || []).filter((t) => t.tradable).sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0)).filter(take).slice(0, 3);
+        rows = [{ ...troya, group: "Troya" }, ...picks.map((t, i) => ({ ...t, group: i ? null : "Troya picks" })), ...stocks.map((t, i) => ({ ...t, group: i ? null : "Stock tokens" }))];
+      } else {
+        const r = await api.get(`swap/tokens?${new URLSearchParams({ q: "", ...cq() })}`);
+        rows = (r.tokens || []).filter((t) => t.address && t.address !== "native" && !MAJOR.test(t.symbol || "")).slice(0, 8);
+      }
+    } catch { rows = []; }
+    if (my !== pop.seq || !alive) return;
+    pop.rows = rows; pop.loading = false;
+    paintPop();
+  }
+  let lastPopKey = "";
+  function paintPop() {
+    popCard.hidden = !!st.buy;
+    if (st.buy) return;
+    if (pop.chain !== st.chain) loadPop();
+    const key = `${st.chain}|${pop.seq}|${pop.loading}`;
+    if (key === lastPopKey) return;
+    lastPopKey = key;
+    const head = h("p", { class: "sw2-mic" }, "Popular now");
+    if (pop.loading) { clear(popCard, head, h("div", { class: "sk", style: { height: "180px", marginTop: "14px", borderRadius: "14px" } })); return; }
+    if (!pop.rows?.length) { clear(popCard, head, h("p", { class: "sw2-wait", style: { marginTop: "10px" } }, "The list is unavailable right now. Choose a coin with Select token.")); return; }
+    const liq = (n) => (n >= 1e6 ? `$${num(n / 1e6, 1)}M liq.` : `$${num(n / 1e3, n >= 1e4 ? 0 : 1)}K liq.`);
+    const row = (t) => h("div", { class: "tp-row" },
+      tokenIcon({ address: t.address, symbol: t.symbol, image: t.image, chain: st.chain }, "sm"),
+      h("span", { class: "tp-name" }, h("b", {}, `$${t.symbol}`), h("small", {}, t.name || short(t.address))),
+      // the change and the chip keep one line; a long name shortens instead
+      h("span", { class: "tp-extra", style: { display: "inline-flex", alignItems: "center", gap: "6px", flex: "none" } },
+        t.change24h != null ? pctEl(t.change24h) : t.liquidityUsd ? h("span", { class: "badge-s" }, liq(t.liquidityUsd)) : null,
+        h("button", { class: "chip", type: "button", "aria-label": `Select $${t.symbol}`, onclick: () => selectBuy(t) }, "Select")));
+    clear(popCard, head,
+      h("div", { style: { display: "grid", gap: "2px", marginTop: "10px" } }, pop.rows.map((t) => [t.group ? h("div", { class: "tp-load muted", style: { padding: "8px 8px 2px" } }, t.group) : null, row(t)])),
+      h("p", { class: "fine muted", style: { margin: "10px 0 0" } }, st.chain === "robinhood" ? "24 h change. Selecting a coin runs Troya Gate on it before you can sign." : "Selecting a coin runs Troya Gate on it before you can sign."));
+  }
+  async function selectBuy(t) {
+    let c = { address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals ?? null, image: t.image || null };
+    if (c.decimals == null) {
+      try { const m2 = await api.get(`token/meta?${new URLSearchParams({ address: c.address, ...cq() })}`); c = { ...c, decimals: m2.decimals, symbol: c.symbol || m2.symbol, name: c.name || m2.name }; }
+      catch { toast("Could not read this token from the chain. Try again in a moment.", "error"); return; }
+    }
+    if (!alive || st.buy) return;
+    st.buy = c;
+    if (!isNative(st.sell) && akey(st.sell?.address) === akey(c.address)) st.sell = nativeOf();
+    reset(); paint(); refreshBal(); requote();
   }
   // the route: the exact path the quote takes, pool by pool
   let lastRouteKey = "";
   // the same coin on Fomo, for people who trade there (Robinhood Chain coins, not ETH, USDG or WETH)
-  const fomoCoin = () => (st.chain === "robinhood" ? [st.buy, st.sell].find((t) => t && !isNative(t) && /^0x[0-9a-fA-F]{40}$/.test(t.address || "") && !/^(USDG|WETH)$/i.test(t.symbol || "")) : null);
+  // a coin the Gate blocked is not pointed to elsewhere either
+  const fomoCoin = () => (st.chain === "robinhood" && !blocked() ? [st.buy, st.sell].find((t) => t && !isNative(t) && /^0x[0-9a-fA-F]{40}$/.test(t.address || "") && !/^(USDG|WETH)$/i.test(t.symbol || "")) : null);
   const fomoRow = () => { const t = fomoCoin(); return t ? h("a", { class: "tk2-ext sw2-fomo", href: `https://fomo.family/tokens/robinhood/${t.address}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/fomo.png", alt: "" }), `Also on Fomo · $${t.symbol}`) : null; };
   function paintRoute() {
     const q = st.quote;
@@ -405,7 +621,8 @@ export async function mount(view, ctx) {
     const node = (t, sub) => h("div", { class: "sw2-node" }, tokenIcon({ ...t, chain: st.chain }, ""), sub instanceof Node ? sub : h("small", {}, sub));
     const venue = (label) => h("div", { class: "sw2-node v" }, h("span", { class: "sw2-pool" }, venueLogo(q.route.venue || label, 22)), h("small", {}, label));
     const hops = q.route.hops?.length ? q.route.hops : [{ from: q.tokenIn.symbol, to: q.tokenOut.symbol }];
-    const vLabel = String(q.route.label || "").split(" · ")[0] + (q.route.pons ? " · Pons pool" : "");
+    // a graduated Pons coin trades in its Pons pool on Uniswap; a coin still on its curve already says "Pons curve"
+    const vLabel = String(q.route.label || "").split(" · ")[0] + (q.route.pons && q.venue !== "pons-curve" ? " · Pons pool" : "");
     const amt = (v, sym) => h("small", {}, h("b", {}, amount(Number(v))), " ", h("span", {}, sym));
     const parts = [node(q.tokenIn, amt(q.amountIn, q.tokenIn.symbol))];
     // the token in the middle of a multi-hop route wears its own logo (USDG, WETH …), like both ends
@@ -435,7 +652,7 @@ export async function mount(view, ctx) {
     const tf = seg(["15m", "1h", "4h"], iv, (v) => { try { chartObj?.remove(); } catch {} chartObj = null; loadSwapChart(t, v); });
     tf.classList.add("sm");
     chartCard.hidden = false;
-    clear(chartCard, h("div", { class: "sw2-ch-h" }, tokenIcon({ ...t, chain: st.chain }, "sm"), h("b", {}, `$${t.symbol}`), st.gate?.pass ? h("span", { class: "dk-v v-passed" }, `Gate ${st.gate.checks.filter((c) => c.status === "pass").length}/${st.gate.checks.length}`) : null, h("span", { class: "sw2-sp" }), tf), box);
+    clear(chartCard, h("div", { class: "sw2-ch-h" }, tokenIcon({ ...t, chain: st.chain }, "sm"), h("b", {}, `$${t.symbol}`), st.gate?.pass ? h("span", { class: "dk-v v-passed" }, `Gate ${gateCount(st.gate).passed}/${gateCount(st.gate).total}`) : null, h("span", { class: "sw2-sp" }), tf), box);
     try {
       const c = await api.get(`market/robinhood/candles?address=${a}&interval=${iv}`);
       if (!alive || my !== chartSeq || a !== chartAddr) return;
@@ -466,7 +683,8 @@ export async function mount(view, ctx) {
     const s = Math.max(0, Math.round((Date.now() - st.gateAt) / 1000));
     return s < 60 ? `checked ${s}s ago` : `checked ${Math.floor(s / 60)}m ago`;
   }
-  const ageTick = setInterval(() => { const el = gateCard.querySelector("[data-gate-age]"); if (el && st.gateAt) el.textContent = gateAge(); }, 1000);
+  // twice a second, so the route timer never skips a second when a tick runs late
+  const ageTick = setInterval(() => { const el = gateCard.querySelector("[data-gate-age]"); if (el && st.gateAt) { const t = gateAge(); if (el.textContent !== t) el.textContent = t; } tickBusy(); }, 500);
 
   // Troya Gate runs again at the moment of signing: on a new pool, liquidity can move between the quote and the click.
   async function regate(q, label) {
@@ -489,13 +707,14 @@ export async function mount(view, ctx) {
     const amt = toRaw(st.amount, st.sell?.decimals ?? 18);
     if (!st.sell || !st.buy || !amt || amt <= 0n) { st.loading = false; paint(); return; }
     const seq = ++st.seq;
-    st.loading = true;
+    st.loading = true; st.loadAt = Date.now();
     paint();
     const qs = new URLSearchParams({ tokenIn: tokParam(st.sell), tokenOut: tokParam(st.buy), amountInRaw: amt.toString(), slippageBps: String(st.slip), ...cq() });
     try {
       const q = await api.get(`swap/quote?${qs}`);
       if (!alive || seq !== st.seq) return;
       st.quote = q; st.quoteErr = null; st.loading = false; st.gating = true;
+      if (q.ethUsd > 0) st.ethUsd = q.ethUsd;
       paint();
       if (who()) qs.set("from", who());
       // fail closed: if the Gate can't run, the swap stays locked until it can
@@ -518,7 +737,7 @@ export async function mount(view, ctx) {
     const notes = g ? g.checks.filter((c) => c.status === "warn").map((c) => `${c.label}: ${c.detail}`) : [];
     const text = [`Swap on ${CHAINS[st.chain]?.name || st.chain}: ${st.amount || "?"} ${st.sell?.symbol || "?"} for ${st.buy?.symbol || "?"}${st.buy?.address && st.buy.address !== "native" ? ` (${st.buy.address})` : ""}.`,
       q ? `Quote ${amount(Number(q.amountOut))} ${q.tokenOut.symbol}, price impact ${q.priceImpact == null ? "?" : (q.priceImpact * 100).toFixed(2) + "%"}, fees and taxes ${q.feePct == null ? "?" : q.feePct + "%"}, route ${q.route?.label}.` : st.quoteErr ? `No quote: ${st.quoteErr}.` : "",
-      g ? `Troya Gate ${g.pass ? "passed" : "blocked"} (${g.checks.filter((c) => c.status === "pass").length}/${g.checks.length}).` : "",
+      g ? `Troya Gate ${g.pass ? "passed" : "blocked"} (${gateCount(g).tally}).` : "",
       fails.length ? `Failed: ${fails.join("; ")}.` : "", notes.length ? `Notes: ${notes.join("; ")}.` : ""].filter(Boolean).join(" ");
     dispatchEvent(new CustomEvent("troya:ctx", { detail: { text } }));
     if (g && !g.pass) dispatchEvent(new CustomEvent("troya:nudge", { detail: { key: `swap-gate-${st.gateAt}`, text: `Troya Gate blocked this swap of ${st.buy?.symbol || "the coin"}. Want me to explain why?`, q: "Why did Troya Gate block this swap, and what can I do instead?" } }));
@@ -541,18 +760,23 @@ export async function mount(view, ctx) {
     if (chainAt !== st.chain) return;
     if (alive) paint();
   }
-  function setMax() {
-    if (!st.bal) return;
+  // the amounts Max and 25 / 50 / 75 % put in the box (the quick chips compare against them to show which is pressed)
+  function maxStr() {
+    if (!st.bal) return "";
     let raw = st.bal.raw;
     const keep = isSolNet() ? SOL_KEEP : GAS_KEEP;
     if (isNative(st.sell)) raw = raw > keep ? raw - keep : 0n; // keep a little ETH / SOL for fees
-    sellInput.value = rawInput(raw, st.sell.decimals ?? 18, 8);
+    return rawInput(raw, st.sell.decimals ?? 18, 8);
+  }
+  const pctStr = (p) => (st.bal ? rawInput((st.bal.raw * BigInt(p)) / 100n, st.sell.decimals ?? 18, 8) : "");
+  function setMax() {
+    if (!st.bal) return;
+    sellInput.value = maxStr();
     sellInput.dispatchEvent(new Event("input"));
   }
   function setPct(p) {
     if (!st.bal) return;
-    const raw = (st.bal.raw * BigInt(p)) / 100n;
-    sellInput.value = rawInput(raw, st.sell.decimals ?? 18, 8);
+    sellInput.value = pctStr(p);
     sellInput.dispatchEvent(new Event("input"));
   }
 
@@ -660,7 +884,33 @@ export async function mount(view, ctx) {
     const m = modal({ title: "Connect a Solana wallet", body: h("div", { class: "sw-solw" }, list.map((w) => h("button", { class: "sw-solw-row", type: "button", onclick: async () => { m.close(); try { await connectSol(w.name); } catch (e) { toast(e.message, "error", 6000); } } },
       w.icon ? h("img", { src: w.icon, alt: "", width: 24, height: 24 }) : null, h("b", {}, w.name))), h("p", { class: "note" }, "Troya never sees your key: your wallet signs the exact swap the Gate checked.")) });
   }
+  // the two rows every review adds: what the route keeps in fees and taxes, and the Gate as it just ran
+  const feeRow = (fq) => ["Fees and taxes", fq.feePct == null ? "–" : `${Number(fq.feePct).toFixed(2)}%`];
+  const gateRow = () => { const g = st.gate, c = gateCount(g); return g?.pass ? ["Troya Gate", `${c.notes ? "Passed with notes" : "Passed"} ${c.passed}/${c.total}`] : null; };
+  // after a confirmed swap: the next things people do with the coin they now hold (each opens a page; nothing is sent)
+  function doneChips(chain, paid, got, outRaw) {
+    const coin = !isNative(got) ? got : !isNative(paid) ? paid : null;
+    const rh = chain === "robinhood" && /^0x[0-9a-fA-F]{40}$/.test(coin?.address || "");
+    const holds = !!coin && coin === got && !MAJOR.test(coin.symbol || "");
+    return h("div", { class: "row", style: { flexWrap: "wrap", gap: "6px", marginTop: "8px" } },
+      rh ? h("a", { class: "chip", href: `#/token/${coin.address.toLowerCase()}` }, `Open $${coin.symbol}`) : null,
+      chain !== "solana" ? h("a", { class: "chip", href: "#/portfolio" }, "View in Portfolio") : null,
+      rh && holds ? h("a", { class: "chip", href: "#/agent/aegis" }, "Guard with Aegis") : null,
+      got && !isNative(got) ? h("button", { class: "chip", type: "button", onclick: () => sellBack(paid, got, outRaw) }, "Sell") : null);
+  }
+  // "Sell": the same pair the other way, filled with what the swap returned (or the balance, if that is less)
+  async function sellBack(paid, got, outRaw) {
+    st.sell = got; st.buy = paid; st.amount = ""; sellInput.value = ""; reset(); paint();
+    await refreshBal();
+    if (!alive || st.sell !== got || st.amount) return;
+    let raw = 0n;
+    try { raw = BigInt(outRaw || 0); } catch {}
+    if (st.bal && st.bal.raw > 0n && raw > st.bal.raw) raw = st.bal.raw;
+    if (raw > 0n) { sellInput.value = rawInput(raw, got.decimals ?? 18, 8); sellInput.dispatchEvent(new Event("input")); }
+    sellInput.focus();
+  }
   async function actSol(q) {
+    const paid = st.sell, got = st.buy;
     try {
       await regate(q);
       st.busy = "Preparing…"; paint();
@@ -677,7 +927,9 @@ export async function mount(view, ctx) {
           ["Minimum received", `${amount(Number(fq.minOut))} ${fq.tokenOut.symbol}`],
           ["Slippage", `${st.slip / 100}%`],
           ["Price impact", fq.priceImpact == null ? "–" : `${(fq.priceImpact * 100).toFixed(2)}%`],
+          feeRow(fq),
           ["Route", fq.route.label],
+          gateRow(),
           ["Recipient", `${short(sol.address)} (you)`],
           ["Network", "Solana"],
         ],
@@ -702,7 +954,8 @@ export async function mount(view, ctx) {
       }
       if (res === "ok") {
         toast(`Swapped ${amount(Number(fq.amountIn))} ${fq.tokenIn.symbol} for ${fq.tokenOut.symbol}`, "ok", 5000);
-        clear(txBox, h("div", { class: "alert ok" }, icon("check"), " Swap confirmed · ", h("a", { class: "link", href: `https://solscan.io/tx/${sig}`, target: "_blank", rel: "noopener" }, short(sig, 6))));
+        clear(txBox, h("div", { class: "alert ok" }, icon("check"), " Swap confirmed · ", h("a", { class: "link", href: `https://solscan.io/tx/${sig}`, target: "_blank", rel: "noopener" }, short(sig, 6))),
+          doneChips("solana", paid, got, fq.amountOutRaw));
         journal({ kind: "swap", chain: "solana", hash: sig, status: "confirmed", venue: fq.venue, tokenIn: fq.tokenIn.address, tokenOut: fq.tokenOut.address, amountIn: fq.amountIn, amountOut: fq.amountOut, rationale: "Manual swap from the Swap page" });
         st.amount = ""; sellInput.value = "";
         reset();
@@ -728,8 +981,11 @@ export async function mount(view, ctx) {
       return;
     }
     if (!wallet.address) { await openConnect(); refreshBal(); return; }
+    // not enough ETH on Robinhood Chain: "Add ETH to buy" opens the cross-chain panel (or the Bridge), it never signs here
+    if (ethShort() > 0n) { if (!blocked()) await addEth(); return; }
     const q = st.quote;
     if (!q) return;
+    const paid = st.sell, got = st.buy;
     try {
       await regate(q);
       st.busy = "Preparing…"; paint();
@@ -754,8 +1010,14 @@ export async function mount(view, ctx) {
         }
         toast(`${q.tokenIn.symbol} approved`, "ok");
         await regate(q, "Running Troya Gate again after the approval…");
-        built = await api.post("swap/build", buildArgs);
-        if ((built.approvals || []).some((a) => a.needed)) throw new Error("The approval is not visible on chain yet. Wait a few seconds and try again.");
+        // the RPC that builds the swap can lag a block behind the receipt: three more tries, 1.5 s apart, before giving up
+        for (let tries = 0; ; tries++) {
+          built = await api.post("swap/build", buildArgs);
+          if (!(built.approvals || []).some((a) => a.needed)) break;
+          if (tries >= 3 || !alive) throw new Error("The approval is not visible on chain yet. Wait a few seconds and try again.");
+          st.busy = "Waiting for the approval to show on chain…"; paint();
+          await new Promise((r) => setTimeout(r, 1500));
+        }
       }
       const fq = built.quote;
       const ok = await review({
@@ -767,7 +1029,9 @@ export async function mount(view, ctx) {
           ["Minimum received", `${amount(Number(fq.minOut))} ${fq.tokenOut.symbol}`],
           ["Slippage", `${st.slip / 100}%`],
           ["Price impact", fq.priceImpact == null ? "–" : `${(fq.priceImpact * 100).toFixed(2)}%`],
+          feeRow(fq),
           ["Route", fq.route.label],
+          gateRow(),
           ["Recipient", `${short(wallet.address)} (you)`],
           ["Network", net],
         ],
@@ -784,7 +1048,8 @@ export async function mount(view, ctx) {
       const rc = await waitReceipt(chain, hash);
       if (rc && rc.status === 1) {
         toast(`Swapped ${amount(Number(fq.amountIn))} ${fq.tokenIn.symbol} for ${fq.tokenOut.symbol}`, "ok", 5000);
-        clear(txBox, h("div", { class: "alert ok" }, icon("check"), ` Swap confirmed · `, h("button", { class: "link", type: "button", onclick: () => navigator.clipboard?.writeText(hash).then(() => toast("Hash copied", "ok")) }, short(hash, 6))));
+        clear(txBox, h("div", { class: "alert ok" }, icon("check"), ` Swap confirmed · `, h("a", { class: "mono link", href: `${CHAINS[chain].explorer}/tx/${hash}`, target: "_blank", rel: "noopener", title: `View it on the ${cname} explorer` }, short(hash, 6))),
+          doneChips(chain, paid, got, fq.amountOutRaw));
         journal({ kind: "swap", chain, hash, status: "confirmed", venue: fq.venue, tokenIn: fq.tokenIn.address, tokenOut: fq.tokenOut.address, amountIn: fq.amountIn, amountOut: fq.amountOut, rationale: "Manual swap from the Swap page" });
         st.amount = ""; sellInput.value = "";
         reset();
@@ -803,7 +1068,8 @@ export async function mount(view, ctx) {
     }
   }
 
-  const off = onWallet(() => { if (!isSolNet()) { refreshBal(); paint(); } });
+  const off = onWallet(() => { if (!isSolNet()) { if (st.chain === "robinhood") readOtherEth(); refreshBal(); paint(); } });
+  if (st.chain === "robinhood") readOtherEth();
   const offSol = onSol(() => { if (isSolNet()) { refreshBal(); paint(); if (st.quote) { reset(); requote(); } } });
   if (isSolNet()) restoreSol().then(() => { refreshBal(); paint(); });
   render();

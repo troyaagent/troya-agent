@@ -49,7 +49,8 @@ export async function watchfireSpec(address) {
   const r = await api.get(`/api/watchfire/${address}`);
   const f = FIRE[r.level] || FIRE.loading;
   const m = r.metrics || null;
-  return { kind: "watchfire", address, symbol: sym(r.symbol), word: f[0], tone: f[1], sub: f[2], why: (r.why || []).slice(0, 2), metrics: m, at: Date.now(), loading: r.level === "loading",
+  // partial: a coin older than the 6 hours Watchfire reads back, whose holder figures are only that window's buys and sells
+  return { kind: "watchfire", address, symbol: sym(r.symbol), word: f[0], tone: f[1], sub: f[2], why: (r.why || []).slice(0, 2), metrics: m, partial: r.fullHistory === false, at: Date.now(), loading: r.level === "loading",
     post: `Watchfire on $${sym(r.symbol) || "this coin"}: ${f[0]}. ${(r.why || [])[0] || f[2]}`.trim() };
 }
 /** pnlPct wins; else entry and exit prices give it. */
@@ -186,7 +187,9 @@ export async function drawCard(spec, ref, canvas = document.createElement("canva
     lines.forEach((l, i) => c.fillText(l, L, 414 + i * 28));
     const m = spec.metrics;
     if (m) {
-      const tiles = [["Largest holder", `${(m.topPct ?? 0).toFixed(1)}%`], ["Bought via one bot", `${Math.round(m.herdPct ?? 0)}%`], ["Sold last minute", `${(m.soldLastMinPct ?? 0).toFixed(1)}%`], ["Holders", m.holders != null ? Number(m.holders).toLocaleString("en-US") : "–"]];
+      // an older coin's figures cover its last 6 hours only: say so on the card, in labels no longer than the usual ones (the tile does not shrink its label)
+      const p = spec.partial;
+      const tiles = [[p ? "Top buyer, 6 h" : "Largest holder", `${(m.topPct ?? 0).toFixed(1)}%`], [p ? "Via one bot, 6 h" : "Bought via one bot", `${Math.round(m.herdPct ?? 0)}%`], ["Sold last minute", `${(m.soldLastMinPct ?? 0).toFixed(1)}%`], [p ? "Buyers, 6 h" : "Holders", m.holders != null ? Number(m.holders).toLocaleString("en-US") : "–"]];
       tiles.forEach(([k, v], i) => {
         const x = L + i * 180, y = 474;
         rrect(c, x, y, 168, 84, 16); c.fillStyle = "rgba(255,255,255,.035)"; c.fill(); c.lineWidth = 1; c.strokeStyle = "rgba(255,255,255,.08)"; c.stroke();

@@ -1,10 +1,13 @@
 // V8 F43 Champions: follow a proven trader into your own capped Agent Wallet.
-// Who can be followed: an AI trader of the Arena with a real-money record, or a user strategy that finished its seven
-// days on paper as "proven". When it buys a coin on paper, each follower's Agent Wallet buys the same coin for the
+// Who can be followed (tightened 20 Nov 2026, see qualify()): an AI trader of the Arena with 5+ closed live trades in
+// profit, a profit on paper and no pause from Troya, or a user strategy that finished its seven days on paper as
+// "proven" and is still in profit. When it buys a coin on paper, each follower's Agent Wallet buys the same coin for the
 // amount the follower chose; when it sells, the follower sells. Every follower trade goes through executeForUser with
 // source "champions": the Gate, the wallet's caps, the Champions job cap and the trust ladder (Watch: alerts only,
 // Approve: an Inbox proposal, Auto: it trades) all apply (V8 F44 Scepter). No performance fee is taken.
-//   GET  /api/champions              who can be followed, their records, followers and latest buys
+// A follow saved on a trader that stops qualifying stays stored but buys nothing until the trader qualifies again;
+// coins it already bought are still sold when the trader sells.
+//   GET  /api/champions              who can be followed (champions), who cannot yet and why (others), latest buys
 //   GET  /api/champions/me           your follows and the trades they made (session)
 //   POST /api/champions/follow       { agentId, buyEth, on }                     (session)
 import { randomBytes } from "node:crypto";
@@ -14,24 +17,50 @@ import { HttpError } from "./api.mjs";
 
 const FILE = "champions.json";
 const BUY = { min: 0.001, max: 0.05, def: 0.002 };
+const MIN_LIVE = 5;                                   // closed live trades an AI trader needs before anyone can follow it
 const lc = (s) => String(s || "").toLowerCase();
+const total = (s) => (Number(s?.pnlEth) || 0) + (Number(s?.openPnlEth) || 0);
 let store = null;
 
-async function followable() {
-  const { arenaBoard } = await import("./arena.mjs");
-  const b = await arenaBoard();
-  return (b.agents || []).filter((a) => (a.kind === "ai" && a.live && a.live.closed > 0) || a.status === "proven")
-    .map((a) => ({ id: a.id, name: a.name, kind: a.kind, model: a.model, status: a.status, rulesText: a.rulesText, paper: a.stats, live: a.live || null, livePaused: !!a.livePaused }));
+// Why a trader cannot be followed now, or null when it can. A follower buys with real ETH, so one live trade or a paper
+// record is not enough (20 Nov 2026: Qwen was followable on 3 live trades, all losses, while Troya had paused its own
+// live buying). A pause from Troya (ARENA_LIVE_PAUSE) or the Arena's live trading being off wins over any record: what
+// the Arena may not buy with its own money, it must not buy with a follower's.
+function qualify(a, { paused, liveOn }) {
+  if (paused.includes(a.id)) return "Paused by Troya";
+  if (a.kind === "ai") {
+    if (!liveOn) return "Arena live trading is off";
+    if (!a.live || !(a.live.closed >= MIN_LIVE) || !(total(a.live) > 0)) return `Needs ${MIN_LIVE} live trades in profit`;
+  } else if (a.status !== "proven") return "Still proving on paper";
+  // paper must be in profit on closed trades and with the open ones counted, so a big open loss is not hidden
+  if (!(Number(a.stats?.pnlEth) > 0 && total(a.stats) > 0)) return "Needs a profit on paper";
+  return null;
 }
 
-/** Arena hook: these paper positions just opened. Followers buy the same coin. */
+/** Every Arena trader with { followable, reason }. Errors are thrown: callers fail closed (nobody followable). */
+async function candidates() {
+  const { arenaBoard, LIVE, LIVE_PAUSED } = await import("./arena.mjs");
+  const b = await arenaBoard();
+  const ctx = { paused: LIVE_PAUSED(), liveOn: LIVE() };
+  return (b.agents || []).map((a) => {
+    const reason = qualify(a, ctx);
+    return { id: a.id, name: a.name, kind: a.kind, model: a.model, status: a.status, rulesText: a.rulesText, paper: a.stats, live: a.live || null,
+      livePaused: ctx.paused.includes(a.id), followable: !reason, reason };
+  });
+}
+const followable = async () => (await candidates()).filter((a) => a.followable);
+
+/** Arena hook: these paper positions just opened. Followers of a trader that qualifies buy the same coin. */
 export async function onArenaOpen(list) {
   if (!store || !list?.length) return;
   const d = await store.readJson(FILE, {});
   const ok = new Set((await followable().catch(() => [])).map((a) => a.id));
+  // the pause is read again here, on its own: it always wins over the list above; if it cannot be read, nothing is bought
+  let paused;
+  try { paused = new Set((await import("./arena.mjs")).LIVE_PAUSED()); } catch { return; }
   const aw = await import("./agentwallet.mjs");
   for (const p of list) {
-    if (!ok.has(p.agent)) continue;
+    if (paused.has(p.agent) || !ok.has(p.agent)) continue;
     for (const [owner, f] of Object.entries(d.follows || {})) {
       const rule = f?.[p.agent];
       if (!rule?.on) continue;
@@ -76,11 +105,15 @@ export async function register(r, ctx) {
     const d = await store.readJson(FILE, {});
     const count = {};
     for (const f of Object.values(d.follows || {})) for (const [id, rule] of Object.entries(f || {})) if (rule?.on) count[id] = (count[id] || 0) + 1;
-    const list = (await followable().catch(() => [])).map((a) => ({ ...a, followers: count[a.id] || 0 }));
+    const all = (await candidates().catch(() => [])).map((a) => ({ ...a, followers: count[a.id] || 0 }));
+    const list = all.filter((a) => a.followable);
+    // the ones that cannot be followed yet are listed too, with the reason: every AI trader, proven strategies that fell
+    // back into a loss, and any trader someone still follows (so its followers can see why it buys nothing and unfollow)
+    const others = all.filter((a) => !a.followable && (a.kind === "ai" || a.status === "proven" || a.followers > 0));
     const { arenaBoard } = await import("./arena.mjs");
     const b = await arenaBoard().catch(() => ({ recent: [] }));
-    return { name: "Troya Champions", rule: "Only Arena traders with a real-money record, or user strategies proven after 7 days on paper, can be followed. Each follower trade passes the Gate, your caps, the Champions cap and your trust ladder. No performance fee.",
-      champions: list, latest: (b.recent || []).filter((p) => list.some((a) => a.id === p.agent)).slice(0, 15), buy: BUY };
+    return { name: "Troya Champions", rule: `Only AI traders with ${MIN_LIVE}+ live trades in profit and a profit on paper, not paused by Troya, or user strategies proven after 7 days on paper and still in profit, can be followed. Each follower trade passes the Gate, your caps, the Champions cap and your trust ladder. No performance fee.`,
+      champions: list, others, latest: (b.recent || []).filter((p) => list.some((a) => a.id === p.agent)).slice(0, 15), buy: BUY };
   }, { weight: 1 });
   r.get("/api/champions/me", async ({ req }) => {
     const s = requireSession(req);
@@ -90,8 +123,12 @@ export async function register(r, ctx) {
   r.post("/api/champions/follow", async ({ req, body }) => {
     const s = requireSession(req);
     const id = String(body?.agentId || "").slice(0, 60);
-    const list = await followable();
-    if (body?.on !== false && !list.some((a) => a.id === id)) throw new HttpError(400, "Only Arena traders with a real-money record, or proven strategies, can be followed.");
+    // stopping a follow is always allowed; starting one needs a trader that qualifies right now
+    if (body?.on !== false) {
+      const c = (await candidates()).find((a) => a.id === id);
+      if (!c) throw new HttpError(400, "No such trader in the Arena.");
+      if (!c.followable) throw new HttpError(400, `${c.name} cannot be followed now: ${c.reason}.`);
+    }
     const buyEth = Math.min(BUY.max, Math.max(BUY.min, Number(body?.buyEth) || BUY.def));
     await store.update(FILE, {}, (d) => { d.follows ||= {}; const f = (d.follows[lc(s.address)] ||= {}); f[id] = { on: body?.on !== false, buyEth, at: Date.now() }; return d; });
     const { logAction } = await import("./journal.mjs");

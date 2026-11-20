@@ -35,11 +35,14 @@
 <a class="skip" href="#view">Skip to content</a>
 
 <aside class="d-side" data-side aria-label="Sidebar">
-  <a class="d-brand" href="/" aria-label="Troya Agent home">
-    <img src="/img/logo-3d-128.png" alt="" width="128" height="128">
-    <span><b>Troya</b><i>Agent</i></span>
-  </a>
-  <button class="d-ask-side" type="button" data-ask><span class="d-ask-ico"></span>Ask Troya<kbd>⌘K</kbd></button>
+  <!-- brand and Search stay pinned while the sidebar scrolls (desk.css .d-side-top) -->
+  <div class="d-side-top">
+    <a class="d-brand" href="/" aria-label="Troya Agent home">
+      <img src="/img/logo-3d-128.png" alt="" width="128" height="128">
+      <span><b>Troya</b><i>Agent</i></span>
+    </a>
+    <button class="d-ask-side" type="button" data-ask aria-keyshortcuts="Meta+K Control+K"><span class="d-ask-ico"></span>Search<kbd>⌘K</kbd></button>
+  </div>
   <nav class="d-nav" data-nav aria-label="App"></nav>
   <div class="d-side-foot" data-side-foot></div>
 </aside>
@@ -49,7 +52,7 @@
   <header class="d-top">
     <button class="icon-btn d-burger" type="button" aria-label="Menu" data-burger></button>
     <div class="d-crumb" data-crumb><b>Desk</b></div>
-    <button class="d-search" type="button" data-ask><span class="d-search-ico"></span><span class="d-search-t">Ask Troya, paste a coin, or jump to a page</span><kbd>⌘K</kbd></button>
+    <button class="d-search" type="button" data-ask aria-label="Search" aria-keyshortcuts="Meta+K Control+K"><span class="d-search-ico"></span><span class="d-search-t">Search</span><kbd>⌘K</kbd></button>
     <div class="d-right" data-right></div>
   </header>
   <main class="a-main d-main" id="view" tabindex="-1"></main>
@@ -66,7 +69,7 @@
 </aside>
 
 <nav class="d-tabbar" data-tabbar aria-label="Quick tabs"></nav>
-<button class="ask-fab d-fab" type="button" data-ask-fab><i class="mark"></i>Ask <kbd>⌘K</kbd></button>
+<button class="ask-fab d-fab" type="button" data-ask-fab><i class="mark"></i>Ask Troya</button>
 <div class="toasts" aria-live="polite" data-toasts></div>
 <script type="module" src="/agent/desk/desk.js"></script>
 </body>

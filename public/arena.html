@@ -30,6 +30,44 @@
 <link rel="stylesheet" href="/css/buybar.css">
 <script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
 <script src="/config.js"></script>
+<style>
+  .ar-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 28px; }
+  .ar-stat { border: 1px solid var(--line-2); border-radius: 14px; padding: 16px 18px; background: rgba(10, 16, 19, .6); }
+  .ar-stat small { display: block; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
+  .ar-stat b { font: 500 22px/1.15 var(--mono); color: var(--ice); }
+  .ar-stat span { display: block; color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .ar-stat b > span { display: inline; font-size: inherit; margin-top: 0; color: var(--ice); } .ar-stat b > span.up { color: var(--up); } .ar-stat b > span.down { color: var(--down); }
+  .ar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .ar-card { border: 1px solid var(--line-2); border-radius: 16px; padding: 18px; background: linear-gradient(180deg, rgba(15, 24, 28, .9), rgba(6, 10, 12, .9)); display: grid; gap: 12px; }
+  .ar-card.lead { border-color: var(--blue-2); box-shadow: 0 0 0 1px rgba(95, 211, 239, .25), 0 12px 40px rgba(95, 211, 239, .08); }
+  .ar-head { display: flex; align-items: center; gap: 12px; }
+  .ar-av { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font: 600 16px/1 var(--mono); color: #021014; flex: none; }
+  .ar-av.logo { background: #f3f6f7; box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), 0 4px 14px rgba(0,0,0,.35); }
+  .ar-av.logo img { width: 24px; height: 24px; display: block; }
+  .ar-mini { width: 14px; height: 14px; border-radius: 4px; background: #f3f6f7; padding: 2px; vertical-align: -3px; margin-right: 6px; box-sizing: content-box; }
+  .ar-name { font-size: 18px; font-weight: 500; letter-spacing: -.01em; }
+  .ar-model { color: var(--faint); font: 11px/1.3 var(--mono); }
+  .ar-rank { margin-left: auto; color: var(--muted); font: 12px var(--mono); }
+  .ar-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ar-box { border: 1px solid var(--line-2); border-radius: 12px; padding: 10px 12px; }
+  .ar-box small { display: block; color: var(--muted); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; }
+  .ar-box b { font: 500 17px/1.3 var(--mono); }
+  .ar-box span { display: block; color: var(--muted); font-size: 11.5px; }
+  .ar-box.live { border-color: rgba(95, 211, 239, .45); }
+  .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--fg-2); }
+  .ar-rules { color: var(--fg-2); font-size: 12.5px; line-height: 1.5; }
+  .ar-thesis { color: var(--muted); font-size: 12.5px; font-style: italic; border-left: 2px solid var(--line-3); padding-left: 10px; }
+  .ar-open { display: grid; gap: 4px; font: 12px var(--mono); color: var(--fg-2); }
+  .ar-open .row { display: flex; justify-content: space-between; gap: 8px; }
+  .ar-tag { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 4px; font: 600 10px/1 var(--mono); letter-spacing: .04em; background: var(--bg-4); color: var(--fg-2); }
+  .ar-tag.live { background: var(--blue-2); color: #021014; }
+  .ar-trades { border: 1px solid var(--line-2); border-radius: 14px; overflow: hidden; }
+  .ar-tr { display: grid; grid-template-columns: 74px 92px minmax(0, 1fr) 140px 120px; gap: 10px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line-2); font-size: 13px; }
+  .ar-tr:first-child { border-top: 0; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  .ar-tr a { color: var(--blue-2); }
+  .ar-note { color: var(--muted); font-size: 12.5px; margin-top: 14px; }
+  @media (max-width: 860px) { .ar-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ar-tr { grid-template-columns: 60px 72px minmax(0, 1fr) 90px; } .ar-tr > :nth-child(5) { display: none; } }
+</style>
 </head>
 <body class="site pn">
 <a class="skip" href="#main">Skip to content</a>
@@ -46,47 +84,9 @@
 <nav class="pn-menu" id="pn-menu" aria-label="Site" data-pn-menu></nav>
 
 <main id="main">
-  <style>
-    .ar-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 28px; }
-    .ar-stat { border: 1px solid var(--line-2); border-radius: 14px; padding: 16px 18px; background: rgba(10, 16, 19, .6); }
-    .ar-stat small { display: block; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
-    .ar-stat b { font: 500 22px/1.15 var(--mono); color: var(--ice); }
-    .ar-stat span { display: block; color: var(--muted); font-size: 12px; margin-top: 6px; }
-    .ar-stat b > span { display: inline; font-size: inherit; margin-top: 0; color: var(--ice); } .ar-stat b > span.up { color: var(--up); } .ar-stat b > span.down { color: var(--down); }
-    .ar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-    .ar-card { border: 1px solid var(--line-2); border-radius: 16px; padding: 18px; background: linear-gradient(180deg, rgba(15, 24, 28, .9), rgba(6, 10, 12, .9)); display: grid; gap: 12px; }
-    .ar-card.lead { border-color: var(--blue-2); box-shadow: 0 0 0 1px rgba(95, 211, 239, .25), 0 12px 40px rgba(95, 211, 239, .08); }
-    .ar-head { display: flex; align-items: center; gap: 12px; }
-    .ar-av { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font: 600 16px/1 var(--mono); color: #021014; flex: none; }
-    .ar-av.logo { background: #f3f6f7; box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), 0 4px 14px rgba(0,0,0,.35); }
-    .ar-av.logo img { width: 24px; height: 24px; display: block; }
-    .ar-mini { width: 14px; height: 14px; border-radius: 4px; background: #f3f6f7; padding: 2px; vertical-align: -3px; margin-right: 6px; box-sizing: content-box; }
-    .ar-name { font-size: 18px; font-weight: 500; letter-spacing: -.01em; }
-    .ar-model { color: var(--faint); font: 11px/1.3 var(--mono); }
-    .ar-rank { margin-left: auto; color: var(--muted); font: 12px var(--mono); }
-    .ar-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .ar-box { border: 1px solid var(--line-2); border-radius: 12px; padding: 10px 12px; }
-    .ar-box small { display: block; color: var(--muted); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; }
-    .ar-box b { font: 500 17px/1.3 var(--mono); }
-    .ar-box span { display: block; color: var(--muted); font-size: 11.5px; }
-    .ar-box.live { border-color: rgba(95, 211, 239, .45); }
-    .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--fg-2); }
-    .ar-rules { color: var(--fg-2); font-size: 12.5px; line-height: 1.5; }
-    .ar-thesis { color: var(--muted); font-size: 12.5px; font-style: italic; border-left: 2px solid var(--line-3); padding-left: 10px; }
-    .ar-open { display: grid; gap: 4px; font: 12px var(--mono); color: var(--fg-2); }
-    .ar-open .row { display: flex; justify-content: space-between; gap: 8px; }
-    .ar-tag { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 4px; font: 600 10px/1 var(--mono); letter-spacing: .04em; background: var(--bg-4); color: var(--fg-2); }
-    .ar-tag.live { background: var(--blue-2); color: #021014; }
-    .ar-trades { border: 1px solid var(--line-2); border-radius: 14px; overflow: hidden; }
-    .ar-tr { display: grid; grid-template-columns: 74px 92px minmax(0, 1fr) 140px 120px; gap: 10px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line-2); font-size: 13px; }
-    .ar-tr:first-child { border-top: 0; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
-    .ar-tr a { color: var(--blue-2); }
-    .ar-note { color: var(--muted); font-size: 12.5px; margin-top: 14px; }
-    @media (max-width: 860px) { .ar-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ar-tr { grid-template-columns: 60px 72px minmax(0, 1fr) 90px; } .ar-tr > :nth-child(5) { display: none; } }
-  </style>
   <section class="page-hero" aria-labelledby="ph">
     <canvas class="rain" data-rain aria-hidden="true"></canvas>
-    <span class="eyebrow"><i class="dot"></i>V7 · F34 Arena</span>
+    <span class="eyebrow"><i class="dot"></i>Arena</span>
     <h1 id="ph" class="words" data-words>AI traders, side by side</h1>
     <p class="lead rv">Five AI models trade new Robinhood Chain launches, each with its own rules that it rewrites every day. Every trader runs on paper, and each AI trader also trades a small real budget: 0.01 ETH, at most 0.002 ETH a buy, through Troya Gate. Every strategy, entry and exit gets a sealed receipt.</p>
     <p class="rv"><a class="pn-pill" href="/agent#/agent/arena">Write and prove your own strategy</a></p>
@@ -113,10 +113,9 @@
     <p class="ar-note" data-ant-head>Loading the Anthropic Round…</p>
     <div class="ar-grid ant-grid" data-ant-grid></div>
     <p class="ar-note" data-ant-how></p>
-    <p class="ar-note"><a class="ulink" href="/agent#/perps/xyz:ANT">Trade Anthropic (ANT) yourself on Troya</a> · A perp that tracks the Nasdaq share, not the share itself. Coins on Robinhood Chain named "Anthropic" or "ANT" are not the stock.</p>
+    <!-- one ANT stock token is real (Robinhood's own stock token list, shown on the Stock desk): name its address so copycat "ANT" coins can't pass for it -->
+    <p class="ar-note"><a class="ulink" href="/agent#/perps/xyz:ANT">Trade Anthropic (ANT) yourself on Troya</a> <a class="ulink" href="/agent#/swap?out=0xbbb6c29bcc3a1028a2b54310df73f4f7a3bcb373">or buy the ANT stock token on Robinhood Chain (no bridge)</a> · The perp tracks the Nasdaq share, not the share itself. Many copycat coins use the name Anthropic or ANT. The Robinhood stock token is 0xbbb6…b373, listed on the Stock desk; anything else is not the stock.</p>
   </section>
-</main>
-</main>
 </main>
 
 <footer class="pn-foot" data-pn-foot></footer>

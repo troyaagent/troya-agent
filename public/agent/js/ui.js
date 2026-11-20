@@ -137,8 +137,10 @@ const L = "/img/logos/";
 // official marks for networks, launchpads, venues and wallets (self-hosted in /img/logos)
 export const LOGOS = {
   chain: { robinhood: "robinhood.png", hyperliquid: "hyperliquid.svg", arbitrum: "arbitrum-disc.svg", base: "base.png", ethereum: "eth-color.svg", solana: "sol.svg" },
-  pad: { clanker: "clanker.png", bankr: "bankr.png", virtuals: "virtuals.png", mintclub: "mintclub.png", uniswap: "uniswap.webp", ramses: "ramses.png", pancake: "pancake.png", sushi: "sushi.png", stocks: "robinhood.png", pons: "pons.svg" },
-  venue: { uniswap: "uniswap.webp", lifi: "lifi.webp", relay: "relay.webp", hyperliquid: "hyperliquid.svg", wrap: "eth-color.svg" },
+  pad: { clanker: "clanker.png", bankr: "bankr.png", virtuals: "virtuals.png", mintclub: "mintclub.png", uniswap: "uniswap.webp", ramses: "ramses.png", pancake: "pancake.png", sushi: "sushi.png", stocks: "robinhood.png", pons: "pons.svg",
+    long: "long.png", o1: "o1.png", frontier: "frontier.png", clank: "clank.png", kyber: "kyberswap.png" },
+  // venueLogo matches a key anywhere in the venue id ("pons-curve", "kyberswap", "uniswap-v4"), first key first
+  venue: { uniswap: "uniswap.webp", lifi: "lifi.webp", relay: "relay.webp", hyperliquid: "hyperliquid.svg", wrap: "eth-color.svg", pons: "pons.svg", kyber: "kyberswap.png", jupiter: "jupiter.svg" },
   wallet: { metamask: "metamask.webp", rabby: "rabby.webp", okx: "okx.webp", coinbase: "coinbase.webp" },
   symbol: { HYPE: "hyperliquid.svg", USDC: "usdc.svg", ETH: "eth-color.svg", WETH: "eth-color.svg", USDG: "usdg.png", SOL: "sol.svg" },
 };

@@ -1,7 +1,8 @@
 /* V8 F42 Herald: the #/herald page and the Share dialog on coin pages. Uses the Desk 2.0 tokens from desk2.css. */
-.hr { display: block; }
-.hr > * + * { margin-top: 16px; }
-.hr .page-head { margin-bottom: 0; }
+/* the page wrapper is .hr-page: app.css owns .hr (a 1 px divider), and sharing that name collapsed the page to 1 px */
+.hr-page { display: block; }
+.hr-page > * + * { margin-top: 16px; }
+.hr-page .page-head { margin-bottom: 0; }
 .hr-jump { display: flex; flex-wrap: wrap; gap: 8px; }
 .hr-jump a { height: 32px; display: inline-flex; align-items: center; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--glass); color: var(--fg-2); font-size: 12.5px; text-decoration: none; transition: border-color .3s var(--soft), color .3s var(--soft); }
 .hr-jump a:hover { border-color: var(--c3); color: var(--fg); }
@@ -65,6 +66,8 @@
 .hr-tbl td.up { color: var(--up); } .hr-tbl td.down { color: var(--down); }
 .hr-tbl tr.mine td { background: color-mix(in srgb, var(--c3) 7%, transparent); }
 .hr-you { margin-left: 8px; }
+/* a small version of the Arena's .ag-ar-logo chip: some marks are near-black, so they sit on a light tile in both themes */
+.hr-logo { display: inline-block; vertical-align: middle; width: 14px; height: 14px; padding: 3px; box-sizing: content-box; margin: -2px 8px 0 0; border-radius: 6px; background: #f3f6f7; box-shadow: 0 0 0 1px var(--line, rgba(0,0,0,.08)); }
 .hr-empty { display: grid; justify-items: start; gap: 6px; padding: 8px 18px 16px; }
 .hr-empty b { font-size: 14px; }
 .hr-empty p { margin: 0; color: var(--muted); font-size: 13px; }

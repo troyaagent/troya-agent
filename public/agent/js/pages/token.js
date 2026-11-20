@@ -39,6 +39,24 @@ export async function mount(view, { parts, go }) {
   if (t.stock) for (const k of ["website", "twitter", "telegram", "discord"]) if (t[k] && rhOwn(t[k])) t[k] = null;
   let chart = null, ro = null, chartStop = false;
 
+  // the header price says how old it is ("updated 12s ago", by the server's clock) and refreshes every 30 s while the
+  // page is open: $TROYA once showed a price 69 minutes old here while its chart and DexScreener said otherwise
+  let skew = d.now ? Date.now() - d.now : 0;
+  const pxP = h("div", { class: "p" }), pxU = h("div", { class: "u" }), pxAt = h("div", { class: "fine muted tk-px-at", style: { marginTop: "4px" } });
+  const paintPx = () => {
+    pxP.textContent = t.priceUsd != null ? `$${price(t.priceUsd)}` : pons?.priceInPair != null ? `${tiny(pons.priceInPair)} ${pons.pair.symbol}` : "No price yet";
+    clear(pxU, t.priceEth != null ? `${tiny(t.priceEth)} ETH` : null, pctEl(t.change24h), h("span", { class: "faint" }, "24h"));
+    paintAt();
+  };
+  const paintAt = () => {
+    if (!t.priceAt) { pxAt.textContent = ""; return; }
+    const s = Math.max(0, (Date.now() - skew - t.priceAt) / 1000);
+    pxAt.textContent = `updated ${s < 60 ? `${Math.floor(s)}s` : s < 3600 ? `${Math.floor(s / 60)} min` : `${Math.floor(s / 3600)} h`} ago`;
+    pxAt.title = t.priceSource ? `Price from ${t.priceSource}` : "";
+    pxAt.classList.toggle("warnc", s > 15 * 60);
+  };
+  paintPx();
+
   const head = h("div", { class: "tk-head" },
     h("div", { class: "tk-id" }, tokenIcon({ ...t, chain: "robinhood" }),
       h("div", { style: { minWidth: 0 } },
@@ -47,9 +65,7 @@ export async function mount(view, { parts, go }) {
           !t.tradable ? h("span", { class: "badge-s warn" }, "Not routed by Troya") : null),
         h("div", { class: "tk-addr" }, h("span", { class: "mono tk2-ca" }, address), h("button", { type: "button", "aria-label": "Copy address", onclick: () => copyText(address, "Address copied") }, icon("copy"))),
         socialRow(t))),
-    h("div", { class: "tk-px" },
-      h("div", { class: "p" }, t.priceUsd != null ? `$${price(t.priceUsd)}` : pons?.priceInPair != null ? `${tiny(pons.priceInPair)} ${pons.pair.symbol}` : "No price yet"),
-      h("div", { class: "u" }, t.priceEth != null ? `${tiny(t.priceEth)} ETH` : null, pctEl(t.change24h), h("span", { class: "faint" }, "24h"))));
+    h("div", { class: "tk-px" }, pxP, pxU, pxAt));
 
   const actions = h("div", { class: "tk-act" },
     h("a", { class: "btn primary", href: `#/swap?out=${address}` }, icon("swap"), "Buy with Troya Swap"),
@@ -83,7 +99,7 @@ export async function mount(view, { parts, go }) {
       h("a", { class: "tk2-ext", href: `https://fomo.family/tokens/robinhood/${address}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/fomo.png", alt: "" }), "Fomo"),
       h("a", { class: "tk2-ext", href: `https://dexscreener.com/robinhood/${address}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/dexscreener.png", alt: "" }), "DEX Screener")));
   let ctxGate = "", ctxNote = "";
-  const tell = (gateLine) => { if (gateLine != null) ctxGate = gateLine; dispatchEvent(new CustomEvent("troya:ctx", { detail: { text: `Token page for $${t.symbol} (${address})${t.stock ? ", a Robinhood stock token" : ""}: price ${t.priceUsd != null ? "$" + tiny(t.priceUsd) : "unknown"}, 24h ${t.change24h != null ? t.change24h.toFixed(1) + "%" : "?"}, liquidity ${t.liquidityUsd != null ? usd(t.liquidityUsd, { compact: true }) : "?"}, 24h volume ${t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : "?"}, holders ${t.holders ?? "?"}, launchpad ${t.launchpad || "?"}. ${ctxGate} ${ctxNote}`.trim() } })); };
+  const tell = (gateLine) => { if (gateLine != null) ctxGate = gateLine; dispatchEvent(new CustomEvent("troya:ctx", { detail: { text: `Token page for $${t.symbol} (${address})${t.stock ? ", a Robinhood stock token" : ""}: price ${t.priceUsd != null ? "$" + tiny(t.priceUsd) : "unknown"}, 24h ${t.change24h != null ? t.change24h.toFixed(1) + "%" : "?"}, market cap ${t.mcapUsd > 0 ? usd(t.mcapUsd, { compact: true }) : "?"}, liquidity (ETH/USDG side) ${t.realLiquidityUsd != null ? usd(t.realLiquidityUsd, { compact: true }) : "?"}${t.liquidityUsd != null ? ` (pool total incl. the coin side ${usd(t.liquidityUsd, { compact: true })})` : ""}, 24h volume ${t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : "?"}, holders ${t.holders ?? "?"}, launchpad ${t.launchpad || "?"}. ${ctxGate} ${ctxNote}`.trim() } })); };
   tell();
   api.get(`/api/badge/${address}`).then((r) => {
     const checks = r.checks || [];
@@ -100,18 +116,38 @@ export async function mount(view, { parts, go }) {
     clear(gList, checks.map((c) => h("li", { class: `c-${c.status}` }, h("span", { class: "dk-ck" }, c.status === "pass" ? icon("check") : c.status === "fail" ? icon("close") : h("b", {}, c.status === "warn" ? "!" : "–")), h("span", {}, c.label))));
   }).catch(() => { gVerdict.textContent = "Gate unavailable"; });
 
-  const stat = (k, v) => h("div", {}, h("div", { class: "k" }, k), h("div", { class: "v" }, v ?? "–"));
-  const stats = h("section", { class: "panel tk-stats" },
+  const stat = (k, v, tip) => h("div", tip ? { title: tip } : {}, h("div", { class: "k" }, k), h("div", { class: "v" }, v ?? "–"));
+  // Liquidity is the money side of the pools (ETH, USDG or stock tokens); the pool total, which also counts the coin at
+  // its own price, only in the tooltip. Market cap: price x supply, the supply read on chain after burns for Pons coins.
+  const statKids = () => [
     t.stock
       ? h("div", { title: `Value of the ${t.symbol} tokens on Robinhood Chain, not ${String(t.name || t.symbol).replace(/\s•.*$/, "")}'s market cap` }, h("div", { class: "k" }, "Tokenized on chain"), h("div", { class: "v" }, t.mcapUsd > 0 ? `≈ ${usd(t.mcapUsd, { compact: true })}` : "–"))
-      : stat("Market cap", t.mcapUsd > 0 ? `≈ ${usd(t.mcapUsd, { compact: true })}` : t.mcapEth > 0 ? ethAmount(t.mcapEth) : null),
-    stat("Liquidity", t.liquidityUsd != null ? usd(t.liquidityUsd, { compact: true }) : null),
+      : stat("Market cap", t.mcapUsd > 0 ? `≈ ${usd(t.mcapUsd, { compact: true })}` : t.mcapEth > 0 ? ethAmount(t.mcapEth) : null,
+        t.supply > 0 ? `Price × ${compact(t.supply, 2)} coins, the supply left after burns, read on chain` : "Price × supply, as GeckoTerminal or DexScreener report it"),
+    stat("Liquidity", t.realLiquidityUsd != null ? usd(t.realLiquidityUsd, { compact: true }) : null,
+      t.liquidityUsd != null ? (t.realLiquidityUsd != null ? `${usd(t.liquidityUsd, { compact: true })} incl. the coin side` : `Pool total ${usd(t.liquidityUsd, { compact: true })} incl. the coin side; the ETH or USDG side is not read yet`) : "The ETH, USDG or stock-token side of this coin's pools"),
     stat("24h volume", t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : null),
     stat("Trades 24h", t.txns24h != null ? h("span", {}, compact(t.txns24h, 1), t.buys24h != null ? h("small", { class: "tk2-sub" }, `${compact(t.buys24h, 1)} buys`) : null) : null),
     stat("Holders", t.holders != null ? compact(t.holders, 1).replace(/\.0(?=[KMB]$)/, "") : null),
     stat("Top 10 hold", t.top10Pct != null ? `${Number(t.top10Pct).toFixed(1)}%` : null),
     pons && !pons.graduated ? stat("Curve raised", `${!(pons.raised >= 1e-6) ? "0" : pons.raised < 1 ? (+pons.raised).toFixed(4) : tiny(pons.raised)} / ${tiny(pons.threshold)} ${pons.pair.symbol}`) : stat("1h change", t.change1h != null ? pctEl(t.change1h) : null),
-    stat("Age", launch?.at ? ageText(launch.at) : t.createdAt ? ageText(t.createdAt) : null));
+    stat("Age", launch?.at ? ageText(launch.at) : t.createdAt ? ageText(t.createdAt) : null)];
+  const stats = h("section", { class: "panel tk-stats" }, statKids());
+  // the numbers again every 30 s while the page is in view (the server reads them at most every 30 s per coin)
+  const LIVE_KEYS = ["priceUsd", "priceEth", "priceAt", "priceSource", "change1h", "change24h", "mcapUsd", "mcapEth", "supply", "liquidityUsd", "liquidityEth", "realLiquidityUsd", "realLiquidityEth", "volume24hUsd", "txns24h", "buys24h", "sells24h", "holders", "top10Pct"];
+  let pxBusy = false;
+  const refreshPx = async () => {
+    if (pxBusy || document.hidden) return;
+    pxBusy = true;
+    try {
+      const r = await api.get(`market/robinhood/token?address=${address}`);
+      if (chartStop || !r?.token) return;
+      if (r.now) skew = Date.now() - r.now;
+      for (const k of LIVE_KEYS) if (k in r.token) t[k] = r.token[k];
+      paintPx(); clear(stats, statKids()); tell();
+    } catch { /* the last numbers stay, with their age */ } finally { pxBusy = false; }
+  };
+  const pxT = setInterval(refreshPx, 30_000), atT = setInterval(paintAt, 5_000);
 
   const info = h("section", { class: "panel tk-info" },
     t.description ? h("p", { style: { margin: 0 } }, t.description) : null,
@@ -283,7 +319,7 @@ export async function mount(view, { parts, go }) {
     }
   }
   loadChart();
-  return () => { chartStop = true; stopBoard(); clearInterval(callsT); offClass(); try { chart?.remove(); } catch {} ro?.disconnect(); };
+  return () => { chartStop = true; stopBoard(); clearInterval(callsT); clearInterval(pxT); clearInterval(atT); offClass(); try { chart?.remove(); } catch {} ro?.disconnect(); };
 }
 
 // the coin's own accounts, as buttons (X, Telegram, website, Discord); nothing when the coin lists none

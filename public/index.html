@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Troya Agent | Your agent, inside the walls</title>
+<title>Troya Agent | AI trading desk for Robinhood Chain</title>
 <meta name="description" content="An agent-first trading desk for Robinhood Chain, Base, Arbitrum, Solana and Hyperliquid. Ask in plain words, review what the agent proposes, sign inside limits it cannot cross.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Troya Agent">
@@ -18,6 +18,34 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
 <meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<!-- structured data for search engines: who runs troya.codes and what the app is. Facts only: no ratings, reviews or user counts we cannot show -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://troya.codes/#org",
+      "name": "Troya Agent",
+      "url": "https://troya.codes/",
+      "logo": { "@type": "ImageObject", "url": "https://troya.codes/img/logo-3d.png", "width": 512, "height": 512 },
+      "sameAs": ["https://x.com/Troyaagent", "https://t.me/troyaagent", "https://github.com/troyaagent"]
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://troya.codes/#app",
+      "name": "Troya Agent",
+      "url": "https://troya.codes/agent",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Web browser",
+      "description": "An agent-first trading desk for Robinhood Chain, Base, Arbitrum, Solana and Hyperliquid. Ask in plain words, review what the agent proposes, sign inside limits it cannot cross.",
+      "image": "https://troya.codes/og.png?v=2",
+      "publisher": { "@id": "https://troya.codes/#org" },
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "description": "Free during mainnet beta; $TROYA holders get higher limits" }
+    }
+  ]
+}
+</script>
 <meta name="theme-color" content="#020405">
 <link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
@@ -44,16 +72,17 @@
 <nav class="menu" aria-label="Menu" data-menu>
   <ol>
     <li><a href="/agent"><span>01</span>Open the desk</a></li>
-    <li><a href="#gate"><span>02</span>The Gate</a></li>
-    <li><a href="#telegram"><span>03</span>Telegram</a></li>
-    <li><a href="#sentry"><span>04</span>Sentry</a></li>
-    <li><a href="#autopilot"><span>05</span>Autopilot</a></li>
-    <li><a href="#desk"><span>06</span>Everything else</a></li>
-    <li><a href="#proof"><span>07</span>Receipts</a></li>
-    <li><a href="/agent#/docs"><span>08</span>Docs</a></li>
-    <li><a href="/community"><span>09</span>Community</a></li>
-    <li><a href="/roadmap"><span>10</span>Roadmap</a></li>
-    <li><a href="/launch-on-x"><span>11</span>Launch on X</a></li>
+    <li><a href="/agent#/market"><span>02</span>Markets</a></li>
+    <li><a href="#gate"><span>03</span>The Gate</a></li>
+    <li><a href="#telegram"><span>04</span>Telegram</a></li>
+    <li><a href="#sentry"><span>05</span>Sentry</a></li>
+    <li><a href="#autopilot"><span>06</span>Autopilot</a></li>
+    <li><a href="#desk"><span>07</span>Everything else</a></li>
+    <li><a href="#proof"><span>08</span>Receipts</a></li>
+    <li><a href="/agent#/docs"><span>09</span>Docs</a></li>
+    <li><a href="/community"><span>10</span>Community</a></li>
+    <li><a href="/roadmap"><span>11</span>Roadmap</a></li>
+    <li><a href="/launch-on-x"><span>12</span>Launch on X</a></li>
   </ol>
   <div class="menu-foot"><a href="https://t.me/troyaagent" target="_blank" rel="noopener">Telegram</a><a href="https://t.me/troyasentry" target="_blank" rel="noopener">Sentry</a><a href="https://x.com/Troyaagent" target="_blank" rel="noopener">X</a><a href="https://github.com/troyaagent/troya-agent" target="_blank" rel="noopener">GitHub</a></div>
 </nav>
@@ -94,7 +123,7 @@
     <figure class="horse3d" data-horse aria-hidden="true"><img src="/img/logo-3d-hd.png" alt="" width="1024" height="1024"><canvas data-horse3d></canvas></figure>
     <div class="hero-pills">
     <a class="ant-pill" href="/agent#/perps/xyz:ANT"><i></i><span>Trade Anthropic<small>ANT perp · bridge in from Robinhood Chain</small></span><b>Trade</b></a>
-    <a class="rm-pill" href="/roadmap"><i></i><span>V7 Athena live · V8 Agamemnon in build</span><b>Roadmap</b></a>
+    <a class="rm-pill" href="/roadmap"><i></i><span>V8 Agamemnon live · V9 Achilles next</span><b>Roadmap</b></a>
     <button class="gas-pill" type="button" data-gas-open aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v7h1.2a1.8 1.8 0 0 1 1.8 1.8V17a1 1 0 0 0 2 0V9.4l-2.6-2.6 1.4-1.4 3.1 3.1c.2.2.3.5.3.7V17a3 3 0 0 1-6 0v-3h-1.2v7zm3-14v4h6V7z"/></svg><span>Free gas for holders</span><i>See the rules</i></button>
     </div>
     <a class="down" href="#inside" aria-label="Scroll"><i></i></a>
@@ -183,12 +212,12 @@
         <article class="iw-card rv"><h4>More chains</h4><p>The same Swap page also trades on Base and Arbitrum (routes from KyberSwap) and on Solana (routes from Jupiter, with Phantom, Solflare or Backpack). Pick the network, and the Gate runs on that chain before anything is signed: route, depth, fees, a simulation and a test sell.</p><a class="ulink" href="/agent#/swap">Pick a network</a></article>
         <article class="iw-card rv"><h4>Perps ticket</h4><p>Any Hyperliquid perp, either side, with leverage, take-profit and stop-loss in the same ticket. Funding takes one transaction: ETH on Robinhood Chain becomes USDC on your own Hyperliquid account.</p><a class="ulink" href="/agent#/perps">Perps</a></article>
         <article class="iw-card rv"><h4>Spot on Hyperliquid</h4><p>Buy and sell HYPE, UBTC, UETH and the other Hyperliquid spot coins from your own Hyperliquid account, with the same trade-only key as Perps. A Spot Gate reads the live book first, and orders never fill more than 1% from the price.</p><a class="ulink" href="/agent#/spot">Spot</a></article>
-        <article class="iw-card rv"><h4>Launch a coin</h4><p>Post <code>@Troyaagent launch Name $TICKER</code> on X, or use Create coin on troya.codes. Open to everyone: one launch from X a day (three a day in all across X, Telegram and troya.codes). Holders of 1,000,000 $TROYA have no daily limit and keep 100% of the creator fee. Creator tax from 0 to 4%.</p><div class="links"><a class="ulink" href="/launch-on-x">Read the guide</a><a class="ulink" href="/agent#/troya-launches">Troya Launches</a></div></article>
+        <article class="iw-card rv"><h4>Launch a coin</h4><p>Post <code>@Troyaagent launch Name $TICKER</code> on X, or use Create coin on troya.codes. Open to everyone: one launch from X a day (three a day in all across X, Telegram and troya.codes). Holders of 1,000,000 $TROYA have no daily limit and keep 100% of the creator fee. Creator tax from 0 to 4%.</p><div class="links"><a class="ulink" href="/agent#/create">Create coin</a><a class="ulink" href="/launch-on-x">Read the guide</a><a class="ulink" href="/agent#/troya-launches">Troya Launches</a></div></article>
         <article class="iw-card rv"><h4>Agent Wallet</h4><p>A small wallet Troya can act from without a popup every time, never past the daily caps you set. Withdrawals only go back to your own wallet. It is custodial, so fund it like pocket money.</p><a class="ulink" href="/agent#/agent/wallet">Agent Wallet</a></article>
         <article class="iw-card rv"><h4>Autopilot and playbooks</h4><p>Write a playbook once (a stop-loss guard, a take-profit ladder, a weekly DCA) and the server checks it every 20 seconds, tab open or not. Without the Agent Wallet it leaves you a ticket to approve.</p><a class="ulink" href="/agent#/agent/playbooks">Playbooks</a></article>
-        <article class="iw-card rv"><h4>Daily AI brief</h4><p>Every morning: your positions, PnL, liquidation distance, funding, the nearest stop, the market and the day's Sentry, with a two-line summary. Smart alerts when a stop is close.</p><a class="ulink" href="/agent">See today's brief</a></article>
+        <article class="iw-card rv"><h4>Daily AI brief</h4><p>Every morning: your positions, PnL, liquidation distance, funding, the nearest stop, the market and the day's Sentry, with a two-line summary. Smart alerts when a stop is close.</p><a class="ulink" href="/agent#/?show=brief">See today's brief</a></article>
         <article class="iw-card rv"><h4>Gate badge</h4><p>Pons devs can show a live Gate result on their own site: paste the contract, copy one line. Checked again at most every 10 minutes, a snapshot and never a "safe" stamp.</p><a class="ulink" href="/badge">Get a badge</a></article>
-        <article class="iw-card rv"><h4>$TROYA holder perks</h4><p>A wallet holding at least 1,000,000 $TROYA (with its Agent Wallet) gets 200 assistant messages a day, 100 active playbooks, every coin Sentry posts by private message, no daily launch limit and 100% of the creator fee on coins you launch.</p><a class="ulink" href="/agent#/agent/wallet">Connect a wallet</a></article>
+        <article class="iw-card rv"><h4>$TROYA holder perks</h4><p>A wallet holding at least 1,000,000 $TROYA (with its Agent Wallet) gets 200 assistant messages a day, 100 active playbooks, every coin Sentry posts by private message, no daily launch limit and 100% of the creator fee on coins you launch.</p><a class="ulink" href="/agent#/treasury">Connect a wallet</a></article>
         <article class="iw-card rv"><h4>API, MCP and CLI</h4><p>Wire Troya into Claude Desktop, Cursor or Claude Code with one command, run it in your terminal with <code>npx @troyaagent/cli</code>, or call the REST API. The same tools, caps and journal sit behind every door.</p><button class="iw-cmd" type="button" data-copy="npx -y @troyaagent/mcp"><span>$</span>npx -y @troyaagent/mcp<b>Copy</b></button></article>
         <article class="iw-card rv"><h4>Check it yourself</h4><p>Each feature opened only after a test with real money. The Verify page lists those transactions, the contracts and who signed, with links to the explorers, so anyone can check them.</p><a class="ulink" href="/verify">Verify</a></article>
       </div>

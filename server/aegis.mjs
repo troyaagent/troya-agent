@@ -192,7 +192,9 @@ async function deliver(ev, holders) {
           try {
             const aw = await import("./agentwallet.mjs");
             const r = await aw.executeForUser(h.owner, { kind: "swap", params, rationale: `Aegis exit: ${ev.text}`, source: "aegis" });
-            await addInbox(h.owner, { kind: "aegis", title: `${title} · ${r.executed ? "sold to ETH" : "exit blocked"}`, body: r.executed ? body : `${body} ${(r.reasons || []).join(" ")}`, data: { aegis: ev } });
+            // held by the trust ladder (Approve, the default for a wallet that never picked a step): the sell is already
+            // waiting in Scepter and the Inbox as a proposal, so this line says so instead of "exit blocked"
+            await addInbox(h.owner, { kind: "aegis", title: `${title} · ${r.executed ? "sold to ETH" : r.proposed ? "exit waiting for your approval" : "exit blocked"}`, body: r.executed ? body : r.proposed ? `${body} Approve the sell in Agent → Scepter or Portfolio → Inbox.` : `${body} ${(r.reasons || []).join(" ")}`, data: { aegis: ev } });
             continue;
           } catch (e) { await addInbox(h.owner, { kind: "aegis", title: `${title} · exit failed`, body: `${body} ${e.message}`, data: { aegis: ev } }); continue; }
         }

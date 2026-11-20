@@ -6,8 +6,9 @@
 import { readFileSync } from "node:fs";
 import { writeFile, rename } from "node:fs/promises";
 import path from "node:path";
+import { AbiCoder, Interface, keccak256, toBeHex } from "ethers";
 import { KYBER_ON } from "./kyber.mjs";
-import { noteV4, ponsState, ponsPublic, ponsProfile, STOCKS, ADDR as RH, rpc as rhRpc, CHAINS as RH_CHAINS } from "./robinhood.mjs";
+import { noteV4, ponsState, ponsPublic, ponsProfile, STOCKS, ADDR as RH, rpc as rhRpc, CHAINS as RH_CHAINS, iface as RHI } from "./robinhood.mjs";
 
 const UA = { "user-agent": "troya-agent/0.2 (+market-reader)", accept: "application/json" };
 const HL = "https://api.hyperliquid.xyz/info";
@@ -172,6 +173,9 @@ const lc = (a) => String(a || "").toLowerCase();
 
 /* ---------------- DexScreener (token detail + stocks: fast, 300 calls/min) ---------------- */
 const DS = "https://api.dexscreener.com/tokens/v1/robinhood/";
+// tokens/v1 answers up to 30 coins a call but with ONE pair per coin, and not always its main pool (MEME came back as a
+// $1.1K USDG pool next to its $600K pool, 20 Nov 2026); token-pairs/v1 lists every pool of one coin
+const DSP = "https://api.dexscreener.com/token-pairs/v1/robinhood/";
 export async function dsPairs(addrs) {
   const list = [...new Set(addrs.map(lc))].filter((a) => ADDR_RE.test(a));
   const out = [];
@@ -181,6 +185,12 @@ export async function dsPairs(addrs) {
     if (Array.isArray(d)) out.push(...d);
   }
   return out;
+}
+export async function dsTokenPairs(address) {
+  const a = lc(address);
+  if (!ADDR_RE.test(a)) return [];
+  const d = await memo(`dsp:${a}`, 60_000, () => getJson(DSP + a, { timeout: 12000 }));
+  return Array.isArray(d) ? d : [];
 }
 // best DexScreener pair per base token (deepest liquidity) → board-style row
 export function dsRows(pairs, ethUsd) {
@@ -231,18 +241,19 @@ export function dsRows(pairs, ethUsd) {
 }
 
 /* ---------------- ETH / USD ---------------- */
+let ETH_LAST = null;   // the last ETH price read, for the synchronous readers (indexRow)
 export async function getEthUsd() {
   return memo("ethUsd", 10_000, async () => {
     try {
       const mids = await hl({ type: "allMids" }, 6000);
       const v = fnum(mids?.ETH);
-      if (v) return v;
+      if (v) return (ETH_LAST = v);
       throw new Error("ETH mid missing");
     } catch {
       const d = await gecko(`tokens/${RH.weth.toLowerCase()}`, { hi: true });
       const v = fnum(d?.data?.attributes?.price_usd);
       if (!v) throw new Error("No ETH price available");
-      return v;
+      return (ETH_LAST = v);
     }
   });
 }
@@ -259,6 +270,17 @@ export async function getHypeUsd() {
 const CBBTC = "0xcec185eb182c47d1ba1efc84e6959e18cd620be4";   // Coinbase Wrapped BTC: a major, kept off the coin board and launch lists
 const HUBS = new Set([lc(RH.weth), lc(RH.usdg), CBBTC, "0x0000000000000000000000000000000000000000"]);
 const board = { rows: new Map(), updatedAt: 0, refreshing: null, error: null, volumeUsd: 0, cursor: 0 };
+// One honest set of numbers per coin (20 Nov 2026 audit). Three things the indexers alone got wrong:
+//  · price: a row off GeckoTerminal's top lists kept its last price for an hour ($TROYA showed $0.00000653, 69 minutes
+//    old, -54%, while its pool traded at $0.0000056); rows older than PRICE_STALE take DexScreener's numbers, and Pons
+//    coins are priced from the chain itself (CHAIN, below)
+//  · market cap: price x 1B ignored the 32.7M $TROYA burned; Pons coins use totalSupply minus 0x...dEaD, read on chain
+//  · liquidity: a pool's reserve counts the coin side at the pool's own price, so MOW showed $18.6M on 0.81 ETH and Troya
+//    picks called it an "$18.8M pool"; REAL holds the money side (ETH, WETH, USDG, cbBTC or a stock token) of its pools
+const PRICE_STALE = 5 * 60_000;
+const REAL = new Map();     // address -> { usd, at }: money side of the coin's pools, from DexScreener's pair list
+const CHAIN = new Map();    // address -> { priceUsd, priceEth, supply, onCurve, realUsd, at }: Pons coins read on chain
+const PSTATIC = new Map();  // address -> { curve, pair, pd, graduated, poolId, tokenFirst, at } | { none: true, at }
 // The board is saved to data/board.json and read back at boot: a full pass takes minutes at GeckoTerminal's pace, so a
 // restart (or a 429 spell) would otherwise leave the Market with only the first page or nothing at all.
 const BOARD_FILE = process.env.DATA_DIR ? path.join(process.env.DATA_DIR, "board.json") : null;
@@ -272,6 +294,9 @@ let boardSaveTimer = null;
     board.rows = new Map(s.rows.filter((t) => t?.address).map((t) => [t.address, t]));
     board.updatedAt = s.updatedAt; board.volumeUsd = s.volumeUsd || 0; board.cursor = Number.isInteger(s.cursor) && s.cursor >= 0 ? s.cursor : 0;
     for (const t of board.rows.values()) if (t.image) IMAGES.set(t.address, t.image);
+    // real liquidity and the on-chain supply come back too (a chain price is never reused after a restart)
+    for (const [a, v] of Array.isArray(s.real) ? s.real : []) if (v && Number.isFinite(v.at)) REAL.set(a, v);
+    for (const [a, v] of Array.isArray(s.supply) ? s.supply : []) if (v?.supply > 0) CHAIN.set(a, { supply: v.supply, at: 0 });
   } catch {}
 })();
 function saveBoard() {
@@ -280,7 +305,8 @@ function saveBoard() {
     boardSaveTimer = null;
     try {
       const tmp = BOARD_FILE + ".tmp";
-      await writeFile(tmp, JSON.stringify({ updatedAt: board.updatedAt, volumeUsd: board.volumeUsd, cursor: board.cursor, rows: [...board.rows.values()].map(clean) }));
+      await writeFile(tmp, JSON.stringify({ updatedAt: board.updatedAt, volumeUsd: board.volumeUsd, cursor: board.cursor, rows: [...board.rows.values()].map(clean),
+        real: [...REAL].slice(-2000), supply: [...CHAIN].filter(([, c]) => c.supply > 0).slice(-2000).map(([a, c]) => [a, { supply: c.supply }]) }));
       await rename(tmp, BOARD_FILE);
     } catch (e) { console.warn("[market] board save:", e.message); }
   }, 5000);
@@ -335,11 +361,17 @@ function fold(map, pr, ethUsd) {
     t._main = pr;
     Object.assign(t, { priceUsd: pr.priceUsd, priceEth: pr.priceEth, change24h: pr.change24h, change1h: pr.change1h, liquidityUsd: pr.liquidityUsd, mcapUsd: pr.mcapUsd,
       pool: pr.pool, poolDex: pr.dex, quoteSymbol: pr.quoteSymbol });
+    t.seenAt = Date.now();   // when this price was read (a pass takes minutes; publish() used to stamp every row at its end)
   }
   t.volume24hEth = ethUsd ? t.volume24hUsd / ethUsd : null;
   t.liquidityEth = ethUsd && t.liquidityUsd != null ? t.liquidityUsd / ethUsd : null;
-  // Pons: 1B minted once; only when it fits the pool (a broken dust-pool price would give an absurd number)
-  if (!(t.mcapUsd > 0) && t.launchpad === "pons" && t.priceUsd > 0 && t.liquidityUsd > 0 && t.priceUsd * 1e9 <= t.liquidityUsd * 400) t.mcapUsd = t.priceUsd * 1e9;
+  // Pons: the supply left after burns, read on chain (honest() below sets it at read time too); until it is read, the 1B
+  // minted once, and only when it fits the pool (a broken dust-pool price would give an absurd number)
+  if (!(t.mcapUsd > 0) && t.launchpad === "pons" && t.priceUsd > 0) {
+    const s = CHAIN.get(t.address)?.supply;
+    if (s > 0) t.mcapUsd = t.priceUsd * s;
+    else if (t.liquidityUsd > 0 && t.priceUsd * 1e9 <= t.liquidityUsd * 400) t.mcapUsd = t.priceUsd * 1e9;
+  }
   t.mcapEth = ethUsd && t.mcapUsd != null ? t.mcapUsd / ethUsd : null;
   if (t.image) IMAGES.set(t.address, t.image);
 }
@@ -402,6 +434,8 @@ async function refreshBoard() {
     publish(map, { full: ok >= PAGES.length * 0.75 });
     try { noteV4(v4seen); } catch {}
     board.error = null;
+    // every pass ends by refreshing the rows it did not reach (off GeckoTerminal's lists) from DexScreener
+    sweepStale().catch((e) => console.warn("[market] stale sweep:", e.message));
   })().finally(() => { board.refreshing = null; });
   return board.refreshing;
 }
@@ -542,17 +576,19 @@ async function holdersTick() {
 }
 setInterval(() => holdersTick().catch(() => {}), BS_KEY ? 4_000 : 20_000).unref();
 const holdersOf = (a) => HOLDERS.get(a) || null;
-/* Troya picks: a read of live data, never advice. A coin needs a real pool and real trading, then earns points for
-   buyers outnumbering sellers, holders spread out, volume a pool can carry (not wash trading), listed socials and a day
-   that is not a collapse. Each pick says why, in a few words. */
+/* Troya picks: a read of live data, never advice. A coin needs real money in its pools and real trading, then earns
+   points for buyers outnumbering sellers, holders spread out, volume its money can carry (not wash trading), listed
+   socials and a day that is not a collapse. Each pick says why, in a few words.
+   Liquidity here is the money side only (realLiquidityUsd: ETH, USDG or stock tokens): MOW was picked as an "$18.8M
+   pool" on 0.81 ETH (20 Nov 2026). A coin whose money side is not read yet is not picked. */
 const money = (n) => (n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}K` : `$${Math.round(n)}`);
 function pickCoins(rows) {
   const out = [];
   for (const t of rows) {
-    const liq = t.liquidityUsd || 0, vol = t.volume24hUsd || 0, tx = t.txns24h || 0, ch = t.change24h;
-    if (liq < 10_000 || tx < 40 || vol < 2_000 || ch == null || ch <= -40) continue;
+    const liq = t.realLiquidityUsd, vol = t.volume24hUsd || 0, tx = t.txns24h || 0, ch = t.change24h;
+    if (!(liq >= 10_000) || tx < 40 || vol < 2_000 || ch == null || ch <= -40) continue;
     const turn = vol / liq;
-    if (turn > 25) continue;                                   // more volume than the pool could carry: likely wash trading
+    if (turn > 25) continue;                                   // more volume than its money could carry: likely wash trading
     const h = HOLDERS.get(t.address), soc = SOCIALS.get(t.address);
     if (h?.top10 != null && h.top10 > 80) continue;            // a handful of wallets own it
     let score = Math.log10(liq) * 2 + Math.min(3, Math.log10(tx));
@@ -563,7 +599,7 @@ function pickCoins(rows) {
       score += (share - 0.5) * 6;
       if (share >= 0.55) why.push(`${Math.round(share * 100)}% of trades are buys`);
     }
-    if (turn >= 0.3 && turn <= 6) { score += 1.5; }
+    if (turn >= 0.6 && turn <= 12) { score += 1.5; }          // the old 0.3-6 band on the two-sided pool, which is about twice the money side
     if (h?.count != null) {
       score += Math.min(3, Math.log10(Math.max(1, h.count)) - 1.5);
       if (h.top10 != null) score += h.top10 < 45 ? 1.5 : h.top10 > 65 ? -1.5 : 0;
@@ -571,7 +607,7 @@ function pickCoins(rows) {
     }
     if (soc && (soc.twitter || soc.telegram || soc.website)) { score += 1; }
     if (ch >= 10) { score += Math.min(2, ch / 25); why.push(`up ${Math.round(ch)}% today`); } else if (ch <= -15) score -= 1;
-    why.unshift(`${money(liq)} pool, ${money(vol)} traded`);
+    why.unshift(`${money(liq)} real liquidity, ${money(vol)} traded`);
     if (soc && (soc.twitter || soc.telegram) && why.length < 3) why.push("lists its socials");
     out.push({ t, score });
     t._pick = { score: +score.toFixed(2), why: why.slice(0, 3) };
@@ -585,7 +621,7 @@ function publish(map, { full = false } = {}) {
   const now = Date.now();
   try { notePrices(map.values()); } catch {}
   setTimeout(() => fillSocials().catch(() => {}), 1000);
-  for (const t of map.values()) t.seenAt = now;          // rows this pass reached
+  for (const t of map.values()) t.seenAt ||= now;        // rows this pass reached (fold() stamps when each price was read)
   // keep tokens from earlier passes that this pass did not reach (pages shift as volume moves); after a complete pass
   // they go once unseen for 30 minutes, while a pass is still running or was cut short by 429s they stay up to 6 hours
   const keep = full ? 30 * 60_000 : BOARD_MAX_AGE;
@@ -602,6 +638,13 @@ function startBoard() {
   refreshBoard().catch((e) => console.warn("[market] board:", e.message));
   boardTimer = setInterval(() => refreshBoard().catch((e) => console.warn("[market] board:", e.message)), 8 * 60_000);
   boardTimer.unref?.();
+  // between passes: Pons prices and supply on chain every minute, the money side of pools every 30 s (8 coins), and the
+  // stale-row sweep every 4 minutes as well as at the end of each pass (a pass can run long when GeckoTerminal answers 429)
+  setTimeout(() => chainTick().catch(() => {}), 2_000).unref?.();
+  setInterval(() => chainTick().catch((e) => console.warn("[market] chain prices:", e.message)), 60_000).unref?.();
+  setInterval(() => realTick().catch(() => {}), 30_000).unref?.();
+  setTimeout(() => sweepStale().catch(() => {}), 20_000).unref?.();
+  setInterval(() => sweepStale().catch((e) => console.warn("[market] stale sweep:", e.message)), 4 * 60_000).unref?.();
 }
 async function ensureBoard() {
   if (board.rows.size) return;
@@ -610,8 +653,9 @@ async function ensureBoard() {
   for (let i = 0; i < 40 && !board.rows.size; i++) await new Promise((r) => setTimeout(r, 500));
   if (!board.rows.size) throw httpErr(503, `The Robinhood Chain board is still loading${board.error ? ` (${board.error})` : ""}. Try again in a few seconds.`);
 }
-/** index row for a token (used by swap quotes for pool depth) */
-export const indexRow = (address) => board.rows.get(lc(address)) || null;
+/** index row for a token (swap quotes read its pool depth; callouts, Portfolio and Watchfire its price): a copy with the
+ *  same honest price, market cap and real liquidity the Market and the coin page show */
+export const indexRow = (address) => { const t = board.rows.get(lc(address)); return t ? honest(t) : null; };
 
 function cleanOpts(opts = {}) {
   let sort = String(opts.sort || "volume").toLowerCase();
@@ -627,33 +671,273 @@ function cleanOpts(opts = {}) {
   const cat = ["picks", "trending", "new", "bonding"].includes(String(opts.cat || "")) ? String(opts.cat) : "all";
   return { sort, dir, launchpad, q, offset, limit, tradable, cat };
 }
-const SORT_KEY = { volume: "volume24hUsd", mcap: "mcapUsd", change: "change24h", liquidity: "liquidityUsd", newest: "createdAt", price: "priceUsd", txns: "txns24h", holders: "holders" };
-// Real backing (20 Nov 2026). A pool's "liquidity" counts both sides at the pool's own price, so a coin minted with a
+// "liquidity" sorts by the money side (what a seller can take out), never by the two-sided pool total
+const SORT_KEY = { volume: "volume24hUsd", mcap: "mcapUsd", change: "change24h", liquidity: "realLiquidityUsd", newest: "createdAt", price: "priceUsd", txns: "txns24h", holders: "holders" };
+
+/* ---------------- one honest price, market cap and liquidity per coin ---------------- */
+// Real liquidity (20 Nov 2026). A pool's "liquidity" counts both sides at the pool's own price, so a coin minted with a
 // made-up price shows millions of liquidity and market cap while the pool holds a few dollars of real money (same-ticker
-// PONS / CASHCAT / AI / USDG pools born 19 Nov: $35M "liquidity" on about $8k of USDG). The quote side from DexScreener
-// (liquidity.usd - liquidity.base x priceUsd) is what a seller can actually take out. A young or barely held coin whose
-// market cap is over 2000x that money is sorted after the rest. Names stay free and nothing is labelled (owner, 18 Nov).
-const BACKED = new Map();   // address -> real quote-side USD across its DexScreener pairs (null = unknown)
-let backedRun = 0;
-async function refreshBacked() {
-  if (Date.now() - backedRun < 5 * 60_000) return;
-  backedRun = Date.now();
-  const rows = [...board.rows.values()].filter((t) => !t.stock);
-  const top = (k) => [...rows].sort((a, b) => (b[k] || 0) - (a[k] || 0)).slice(0, 60).map((t) => t.address);
-  const young = rows.filter((t) => t.createdAt && Date.now() - t.createdAt < 7 * 86400_000).map((t) => t.address);
-  const addrs = [...new Set([...top("mcapUsd"), ...top("liquidityUsd"), ...young])].slice(0, 210);
-  const pairs = await dsPairs(addrs).catch(() => []);
-  if (!pairs.length) return;
-  const sum = new Map();
-  for (const p of pairs) {
-    const a = lc(p.baseToken?.address), L = p.liquidity || {};
-    if (!a || !(Number(L.usd) > 0) || L.base == null) continue;
-    sum.set(a, (sum.get(a) || 0) + Math.max(0, Number(L.usd) - Number(L.base) * (Number(p.priceUsd) || 0)));
+// PONS / CASHCAT / AI / USDG pools born 19 Nov: $35M "liquidity" on about $8k of USDG; MOW $18.6M on 0.81 ETH). The money
+// side, ETH, WETH, USDG, cbBTC or a Robinhood stock token, summed over the coin's pools, is what a seller can actually
+// take out. A side that is another memecoin is not money. 0 = pools but no money side; null = not read yet.
+const MONEY = new Set([lc(RH.weth), lc(RH.usdg), CBBTC, "0x0000000000000000000000000000000000000000"]);
+const isMoney = (a) => MONEY.has(a) || STOCK_SET.has(a);
+export function realFromPairs(pairs, address, ethUsd) {
+  const a = lc(address);
+  let usd = 0, n = 0, seen = 0;
+  for (const p of pairs || []) {
+    const b = lc(p.baseToken?.address), q = lc(p.quoteToken?.address), L = p.liquidity || {};
+    if (b !== a && q !== a) continue;
+    seen++;
+    const total = Number(L.usd), pu = Number(p.priceUsd), pn = Number(p.priceNative);
+    if (!(total > 0)) continue;
+    let side = null;
+    if (b === a && isMoney(q)) {
+      // the quote amount at the quote's own dollar price (priceUsd / priceNative); without it, the pool less the coin side
+      const qUsd = pu > 0 && pn > 0 ? pu / pn : q === lc(RH.usdg) ? 1 : ethUsd && (q === lc(RH.weth) || /^0x0{40}$/.test(q)) ? ethUsd : null;
+      side = L.quote != null && qUsd ? Number(L.quote) * qUsd : L.base != null && pu > 0 ? total - Number(L.base) * pu : null;
+    } else if (q === a && isMoney(b)) {
+      side = L.base != null && pu > 0 ? Number(L.base) * pu : null;   // the coin is the quote here: the base is the money
+    }
+    if (side == null || !Number.isFinite(side)) continue;
+    usd += Math.max(0, Math.min(total, side)); n++;
   }
-  for (const a of addrs) BACKED.set(a, sum.has(a) ? sum.get(a) : null);
+  return n ? usd : seen ? 0 : null;
 }
+// on a Pons curve the money is what was raised on it (read on chain); elsewhere the DexScreener read above
+const realLiqOf = (a, c = CHAIN.get(a)) => (c?.onCurve && c.realUsd != null && Date.now() - c.at < 30 * 60_000 ? c.realUsd : REAL.get(a)?.usd ?? null);
+
+// Pons coins on chain: the curve's reserves while on the curve, the Uniswap v4 pool's sqrtPriceX96 after graduation (as
+// /api/flywheel reads $TROYA), and totalSupply minus what sits at 0x...dEaD. Every Pons coin on the board, once a
+// minute, in a few Multicall3 reads; the coin page reads its own coin again when it opens.
+const CHAIN_FRESH = 3 * 60_000;
+const DEAD = "0x000000000000000000000000000000000000dead";
+const ERC = new Interface(["function totalSupply() view returns (uint256)", "function balanceOf(address) view returns (uint256)"]);
+const CURVE = new Interface(["function getReserves() view returns (uint256 quoteReserve,uint256 tokenReserve)", "function realQuoteReserve() view returns (uint256)", "function graduated() view returns (bool)"]);
+const PMI = new Interface(["function extsload(bytes32 slot) view returns (bytes32)"]);
+// a v4 pool's slot0 in the PoolManager's storage (the pools mapping sits at slot 6)
+const slot0Of = (poolId) => toBeHex(BigInt(keccak256(AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256"], [poolId, 6]))), 32);
+async function multi(calls) {   // [{ target, data }] -> [returnData | null], 150 reads per eth_call
+  const out = [];
+  for (let i = 0; i < calls.length; i += 150) {
+    const part = calls.slice(i, i + 150);
+    try {
+      const data = RHI.mc.encodeFunctionData("aggregate3", [part.map((c) => ({ target: c.target, allowFailure: true, callData: c.data }))]);
+      const raw = await rhRpc("robinhood", "eth_call", [{ to: RH.multicall3, data }, "latest"], { timeoutMs: 12000 });
+      const [res] = RHI.mc.decodeFunctionResult("aggregate3", raw);
+      out.push(...res.map((r) => (r.success && r.returnData && r.returnData !== "0x" ? r.returnData : null)));
+    } catch { out.push(...part.map(() => null)); }
+  }
+  return out;
+}
+// the pair's dollar price: ETH, USDG, a Robinhood stock token (many Pons coins pair with GME, NVDA, GLD...: their pool
+// price from the stock list) or a coin on the board
+const pairUsd = (pair, ethUsd, stockPx) => (/^0x0{40}$/.test(pair) || pair === lc(RH.weth) ? ethUsd : pair === lc(RH.usdg) ? 1
+  : stockPx?.get(pair) ?? CHAIN.get(pair)?.priceUsd ?? board.rows.get(pair)?.priceUsd ?? null);
+const staticDue = (a) => { const s = PSTATIC.get(a); return !s || (s.none ? Date.now() - s.at > 6 * 3600_000 : !s.graduated && Date.now() - s.at > 30 * 60_000); };
+async function loadStatic(a) {
+  const s = await ponsState(a).catch(() => undefined);
+  if (s === undefined) return;                                  // the RPC did not answer: keep what was known
+  if (!s) { PSTATIC.set(a, { none: true, at: Date.now() }); return; }
+  PSTATIC.set(a, { curve: s.curve, pair: lc(s.pair), pd: Number(s.pairDecimals ?? 18), graduated: !!(s.graduated && s.poolId), poolId: s.poolId || null,
+    tokenFirst: s.v4Key ? lc(s.v4Key.c0) === a : null, at: Date.now() });
+}
+async function readChain(addrs, { statics = 40 } = {}) {
+  const ethUsd = await getEthUsd().catch(() => null);
+  const list = [...new Set(addrs.map(lc))].filter((a) => ADDR_RE.test(a));
+  const due = list.filter(staticDue).slice(0, statics);
+  for (let i = 0; i < due.length; i += 4) await Promise.all(due.slice(i, i + 4).map(loadStatic));
+  const calls = [], idx = [];
+  for (const a of list) {
+    const st = PSTATIC.get(a);
+    if (!st || st.none) continue;
+    const at = calls.length;
+    calls.push({ target: a, data: ERC.encodeFunctionData("totalSupply") }, { target: a, data: ERC.encodeFunctionData("balanceOf", [DEAD]) });
+    if (st.graduated) calls.push({ target: RH.poolManager, data: PMI.encodeFunctionData("extsload", [slot0Of(st.poolId)]) });
+    else calls.push({ target: st.curve, data: CURVE.encodeFunctionData("getReserves") }, { target: st.curve, data: CURVE.encodeFunctionData("realQuoteReserve") }, { target: st.curve, data: CURVE.encodeFunctionData("graduated") });
+    idx.push([a, st, at]);
+  }
+  if (!calls.length) return;
+  const stockPx = idx.some(([, st]) => STOCK_SET.has(st.pair)) ? new Map(((await getStocks().catch(() => null))?.stocks || []).filter((x) => x.priceUsd > 0).map((x) => [x.address, x.priceUsd])) : null;
+  const res = await multi(calls);
+  const now = Date.now();
+  for (const [a, st, at] of idx) {
+    const dec = (k, ifc, fn) => { try { return res[at + k] ? ifc.decodeFunctionResult(fn, res[at + k]) : null; } catch { return null; } };
+    const ts = dec(0, ERC, "totalSupply")?.[0], dead = dec(1, ERC, "balanceOf")?.[0];
+    const supply = ts != null && ts > 0n ? Number(ts - (dead != null && dead <= ts ? dead : 0n)) / 1e18 : null;   // Pons coins have 18 decimals
+    const pUsd = pairUsd(st.pair, ethUsd, stockPx);
+    let inPair = null, onCurve = false, realUsd = null;
+    if (st.graduated) {
+      let w = 0n; try { w = res[at + 2] ? BigInt(PMI.decodeFunctionResult("extsload", res[at + 2])[0]) : 0n; } catch {}
+      const sq = w & ((1n << 160n) - 1n);
+      if (sq > 0n) {
+        // price = token1 per token0 in raw units; the coin has 18 decimals, its pair pd
+        const sp = Number(sq) / 2 ** 96, r = sp * sp;
+        inPair = st.tokenFirst ? r * 10 ** (18 - st.pd) : 1 / (r * 10 ** (st.pd - 18));
+      }
+    } else {
+      const rv = dec(2, CURVE, "getReserves"), rq = dec(3, CURVE, "realQuoteReserve")?.[0], g = dec(4, CURVE, "graduated")?.[0];
+      if (g) PSTATIC.delete(a);                                 // it graduated since the last read: its pool is read next round
+      else if (rv && rv[1] > 0n) {
+        inPair = (Number(rv[0]) / 10 ** st.pd) / (Number(rv[1]) / 1e18);
+        onCurve = true;
+        if (rq != null && pUsd) realUsd = (Number(rq) / 10 ** st.pd) * pUsd;
+      }
+    }
+    const priceUsd = inPair > 0 && Number.isFinite(inPair) && pUsd ? inPair * pUsd : null;
+    const prev = CHAIN.get(a);
+    CHAIN.set(a, { priceUsd, priceEth: priceUsd && ethUsd ? priceUsd / ethUsd : null, supply: supply > 0 ? supply : prev?.supply ?? null, onCurve, realUsd, at: now });
+  }
+  while (CHAIN.size > 3000) CHAIN.delete(CHAIN.keys().next().value);
+  while (PSTATIC.size > 5000) PSTATIC.delete(PSTATIC.keys().next().value);
+}
+let chainBusy = false;
+async function chainTick() {
+  if (chainBusy || !board.rows.size) return;
+  chainBusy = true;
+  try {
+    const pons = [...board.rows.values()].filter((t) => t.launchpad === "pons" && !t.stock).sort((x, y) => (y.volume24hUsd || 0) - (x.volume24hUsd || 0)).slice(0, 300);
+    await readChain(pons.map((t) => t.address));
+  } finally { chainBusy = false; }
+}
+
+// honest(row) -> a copy with the freshest price (a Pons coin's chain price while it is fresh, else the row, which the
+// sweep refreshes from DexScreener once it is PRICE_STALE old), priceAt (when that price was read), the market cap on the
+// supply left after burns for Pons coins, and realLiquidityUsd next to the two-sided liquidityUsd
+function honest(t, ethUsd = ETH_LAST) {
+  const r = { ...t };
+  r.priceAt = Math.max(t.priceAt || 0, t.seenAt || 0) || null;
+  r.priceSource = t.priceSource || (t.source === "DexScreener" ? "DexScreener" : "GeckoTerminal");
+  const c = CHAIN.get(t.address);
+  if (c?.priceUsd > 0 && Date.now() - c.at < CHAIN_FRESH) {
+    // the 24h and 1h changes were measured to the indexer's price: keep where they started, end them at the chain price
+    const p0 = r.priceUsd;
+    if (p0 > 0) for (const k of ["change24h", "change1h"]) if (r[k] != null && r[k] > -100) r[k] = +((c.priceUsd / (p0 / (1 + r[k] / 100)) - 1) * 100).toFixed(2);
+    r.priceUsd = c.priceUsd;
+    r.priceEth = c.priceEth ?? (ethUsd ? c.priceUsd / ethUsd : r.priceEth);
+    r.priceAt = c.at;
+    r.priceSource = c.onCurve ? "Pons curve, on chain" : "Uniswap v4 pool, on chain";
+  }
+  if (c?.supply > 0 && r.priceUsd > 0) { r.supply = c.supply; r.mcapUsd = r.priceUsd * c.supply; r.mcapEth = ethUsd ? r.mcapUsd / ethUsd : null; }
+  const real = realLiqOf(t.address, c);
+  r.realLiquidityUsd = real;
+  r.realLiquidityEth = real != null && ethUsd ? real / ethUsd : null;
+  return r;
+}
+
+// a row the indexer has not refreshed for PRICE_STALE takes DexScreener's numbers, in place (the Market, the Desk and the
+// coin page then show the same thing): the pair of the row's own main pool when DexScreener lists it, otherwise its
+// deepest pair, and only when that is about as deep (a stray dust pair's price can be far off). Structure (pool, venue,
+// launchpad, route) stays as the index has it; the two-sided liquidity stays the main pool's, as GeckoTerminal reports.
+function freshen(row, pairs, ethUsd, now = Date.now()) {
+  const a = row.address;
+  const mine = (pairs || []).filter((p) => lc(p.baseToken?.address) === a && fnum(p.priceUsd) > 0);
+  if (!mine.length) return false;
+  let p = mine.find((x) => lc(x.pairAddress) === row.pool);
+  if (!p) {
+    // the pair with the most money in it (a made-up price inflates the two-sided total, never the money side)
+    p = mine.map((x) => ({ x, m: realFromPairs([x], a, ethUsd) || 0 })).sort((u, v) => v.m - u.m || (v.x.liquidity?.usd || 0) - (u.x.liquidity?.usd || 0))[0].x;
+    if ((p.liquidity?.usd || 0) < (row.liquidityUsd || 0) * 0.5) return false;
+  }
+  const sum = dsRows(mine, ethUsd).get(a);
+  const p0 = row.priceUsd, p1 = fnum(p.priceUsd), tx = p.txns?.h24 || {};
+  const mcap = fnum(p.marketCap) ?? fnum(p.fdv) ?? (row.mcapUsd > 0 && p0 > 0 ? row.mcapUsd * (p1 / p0) : null);
+  Object.assign(row, {
+    priceUsd: p1, priceEth: ethUsd ? p1 / ethUsd : row.priceEth, change24h: fnum(p.priceChange?.h24), change1h: fnum(p.priceChange?.h1),
+    liquidityUsd: fnum(p.liquidity?.usd) ?? row.liquidityUsd, mcapUsd: mcap,
+    volume24hUsd: sum?.volume24hUsd ?? fnum(p.volume?.h24) ?? row.volume24hUsd,
+    buys24h: sum?.buys24h ?? tx.buys ?? row.buys24h, sells24h: sum?.sells24h ?? tx.sells ?? row.sells24h,
+    priceAt: now, priceSource: "DexScreener",
+  });
+  row.txns24h = (row.buys24h || 0) + (row.sells24h || 0);
+  row.volume24hEth = ethUsd ? (row.volume24hUsd || 0) / ethUsd : null;
+  row.liquidityEth = ethUsd && row.liquidityUsd != null ? row.liquidityUsd / ethUsd : null;
+  row.mcapEth = ethUsd && row.mcapUsd != null ? row.mcapUsd / ethUsd : null;
+  return true;
+}
+// the same refresh from the row's own main pool on GeckoTerminal (pools/multi): price, changes, the pool's liquidity and
+// market cap, and that pool's share of the 24h volume (the other pools' volume and the trade counts wait for the next pass)
+function freshenPool(row, pr, ethUsd, now = Date.now()) {
+  if (!(pr.priceUsd > 0)) return false;
+  const trades = (pr.buys || 0) + (pr.sells || 0);
+  const vol = pr.volumeUsd > (pr.liquidityUsd || 0) * 300 || (!STOCK_SET.has(row.address) && pr.volumeUsd > 10_000 && (trades === 0 || pr.volumeUsd / trades > 50_000)) ? 0 : pr.volumeUsd || 0;
+  const entry = (row.pools || []).find((x) => x.pool === pr.pool);
+  if (entry) { row.volume24hUsd = Math.max(0, (row.volume24hUsd || 0) - (entry.volumeUsd || 0) + vol); entry.volumeUsd = vol; entry.liquidityUsd = pr.liquidityUsd; }
+  const p0 = row.priceUsd;
+  Object.assign(row, { priceUsd: pr.priceUsd, priceEth: pr.priceEth ?? (ethUsd ? pr.priceUsd / ethUsd : row.priceEth), change24h: pr.change24h, change1h: pr.change1h,
+    liquidityUsd: pr.liquidityUsd ?? row.liquidityUsd, mcapUsd: pr.mcapUsd || (row.mcapUsd > 0 && p0 > 0 ? row.mcapUsd * (pr.priceUsd / p0) : row.mcapUsd), priceAt: now, priceSource: "GeckoTerminal" });
+  row.volume24hEth = ethUsd ? (row.volume24hUsd || 0) / ethUsd : null;
+  row.liquidityEth = ethUsd && row.liquidityUsd != null ? row.liquidityUsd / ethUsd : null;
+  row.mcapEth = ethUsd && row.mcapUsd != null ? row.mcapUsd / ethUsd : null;
+  return true;
+}
+const rowAge = (t, now = Date.now()) => now - Math.max(t.priceAt || 0, t.seenAt || 0);
+// rows older than PRICE_STALE from DexScreener, 30 coins a call (53 of 290 rows were 60-83 minutes old on 20 Nov while
+// the footer said "updated just now"). The batch answer has one pair per coin: a coin whose main pool it skipped reads
+// its own pair list. Pons coins on their curve are priced on chain, and come here only when that read is missing.
+let sweepBusy = false;
+async function sweepStale() {
+  if (sweepBusy || !board.rows.size) return;
+  sweepBusy = true;
+  try {
+    const now = Date.now(), ethUsd = await getEthUsd().catch(() => null);
+    // a coin on its Pons curve is priced on chain; only when that read is missing does its curve pool come from GeckoTerminal
+    const onCurve = (t) => t.poolDex === "pons-v2";
+    const chainFresh = (t) => { const c = CHAIN.get(t.address); return c?.priceUsd > 0 && now - c.at < CHAIN_FRESH; };
+    const all = [...board.rows.values()].filter((t) => !t.stock && rowAge(t, now) > PRICE_STALE && !(onCurve(t) && chainFresh(t)))
+      .sort((x, y) => (y.volume24hUsd || 0) - (x.volume24hUsd || 0)).slice(0, 450);
+    if (!all.length) return;
+    const old = all.filter((t) => !onCurve(t));
+    const pairs = old.length ? await dsPairs(old.map((t) => t.address)).catch(() => []) : [];
+    const listed = new Set(pairs.map((p) => lc(p.baseToken?.address)));
+    const miss = [...old.filter((t) => !freshen(t, pairs, ethUsd, now)), ...all.filter(onCurve)];
+    for (const t of miss.filter((x) => listed.has(x.address)).slice(0, 30)) {
+      const ps = await dsTokenPairs(t.address).catch(() => null);
+      if (!ps) continue;
+      freshen(t, ps, ethUsd, Date.now());
+      if (ps.length) REAL.set(t.address, { usd: realFromPairs(ps, t.address, ethUsd), at: Date.now() });
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    // DexScreener does not list every venue (Virtuals, O1, Frontier, Clank pools: 33 of 86 stale rows on 20 Nov): the rest
+    // read their own main pool from GeckoTerminal, 30 pools a call, at background priority and at most 2 calls a sweep
+    const left = miss.filter((t) => rowAge(t) > PRICE_STALE && /^0x[0-9a-f]{40}([0-9a-f]{24})?$/.test(t.pool || "")).slice(0, 60);
+    for (let i = 0; i < left.length; i += 30) {
+      const part = left.slice(i, i + 30);
+      const d = await gecko(`pools/multi/${part.map((t) => t.pool).join(",")}?include=base_token`).catch(() => null);
+      if (!d?.data?.length) continue;
+      const inc = new Map((d.included || []).map((x) => [x.id, x]));
+      const byPool = new Map(d.data.map((p) => { const pr = poolRow(p, inc); return [pr.pool, pr]; }));
+      for (const t of part) { const pr = byPool.get(t.pool); if (pr && pr.base === t.address) freshenPool(t, pr, ethUsd); }
+    }
+    board.volumeUsd = [...board.rows.values()].filter((t) => !t.stock).reduce((s, t) => s + (t.volume24hUsd || 0), 0);
+    saveBoard();
+  } finally { sweepBusy = false; }
+}
+// the money side of each coin from DexScreener's full pair list: a coin that could be a pick every 10 minutes, the rest
+// every 30, 8 coins every 30 seconds (about 16 calls a minute against DexScreener's 300)
+let realBusy = false;
+async function realTick() {
+  if (realBusy || !board.rows.size) return;
+  realBusy = true;
+  try {
+    const now = Date.now(), ethUsd = await getEthUsd().catch(() => null);
+    const cand = (t) => (t.liquidityUsd || 0) >= 10_000 && (t.txns24h || 0) >= 40 && (t.volume24hUsd || 0) >= 2_000;
+    const due = [...board.rows.values()].filter((t) => !t.stock && t.poolDex !== "pons-v2")
+      .map((t) => { const r = REAL.get(t.address); return { t, age: r ? now - r.at : Infinity, c: cand(t) }; })
+      .filter((x) => x.age > (x.c ? 10 : 30) * 60_000)
+      .sort((x, y) => (y.age === Infinity) - (x.age === Infinity) || y.c - x.c || (y.t.volume24hUsd || 0) - (x.t.volume24hUsd || 0)).slice(0, 8);
+    for (const { t } of due) {
+      const ps = await dsTokenPairs(t.address).catch(() => null);
+      if (ps) REAL.set(t.address, { usd: realFromPairs(ps, t.address, ethUsd), at: Date.now() });
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    while (REAL.size > 4000) REAL.delete(REAL.keys().next().value);
+  } finally { realBusy = false; }
+}
+// A young or barely held coin whose market cap is over 2000x the money in its pools is sorted after the rest. Names stay
+// free and nothing is labelled (owner, 18 Nov).
 const unbacked = (t) => {
-  const real = BACKED.get(t.address), cap = Number(t.mcapUsd) || 0;
+  const real = t.realLiquidityUsd, cap = Number(t.mcapUsd) || 0;
   if (real == null || cap < 100_000 || cap <= real * 2000) return false;
   const holders = holdersOf(t.address)?.count;
   return (t.createdAt && Date.now() - t.createdAt < 7 * 86400_000) || (holders != null && holders < 1000);
@@ -664,9 +948,9 @@ export async function getRobinhoodTokens(opts = {}) {
   const o = cleanOpts(opts);
   await ensureBoard();
   if (Date.now() - board.updatedAt > 10 * 60_000) refreshBoard().catch(() => {});
-  refreshBacked().catch(() => {});
   const ethUsd = await getEthUsd().catch(() => null);
-  let all = [...board.rows.values()].filter((t) => !t.stock);
+  // every row as the coin page shows it: chain price for Pons coins, supply after burns, the money side of its pools
+  let all = [...board.rows.values()].filter((t) => !t.stock).map((t) => honest(t, ethUsd));
   // every coin is listed alike, whatever its ticker (owner, 18 Nov: no "copy" marks, as on other launchers)
   if (o.q && ADDR_RE.test(o.q) && !board.rows.has(lc(o.q))) {
     const r = await getRobinhoodToken(o.q).catch(() => null);
@@ -691,6 +975,10 @@ export async function getRobinhoodTokens(opts = {}) {
   else if (o.cat === "new") rows = rows.filter(isNew);
   else if (o.cat === "bonding") rows = rows.filter(onCurve);
   const hidden = o.tradable ? (o.launchpad === "all" ? all.length - routable.length : all.filter((t) => t.launchpad === o.launchpad && !t.tradable).length) : 0;
+  // how many coins of this listing carry a price read in the last 10 minutes (the footer said "updated just now" while 53
+  // of 290 rows were an hour old); each row also carries its own priceAt
+  const now = Date.now();
+  const fresh10 = base.filter((t) => t.priceAt && now - t.priceAt <= 10 * 60_000).length;
   const k = SORT_KEY[o.sort];
   const sgn = o.dir === "asc" ? 1 : -1;
   if (k === "holders") for (const t of rows) t.holders = HOLDERS.get(t.address)?.count ?? null;
@@ -705,11 +993,11 @@ export async function getRobinhoodTokens(opts = {}) {
   });
   return {
     catCounts, cat: o.cat,
-    tokens: rows.slice(o.offset, o.offset + o.limit).map((t) => { const r = { ...clean(t), pick: t._pick || undefined, spark: sparkOf(t), socials: socialOf(t.address), holders: holdersOf(t.address)?.count ?? null, top10Pct: holdersOf(t.address)?.top10 ?? null }; if (!(r.mcapUsd > 0) && r.launchpad === "pons" && r.priceUsd > 0 && r.liquidityUsd > 0 && r.priceUsd * 1e9 <= r.liquidityUsd * 400) { r.mcapUsd = r.priceUsd * 1e9; r.mcapEth = ethUsd ? r.mcapUsd / ethUsd : null; } return r; }), total: rows.length, counts, hiddenTotal: hidden,
+    tokens: rows.slice(o.offset, o.offset + o.limit).map((t) => ({ ...clean(t), pick: t._pick || undefined, spark: sparkOf(t), socials: socialOf(t.address), holders: holdersOf(t.address)?.count ?? null, top10Pct: holdersOf(t.address)?.top10 ?? null })), total: rows.length, counts, hiddenTotal: hidden,
     volume24hUsd: board.volumeUsd, volume24hEth: ethUsd ? board.volumeUsd / ethUsd : null,
     offset: o.offset, limit: o.limit, sort: o.sort, dir: o.dir, launchpad: o.launchpad,
-    updatedAt: board.updatedAt, stale: !!board.error, notice: board.error ? `Last refresh failed (${board.error}); showing the previous board.` : null,
-    source: "GeckoTerminal + Robinhood Chain RPC", ethUsd,
+    updatedAt: board.updatedAt, fresh10, freshOf: base.length, now, stale: !!board.error, notice: board.error ? `Last refresh failed (${board.error}); showing the previous board.` : null,
+    source: "GeckoTerminal + DexScreener + Robinhood Chain RPC", ethUsd,
   };
 }
 
@@ -733,17 +1021,35 @@ export async function getRobinhoodToken(address) {
   if (a === lc(RH.usdg) || a === lc(RH.weth)) return memo(`rh:hub:${a}`, 60_000, () => hubToken(a));
   return memo(`rh:token:${a}`, 30_000, async () => {
     const ethUsd = await getEthUsd().catch(() => null);
-    const [ds, ps, prof] = await Promise.allSettled([dsPairs([a]).then((x) => dsRows(x, ethUsd).get(a) || null), ponsState(a), ponsProfile(a)]);
-    let row = board.rows.get(a) ? clean(board.rows.get(a)) : null;
+    // every pool of the coin (token-pairs); the one-pair batch endpoint only when that list is unavailable
+    const [ds, ps, prof] = await Promise.allSettled([dsTokenPairs(a).catch(() => dsPairs([a])), ponsState(a), ponsProfile(a)]);
+    const pairs = ds.status === "fulfilled" ? ds.value : [];
+    const live = board.rows.get(a) || null;
+    let row = live ? clean(live) : null;
     // with Blockscout paused, holder counts come only from the paced holders loop: a read here for every coin Sentry,
     // The Record or the board looks at filled GeckoTerminal's queue faster than it drains (18 Nov)
     { const hh = HOLDERS.get(a); if (BS_KEY && !bsDown() && (!hh || Date.now() - (hh.at || 0) > 15 * 60_000)) await Promise.race([fetchHolders(a, { hi: false }).catch(() => null), new Promise((r) => setTimeout(r, 4000))]); }
-    const dsr = ds.status === "fulfilled" ? ds.value : null;
+    const dsr = dsRows(pairs, ethUsd).get(a) || null;
+    if (dsr) {
+      // price from the pool that holds the most money, not the biggest two-sided total (a made-up price inflates that)
+      const main = pairs.filter((p) => lc(p.baseToken?.address) === a && fnum(p.priceUsd) > 0)
+        .map((p) => ({ p, m: realFromPairs([p], a, ethUsd) || 0 })).sort((x, y) => y.m - x.m || (y.p.liquidity?.usd || 0) - (x.p.liquidity?.usd || 0))[0]?.p;
+      if (main && lc(main.pairAddress) !== dsr.pool) {
+        const pu = fnum(main.priceUsd);
+        Object.assign(dsr, { priceUsd: pu, priceEth: ethUsd ? pu / ethUsd : dsr.priceEth, change24h: fnum(main.priceChange?.h24), change1h: fnum(main.priceChange?.h1), liquidityUsd: fnum(main.liquidity?.usd),
+          mcapUsd: fnum(main.marketCap) ?? fnum(main.fdv), pool: lc(main.pairAddress), poolDex: `${main.dexId || "other"}${main.labels?.[0] ? "-" + main.labels[0] : ""}`, quoteSymbol: main.quoteToken?.symbol || null });
+      }
+      dsr.priceAt = Date.now(); dsr.priceSource = "DexScreener";
+    }
+    if (pairs.length) REAL.set(a, { usd: realFromPairs(pairs, a, ethUsd), at: Date.now() });
     const pons = ps.status === "fulfilled" && ps.value ? ponsPublic(ps.value) : null;
     // a Pons token still on its curve trades on the curve; a stray DEX pair thinner than the curve (e.g. a $0.40 dust
     // pool) would show a wrong price and liquidity, so it is ignored for numbers (its links and image are still used)
     const curveLive = !!(pons && !pons.graduated && pons.priceInPair > 0 && pons.pair?.address === "native");
     const dsThin = !!(dsr && curveLive && (dsr.liquidityUsd || 0) < pons.raised * (ethUsd || 0));
+    // a board row the index has not refreshed for 5 minutes takes DexScreener's numbers, on the board too, so the Market,
+    // the Desk and this page show one price ($TROYA read $0.00000653 here, 69 minutes old, at $0.0000056 on 20 Nov)
+    if (live && !curveLive && live.poolDex !== "pons-v2" && rowAge(live) > PRICE_STALE && freshen(live, pairs, ethUsd)) row = clean(live);
     if (!row && dsr && !dsThin) row = dsr;
     // fall back to GeckoTerminal only when neither the board nor DexScreener knows the token
     if (!row) {
@@ -756,7 +1062,7 @@ export async function getRobinhoodToken(address) {
       }
     }
     if (!row && !pons) throw httpErr(404, "This token is not on the Robinhood Chain board yet (no pool on GeckoTerminal or DexScreener, and not a Pons launch).");
-    const token = row ? { ...row } : { address: a, name: "", symbol: "", launchpad: "pons", tradable: true, pools: [] };
+    let token = row ? { ...row } : { address: a, name: "", symbol: "", launchpad: "pons", tradable: true, pools: [] };
     if (!token.stock) { const sd = await Promise.race([import("./stocks.mjs").then((m) => m.stockDesk()).catch(() => null), new Promise((r) => setTimeout(() => r(null), 1500))]); if (sd?.assets?.some((x) => lc(x.address) === a)) token.stock = true; }
     { const hd = HOLDERS.get(a); if (hd?.count != null) { token.holders = hd.count; token.top10Pct = hd.top10; } }
     if (pons) { token.launchpad = "pons"; token.tradable = true; }
@@ -765,7 +1071,17 @@ export async function getRobinhoodToken(address) {
       token.priceEth = pons.priceInPair; token.priceUsd = ethUsd ? pons.priceInPair * ethUsd : null;
       token.liquidityEth = pons.raised; token.liquidityUsd = ethUsd ? pons.raised * ethUsd : null;
       if (dsr?.mcapUsd && dsr.priceUsd) { token.mcapUsd = dsr.mcapUsd * (token.priceUsd / dsr.priceUsd); token.mcapEth = ethUsd ? token.mcapUsd / ethUsd : null; }
+      token.priceAt = Date.now(); token.priceSource = "Pons curve, on chain";
     }
+    // a Pons coin is priced from the chain itself (its curve, or its v4 pool after graduation) and its market cap counts
+    // the supply left after burns; the board takes the same read, so every page shows this number
+    if (pons) {
+      const st = PSTATIC.get(a);
+      if (st && !st.none && st.graduated !== !!(pons.graduated && pons.poolId)) PSTATIC.delete(a);
+      await Promise.race([readChain([a], { statics: 1 }).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]);
+    }
+    token = honest(token, ethUsd);
+    if (token.realLiquidityUsd == null && curveLive && ethUsd) { token.realLiquidityUsd = pons.raised * ethUsd; token.realLiquidityEth = pons.raised; }
     if (!token.symbol || !token.name) {
       try { const rh = await import("./robinhood.mjs"); const m = await rh.tokenMeta(a); token.symbol ||= m.symbol; token.name ||= m.name; } catch {}
     }
@@ -783,7 +1099,8 @@ export async function getRobinhoodToken(address) {
         pons: pons ? pons.ponsUrl : null, dexscreener: `https://dexscreener.com/robinhood/${a}`, geckoterminal: `https://www.geckoterminal.com/robinhood/tokens/${a}`,
         explorer: `https://robinhoodchain.blockscout.com/token/${a}`,
       },
-      sources: [board.rows.get(a) ? "GeckoTerminal" : dsr ? "DexScreener" : null, pons ? "Pons factory (on chain)" : null].filter(Boolean),
+      sources: [...new Set([board.rows.get(a) ? "GeckoTerminal" : null, token.priceSource === "DexScreener" || (!board.rows.get(a) && dsr) || pairs.length ? "DexScreener" : null,
+        pons ? "Pons factory (on chain)" : null, / on chain$/.test(token.priceSource || "") ? "Robinhood Chain RPC (price, supply)" : null].filter(Boolean))],
       updatedAt: Date.now(),
     };
   });
@@ -1074,7 +1391,8 @@ export async function getBrief() {
     if (rhR.status === "fulfilled" && rhR.value.tokens.length) {
       const e = rhR.value;
       const top = e.tokens[0];
-      const gain = [...e.tokens].filter((t) => t.change24h != null && (t.volume24hUsd || 0) >= 20_000 && (t.liquidityUsd || 0) >= 20_000).sort((a, b) => b.change24h - a.change24h)[0];
+      // "liquid" = $10K of money in its pools (the old $20K on the two-sided total, which counts the coin side too)
+      const gain = [...e.tokens].filter((t) => t.change24h != null && (t.volume24hUsd || 0) >= 20_000 && (t.realLiquidityUsd || 0) >= 10_000).sort((a, b) => b.change24h - a.change24h)[0];
       let text = `Robinhood Chain: ${top.symbol} leads 24h volume with ${fmtUsd(top.volume24hUsd || 0)} traded${top.change24h != null ? ` (${fmtPct(top.change24h)})` : ""}`;
       if (e.volume24hUsd) text += `, out of ${fmtUsd(e.volume24hUsd)} across coins on the board`;
       text += gain && gain.address !== top.address ? `; ${gain.symbol} is the strongest gainer among liquid coins at ${fmtPct(gain.change24h)}.` : ".";
@@ -1108,7 +1426,7 @@ export async function getSignals() {
     }
     if (gainR.status === "fulfilled") {
       for (const t of gainR.value.tokens) {
-        if ((t.volume24hUsd || 0) >= 25_000 && (t.liquidityUsd || 0) >= 15_000 && t.change24h != null && t.change24h >= 50) {
+        if ((t.volume24hUsd || 0) >= 25_000 && (t.realLiquidityUsd || 0) >= 7_500 && t.change24h != null && t.change24h >= 50) {   // money side, half the old two-sided $15K
           out.push({ id: `v:${t.address}`, kind: "volume", address: t.address, symbol: t.symbol, image: t.image || null, value: Math.min(t.change24h, 5000) / 10, title: `${t.symbol} ${fmtPct(t.change24h)} on Robinhood Chain`,
             detail: `${fmtUsd(t.volume24hUsd)} traded in 24h on ${LAUNCHPADS[t.launchpad] || t.launchpad}.` });
         }
@@ -1146,7 +1464,7 @@ export async function searchCoins(q, limit = 12) {
   if (!raw) return { q: "", coins: [] };
   if (ADDR_RE.test(raw)) {
     const r = await getRobinhoodToken(raw).catch(() => null), t = r?.token;
-    return { q: raw, coins: t ? [{ address: lc(t.address), symbol: t.symbol, name: t.name, kind: STOCK_SET.has(lc(t.address)) ? "stock" : "coin", image: t.image || null, priceUsd: t.priceUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, change24h: t.change24h ?? null, launchpad: t.launchpad || null }] : [] };
+    return { q: raw, coins: t ? [{ address: lc(t.address), symbol: t.symbol, name: t.name, kind: STOCK_SET.has(lc(t.address)) ? "stock" : "coin", image: t.image || null, priceUsd: t.priceUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, realLiquidityUsd: t.realLiquidityUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, change24h: t.change24h ?? null, launchpad: t.launchpad || null }] : [] };
   }
   const ql = raw.toLowerCase();
   const hit = COIN_SEARCH.get(ql);
@@ -1171,8 +1489,10 @@ export async function searchCoins(q, limit = 12) {
     if (hits(symbol, name)) add({ address, symbol, name, kind: "major" });
   for (const s of STOCKS) if (hits(s.symbol, s.name)) { const r = stockRows.get(lc(s.address)) || {}; add({ address: s.address, symbol: s.symbol, name: String(s.name || "").replace(/\s•\s*Robinhood Token$/, ""), kind: "stock", image: IMAGES.get(lc(s.address)) || null,
     priceUsd: r.priceUsd ?? null, liquidityUsd: r.liquidityUsd ?? null, volume24hUsd: r.volume24hUsd ?? null, change24h: r.change24h ?? null, tradable: r.tradable ?? true }); }
-  for (const t of board.rows.values()) if (hits(t.symbol, t.name))
-    add({ address: t.address, symbol: t.symbol, name: t.name, kind: t.stock ? "stock" : "coin", image: t.image || null, priceUsd: t.priceUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, change24h: t.change24h ?? null, launchpad: t.launchpad || null });
+  for (const t0 of board.rows.values()) if (hits(t0.symbol, t0.name)) {
+    const t = honest(t0);   // the same price and money-side liquidity as the board and the coin page
+    add({ address: t.address, symbol: t.symbol, name: t.name, kind: t.stock ? "stock" : "coin", image: t.image || null, priceUsd: t.priceUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, realLiquidityUsd: t.realLiquidityUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, change24h: t.change24h ?? null, launchpad: t.launchpad || null });
+  }
   try {
     const d = await memo(`ds:search:${ql}`, 60_000, () => getJson(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(raw)}`, { timeout: 8000 }));
     for (const p of d?.pairs || []) {
@@ -1219,7 +1539,8 @@ export async function register(r) {
     return { count: g.count, top10: g.top10, holders: [], source: "GeckoTerminal", note: "The list of top wallets is unavailable right now; the holder count and the top-10 share are live." };
   }, { weight: 2, perMin: 60 });
   r.get("/api/market/robinhood", ({ query }) => getRobinhoodTokens(query), { weight: 1 });
-  r.get("/api/market/robinhood/token", ({ query }) => getRobinhoodToken(query.address), { weight: 2 });
+  // now: the server's clock, so a page can say how old a price is even when the viewer's clock is off
+  r.get("/api/market/robinhood/token", async ({ query }) => ({ ...(await getRobinhoodToken(query.address)), now: Date.now() }), { weight: 2 });
   r.get("/api/market/queue", () => ({ gecko: geckoQueue(), at: Date.now() }), { perMin: 30 });
   r.get("/api/market/robinhood/candles", ({ query }) => getRobinhoodCandles(query.address, query.interval), { weight: 1 });
   r.get("/api/market/robinhood/trades", ({ query }) => getRobinhoodTrades(query.address), { weight: 1 });

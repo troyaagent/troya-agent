@@ -158,10 +158,13 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
   if (!r) throw new HttpError(400, "No Agent Wallet yet. Create one in Agent → Wallet.");
   // V8 F44 Scepter, the trust ladder: on "watch" an automated job only alerts; on "approve" it asks first (an Inbox
   // proposal); on "auto" it acts inside the caps. A trade the user taps or confirms is never held back by the ladder.
-  if (AUTO_JOBS.includes(source) && !proposalId) {
+  if (AUTO_JOBS.includes(source)) {
     const trust = (await getPolicy(owner)).effective.trust;
-    if (trust === "watch") return blocked(owner, kind, rationale || `${source}: ${kind}`, ["Your trust ladder is on Watch: automated jobs alert you and never trade. Change it in Agent → Scepter."], null, source, null);
-    if (trust === "approve") {
+    // a held proposal carried by an automated job (the browser-tab Autopilot) goes through only on "auto": until 20 Nov
+    // 2026 a proposalId skipped the ladder, so the tab executed the very trades "approve" had just held for a yes
+    if (proposalId) { if (trust !== "auto") throw heldForApproval(proposalId); }
+    else if (trust === "watch") return blocked(owner, kind, rationale || `${source}: ${kind}`, ["Your trust ladder is on Watch: automated jobs alert you and never trade. Change it in Agent → Scepter."], null, source, null);
+    else if (trust === "approve") {
       const { createProposal, addInbox } = await import("./inbox.mjs");
       const p = await createProposal(owner, { kind, params, summary: rationale || `${source}: ${kind}`, rationale, source });
       await addInbox(owner, { kind: "proposal", title: `${source} asks to ${kind}`, body: `${rationale || ""} Approve it in Agent → Scepter or Portfolio → Inbox.`.trim(), data: { proposalId: p.id } });
@@ -363,6 +366,15 @@ async function blocked(owner, kind, summary, reasons, gate, source, proposalId) 
   if (proposalId) await markProposal(owner, proposalId, "blocked", { reasons });
   return { executed: false, blocked: true, summary, reasons, gate };
 }
+// V8 F44 Scepter: a proposal held by the trust ladder waits for the owner's own tap (Inbox, Scepter, a Telegram confirm).
+// Unlike blocked() this leaves the proposal pending and writes no journal line: the tab Autopilot asks every 30 seconds,
+// and a held proposal must still be there, untouched, when the owner comes to approve it.
+const HELD = "Waiting for your approval in Scepter";
+function heldForApproval(proposalId) {
+  return new HttpError(409, HELD, { executed: false, blocked: true, held: true, proposalId, reasons: [HELD] });
+}
+// the automated job a request to /execute speaks for, or "app" for the owner's own tap (only AUTO_JOBS names count)
+const jobOf = (src) => (AUTO_JOBS.includes(src) ? src : "app");
 
 /* ---------- perps end to end: open the order once the funding lands ---------- */
 const PENDING = "perp-pending.json", PENDING_TTL = 20 * 60_000, HL_MIN_FUND_USD = 6;
@@ -387,7 +399,9 @@ async function pendingTick() {
           const res = x.result || {};
           const err = Array.isArray(res.response) ? res.response.find((y) => y?.error)?.error : null;
           const fill = Array.isArray(res.response) ? res.response.find((y) => y?.filled)?.filled : null;
-          if (x.blocked) await addInbox(j.owner, { kind: "perp", title: `${what}: not opened`, body: `The USDC landed on Hyperliquid, but the order stopped at the last check: ${(x.reasons || []).join(" ")} The USDC stays on your Hyperliquid account.` });
+          // an automated job's order, with the trust ladder moved to Approve since the funding left: it waits for a yes
+          if (x.proposed) await addInbox(j.owner, { kind: "perp", title: `${what}: waiting for your approval`, body: "The USDC landed on Hyperliquid. Your trust ladder is on Approve, so the order opens only when you approve it in Agent → Scepter or Portfolio → Inbox. The USDC stays on your Hyperliquid account." });
+          else if (x.blocked) await addInbox(j.owner, { kind: "perp", title: `${what}: not opened`, body: `The USDC landed on Hyperliquid, but the order stopped at the last check: ${(x.reasons || []).join(" ")} The USDC stays on your Hyperliquid account.` });
           else if (err) await addInbox(j.owner, { kind: "perp", title: `${what}: Hyperliquid refused it`, body: `${String(err).slice(0, 200)} The USDC stays on your Hyperliquid account.` });
           else await addInbox(j.owner, { kind: "perp", title: `${what}: opened`, body: `The USDC landed on Hyperliquid and the order went through the Gate and your caps${fill ? `: filled ${fill.totalSz} at ${fill.avgPx}` : ""}.` });
         } catch (e) { await addInbox(j.owner, { kind: "perp", title: `${what}: not opened`, body: `${e.message} The USDC stays on your Hyperliquid account.` }).catch(() => {}); }
@@ -450,21 +464,26 @@ export async function register(r, ctx) {
   // execute a pending proposal (or a direct action from the app) with the Agent Wallet
   r.post("/api/agent-wallet/execute", async ({ req, body }) => {
     const s = requireSession(req);
+    // who is asking: the owner's own tap ("app"), or an automated job speaking for itself (the tab Autopilot sends
+    // source "autopilot"). A job keeps its name all the way down, so the trust ladder and its own daily cap apply to it.
+    const source = jobOf(body.source);
     if (body.proposalId) {
       const p = await getProposal(s.address, String(body.proposalId));
       if (!p) throw new HttpError(404, "Proposal not found.");
       if (p.status !== "pending") throw new HttpError(409, `This proposal is ${p.status}.`);
+      // held for the owner's yes: checked before anything runs, so a held playbook ("watch") proposal stays pending too
+      if (source !== "app" && (await getPolicy(s.address)).effective.trust !== "auto") throw heldForApproval(p.id);
       if (p.kind === "watch") {
         const watches = await import("./watches.mjs");
         const wch = await watches.createWatch(s.address, p.params);
         await markProposal(s.address, p.id, "done", { watchId: wch.id });
         return { executed: true, summary: `Playbook created: ${wch.title}`, watch: wch };
       }
-      return executeForUser(s.address, { kind: p.kind, params: p.params, rationale: p.rationale || "Approved proposal", source: body.source === "autopilot" ? "autopilot" : "app", proposalId: p.id });
+      return executeForUser(s.address, { kind: p.kind, params: p.params, rationale: p.rationale || "Approved proposal", source, proposalId: p.id });
     }
     const kind = String(body.kind || "");
     if (!["swap", "perp", "perp_funded", "close", "withdraw", "hl_fund"].includes(kind)) throw new HttpError(400, "Unknown action.");
-    return executeForUser(s.address, { kind, params: body.params || {}, rationale: String(body.rationale || "Requested in the app").slice(0, 300), source: "app" });
+    return executeForUser(s.address, { kind, params: body.params || {}, rationale: String(body.rationale || "Requested in the app").slice(0, 300), source });
   });
 
   r.post("/api/agent-wallet/withdraw", async ({ req, body }) => {

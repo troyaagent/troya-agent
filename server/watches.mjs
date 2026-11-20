@@ -130,8 +130,10 @@ async function fire(w, price, action, note) {
   if (action && wallet?.enabled && !pol.effective.paused && !pol.effective.killSwitch) {
     try {
       const r = await aw.executeForUser(w.address, { kind: action.kind, params: action.params, rationale: `Playbook "${w.title}" fired at ${price}`, source: "playbook" });
-      outcome = r.executed ? "executed" : r.blocked ? "blocked" : "built";
-      if (!r.executed) await addInbox(w.address, { kind: "playbook", title: `${w.title}: ${outcome}`, body: (r.reasons || []).join(" ") || r.result?.note || "" });
+      // held by the trust ladder (Approve): executeForUser already put the proposal in the Inbox and Scepter, so it counts as
+      // "proposed", as a fire without the Agent Wallet does, and no second, empty "built" line is written
+      outcome = r.executed ? "executed" : r.proposed ? "proposed" : r.blocked ? "blocked" : "built";
+      if (!r.executed && !r.proposed) await addInbox(w.address, { kind: "playbook", title: `${w.title}: ${outcome}`, body: (r.reasons || []).join(" ") || r.result?.note || "" });
     } catch (e) {
       outcome = "failed";
       await addInbox(w.address, { kind: "playbook", title: `${w.title}: could not execute`, body: e.message });

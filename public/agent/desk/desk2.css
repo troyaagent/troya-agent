@@ -805,9 +805,10 @@ html[data-theme="light"] .ag2-hero::before { background: radial-gradient(480px 2
 .sd-mk-o small { color: var(--muted); }
 .sd-more { justify-self: start; }
 @media (max-width: 560px) {
-  /* phone: the four desk tabs share the width inside the 16px gutter */
-  .sd-tabs .seg { display: grid; grid-template-columns: repeat(4, auto); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-  .sd-tabs .seg button { padding: 0 10px; white-space: nowrap; font-size: 12.5px; }
+  /* phone: the five desk tabs stay on one line and scroll sideways (a four-column grid put Borrow on a line of its own);
+     the one-line strip, its snap and its edge fade are in the audit fixes of 20 Nov at the end of this sheet */
+  .sd-tabs .seg { max-width: 100%; }
+  .sd-tabs .seg button { padding: 0 12px; white-space: nowrap; font-size: 12.5px; }
 }
 
 /* ---------- Launchpad, Leaderboard, Create, Social, Flywheel ---------- */
@@ -1444,7 +1445,9 @@ html[data-theme="light"] .d-side::-webkit-scrollbar-thumb { background: #d6d1c7;
 @media (max-width: 1100px) { .tk2 .tk-grid { display: flex; flex-direction: column; align-items: stretch; } .tk2 .tk-grid > div { display: contents; } .tk2 .tk-grid > div > * { order: 3; min-width: 0; max-width: 100%; width: 100%; } .tk2 .tk-grid > div:first-child > :first-child { order: 0; } .tk2 .tk-grid .wt-trade { order: 1; } .tk2 .tk-grid .tk-tabs { order: 2; } }
 
 /* ---------- V8 F44 Scepter (scepter.js) ---------- */
-.sc { display: grid; gap: 16px; }
+/* one column that never grows past the screen: an implicit auto column took the width of the widest table (531px on a
+   390px phone) and pushed buttons and columns off screen; the tables scroll inside their panel instead */
+.sc { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .sc-hero { padding: 6px 2px 0; }
 .sc-title { margin: 0 0 6px; font-size: clamp(28px, 4vw, 40px); letter-spacing: -.02em; }
 .sc-hero p { margin: 0; max-width: 680px; }
@@ -1479,10 +1482,10 @@ html[data-theme="light"] .d-side::-webkit-scrollbar-thumb { background: #d6d1c7;
 .sc-acts { flex: none; display: flex; align-items: center; gap: 8px; }
 .sc-pad { padding: 0 16px 16px; margin: 0; }
 @media (max-width: 900px) { .sc-grid { grid-template-columns: minmax(0, 1fr); } .sc-steps { grid-template-columns: 1fr; } .sc-cmd { flex-direction: column; align-items: stretch; } }
-.sc-jobs .tbl-wrap { overflow-x: auto; }
+.sc .tbl-wrap, .ts .tbl-wrap { overflow-x: auto; }
 
 /* ---------- V8 F46 Treasury (treasury.js) and the Watchfire pin ---------- */
-.ts { display: grid; gap: 16px; }
+.ts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }   /* same as .sc: the tier table scrolls, the page does not */
 .ts-hero { padding: 6px 2px 18px; }
 .ts-hero h1 { margin: 6px 0 8px; font-size: clamp(30px, 4.5vw, 46px); letter-spacing: -.02em; }
 .ts-hero p { margin: 0; max-width: 720px; }
@@ -1526,3 +1529,62 @@ div.wt-foot { display: flex; align-items: center; }
 .wt-av.sm { position: absolute; width: 22px; height: 22px; transform: translate(-50%, -50%); font-size: 8.5px; border: 2px solid #8edff5; box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: auto; }
 .wt-x .wt-call-list, .wt-calls > .wt-call-list { max-height: 560px; overflow: auto; }
 .wt-track { margin-top: 6px; height: 26px; padding: 0 10px; font-size: 11.5px; }
+
+/* ---------- audit fixes, 20 Nov: the footer waits below the fold, the Ask orb keeps its corner, the four steps bar, strips ---------- */
+/* Until a page mounts, #view holds a short skeleton. The main area keeps at least a screen's height, so the footer starts
+   below the fold instead of showing for a moment and then jumping away (most of the Desk's layout shift on phones).
+   svh is the small viewport: the height stays put while a phone's address bar slides away. */
+.d-main { min-height: calc(100vh - var(--top, 68px)); min-height: calc(100svh - var(--top, 68px)); }
+/* The Ask orb is fixed 18px from the right edge and 52px wide. When the desk is narrower than the centred page plus that
+   corner, the page's right padding grows to 70px, so the page ends where the orb begins and no link or last table column
+   scrolls under it; on a wider desk the centred page already clears the orb and the padding is back to 32px (100cqw is
+   the .d-shell container). Pages without the orb (the chat, an open drawer, a tucked orb) keep their padding, and so do
+   the trade pages: their tickets run to the right edge and the orb shrinks to a small corner mark there. Troya Launches
+   (a wide page) keeps 70px at any width, and its bottom padding is at least 72px so the last row clears the orb. */
+@media (min-width: 861px) {
+  body:not(.on-chat, .drawer-open, .g-tucked) #view:not(.wide, [data-page="swap"], [data-page="perps"], [data-page="spot"], [data-page="lighter"], [data-page="stocks"], [data-page="liquidity"], [data-page="bridge"]) {
+    padding-right: clamp(32px, calc(70px - (100cqw - 1320px) / 2), 70px); }
+  body:not(.on-chat, .drawer-open, .g-tucked) #view.wide[data-page="hippodrome"] { padding-right: 70px; }
+  #view.wide[data-page="hippodrome"] { padding-bottom: 72px; }
+}
+/* Start in four steps, phone: the progress bar takes its own full-width row under the title (in one flex row with the
+   title and both links it shrank to a 24px dash) */
+@media (max-width: 560px) {
+  .dk-steps-h { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px 14px; }
+  .dk-steps-h .dk-bar { grid-row: 2; grid-column: 1 / -1; }
+}
+/* Tab and chip strips stay on one line and scroll sideways when they do not fit: Market categories, All launches tabs,
+   Stock desk tabs, Troya Launches lanes, and on phones the launchpad chips. A tab snaps gently into place and the edge
+   fades where more tabs wait. Where the browser ties an animation to a scroll, the fades follow it: none on a strip that
+   fits, none on the right once it is scrolled to the end, one on the left once it has moved. Elsewhere phones get a fixed
+   fade on the right edge. body.desk outranks market.css, which loads after this sheet. */
+@property --sf-l { syntax: "<length-percentage>"; inherits: false; initial-value: 0px; }
+@property --sf-r { syntax: "<length-percentage>"; inherits: false; initial-value: 0px; }
+body.desk :is(.mk2-cats, .lp-tabs .tabs, .sd-tabs .seg, .hp-tabs) { flex-wrap: nowrap; white-space: nowrap; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity; scroll-padding-inline: 6px; scrollbar-width: none; }
+body.desk :is(.mk2-cats, .lp-tabs .tabs, .sd-tabs .seg, .hp-tabs)::-webkit-scrollbar { display: none; }
+body.desk :is(.mk2-cats, .lp-tabs .tabs, .sd-tabs .seg, .hp-tabs) > * { flex-shrink: 0; scroll-snap-align: start; }
+@media (max-width: 720px) {
+  body.desk .mk-filters .chips { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; }
+  body.desk .mk-filters .chips > * { flex-shrink: 0; scroll-snap-align: start; }
+}
+@media (max-width: 420px) { .hp-tabs { gap: 5px; } .hp-tab { padding: 0 12px; } }   /* the three lanes fit a 390px phone without a scroll */
+@keyframes d2-strip { 0% { --sf-l: 0px; --sf-r: 48px; } 12% { --sf-l: 32px; } 88% { --sf-r: 48px; } 100% { --sf-l: 32px; --sf-r: 0px; } }
+@supports (animation-timeline: scroll()) {
+  body.desk :is(.mk2-cats, .lp-tabs .tabs, .sd-tabs .seg, .hp-tabs) {
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--sf-l), #000 calc(100% - var(--sf-r)), transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 var(--sf-l), #000 calc(100% - var(--sf-r)), transparent);
+    animation: d2-strip linear both; animation-timeline: scroll(self inline); }
+  @media (max-width: 720px) {
+    body.desk .mk-filters .chips {
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--sf-l), #000 calc(100% - var(--sf-r)), transparent);
+      mask-image: linear-gradient(90deg, transparent, #000 var(--sf-l), #000 calc(100% - var(--sf-r)), transparent);
+      animation: d2-strip linear both; animation-timeline: scroll(self inline); }
+  }
+}
+@supports not (animation-timeline: scroll()) {
+  @media (max-width: 720px) {
+    body.desk :is(.mk2-cats, .lp-tabs .tabs, .sd-tabs .seg, .hp-tabs, .mk-filters .chips) {
+      -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  }
+}

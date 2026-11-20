@@ -48,7 +48,7 @@
 <main id="main">
   <section class="page-hero" aria-labelledby="ph">
     <canvas class="rain" data-rain aria-hidden="true"></canvas>
-    <span class="eyebrow"><i class="dot"></i>V7 · F38 Gate in your wallet</span>
+    <span class="eyebrow"><i class="dot"></i>Safety · Gate in your wallet</span>
     <h1 id="ph" class="words" data-words>Troya Gate, on your confirm screen</h1>
     <p class="lead rv">The Troya Gate Snap adds a tab to MetaMask's confirm screen. Before you sign anything that touches a coin on Robinhood Chain, it shows the Gate's verdict for that coin: the buy and a test sell simulated, taxes, pool depth, honeypot and blacklist patterns, owner powers. It also warns you about unlimited approvals. It only reads the transaction you are about to sign. It never asks for keys and cannot sign or send anything.</p>
   </section>
@@ -71,7 +71,7 @@
     <div class="eyebrow-line"><span>02 / What it reads</span></div>
     <div class="split">
       <h2 id="reads-h" class="h2 words" data-words>Only what you are about to sign</h2>
-      <p class="lead rv">For each transaction, the Snap sends the target contract, the calldata and the chain to the Troya Gate API at troya.codes and shows the answer. Your wallet address, balances, keys and seed phrase stay in MetaMask. Every Gate verdict Troya publishes is also signed and listed on <a class="link" href="/seal">Seal</a>, and the Gate itself is tested with real money on <a class="link" href="/verify">Verify</a>.</p>
+      <p class="lead rv">For each transaction, the Snap sends the sending address, the target contract, the calldata, the ETH value and the chain to Troya Gate at troya.codes, and shows the answer. Your balances, keys and seed phrase stay in MetaMask. The Snap's answers are live snapshots, not receipts; every Gate API check, Council verdict, red Aegis alert, Arena trade and Record call is signed and listed on <a class="link" href="/seal">Seal</a>, and the Gate itself is tested with real money on <a class="link" href="/verify">Verify</a>.</p>
     </div>
   </section>
   <section class="ip" aria-labelledby="faq-h" id="faq">
@@ -85,7 +85,7 @@
       <article class="step rv"><span class="n">VERDICT</span><h3>What do the verdicts mean?</h3><p><b>Passed</b>: the buy and a test sell simulate fine and nothing in taxes, depth or owner powers stands out. <b>Caution</b>: something deserves a look, with the reason shown. <b>Failed</b>: a check failed, such as a sell that would not go through; MetaMask shows it as critical. It is a snapshot from Troya Gate, never a safe stamp.</p></article>
       <article class="step rv"><span class="n">CHAINS</span><h3>Which transactions does it check?</h3><p>Transactions on Robinhood Chain (chain 4663) that touch a coin: swaps on any app, buys on a Pons curve, approvals. On other chains it stays quiet. Unlimited approvals get a warning on their own.</p></article>
       <article class="step rv"><span class="n">FLASK</span><h3>Why MetaMask Flask for now?</h3><p>MetaMask reviews every Snap that uses internet access before regular MetaMask can install it. Troya Gate has been submitted to the MetaMask Snaps Directory; until it is listed, it runs in Flask, MetaMask's developer build.</p></article>
-      <article class="step rv"><span class="n">DATA</span><h3>What is sent to Troya?</h3><p>The target contract, the calldata and the chain of the transaction you are about to sign, to get the verdict. Not your balances, not your keys, nothing else from your wallet.</p></article>
+      <article class="step rv"><span class="n">DATA</span><h3>What is sent to Troya?</h3><p>The sending address, the target contract, the calldata, the ETH value and the chain of the transaction you are about to sign, to get the verdict. Not your balances, not your keys, nothing else from your wallet.</p></article>
       <article class="step rv"><span class="n">REMOVE</span><h3>How do I remove it?</h3><p>In MetaMask: menu, Snaps, Troya Gate, Remove. It takes effect at once and leaves nothing behind.</p></article>
     </div>
   </section>

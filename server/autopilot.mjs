@@ -11,11 +11,15 @@ import { formatUnits } from "ethers";
 import { quoteSwap } from "./tools.mjs";
 import { getAgentWallet, executeForUser } from "./agentwallet.mjs";
 import { getBalances } from "./robinhood.mjs";
+import { getPolicy } from "./policy.mjs";
 
 const LIVE_OK = process.env.AUTOPILOT_LIVE === "1";
 const TG = process.env.TELEGRAM_BOT_TOKEN || "";
 const STATE = "autopilot.json";
 const MAX_AGE = 7 * 86400e3;
+// a live trade the trust ladder holds for the owner's yes (Approve, the default since 20 Nov 2026) is an inbox item and a
+// Telegram message each time: a held exit is asked again at most every half hour, not on every 60 s tick
+const ASK_AGAIN_MS = 30 * 60_000;
 export const DEFAULTS = { minRaisedEth: 1, buyEth: 0.01, takeProfitX: 2, stopPct: 30, maxOpen: 3, maxBuysPerDay: 5 };
 const LIMITS = { minRaisedEth: [0, 4.2], buyEth: [0.001, 0.5], takeProfitX: [1.05, 50], stopPct: [5, 95], maxOpen: [1, 10], maxBuysPerDay: [1, 30] };
 let store = null, ticking = false, sender = null;
@@ -128,9 +132,11 @@ export async function onLaunch(r) {
     const rules = cleanRules(u.rules || {});
     if (raised < rules.minRaisedEth) continue;
     const mine = (s.positions || []).filter((p) => p.address === address);
-    if (mine.some((p) => p.token.toLowerCase() === r.token.toLowerCase())) continue;   // one buy per coin, ever (Sentry re-checks quiet launches)
+    // a buy held for the owner's yes counts like a buy: one ask per coin, and inside the day's buys
+    const asked = (s.asked || []).filter((a) => a.address === address);
+    if (mine.some((p) => p.token.toLowerCase() === r.token.toLowerCase()) || asked.some((a) => a.token === r.token.toLowerCase())) continue;   // one buy per coin, ever (Sentry re-checks quiet launches)
     if (mine.filter((p) => p.status === "open").length >= rules.maxOpen) continue;
-    if (mine.filter((p) => p.openedAt > Date.now() - 86400e3).length >= rules.maxBuysPerDay) continue;
+    if (mine.filter((p) => p.openedAt > Date.now() - 86400e3).length + asked.filter((a) => a.at > Date.now() - 86400e3).length >= rules.maxBuysPerDay) continue;
     const pos = await open(address, u.mode === "live" && LIVE_OK ? "live" : "practice", r, rules).catch((e) => { console.warn("[autopilot] open", address.slice(0, 8), e.message); return null; });
     if (pos) opened.push(pos);
   }
@@ -144,6 +150,9 @@ async function open(address, mode, r, rules) {
     const awPre = await getAgentWallet(address);
     const pre = Number((await tokenBal(awPre.address, r.token))?.amount || 0);
     const ex = await executeForUser(address, { kind: "swap", params: { tokenIn: "ETH", tokenOut: r.token, amountIn: rules.buyEth, slippagePct: 3 }, rationale: `Sentry Autopilot: $${r.symbol} passed the Gate at ${Number(r.pons?.raised || 0).toFixed(2)} ETH raised`, source: "autopilot" });
+    // held by the trust ladder: executeForUser already put the ask in the inbox and on Telegram, so no "skipped" message
+    // that contradicts it, and the coin is noted so Sentry's re-checks of the same launch do not ask again
+    if (!ex.executed && ex.proposed) { await noteAsk(address, r.token); return null; }
     if (!ex.executed) { await dm(address, `<b>Sentry Autopilot skipped $${esc(pos.symbol)}.</b> ${esc((ex.reasons || [ex.result?.note || "Not sent."]).join(" ").slice(0, 200))}`); return null; }
     for (let i = 0; i < 6; i++) {
       const now = Number((await tokenBal(awPre.address, r.token))?.amount || 0);
@@ -158,6 +167,12 @@ async function open(address, mode, r, rules) {
   return pos;
 }
 
+async function noteAsk(address, token) {
+  await store.update(STATE, blank(), (s) => {
+    s.asked = [...(s.asked || []).filter((a) => a.at > Date.now() - MAX_AGE), { address, token: token.toLowerCase(), at: Date.now() }].slice(-5000);
+  });
+}
+
 /* ---------- exits ---------- */
 export function exitReason(pos, valueEth, now = Date.now()) {
   const ratio = valueEth / pos.amountEth;
@@ -168,6 +183,8 @@ export function exitReason(pos, valueEth, now = Date.now()) {
 }
 export async function close(pos, reason, valueEth) {
   if (pos.mode === "live") {
+    // asked a moment ago and still held (not on Auto): wait for the owner's yes instead of asking again every tick
+    if (pos.exitAskedAt > Date.now() - ASK_AGAIN_MS && (await getPolicy(pos.address)).effective.trust !== "auto") { await savePosition(pos); return null; }
     const aw = await getAgentWallet(pos.address);
     // a public RPC can lag right after the buy: wait until the coins show up before selling
     let h = null;
@@ -181,7 +198,7 @@ export async function close(pos, reason, valueEth) {
     const amount = trunc(formatUnits(BigInt(h.raw), h.decimals));   // a decimal string, cut and never rounded above what it holds
     const before = await ethBal(aw.address);
     const ex = await executeForUser(pos.address, { kind: "swap", params: { tokenIn: pos.token, tokenOut: "ETH", amountIn: amount, slippagePct: 8 }, rationale: `Sentry Autopilot: ${reason} on $${pos.symbol}`, source: "autopilot" });
-    if (!ex.executed) { pos.lastError = (ex.reasons || [ex.result?.note || "not sent"]).join(" ").slice(0, 200); await savePosition(pos); return null; }
+    if (!ex.executed) { if (ex.proposed) pos.exitAskedAt = Date.now(); pos.lastError = (ex.reasons || [ex.proposed ? "Waiting for your approval in Agent → Scepter." : ex.result?.note || "not sent"]).join(" ").slice(0, 200); await savePosition(pos); return null; }
     let after = NaN;
     for (let i = 0; i < 6; i++) { after = await ethBal(aw.address); if (isFinite(before) && after > before) break; await sleep(3000); }
     if (isFinite(before) && isFinite(after) && after > before) valueEth = after - before;   // what actually came back

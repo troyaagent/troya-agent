@@ -48,10 +48,10 @@
 <main id="main">
   <section class="page-hero" aria-labelledby="ph">
     <canvas class="rain" data-rain aria-hidden="true"></canvas>
-    <span class="eyebrow"><i class="dot"></i>Launch on X · V6 Hermes</span>
+    <span class="eyebrow"><i class="dot"></i>Launch on X</span>
     <h1 id="ph" class="words" data-words>Post it. It's live.</h1>
     <p class="lead rv">Tag @Troyaagent with a name, a $TICKER and an image, and Troya launches the coin on Robinhood Chain from your Agent Wallet, then replies with its address. Open to everyone: one launch from X a day (three a day in all across X, Telegram and troya.codes), or no limit with 1,000,000 $TROYA, which also keeps the whole creator fee for you.</p>
-    <nav class="rm-jump rv" aria-label="On this page"><a href="#setup">Set up</a><a href="#post">The post</a><a href="#next">What happens</a><a href="#money">Creator fees</a><a href="#sell">Selling</a><a href="#rules">Rules</a><a href="#board">Troya Launches</a><a href="#icons">Icons</a><a href="#faq">FAQ</a></nav>
+    <nav class="rm-jump rv" aria-label="On this page"><a href="#setup">Set up</a><a href="#post">The post</a><a href="#next">What happens</a><a href="#money">Creator fees</a><a href="#sell">Selling</a><a href="#rules">Rules</a><a href="#board">Troya Launches</a><a href="#icons">Icons</a><a href="#faq">FAQ</a><a href="#telegram">In Telegram</a></nav>
   </section>
 
   <section class="ip lg" id="setup" aria-labelledby="setup-h">
@@ -164,7 +164,27 @@
 <details class="lg-faq rv"><summary>Do I need an image?</summary><p>No, but a coin launched without one has no image, for good. Square, PNG or JPEG.</p></details>
 <details class="lg-faq rv"><summary>Can I change the name, ticker, image or tax later?</summary><p>No. They are written into the coin when it is launched.</p></details>
 <details class="lg-faq rv"><summary>Is the Gate result a safety stamp?</summary><p>No. It is a live check of the coin at that moment, not a promise about what happens next.</p></details>
-<details class="lg-faq rv"><summary>I don't hold 1M $TROYA. Can I still launch?</summary><p>Yes: one launch from X a day and up to three a day in all, from X, Telegram or <a class="ulink" href="/agent#/launch/create">troya.codes</a> with your own wallet. You keep 0.6% of volume plus your whole creator tax, and Troya takes 0.1%. Hold 1M for no daily limit and the whole creator fee. Launching from Telegram opens after its real-money test.</p></details>
+<details class="lg-faq rv"><summary>I don't hold 1M $TROYA. Can I still launch?</summary><p>Yes: one launch from X a day and up to three a day in all, from X, Telegram or <a class="ulink" href="/agent#/launch/create">troya.codes</a> with your own wallet. You keep 0.6% of volume plus your whole creator tax, and Troya takes 0.1%. Hold 1M for no daily limit and the whole creator fee. You can also launch from Telegram: send /launch to the Troya bot.</p></details>
+  </section>
+
+  <section class="ip lg" id="telegram" aria-labelledby="telegram-h">
+    <div class="eyebrow-line"><span>10 / In Telegram</span></div>
+    <h2 id="telegram-h" class="h2 words" data-words>Launch from a private chat</h2>
+    <p class="lead rv">The same launch, rules and creator fees as on X, from a private chat with <a class="ulink" href="https://t.me/TrojanTroya_bot?start=launch" target="_blank" rel="noopener">@TrojanTroya_bot</a>. Your Agent Wallet pays the Pons launch fee and any initial buy; Troya pays the gas. Nothing is sent until you press Confirm.</p>
+    <ol class="lg-steps">
+<li class="lg-step rv"><span class="lg-n">1</span><div><b>Link the chat once</b><span>Open <a class="ulink" href="/agent#/start?for=launch-tg">troya.codes/agent → Get ready to launch in Telegram</a>: sign in, create your Agent Wallet with a little ETH, then press <b>Link Telegram</b> and tap Start in the chat it opens (later on it lives in Settings → Telegram alerts). Only a chat linked to your wallet can launch for it.</span></div></li>
+<li class="lg-step rv"><span class="lg-n">2</span><div><b>Send /launch</b><span>In the private chat with the bot, never in the group. It asks for the name (up to 48 characters), then the ticker (letters and numbers).</span></div></li>
+<li class="lg-step rv"><span class="lg-n">3</span><div><b>Send the image</b><span>As a photo, square works best; other shapes get cropped to the middle. Send /skip to launch without one: the coin then has none, for good.</span></div></li>
+<li class="lg-step rv"><span class="lg-n">4</span><div><b>Tap the creator tax and the initial buy</b><span>Creator tax from No tax to 4%, all yours. Initial buy from No buy to 0.05 ETH, made by your Agent Wallet after the first 3 seconds, through the Gate and within its caps.</span></div></li>
+<li class="lg-step rv"><span class="lg-n">5</span><div><b>Check the preview, then Confirm within 90 seconds</b><span>It shows the name, ticker, image, tax, buy, creator fee and what your Agent Wallet holds. Pressed later, while the setup is still open (30 minutes), Confirm does not launch: Troya re-checks prices and limits and sends a fresh preview with a new Confirm.</span></div></li>
+<li class="lg-step rv"><span class="lg-n">6</span><div><b>It's live</b><span>The bot replies with the address and the market cap, with buttons to trade it on Troya, share it on X and open your Creator desk. Send /launch again for the next one.</span></div></li>
+    </ol>
+    <div class="lg-grid">
+      <div class="lg-card rv"><small>The quick way</small><code>/launch Wooden Horse $HORSE tax 2% buy 0.01</code><p>Send it as the caption of the coin's image and the bot goes straight to the preview. Leave out <code class="in">tax</code> and <code class="in">buy</code> for a clean launch; sent without an image, it asks for one (or <code class="in">/skip</code>).</p></div>
+      <div class="lg-card rv"><small>Stop or skip</small><p><code class="in">/skip</code> launches without an image. <code class="in">/cancel</code> drops the launch being prepared, at any step. A setup with no answer for 30 minutes is dropped too, and nothing is spent until you press Confirm.</p></div>
+    </div>
+    <p class="lg-note rv">Same limits as every Troya launch: without 1M $TROYA, up to three launches a day across X, Telegram and troya.codes. Your initial buy sits in your Agent Wallet; <a class="ulink" href="#sell">sell it</a> from Launch from X → Your launches.</p>
+    <p class="lg-cta rv"><a class="btn-solid" href="https://t.me/TrojanTroya_bot?start=launch" target="_blank" rel="noopener">Launch in Telegram</a></p>
   </section>
 
   <section class="ip" aria-labelledby="no-h">

@@ -2,25 +2,39 @@
 // your inbox and Telegram), Gate checks a day, and the 1M perks. Pro plans show their prices once the team sets them.
 import { h, clear, useCss, icon, toast, short, compact } from "../ui.js";
 import { api } from "../api.js";
-import { wallet, openConnect } from "../wallet.js";
+import { wallet, onWallet, openConnect, signIn } from "../wallet.js";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 const CA = "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074";
 
+// the same sign-in block as the Agent tabs: one tap connects the wallet when none is connected, then signs in.
+// Connecting alone gives no session, so a button that only opened the connect sheet never showed a tier.
+function signInBox(text) {
+  return h("div", { class: "ag-signin" },
+    h("div", {}, h("b", {}, wallet.address ? "Sign in to see your tier" : "Connect a wallet to see your tier"), h("p", {}, text)),
+    h("button", { class: "btn primary", type: "button", onclick: async () => {
+      try { if (!wallet.address) await openConnect(); if (wallet.address) await signIn(); } catch (e) { toast(e.message, "error"); }
+    } }, icon("key"), wallet.address ? "Sign in" : "Connect wallet"));
+}
+
 export async function mount(view) {
   useCss("home");
+  useCss("agent");   // the .ag-intro header and the .ag-signin block, shared with the Agent tabs
   document.title = "Treasury · Troya Agent";
   const body = h("div", { class: "ts" });
-  clear(view, h("section", { class: "ts-hero" }, h("span", { class: "eyebrow fine" }, "V8 · Treasury"), h("h1", {}, "The King's Treasury"),
-    h("p", { class: "muted" }, "Hold $TROYA, climb the tiers. Every tier unlocks things that work today: Watchfire pins that alert you the moment a dump pattern starts, more Gate checks a day, and from 1,000,000 $TROYA the holder perks. Counted across your signed-in wallet and its Agent Wallet.")), body);
-  let stop = false;
+  clear(view, h("div", { class: "ts" },
+    h("div", { class: "ag-intro" }, h("p", { class: "dk-eyebrow", style: { margin: "0" } }, "Treasury"), h("h2", {}, "Holder tiers"),
+      h("p", {}, "Hold $TROYA, climb the tiers. Every tier unlocks things that work today: Watchfire pins that alert you the moment a dump pattern starts, more Gate checks a day, and from 1,000,000 $TROYA the holder perks. Counted across your signed-in wallet and its Agent Wallet.")),
+    body));
+  let stop = false, seq = 0, seen;
   async function load() {
+    const my = ++seq;   // a slower, older load never paints over a newer one (a wallet change starts a new one)
     const [t, pins, xt] = await Promise.all([api.get("/api/treasury").catch(() => null), wallet.session ? api.get("/api/treasury/pins").catch(() => null) : null, wallet.session ? api.get("/api/xtracker/me").catch(() => null) : null]);
-    if (stop) return;
+    if (stop || my !== seq) return;
     if (!t) { clear(body, h("div", { class: "panel" }, h("div", { class: "empty" }, "The Treasury is unavailable right now."))); return; }
     const you = t.you;
     const yourCard = !wallet.session
-      ? h("section", { class: "panel ts-you" }, h("div", {}, h("b", {}, "Your tier"), h("p", { class: "fine muted" }, "Sign in to see your tier, your balance and your pins.")), h("button", { class: "btn primary", type: "button", onclick: () => openConnect() }, icon("wallet"), "Connect wallet"))
+      ? signInBox("Your tier, your balance and your pins belong to the wallet you sign in with.")
       : h("section", { class: "panel ts-you" },
         h("div", {}, h("small", { class: "fine muted" }, "Your tier"), h("h2", {}, you?.name || "Visitor"),
           h("p", { class: "fine muted" }, you?.known ? `${compact(you.balance || 0, 2)} $TROYA counted.${you.next ? ` ${compact(you.next.min - you.balance, 2)} more for ${you.next.name}.` : " The top tier."}` : "Your balance could not be read right now.")),
@@ -36,7 +50,7 @@ export async function mount(view) {
       h("p", { class: "fine ts-pad" }, t.perks));
     const pinIn = h("input", { class: "wt-in", type: "text", placeholder: "Paste a Robinhood Chain coin address (0x…)", "aria-label": "Coin address to pin" });
     const pinBox = h("section", { class: "panel" }, h("div", { class: "panel-h" }, h("h2", {}, "Watchfire pins"), h("span", { class: "fine muted" }, pins ? `${pins.pins.length} of ${pins.max}` : "")),
-      h("p", { class: "fine muted ts-pad" }, "Watchfire watches every transfer of a pinned coin. The moment coins are gathered into one wallet, or one wallet sells 5% of the supply, you get it in your inbox and on Telegram (link Telegram in Portfolio)."),
+      h("p", { class: "fine muted ts-pad" }, "Watchfire watches every transfer of a pinned coin. The moment coins are gathered into one wallet, or one wallet sells 5% of the supply, you get it in your inbox and on Telegram (link Telegram in Settings, the gear icon)."),
       wallet.session ? h("div", { class: "wt-row ts-pad" }, pinIn, h("button", { class: "btn sm primary", type: "button", onclick: async () => {
         const v = pinIn.value.trim();
         if (!ADDR.test(v)) return toast("Paste a 0x… coin address.", "warn");
@@ -60,6 +74,9 @@ export async function mount(view) {
       h("p", { class: "ts-pad" }, t.pro?.note || "Pro plans are listed here with their prices."));
     clear(body, yourCard, tiers, pinBox, xBox, pro);
   }
-  load();
-  return () => { stop = true; };
+  // onWallet calls back at once with the current wallet: that first call is the load. After that it reloads only when the
+  // wallet or the session changes (connect, sign in, switch account, sign out), not on a chain switch.
+  const who = () => (wallet.session ? `s:${String(wallet.session.address || wallet.address || "").toLowerCase()}` : `g:${wallet.address || ""}`);
+  const off = onWallet(() => { const k = who(); if (k !== seen) { seen = k; load(); } });
+  return () => { stop = true; off(); };
 }

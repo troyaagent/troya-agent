@@ -328,6 +328,11 @@ export async function register(r, ctx) {
 }
 
 /** The bot's /flywheel off|on for linked admin chats. */
+// Herald payouts (server/payouts.mjs; owner, 20 Nov 2026): the same creator wallet pays the weekly Arena Cup prizes and
+// referral rewards, only inside payouts.mjs's rails (a share of that week's claimed creator fees, a weekly dollar cap,
+// only the wallets on that week's list, a gas reserve kept). Plain ETH transfers; nothing else is signed through this.
+export async function payoutSigner() { return signer(); }
+
 export async function setEnabled(on) {
   if (!store) return null;
   if (!on) { const c = await store.readJson(CAMP, null); if (c?.active) await finishCampaign(c, "Stopped with /flywheel off."); }

@@ -109,6 +109,7 @@ export async function solQuote({ tokenIn, tokenOut, amountIn, amountInRaw, slipp
   const [mi, mo] = await Promise.all([solTokenMeta(tokenIn), solTokenMeta(tokenOut)]);
   const inMint = mintOf(mi.address === "native" ? null : mi.address), outMint = mintOf(mo.address === "native" ? null : mo.address);
   if (inMint === outMint) throw new HttpError(400, "Pick two different tokens.");
+  if (amountInRaw != null && amountInRaw !== "" && !/^\d+$/.test(String(amountInRaw))) throw new HttpError(400, "Enter a valid amount.");
   const amt = amountInRaw != null && amountInRaw !== "" ? BigInt(amountInRaw) : toRaw(amountIn, mi.decimals);
   if (amt <= 0n) throw new HttpError(400, "Enter a positive amount.");
   const slip = Math.min(_sim ? 5000 : MAX_SLIP, Math.max(1, Math.round(Number(slippageBps) || 100)));

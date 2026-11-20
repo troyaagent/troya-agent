@@ -603,6 +603,7 @@ export async function quoteSwap({ tokenIn, tokenOut, amountIn, amountInRaw, slip
   const tout = isNative(tokenOut) ? ZERO : addr(tokenOut, "output token");
   if (lower(tin) === lower(tout)) throw new HttpError(400, "Pick two different tokens.");
   const [mi, mo] = await Promise.all([metaOf(tin), metaOf(tout)]);
+  if (amountInRaw != null && amountInRaw !== "" && !/^\d+$/.test(String(amountInRaw))) throw new HttpError(400, "Enter a valid amount.");
   const amt = amountInRaw != null && amountInRaw !== "" ? BigInt(amountInRaw) : parseAmount(amountIn, mi.decimals);
   if (amt <= 0n) throw new HttpError(400, "Enter a positive amount.");
   const slip = capSlippage(slippageBps, _sim);

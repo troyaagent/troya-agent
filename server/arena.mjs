@@ -165,6 +165,27 @@ async function openLive(d, ag, paper) {
   return pos;
 }
 
+// ETH a live sell really returned, read from its own transaction: the wallet's balance at the sell's block against the
+// block before, plus the gas it paid. The Arena wallet is shared by every AI trader, so a plain before/after balance read
+// can catch another trader's buy in between (20 Nov 2026: a real 0.00192 ETH exit was booked as 0). Only trusted when this
+// wallet sent exactly one transaction in that block.
+async function ethBackFromTx(wallet, hash) {
+  if (!hash || !wallet) return null;
+  const { rpc } = await import("./robinhood.mjs");
+  let rc = null;
+  for (let i = 0; i < 8 && !rc; i++) { rc = await rpc("robinhood", "eth_getTransactionReceipt", [hash]).catch(() => null); if (!rc) await new Promise((x) => setTimeout(x, 2000)); }
+  if (!rc || rc.status !== "0x1") return null;
+  const bn = Number(BigInt(rc.blockNumber)), h = (n) => "0x" + n.toString(16);
+  const [b0, b1, n0, n1] = await Promise.all([
+    rpc("robinhood", "eth_getBalance", [wallet, h(bn - 1)]), rpc("robinhood", "eth_getBalance", [wallet, h(bn)]),
+    rpc("robinhood", "eth_getTransactionCount", [wallet, h(bn - 1)]), rpc("robinhood", "eth_getTransactionCount", [wallet, h(bn)]),
+  ]);
+  if (Number(BigInt(n1)) - Number(BigInt(n0)) !== 1) return null;
+  const gas = BigInt(rc.gasUsed) * BigInt(rc.effectiveGasPrice || "0x0");
+  const back = BigInt(b1) - BigInt(b0) + gas;
+  return back > 0n ? Number(back) / 1e18 : null;
+}
+
 async function closeLive(pos, why) {
   const owner = process.env.ARENA_LIVE_OWNER;
   const aw = await (await import("./agentwallet.mjs")).getAgentWallet(owner).catch(() => null);
@@ -178,8 +199,10 @@ async function closeLive(pos, why) {
   if (!ex.executed) { pos.lastError = (ex.reasons || []).join(" ").slice(0, 200); return false; }
   let ethAfter = ethBefore;
   for (let i = 0; i < 6; i++) { ethAfter = (await walletTokenRaw(aw.address, pos.token)).eth; if (isFinite(ethBefore) && ethAfter > ethBefore) break; await new Promise((r) => setTimeout(r, 2500)); }
-  const back = isFinite(ethBefore) && ethAfter > ethBefore ? ethAfter - ethBefore : 0;
-  Object.assign(pos, { status: "closed", closedAt: Date.now(), reason: why, exitValueEth: back, pnlEth: back - pos.amountEth, txSell: (ex.result?.steps || []).at(-1)?.hash || null });
+  const txSell = (ex.result?.steps || []).at(-1)?.hash || null;
+  const exact = await ethBackFromTx(aw.address, txSell).catch(() => null);
+  const back = exact > 0 ? exact : isFinite(ethBefore) && ethAfter > ethBefore ? ethAfter - ethBefore : 0;
+  Object.assign(pos, { status: "closed", closedAt: Date.now(), reason: why, exitValueEth: +back.toFixed(8), pnlEth: +(back - pos.amountEth).toFixed(8), txSell });
   pos.sealClose = (await import("./seal.mjs").then((s) => s.seal("arena-live-close", pos.token, { agent: pos.agent, id: pos.id, reason: why, exitValueEth: back, pnlEth: pos.pnlEth }, `${pos.agent} sold $${pos.symbol}: ${why}`)).catch(() => null))?.hash || null;
   console.log(`[arena] live ${pos.agent} sold $${pos.symbol}: ${why}, ${back.toFixed(6)} ETH back`);
   return true;
@@ -365,10 +388,31 @@ async function backfillSeals(dataDir) {
   if (n) console.log(`[arena] linked ${n} older trades to their Seal receipts`);
 }
 
+// live exits booked as 0 ETH while the sell transaction is on chain (the shared-wallet read above): read them again, once
+async function fixZeroExits() {
+  const owner = process.env.ARENA_LIVE_OWNER;
+  const aw = owner ? await (await import("./agentwallet.mjs")).getAgentWallet(owner).catch(() => null) : null;
+  if (!aw?.address) return;
+  const d = await store.readJson(FILE, {});
+  const fixes = new Map();
+  for (const p of d.positions || []) {
+    if (p.mode !== "live" || p.status !== "closed" || p.exitValueEth !== 0 || !p.txSell || p.reason === "nothing left to sell") continue;
+    const back = await ethBackFromTx(aw.address, p.txSell).catch(() => null);
+    if (back > 0) fixes.set(p.id, back);
+  }
+  if (!fixes.size) return;
+  await store.update(FILE, {}, (x) => {
+    for (const p of x.positions || []) if (fixes.has(p.id) && p.exitValueEth === 0) { const v = fixes.get(p.id); Object.assign(p, { exitValueEth: +v.toFixed(8), pnlEth: +(v - p.amountEth).toFixed(8), exitFixed: Date.now() }); }
+    return x;
+  });
+  console.log(`[arena] corrected ${fixes.size} live exit(s) booked as 0 ETH from their sell transactions`);
+}
+
 export async function register(r, ctx) {
   store = ctx.store;
   setTimeout(() => tick().catch(() => {}), 100_000);
   setTimeout(() => backfillSeals(ctx.dataDir).catch((e) => console.warn("[arena] seal backfill:", e.message)), 30_000);
+  setTimeout(() => fixZeroExits().catch((e) => console.warn("[arena] exit fix:", e.message)), 45_000);
   setInterval(() => tick().catch(() => {}), TICK_MS).unref();
   setTimeout(() => watch().catch(() => {}), 20_000);
   setInterval(() => watch().catch(() => {}), 30_000).unref();

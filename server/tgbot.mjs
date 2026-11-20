@@ -100,6 +100,7 @@ async function gate(arg) {
   if (!h?.contract) return "There is no contract at that address on Robinhood Chain.";
   const lines = [];
   if (info?.symbol) lines.push(`<b>${esc(String(info.symbol).slice(0, 16))}</b> ${fpx(info.priceUsd)}${info.liquidityUsd != null ? ` · liquidity ${fusd(info.liquidityUsd)}` : ""}${info.launchpad ? ` · ${esc(info.launchpad)}` : ""}`);
+  if (info?.age) lines.push(`Age: ${esc(info.age)} (born ${esc(info.bornAt)})`);
   lines.push(`<b>Troya Gate ${h.score}/100.</b> ${esc(h.verdict || "")}`);
   for (const f of (h.flags || []).slice(0, 5)) lines.push(`${f.level === "high" ? "✕" : f.level === "medium" ? "!" : "·"} ${esc(f.text)}`);
   if (h.owner) lines.push(h.ownerRenounced ? "Owner: renounced." : `Owner: ${esc(h.owner.slice(0, 8))}…${esc(h.owner.slice(-4))} (still active).`);

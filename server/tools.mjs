@@ -101,7 +101,14 @@ export async function robinhoodToken(address) {
   const market = await mod("market");
   try {
     const r = await market.getRobinhoodToken(String(address).toLowerCase());
-    if (r?.token?.address) return { ...slim(r.token), pons: r.pons || null, description: untrusted(r.token.description, 280) || null, links: r.links };
+    if (r?.token?.address) {
+      // token age (community request, 20 Nov 2026): when the coin was born, from its creation block; the board's
+      // createdAt is the main pool's date, which for a graduated coin is its graduation
+      const tg = await import("./tokenage.mjs").catch(() => null);
+      const b = tg ? await tg.bornAt(r.token.address, { waitMs: 3000 }).catch(() => null) : null;
+      const age = b ? { createdAt: b, bornAt: new Date(b).toISOString().slice(0, 16).replace("T", " ") + " UTC", age: tg.ageText(b) } : {};
+      return { ...slim(r.token), ...age, pons: r.pons || null, description: untrusted(r.token.description, 280) || null, links: r.links };
+    }
   } catch (e) { if (e.status !== 404) throw e; }
   return null;
 }
@@ -344,7 +351,7 @@ export const TOOLS = [
     run: async ({ limit = 3 }) => { const all = (await hlMarkets()).filter((m) => (m.volume24hUsd || 0) > 5e5 && m.fundingApr != null).sort((a, b) => b.fundingApr - a.fundingApr); const k = Math.min(10, limit); return { highest: all.slice(0, k), lowest: all.slice(-k).reverse() }; } },
   { name: "robinhood_tokens", tier: "read", description: "Coins on Robinhood Chain (chain 4663) from GeckoTerminal pools and Pons on chain: price in ETH and USD, 24h change, volume, liquidity, launchpad. sort: volume | new | gainers.", schema: S({ q: str("Search by symbol, name or address"), sort: { type: "string", enum: ["volume", "new", "gainers"] }, limit: numS("Max 50") }),
     run: (a) => robinhoodTokens(a) },
-  { name: "robinhood_token", tier: "read", description: "One Robinhood Chain token: price in ETH and USD, 24h change, volume, liquidity, market cap, launchpad, and its Pons curve state when it is a Pons launch.", schema: S({ address: str("Token contract address") }, ["address"]),
+  { name: "robinhood_token", tier: "read", description: "One Robinhood Chain token: price in ETH and USD, 24h change, volume, liquidity, market cap, launchpad, its age (bornAt and age: when the token contract was created), and its Pons curve state when it is a Pons launch.", schema: S({ address: str("Token contract address") }, ["address"]),
     run: async ({ address }) => (await robinhoodToken(address)) || { found: false, note: "No pool on GeckoTerminal and not a Pons launch." } },
   { name: "robinhood_stocks", tier: "read", description: "Tokenized stocks and ETFs on Robinhood Chain (NVDA, TSLA, AAPL, SPY…) with prices from their on-chain pools.", schema: S({ q: str("Filter by symbol or name") }),
     run: (a) => robinhoodStocks(a) },

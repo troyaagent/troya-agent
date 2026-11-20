@@ -70,6 +70,7 @@ const MODULES = [
   "./trust.mjs",       // Safety page: live proof Troya is still being built (public commits, launches, burns, Sentry)
   "./community.mjs",   // community inbox: bug reports, ideas and suspicious-activity flags (web + Telegram), admins only
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
+  "./tokenage.mjs",    // token age: when a coin was born (its creation block), cached for good (community request, 20 Nov)
 ];
 
 const routes = [];

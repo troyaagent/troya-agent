@@ -116,6 +116,9 @@ export async function mount(view, { parts, go }) {
     clear(gList, checks.map((c) => h("li", { class: `c-${c.status}` }, h("span", { class: "dk-ck" }, c.status === "pass" ? icon("check") : c.status === "fail" ? icon("close") : h("b", {}, c.status === "warn" ? "!" : "–")), h("span", {}, c.label))));
   }).catch(() => { gVerdict.textContent = "Gate unavailable"; });
 
+  // token age (community request, 20 Nov 2026): the birth from the coin's creation block; the board's createdAt is the main
+  // pool's date, which for a coin that graduated to Uniswap is its graduation
+  let born = null;
   const stat = (k, v, tip) => h("div", tip ? { title: tip } : {}, h("div", { class: "k" }, k), h("div", { class: "v" }, v ?? "–"));
   // Liquidity is the money side of the pools (ETH, USDG or stock tokens); the pool total, which also counts the coin at
   // its own price, only in the tooltip. Market cap: price x supply, the supply read on chain after burns for Pons coins.
@@ -131,8 +134,9 @@ export async function mount(view, { parts, go }) {
     stat("Holders", t.holders != null ? compact(t.holders, 1).replace(/\.0(?=[KMB]$)/, "") : null),
     stat("Top 10 hold", t.top10Pct != null ? `${Number(t.top10Pct).toFixed(1)}%` : null),
     pons && !pons.graduated ? stat("Curve raised", `${!(pons.raised >= 1e-6) ? "0" : pons.raised < 1 ? (+pons.raised).toFixed(4) : tiny(pons.raised)} / ${tiny(pons.threshold)} ${pons.pair.symbol}`) : stat("1h change", t.change1h != null ? pctEl(t.change1h) : null),
-    stat("Age", launch?.at ? ageText(launch.at) : t.createdAt ? ageText(t.createdAt) : null)];
+    stat("Age", born ? ageText(born) : launch?.at ? ageText(launch.at) : t.createdAt ? ageText(t.createdAt) : null, "How long ago the coin was created")];
   const stats = h("section", { class: "panel tk-stats" }, statKids());
+  api.get(`/api/token-age/${address}`).then((r) => { if (r?.bornAt) { born = r.bornAt; clear(stats, statKids()); } }).catch(() => {});
   // the numbers again every 30 s while the page is in view (the server reads them at most every 30 s per coin)
   const LIVE_KEYS = ["priceUsd", "priceEth", "priceAt", "priceSource", "change1h", "change24h", "mcapUsd", "mcapEth", "supply", "liquidityUsd", "liquidityEth", "realLiquidityUsd", "realLiquidityEth", "volume24hUsd", "txns24h", "buys24h", "sells24h", "holders", "top10Pct"];
   let pxBusy = false;

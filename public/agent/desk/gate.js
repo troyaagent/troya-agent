@@ -4,6 +4,13 @@ import { h, clear, icon, useCss, short, ago, tokenIcon, toast } from "/agent/js/
 import { api } from "/agent/js/api.js";
 import { coinSuggest, findCoin } from "/agent/js/coinsearch.js";
 
+// token age on the Gate (community request, 20 Nov 2026): how long ago the coin was created, from its creation block
+const gateIdLine = (r, a) => {
+  const s = h("span", {}, [r.name, short(a)].filter(Boolean).join(" · "));
+  api.get(`/api/token-age/${a}`).then((x) => { if (x?.bornAt) { s.append(` · age ${ago(x.bornAt)}`); s.title = `Created ${new Date(x.bornAt).toUTCString().replace(" GMT", " UTC")}`; } }).catch(() => {});
+  return s;
+};
+
 const ADDR = /0x[0-9a-fA-F]{40}/;
 const EXAMPLE = "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC";   // NVDA (Robinhood stock token)
 const WORD = { passed: "Passed", caution: "Caution", failed: "Failed", untested: "No buyers yet", error: "Unavailable" };
@@ -140,7 +147,7 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
         ringEl,
         tokenIcon({ symbol: r.symbol, address: a, chain: "robinhood" }, ""),
         h("div", { class: "dk-gate-id" },
-          h("b", {}, r.symbol ? `$${r.symbol}` : short(a)), h("span", {}, [r.name, short(a)].filter(Boolean).join(" · "))),
+          h("b", {}, r.symbol ? `$${r.symbol}` : short(a)), gateIdLine(r, a)),
         h("div", { class: "dk-gate-v" },
           h("span", { class: `dk-v v-${r.verdict}` }, WORD[r.verdict] || r.verdict),
           h("span", { class: "fine" }, `${tally}${r.checkedAt ? ` · checked ${Date.now() - r.checkedAt < 60_000 ? "just now" : `${ago(r.checkedAt)} ago`}` : ""}`))),

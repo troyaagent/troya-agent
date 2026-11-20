@@ -3,7 +3,12 @@ import { h, clear, useCss, pageHead, seg, table, sparkline, pctEl, usd, tiny, co
 import { api, cached } from "../api.js";
 import { LAUNCHPADS, padName, tokenCell, priceCell, ethAmount, usdCell, mcapCell, ageText, updatedText, fmtFunding, fmtApr, perpPrice } from "../marketlib.js";
 // phones: price on top, market cap under it (instead of the ETH price), so the board stays three columns wide
-const priceMcCell = (t) => h("div", { class: "pcell" }, h("span", {}, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"), h("span", { class: "sub" }, t.mcapUsd > 0 ? `MC ${usd(t.mcapUsd, { compact: true })}` : "MC –"), staleNote(t));
+// token age (community request, 20 Nov 2026): when the coin was born, from its creation block (/api/token-age). The board's
+// createdAt is the main pool's date, so a coin that graduated to Uniswap looked as old as its graduation; it stays the
+// fallback until the birth is read.
+const BORN = new Map();
+const bornOf = (t) => BORN.get(String(t.address || "").toLowerCase()) || t.createdAt || null;
+const priceMcCell = (t) => h("div", { class: "pcell" }, h("span", {}, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"), h("span", { class: "sub" }, t.mcapUsd > 0 ? `MC ${usd(t.mcapUsd, { compact: true })}` : "MC –", bornOf(t) ? h("span", { title: "Age: how long ago the coin was created" }, ` · ${ageText(bornOf(t))}`) : null), staleNote(t));
 // Liquidity is the money side of a coin's pools (ETH, USDG or stock tokens): what a seller can take out. The pool total
 // also counts the coin at the pool's own price (MOW: $18.6M on 0.81 ETH), so it only shows in the tooltip.
 const liqTip = (t) => (t.liquidityUsd != null ? (t.realLiquidityUsd != null ? `${usd(t.liquidityUsd, { compact: true })} incl. the coin side` : `Pool total ${usd(t.liquidityUsd, { compact: true })} incl. the coin side; the ETH or USDG side is not read yet`) : "");
@@ -87,7 +92,7 @@ function robinhoodTab(box, go, query) {
       { key: "mcap", label: "Mkt cap", sort: true, render: (t) => mcapCell(t), hide: NARROW },
       { key: "holders", label: "Holders", sort: true, render: (t) => (t.holders != null ? h("div", { class: "pcell" }, h("span", {}, compact(t.holders, 1).replace(/\.0(?=[KMB]$)/, "")), t.top10Pct != null ? h("span", { class: `sub ${t.top10Pct > 60 ? "warnc" : ""}`, title: "Share held by the 10 largest wallets" }, `top 10 ${t.top10Pct.toFixed(0)}%`) : null) : h("span", { class: "muted" }, "–")), hide: NARROW },
       { key: "txns", label: "Trades 24h", sort: true, render: (t) => (t.txns24h != null ? compact(t.txns24h, 1) : "–"), hide: NARROW },
-      { key: "newest", label: "Age", sort: true, render: (t) => h("span", { class: "muted" }, ageText(t.createdAt)), hide: NARROW },
+      { key: "newest", label: "Age", sort: true, render: (t) => h("span", { class: "muted", title: "How long ago the coin was created" }, ageText(bornOf(t))), hide: NARROW },
     ],
   });
   // Desk 2.0: the four busiest coins as cards above the board
@@ -124,13 +129,28 @@ function robinhoodTab(box, go, query) {
         rows = [...first, ...rows.filter((t) => !seen.has(String(t.address).toLowerCase()))];
         d.total = Math.max(d.total || 0, rows.length);
       }
-      tbl.setRows(rows);
-      // rows whose price is over 15 minutes old are dimmed (the price cell says how old); the table helper has no row class
-      tbl.querySelectorAll("tbody > tr").forEach((tr, i) => {
-        const t = rows[i], old = t && ageOf(t) > STALE_MS;
-        tr.style.opacity = old ? ".55" : "";
-        tr.title = old ? `This price is ${ageWords(ageOf(t))} old: no source has refreshed this coin since.` : "";
-      });
+      const paintRows = () => {
+        tbl.setRows(rows);
+        // rows whose price is over 15 minutes old are dimmed (the price cell says how old); the table helper has no row class
+        tbl.querySelectorAll("tbody > tr").forEach((tr, i) => {
+          const t = rows[i], old = t && ageOf(t) > STALE_MS;
+          tr.style.opacity = old ? ".55" : "";
+          tr.title = old ? `This price is ${ageWords(ageOf(t))} old: no source has refreshed this coin since.` : "";
+        });
+      };
+      paintRows();
+      // the real births for this page: known ones come back at once, the rest are read in the background and asked again
+      const askAges = async (tries) => {
+        const need = rows.map((t) => String(t.address || "").toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a) && !BORN.has(a));
+        if (!need.length) return;
+        const r = await api.post("token-age", { addresses: need.slice(0, 60) }).catch(() => null);
+        if (id !== reqId || !r?.ages) return;
+        let got = 0;
+        for (const [a, at] of Object.entries(r.ages)) if (at) { BORN.set(a, at); got++; }
+        if (got) paintRows();
+        if (tries > 0 && got < need.length) setTimeout(() => { if (id === reqId) askAges(tries - 1); }, 7000);
+      };
+      askAges(2);
       if (!state.q && state.offset === 0 && state.launchpad === "all") {
         const top = state.cat === "all" && state.sort === "volume" && state.dir === "desc" ? d : await api.get("market/robinhood?cat=all&sort=volume&dir=desc&limit=12&tradable=1").catch(() => null);
         if (id !== reqId) return;

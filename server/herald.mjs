@@ -33,6 +33,11 @@ const admins = () => String(process.env.X_ADMINS || process.env.TROYA_ADMINS || 
 const isAdmin = (req) => { const s = getSession(req); return !!s && admins().includes(lc(s.address)); };
 const refBps = () => { const v = Math.round(Number(process.env.HERALD_REF_BPS)); return v > 0 && v <= 10_000 ? v : 0; };
 const cupPrize = () => clean(process.env.HERALD_CUP_PRIZE, 200) || null;
+// owner, 20 Nov 2026: referral rewards count for HERALD_REF_DAYS after a wallet joins; all rewards together are capped at
+// HERALD_FEE_CAP_PCT of the week's creator-fee income (payouts scale down when fees are lower)
+const refDays = () => { const v = Math.round(Number(process.env.HERALD_REF_DAYS)); return v > 0 ? v : 0; };
+const feeCapPct = () => { const v = Number(process.env.HERALD_FEE_CAP_PCT); return v > 0 && v <= 100 ? v : 0; };
+const inWindow = (join, t) => Number(t) >= join && (!refDays() || Number(t) < join + refDays() * 86_400_000);
 const linkOf = (code) => `${SITE}/agent?ref=${code}`;
 
 /* ---------- the contributor board: seeded with work the project needs; amounts are set by the team later ---------- */
@@ -100,7 +105,7 @@ async function scanJournal() {
     if (!TRADE_RE.test(line) || !line.includes('"status":"executed"')) continue;
     try {
       const r = JSON.parse(line), ref = refs[r.address];
-      if (ref && r.t >= ref.at) J.trades.set(r.address, (J.trades.get(r.address) || 0) + 1);
+      if (ref && inWindow(ref.at, r.t)) J.trades.set(r.address, (J.trades.get(r.address) || 0) + 1);
     } catch { /* a broken line is skipped */ }
   }
 }
@@ -113,7 +118,7 @@ async function activity() {
   const refs = d.refs || {};
   const per = new Map();                                     // referred wallet → counts after its join
   const row = (a) => { let r = per.get(a); if (!r) per.set(a, (r = { launches: 0, feeLaunches: 0, trades: 0, gateCalls: 0, gateUsd: 0 })); return r; };
-  const after = (a, t) => refs[a] && Number(t) >= refs[a].at;
+  const after = (a, t) => refs[a] && inWindow(refs[a].at, t);
   for (const l of await store.readJson("launches.json", [])) {
     const a = lc(l.owner);
     if (l.teamTest || !after(a, l.at)) continue;
@@ -154,8 +159,9 @@ async function activity() {
 function rewards(s) {
   const bps = refBps();
   if (!bps) return { on: false, text: "Rewards switch on after the owner sets them." };
-  return { on: true, bps, pendingUsd: +(((s?.gateUsd || 0) * bps) / 10_000).toFixed(4), paidIn: "ETH",
-    text: `${bps / 100}% of what Troya earns from the wallets you brought, paid in ETH from fees. Shown as pending until the team pays it.`,
+  const days = refDays(), cap = feeCapPct();
+  return { on: true, bps, days: days || null, capPct: cap || null, pendingUsd: +(((s?.gateUsd || 0) * bps) / 10_000).toFixed(4), paidIn: "ETH",
+    text: `${bps / 100}% of what Troya earns from the wallets you brought${days ? `, for ${days} days after each one joins` : ""}, paid in ETH from Troya's fees.${cap ? ` All rewards together are capped at ${cap}% of the week's creator-fee income, so payouts scale down when fees are lower.` : ""} Shown as pending until the team pays it.`,
     covers: "Counts Gate sales (x402 calls and Gate API deposits) from the wallets you brought. Fees from their launches are not in this figure yet." };
 }
 

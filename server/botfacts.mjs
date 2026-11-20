@@ -26,11 +26,14 @@ function roadmap(html) {
     if (!num) continue;
     const title = strip((sec.match(/<h2[^>]*>([\s\S]*?)<\/h2>/) || [])[1]);
     const chip = (sec.match(/rm-chip (\w+)/) || [])[1] || "";
+    // the chip's own words win: "Live, finishing" on a build-coloured chip means live, not "in build"
+    const chipText = strip((sec.match(/rm-chip \w+"><i><\/i>([^<]*)</) || [])[1] || "");
     const phases = [...sec.matchAll(/<li class="rm-ph( next)?"[\s\S]*?<small>(F\d+)<\/small><b>([\s\S]*?)<\/b>(?:<span>([\s\S]*?)<\/span>)?/g)].map((m) => {
       const name = strip(m[3].replace(/<a[\s\S]*?<\/a>/g, ""));
       return m[1] ? `${m[2]} ${name}: NOT live yet` : `${m[2]} ${name}: LIVE (${cut(strip(m[4]), 110)})`;
     });
-    out.push(`${num} ${title} [${chip === "live" ? "shipped" : chip === "build" ? "in build" : chip || "status not shown"}]: ${phases.join("; ")}`);
+    const status = chip === "live" ? "shipped" : /\blive\b/i.test(chipText) ? `${chipText}: every phase running, real-money tests and switches next` : chip === "build" ? "in build" : chip || "status not shown";
+    out.push(`${num} ${title} [${status}]: ${phases.join("; ")}`);
   }
   return out;
 }

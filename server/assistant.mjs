@@ -10,7 +10,8 @@ import { HttpError } from "./api.mjs";
 import { runTool, hlMarkets, resolveToken, quoteSwap, gateSwap, simulatePerp, gatePerp, getBalances, ethUsd, untrusted, TOOLS } from "./tools.mjs";
 import { initLlm, llmOn, underCap, chatWithTools, usageToday } from "./llm.mjs";
 import { createProposal } from "./inbox.mjs";
-import { liveFacts, glossaryBlock, featuresIn, linkOf } from "./botfacts.mjs";
+import { liveFacts, glossaryBlock, featuresIn, linkOf, workBlock } from "./botfacts.mjs";
+import { initPersonas, personaBlock, personaForAddress } from "./personas.mjs";
 // a guest (not signed in) gets the answer; tickets are only stored for a signed-in wallet
 const propose = (ctx, p) => (ctx.guest ? Promise.resolve({ id: `guest-${Date.now().toString(36)}`, ...p, guest: true }) : createProposal(ctx.address, p));
 import { checkAction, operatorPolicy } from "./policy.mjs";
@@ -440,11 +441,12 @@ const FACTS = [
   "For builders and other agents: the Gate API (GET /api/gate/v1/check/<token>?amountEth=, signed by Troya's attestor key, checked with POST /api/gate/v1/verify) gives free checks a day by holder tier, then charges per check from USDG credit, bought by sending USDG on Robinhood Chain to the address the API shows, from the wallet that will use it (it lands within a minute; in the app: Agent → Agent Wallet → Gate API credits). Agents can also pay per check over x402 on Base. Never quote the price per check from memory: send people to troya.codes/api/gate/v1 or troya.codes/api-and-mcp. Troya CLI: npx @troyaagent/cli (gate, token, search, market, holders, health, quote, oracle, record, flywheel, perp, movers and funding need no key; swap and execute need an API token and are a dry run unless --live). Remote MCP: claude mcp add --transport http troya https://troya.codes/mcp; also troya.codes/skill.md and troya.codes/llms.txt; /api/allies/<wallet> reads an agent's ERC-8004 record; GET /api/gate/feed is the free signed verdict feed. Agent registry calls are agents' views, never advice; chart oracle notes are a chart read, never advice.",
   "Audited rail: installed with claude mcp add robinhood-rail -e TROYA_API_KEY=<token> -- npx -y https://troya.codes/rail/troyaagent-rail-0.1.0.tgz. Moving money, unknown tools and orders it cannot size are always refused, and it fails closed if Troya cannot be reached. Troya never sees the Robinhood login (mcp-remote signs in on the user's machine). It is not a partnership with or endorsed by Robinhood; Robinhood's agentic trading is in beta and needs access on the user's Robinhood account; the rail was tested end to end against a stand-in MCP, so never claim it was tested on a real Robinhood account.",
   "Fomo (people say fomo pay, pay fomo, fomo listing, fomo app): $TROYA already trades on Fomo, the social trading app, with nothing to pay: fomo.family/tokens/robinhood/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074; the Gate page, the Swap route card and the token page link to it, and Telegram buy posts carry a Buy on Fomo button. A paid profile or paid promotion on Fomo has not been announced: say so, never promise one.",
-  "X and raids: Troya runs @Troyaagent on X itself and posts every announcement there; when someone asks to share something on X, say it is already on x.com/Troyaagent and invite a like or repost, and never say you cannot post to X. The raid target is always Troya's pinned post on X; in Telegram /raid shows it with one-tap buttons.",
+  "X and raids: Troya runs @Troyaagent on X itself and posts every announcement there; when someone asks to share something on X, say it is already on x.com/Troyaagent and invite a like or repost, and never say you cannot post to X. In Telegram, /raid shows the raid board: the post the group admins picked (when there is one), Troya's pinned post and the newest Troya posts, each with one-tap Like, Repost and Reply; nothing is paid or promised for raiding.",
   "Safety questions (are my money and keys safe, will the project stop): Troya never asks for a seed phrase or private key; the user's own wallet signs every trade; the Agent Wallet is optional pocket money that acts only inside their caps and the trust ladder they set in Scepter, withdraws only to their own wallet and can be exported any time; creator fees go to their wallet or to a fee-split contract that pays them directly. Point to troya.codes/safety (the latest shipped work, live), troya.codes/roadmap and troya.codes/verify. Never say funds are guaranteed.",
   "Roadmap: every roadmap and phase is on troya.codes/roadmap and every real-money receipt on troya.codes/verify; the LIVE STATUS block at the end is read from both, so send people there for the roadmap. Roadmaps after V8 are named only, with no phases, dates or promises: V9 Achilles (strength and speed), V10 Poseidon (liquidity and more chains), V11 Penelope (the long run), V12 Prometheus (open tools for builders), V13 Ithaca (holders help steer), V14 Olympus (the summit); never describe features for them. Pro plans are not on sale until the team sets their prices. Never give dates or promise prices.",
 ];
-function systemPrompt(lang, guest = false, live = "") {
+// persona: the voice block for a linked Telegram chat whose member picked one with /persona (server/personas.mjs); "" on the web
+function systemPrompt(lang, guest = false, live = "", persona = "") {
   return `${ABOUT.join(" ")}
 
 KEY FACTS:
@@ -461,12 +463,13 @@ Rules:
 - No financial advice or price predictions. You may describe data, trends and risks.
 - ${guest ? "The user is a guest (not signed in): they can ask about any coin, price or Gate check; for balances, positions or the Agent Wallet, ask them to connect a wallet and sign in." : "The user is signed in; get_balances without an address reads their wallet."}
 - Earlier turns in this chat were answered from tool results that are not repeated here, and tickets they created are noted as [Tickets created: ...]. Trust those earlier answers: never retract or "correct" them because their tool data is missing. Call the tools again if you need fresh numbers.
-- Reply in ${lang === "id" ? "Bahasa Indonesia (casual and friendly, like a trading-desk buddy)" : "English"}, matching the user's language if they switch. Be brief: under 150 words unless listing data. Use **bold** and "- " bullets. No tables, no headings, no emoji.${live}
+- Reply in ${lang === "id" ? "Bahasa Indonesia (casual and friendly, like a trading-desk buddy)" : "English"}, matching the user's language if they switch. Be brief: under 150 words unless listing data. Use **bold** and "- " bullets. No tables, no headings, no emoji.${live}${workBlock()}${persona}
 Current time: ${new Date().toISOString().slice(0, 16)} UTC.`;
 }
 // the live block, without holding up an answer: a cold or slow read of the site answers without it this once (the read
 // carries on and fills the 15-minute cache for the next question)
-const liveBlock = () => Promise.race([liveFacts({ brief: true }).catch(() => ""), new Promise((r) => setTimeout(() => r(""), 2500))]);
+// (the WORK IN PROGRESS block is added by systemPrompt itself, so it is there even when this read is slow)
+const liveBlock = () => Promise.race([liveFacts({ brief: true, work: false }).catch(() => ""), new Promise((r) => setTimeout(() => r(""), 2500))]);
 
 // Memory: the model reads the last 16 messages of the current chat, plus a short running summary of anything older
 // (written in the background by maybeSummarize). Guests send their last few messages from the browser.
@@ -512,7 +515,7 @@ async function agentAnswer(ctx, text, lang) {
     throw new Error(`Unknown tool ${name}`);
   };
   ctx.status(T(lang, "Thinking…", "Sedang berpikir…"));
-  const reply = await chatWithTools({ system: systemPrompt(lang, !!ctx.guest, await liveBlock()), history: hist, user: text, tools: AGENT_TOOLS, exec, onTool: (n, ok) => ctx.tool(n, ok) });
+  const reply = await chatWithTools({ system: systemPrompt(lang, !!ctx.guest, await liveBlock(), ctx.persona ? personaBlock(ctx.persona) : ""), history: hist, user: text, tools: AGENT_TOOLS, exec, onTool: (n, ok) => ctx.tool(n, ok) });
   if (!reply && !proposals.length) return null;
   return { text: reply || T(lang, "Ticket below.", "Tiketnya di bawah."), proposals };
 }
@@ -685,7 +688,9 @@ export async function answerFor(address, raw, { via = "telegram" } = {}) {
   const usage = await takeMessage(address);
   const settings = (await store.readJson("settings.json", {}))[address.toLowerCase()] || {};
   const lang = detectLang(text, settings.lang);
-  const ctx = { address, via, scopes: ["read", "prepare"], slippage: settings.slippage || 1, status: () => {}, tool: () => {} };
+  // the voice the member picked in Telegram with /persona (their own pick, else the community's choice)
+  const persona = via === "telegram" ? await personaForAddress(address).catch(() => "troya") : "troya";
+  const ctx = { address, via, persona, scopes: ["read", "prepare"], slippage: settings.slippage || 1, status: () => {}, tool: () => {} };
   const id = randomBytes(6).toString("hex");
   let out;
   try { out = await answer(ctx, text, lang); }
@@ -697,6 +702,7 @@ export async function answerFor(address, raw, { via = "telegram" } = {}) {
 export async function register(r, ctx) {
   store = ctx.store;
   initLlm(store);
+  initPersonas(store);
   // read the live status once the server is listening, so the first question already has it (see liveBlock)
   setTimeout(() => { liveFacts({ brief: true }).catch(() => {}); }, 20_000).unref?.();
 

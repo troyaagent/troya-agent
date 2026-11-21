@@ -411,10 +411,11 @@ export async function postTweet(text, { mediaIds = [], replyTo = null } = {}) {
   await store.update("x-log.json", [], (l) => [...l, { id: id || "post", at: Date.now(), author: "(team post)", text: "", status: "posted", reply: String(text), replyId: id, manual: true }].slice(-300));
   return id;
 }
-// /raid in Telegram: Troya's own latest posts (no replies, no reposts), one read every 10 minutes at most
+// /raid in Telegram: Troya's own latest posts (no replies, no reposts), one read every 10 minutes at most; the raid board
+// passes a longer maxAgeMs (30 min), so it reuses the memo instead of reading X again
 let postsMemo = null;
-export async function latestPosts(n = 3) {
-  if (postsMemo && Date.now() - postsMemo.at < 10 * 60_000) return postsMemo.v.slice(0, n);
+export async function latestPosts(n = 3, { maxAgeMs = 10 * 60_000 } = {}) {
+  if (postsMemo && Date.now() - postsMemo.at < maxAgeMs) return postsMemo.v.slice(0, n);
   const bot = await botTokens();
   if (!bot?.access || !bot.id || !(await spend("reads"))) return postsMemo?.v?.slice(0, n) || [];
   const p = await xApi(`/2/users/${bot.id}/tweets?max_results=5&exclude=replies,retweets&tweet.fields=created_at,public_metrics`, { token: bot.access });
@@ -426,8 +427,8 @@ export async function latestPosts(n = 3) {
 // /raid targets Troya's PINNED post on X (owner, 19 Nov 2026: the pinned post covers everything, raids go there), read
 // once every 10 minutes at most inside the daily "users" budget; null when nothing is pinned
 let pinMemo = null;
-export async function pinnedPost() {
-  if (pinMemo && Date.now() - pinMemo.at < 10 * 60_000) return pinMemo.v;
+export async function pinnedPost({ maxAgeMs = 10 * 60_000 } = {}) {
+  if (pinMemo && Date.now() - pinMemo.at < maxAgeMs) return pinMemo.v;
   const bot = await botTokens();
   if (!bot?.access || !bot.id || !(await spend("users"))) return pinMemo?.v || null;
   const p = await xApi(`/2/users/${bot.id}?user.fields=pinned_tweet_id&expansions=pinned_tweet_id&tweet.fields=created_at,public_metrics`, { token: bot.access });
@@ -440,6 +441,15 @@ export async function pinnedPost() {
     : pid ? { id: pid, text: String(logged?.reply || ""), at: logged?.at || null, likes: null, reposts: null, replies: null, pinned: true } : null;
   pinMemo = { at: Date.now(), v };
   return v;
+}
+// The raid board's free source: posts Troya made itself (postTweet logs each one in data/x-log.json as a "(team post)"
+// with its id and text). No X call; newest first. Mentions and replies to other people are left out.
+export async function loggedPosts(n = 5) {
+  if (!store) return [];
+  const log = await store.readJson("x-log.json", []).catch(() => []);
+  return (Array.isArray(log) ? log : []).filter((e) => e?.author === "(team post)" && e.status === "posted" && /^\d{5,25}$/.test(String(e.replyId || "")))
+    .sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, n)
+    .map((e) => ({ id: String(e.replyId), text: String(e.reply || ""), at: e.at || null, likes: null, reposts: null, replies: null, logged: true }));
 }
 
 // Project check (projectcheck.mjs): one public profile read, inside the daily "users" budget
@@ -481,7 +491,7 @@ async function compose(name, text) {
   const facts = await (await import("./botfacts.mjs")).liveFacts();
   const system = `${tg.TG_SYSTEM}${facts}
 
-NOW YOU ARE ON X, not Telegram: you are replying publicly as @Troyaagent to a post that mentions you. Rules on X: answer in the language of the post (English if unsure); one short reply, at most 260 characters; no hashtags, no emojis, no markdown, never tag anyone; the only links you may give are troya.codes pages, t.me/troyaagent and x.com/Troyaagent; live numbers only from tools; never predict prices or tell anyone to buy or sell; sound like a real, friendly member of the team, not a help desk: short natural sentences, no corporate phrases, vary your wording, and do not end every reply with a link; a compliment, a cheer or a gm is worth answering: thank them warmly in your own words, and only sometimes add one thing to try on Troya with its link; if asked, say plainly you are Troya's AI agent; worries about safety or about the project stopping get the plain facts and troya.codes/safety; if the post is spam, a scam or an insult, reply with exactly SKIP. Current time: ${new Date().toISOString().slice(0, 16)} UTC.`;
+NOW YOU ARE ON X, not Telegram: you are replying publicly as @Troyaagent to a post that mentions you. Rules on X: answer in the language of the post (English if unsure); one short reply, at most 260 characters; no hashtags, no emojis, no markdown, never tag anyone; the only links you may give are troya.codes pages, t.me/troyaagent and x.com/Troyaagent; live numbers only from tools; never predict prices or tell anyone to buy or sell; sound like a real, friendly member of the team, not a help desk: short natural sentences, no corporate phrases, vary your wording, and do not end every reply with a link; a compliment, a cheer or a gm is worth answering: thank them warmly in your own words, and only sometimes add one thing to try on Troya with its link; if asked, say plainly you are Troya's AI agent; worries about safety or about the project stopping get the plain facts and troya.codes/safety; Telegram commands such as /raid or /persona only work in Telegram (t.me/troyaagent): on X, give the post link or the page instead; if the post is spam, a scam or an insult, reply with exactly SKIP. Current time: ${new Date().toISOString().slice(0, 16)} UTC.`;
   const out = await llm.chatWithTools({ system, history: [], user: `${String(name).slice(0, 30)} on X: <untrusted>${text.slice(0, 500)}</untrusted>`, tools: tg.TG_TOOLS, exec: tg.tgExec, maxSteps: 3 });
   const s = tidy(out);
   if (!s || /^SKIP\b/i.test(s)) throw new Error("nothing worth answering");

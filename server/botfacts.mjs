@@ -5,7 +5,10 @@
 // is cached for 15 minutes and the last good copy is kept if the site cannot be read.
 // Audit, 20 Nov 2026: the in-app assistant (server/assistant.mjs) reads this block too, and the feature glossary
 // (glossary() below, the same lines the in-app Guide uses) so it knows what each feature IS, not only what shipped.
+// 21 Nov 2026: every block also carries WORK IN PROGRESS (workBlock() below): what the team is building right now and
+// what shipped as an opt-in, so no bot calls an unbuilt feature live.
 import { readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 const PORT = process.env.PORT || 9270;
 const TTL = 15 * 60 * 1000;
@@ -87,12 +90,55 @@ async function build() {
 }
 
 // { brief: true } leaves out each phase's description (for a prompt that already carries the feature glossary)
-export async function liveFacts({ brief = false } = {}) {
-  const pick = () => (brief ? cache.brief : cache.full);
+// { work: false } leaves out the WORK IN PROGRESS block (for a prompt that adds workBlock() itself)
+export async function liveFacts({ brief = false, work = true } = {}) {
+  const pick = () => (brief ? cache.brief : cache.full) + (work ? workBlock() : "");
   if (Date.now() - cache.at < TTL && cache.full) return pick();
   inflight ||= build().then((b) => { if (b.full) cache = { at: Date.now(), ...b }; else cache.at = Date.now() - TTL + 60_000; }).catch(() => {}).finally(() => { inflight = null; });
   await inflight;
   return pick();
+}
+
+/* ---------- work in progress ----------
+   Community questions on 21 Nov 2026 asked about features the team is building right now. The bots (Telegram, X) and
+   the in-app assistant must answer "that one is being worked on" for these, never "live", and must describe an opt-in
+   feature as opt-in. Statuses: building (not live, nothing to use yet), optin (live, off by default, the user switches
+   it on), live. A status changes here, or with no deploy in data/feature-status.json, e.g. { "staking": "live" }
+   (re-read every minute). A roadmap phase that the LIVE STATUS block marks LIVE still wins for that phase. */
+const WORK = [
+  { key: "staking", name: "$TROYA staking", aka: ["staking", "stake", "staked", "staker", "stakers", "stake troya", "troya staking", "staking tiers", "staking rewards", "apy"],
+    building: "being built, not live: the staking contract is not deployed yet, so nobody can stake $TROYA today and there are no staking rewards, APY or staking tiers to claim. Never quote tiers, rewards, APY or a date, and warn that any site, bot or DM offering $TROYA staking right now is a scam." },
+  { key: "chat", name: "Community chat inside the app", aka: ["in-app chat", "in app chat", "app chat", "chat in the app", "community chat", "chat room", "chatroom", "web chat", "chat on the website", "chat on troya.codes"],
+    building: "being built, not open yet: members cannot chat with each other inside troya.codes today; the community talks in the Telegram group t.me/troyaagent. This is not Ask Troya, the AI assistant in the app, which is live." },
+  { key: "passed", name: "Passed strip on the Desk", aka: ["passed strip", "pass strip", "passed lane", "passed coins strip", "passes strip"],
+    building: "being built, not on the Desk yet: a live lane of the newest coins that passed Troya Sentry at the channel's bar (next to a lane of coins that just graduated from their Pons curve). Until it ships, the same passes are posted in t.me/troyasentry and shown by /sentry in Telegram." },
+  { key: "permit2", name: "One-approval sells with Permit2", aka: ["permit2", "permit 2", "one approval", "one-approval", "single approval", "approve once", "approval once", "fewer approvals", "two approvals", "approve every sell", "approval every time"],
+    optin: "live, opt-in, off by default: on the Swap page, for coins that route through Uniswap v4 on Robinhood Chain, a seller can approve the coin once for Uniswap's Permit2 contract (an unlimited allowance), and every later sell is then a free signature for the exact amount (valid 30 minutes) plus the swap itself, instead of two exact approvals each time. The choice is remembered on that device. Routes through KyberSwap, LI.FI, Uniswap v3 and Pons curves keep the exact approvals. It is a choice, never required: an unlimited approval is a trade-off, so say so plainly." },
+  { key: "walletconnect", name: "WalletConnect (phone wallets by QR code)", aka: ["walletconnect", "wallet connect", "reown", "qr code", "scan qr", "connect with qr", "mobile wallet", "phone wallet", "connect my phone", "trust wallet", "email login", "passkey"],
+    building: "being built, not live: today the app connects a browser wallet (an extension such as MetaMask, Rabby, Coinbase Wallet or OKX Wallet, or the browser inside a wallet app); connecting a phone wallet by scanning a WalletConnect QR code is coming, with no date. Email or passkey sign-in has not been announced." },
+];
+const STATUS_FILE = process.env.DATA_DIR ? join(process.env.DATA_DIR, "feature-status.json") : new URL("../data/feature-status.json", import.meta.url);
+let over = { at: 0, v: {} };
+function overrides() {
+  if (Date.now() - over.at < 60_000) return over.v;
+  let v = {};
+  try { const o = JSON.parse(readFileSync(STATUS_FILE, "utf8")); if (o && typeof o === "object") v = o; } catch { /* no file: the defaults */ }
+  over = { at: Date.now(), v };
+  return v;
+}
+const statusOf = (w) => { const s = overrides()[w.key]; return ["building", "optin", "live"].includes(s) ? s : w.optin ? "optin" : "building"; };
+// an override with no written line for its status gets a plain one, never the line of another status
+const sayOf = (w, st) => w[st] || (st === "live" ? "live now; for where it is and how it works use the FEATURE GLOSSARY or troya.codes/agent#/docs, never details from memory"
+  : st === "optin" ? "live as an opt-in: off until the user switches it on; for where it is and how it works use the FEATURE GLOSSARY or troya.codes/agent#/docs, never details from memory" : w.building);
+export function workItems() { return WORK.map((w) => { const status = statusOf(w); return { key: w.key, name: w.name, status, says: sayOf(w, status) }; }); }
+// the items a question names (troya_feature tool); nothing when it names none
+export function workStatus(text) {
+  const s = norm(text);
+  return workItems().filter((it) => { const w = WORK.find((x) => x.key === it.key); return [w.name, ...w.aka].some((a) => s.includes(norm(a))); });
+}
+export function workBlock() {
+  return `\n\nWORK IN PROGRESS (set by the team, newer than anything written above, the feature glossary included): when someone asks about one of these, answer from its line in plain words, e.g. "that one is being worked on, it is not live yet", and never say or imply that a feature being built is live, can be used today, or has a date. An opt-in feature is live but off until the user switches it on: say both. A roadmap phase the LIVE STATUS block marks LIVE still wins for that phase.\n` +
+    workItems().map((it) => `- ${it.name}: ${it.says}`).join("\n");
 }
 
 /* ---------- the feature glossary ----------

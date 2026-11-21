@@ -186,7 +186,9 @@ const sizeCell = (v, kind, est) => {
   const txt = kind === "usd" ? (v > 0 && v < 0.01 ? "<$0.01" : usd(v, { compact: v >= 1e4 })) : v > 0 && v < 0.0001 ? "<0.0001" : v >= 1 ? v.toFixed(3) : tiny(v, 3);
   return h("td", est ? { title: "Estimated: the coins times the chart's price in that bar" } : {}, est ? h("span", { class: "muted" }, "≈ ") : null, txt);
 };
-export function renderTrades(box, b, filter, setFilter, symbol, size) {
+// opts.limit caps the rows (20 on a phone) and opts.more shows the next ones; without opts, 120 as before
+export function renderTrades(box, b, filter, setFilter, symbol, size, opts = {}) {
+  const cap = Math.min(120, opts.limit || 120);
   if (!b) { clear(box, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, NO_BOARD))); return; }
   const counts = b.counts || {};
   const chips = h("div", { class: "wt-chips" },
@@ -196,7 +198,7 @@ export function renderTrades(box, b, filter, setFilter, symbol, size) {
   clear(box, h("div", { class: "panel mk-panel wt-panel" }, chips,
     list.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl wt-tbl" },
       h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Age"), h("th", { class: "l" }, "Side"), h("th", {}, "USD"), h("th", {}, "ETH"), h("th", {}, "% supply"), h("th", {}, symbol), h("th", { class: "l" }, "Trader"))),
-      h("tbody", {}, list.slice(0, 120).map((x) => {
+      h("tbody", {}, list.slice(0, cap).map((x) => {
         const s = size?.(x) || null;
         return h("tr", {},
           h("td", { class: "l muted" }, h("a", { class: "link", href: `${SCAN}/tx/${x.tx}`, target: "_blank", rel: "noopener" }, secs(x.secsAgo))),
@@ -206,6 +208,7 @@ export function renderTrades(box, b, filter, setFilter, symbol, size) {
           h("td", { class: "l" }, h("a", { class: "link mono", href: `${SCAN}/address/${x.wallet}`, target: "_blank", rel: "noopener" }, short(x.wallet, 4)), " ", x.tags.map(tagEl)));
       })))) :
       h("div", { class: "empty" }, filter === "all" ? (b.level === "loading" ? "Reading this coin's transfers…" : "No trades in the window Watchfire reads yet.") : `No ${TAGS[filter][0].toLowerCase()} trades in this window.`),
+    list.length > cap && opts.more ? h("div", { class: "mk-more" }, h("button", { class: "btn sm", type: "button", onclick: opts.more }, "Show more")) : null,
     h("p", { class: "fine" }, `Every buy and sell of the coin, read live from the chain by Watchfire${b.fullHistory === false ? " (this coin is older than 6 hours: the last 6 hours)" : ""}. USD and ETH come from GeckoTerminal for the same transaction, or are estimated (≈) from the chart. Tags are patterns, not accusations.`)));
 }
 export function renderEarly(box, b) {

@@ -284,7 +284,7 @@ async function keepPlan(p) {
 }
 const planFor = async (recipient) => (await store.readJson("launch-plans.json", [])).find((x) => lc(x.recipient) === lc(recipient)) || null;
 /** A web launch (signed in the browser with the creator's own wallet), checked on chain before it is recorded. */
-export async function recordWeb({ hash, owner, salt, troyaBps }) {
+export async function recordWeb({ hash, owner, salt, troyaBps, session = null }) {
   if (!/^0x[0-9a-fA-F]{64}$/.test(String(hash || ""))) throw new HttpError(400, "Bad transaction hash.");
   const tx = await rpc("robinhood", "eth_getTransactionByHash", [hash]);
   if (!tx) throw new HttpError(404, "That transaction is not on Robinhood Chain yet.");
@@ -296,7 +296,11 @@ export async function recordWeb({ hash, owner, salt, troyaBps }) {
   // a fee splitter Troya planned for this wallet proves the launch came through troya.codes, whenever it is recorded
   const planned = lc(got.recipient) !== lc(from) ? await planFor(got.recipient) : null;
   if (planned && lc(planned.owner) !== lc(from)) throw new HttpError(403, "That launch was signed by another wallet.");
-  const blk = planned ? null : await rpc("robinhood", "eth_getBlockByNumber", ["0x" + got.block.toString(16), false]).catch(() => null);
+  // A holder's coin has no splitter plan to prove where it came from, so it used to fall out after an hour when the record
+  // call missed (closed tab). The signed-in creator bringing their own coin, whose fee goes to that same wallet, is proof
+  // enough at any age: only the wallet that signed the launch can sign in as it, and the holder check below still applies.
+  const own = !planned && session && lc(session) === lc(from) && lc(got.recipient) === lc(from) && (await holderInfo(from)).holder;
+  const blk = planned || own ? null : await rpc("robinhood", "eth_getBlockByNumber", ["0x" + got.block.toString(16), false]).catch(() => null);
   if (blk?.timestamp && Date.now() - Number(BigInt(blk.timestamp)) * 1000 > RECORD_WINDOW_MS) throw new HttpError(400, "Only a coin launched on troya.codes in the last hour can be added to Troya Launches.");
   if ((await store.readJson("launches.json", [])).some((x) => lc(x.token) === lc(got.token))) return { ok: true, launch: (await store.readJson("launches.json", [])).find((x) => lc(x.token) === lc(got.token)) };
   const meta = await tokenMeta(got.token).catch(() => null);
@@ -931,7 +935,7 @@ export async function register(r, ctx) {
       text: `Free to launch. Troya takes 0.1% of trading volume out of the creator's 0.7% share of the Pons fee; holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA keep all of it. ${(await tgLaunchMode()) === "live" ? "X, Telegram and troya.codes are open to everyone" : "X and troya.codes are open to everyone; Telegram opens after its real-money test"}. Creator tax 0–4%. Without 1M $TROYA: up to ${LIMITS.perDay} launches a day, at most ${LIMITS.perDayX} of them from X; holders have no daily limit. Any name up to 48 characters; the ticker is letters and numbers, up to 16, saved exactly as typed. The image is cropped to a centre square of up to 1024 px; it is required on troya.codes and optional on X and Telegram, where a coin launched without one has none for good. A website and a Telegram group can be added on every path (on X: "site: example.com" and "tg: t.me/group"). From X or Telegram the Agent Wallet needs the Pons launch fee plus 0.0001 ETH${fee != null ? ` (${ethText(needEthFor(fee))} ETH today)` : ""}, plus the buy and 0.0002 ETH for an initial buy; Troya pays the gas.` };
   });
   r.post("/api/launch/plan", ({ body }) => plan({ owner: body?.creator, creatorTaxBps: body?.creatorTaxBps, name: body?.name, symbol: body?.symbol, source: "web" }), { perMin: 30 });
-  r.post("/api/launch/record", async ({ req, body }) => recordWeb({ hash: body?.hash, owner: getSession(req)?.address || body?.creator || null, salt: body?.salt, troyaBps: body?.troyaBps }), { perMin: 20 });
+  r.post("/api/launch/record", async ({ req, body }) => recordWeb({ hash: body?.hash, owner: getSession(req)?.address || body?.creator || null, session: getSession(req)?.address || null, salt: body?.salt, troyaBps: body?.troyaBps }), { perMin: 20 });
   r.get("/api/launch/mine", async ({ req }) => ({ launches: (await launchesOf(requireSession(req).address)).slice().reverse() }));
   r.get("/api/launch/board", () => board(), { perMin: 120 });
   // graduated ones wear the horse in gold

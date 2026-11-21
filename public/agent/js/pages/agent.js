@@ -353,10 +353,26 @@ function mountChat(box, ctx) {
 /* =====================================================================================
    WALLET (Agent Wallet + API tokens)
    ===================================================================================== */
-function mountWallet(box) {
+function mountWallet(box, ctx) {
   const main = h("div", { class: "ag-col" });
   clear(box, main);
   let stopBal = null;
+  // #/agent/wallet?panel=api (the Desk's "API and MCP" tool) lands on the Developer section, scrolled to and highlighted
+  let wantApi = ctx?.query?.panel === "api";
+  const devSection = (...panels) => {
+    const sec = h("section", { id: "developer", class: "ag-col ag-dev", "aria-labelledby": "ag-dev-h" },
+      h("div", { class: "ag-intro" }, h("h2", { id: "ag-dev-h" }, "Developer"), h("p", {}, "API tokens for MCP and REST, and Gate API credits for agents that call Troya Gate.")), ...panels);
+    // once per visit: render() runs again after every withdraw or switch, and must not pull the page back down each time
+    if (wantApi) {
+      wantApi = false;
+      requestAnimationFrame(() => {
+        sec.scrollIntoView({ behavior: "smooth", block: "start" });
+        const p = sec.querySelector(".ag-panel");
+        if (p) { p.style.transition = "box-shadow .6s ease"; p.style.boxShadow = "0 0 0 2px var(--blue, #4c8dff)"; setTimeout(() => { p.style.boxShadow = ""; }, 2400); }
+      });
+    }
+    return sec;
+  };
 
   async function render() {
     stopBal?.();
@@ -373,7 +389,7 @@ function mountWallet(box) {
             h("li", {}, "Export the key any time with a fresh signature"),
             h("li", {}, "On Hyperliquid it trades as an approved agent on your account: trade-only, it cannot withdraw there")),
           h("button", { class: "btn primary", type: "button", onclick: async () => { try { await api.post("agent-wallet/create"); toast("Agent Wallet ready", "ok"); render(); } catch (e) { toast(e.message, "error"); } } }, icon("plus"), "Create Agent Wallet")),
-        tokensPanel(), gateApiPanel());
+        devSection(tokensPanel(), gateApiPanel()));
       return;
     }
     const balBox = h("div", { class: "stats ag-bal" }, [["robinhood", "Robinhood Chain"], ["robinhood", "Tokens"], ["hyperliquid", "Hyperliquid"]].map(([lk, k]) => h("div", { class: "stat" }, h("div", { class: "k" }, chainLogo(lk, 14), k), h("div", { class: "v" }, h("span", { class: "sk", style: { display: "inline-block", width: "90px", height: "22px" } })))));
@@ -387,7 +403,35 @@ function mountWallet(box) {
       if (!(v > 0)) return toast("Not enough ETH in the Agent Wallet to withdraw.", "");
       wAmt.value = String(v);
     } }, "Max");
-    const wChain = h("select", { class: "select" }, h("option", { value: "robinhood" }, "Robinhood Chain"));
+    // coins in the Agent Wallet (bought by Sentry Autopilot, Champions, the War Table or Aegis): each can be withdrawn to the
+    // owner (an ERC-20 transfer the server only ever sends to the signed-in wallet) or sold to ETH through Troya Gate
+    const coinBox = h("div", { class: "ag-coins" }, h("p", { class: "faint", style: { margin: 0 } }, "Reading coins…"));
+    let coinKey = "";
+    function paintCoins(list) {
+      const key = JSON.stringify(list.map((x) => [x.address, x.amount]));
+      if (key === coinKey || inUse(coinBox)) return;
+      coinKey = key;
+      if (!list.length) return clear(coinBox, h("p", { class: "faint", style: { margin: 0 } }, "No coins in the Agent Wallet."));
+      clear(coinBox, h("ul", { class: "sc-list", style: { padding: 0, margin: 0 } }, list.map((x) => h("li", { class: "row", style: { justifyContent: "space-between", flexWrap: "wrap", gap: "8px" } },
+        h("div", {}, h("b", {}, `$${x.symbol || "?"}`), h("div", { class: "faint mono" }, `${num(x.amount, 6)} · ${short(x.address, 4)}`)),
+        h("div", { class: "row", style: { gap: "6px" } },
+          h("button", { class: "btn sm", type: "button", onclick: async (e) => {
+            const btn = e.currentTarget;   // read before the await: currentTarget is null once the click has been dispatched
+            if (!(await review({ title: `Withdraw $${x.symbol}`, rows: [["Amount", `All (${num(x.amount, 6)} ${x.symbol})`], ["Token", short(x.address, 6)], ["Network", "Robinhood Chain"], ["To", short(wallet.address, 6)]], confirmLabel: "Withdraw" }))) return;
+            btn.disabled = true;
+            try { const r = await api.post("agent-wallet/withdraw", { token: x.address, symbol: x.symbol, amount: "all" }); toast(r.executed ? `$${x.symbol} sent to your wallet` : r.result?.note || (r.blocked ? r.reasons.join(" ") : "Not sent"), r.executed ? "ok" : "", 5000); render(); } catch (err) { toast(err.message, "error", 6000); render(); }
+          } }, "Withdraw"),
+          h("button", { class: "btn sm ghost", type: "button", onclick: async (e) => {
+            const btn = e.currentTarget;
+            // the balance arrives as a decimal Number, which can round a hair above the raw balance and make the sell revert:
+            // like the War Table's 100%, sell 99.9% of it, written as plain digits (the server refuses "1.2e+12")
+            const v = Number(x.amount) * 0.999;
+            const amountIn = v >= 1 ? String(Math.floor(v * 1e6) / 1e6) : v.toFixed(18).replace(/0+$/, "").replace(/\.$/, "");
+            if (!(await review({ title: `Sell $${x.symbol} to ETH`, summary: "Checked by Troya Gate first and kept inside your Budget; the ETH stays in the Agent Wallet.", rows: [["Sell", `${num(Number(amountIn), 6)} ${x.symbol} (99.9% of it)`], ["For", "ETH"], ["Slippage", "5%"], ["Network", "Robinhood Chain"]], confirmLabel: "Sell" }))) return;
+            btn.disabled = true;
+            try { const r = await api.post("agent-wallet/execute", { kind: "swap", params: { tokenIn: x.address, tokenOut: "ETH", amountIn, slippagePct: 5 }, rationale: "Owner sold a coin from the Agent Wallet" }); toast(r.executed ? `Sold $${x.symbol}` : r.result?.note || (r.reasons || r.gate?.reasons || ["Not sent"]).join(" "), r.executed ? "ok" : "", 6000); render(); } catch (err) { toast(err.message, "error", 6000); render(); }
+          } }, "Sell to ETH"))))));
+    }
     // one-signature top-up from the connected wallet: the step people miss ("my ETH is in my wallet, why does the launch fail?")
     function fundRow(w) {
       const amt = h("input", { class: "input ag-fund-in", type: "number", min: "0", step: "any", value: "0.002", "aria-label": "ETH to add to the Agent Wallet" });
@@ -432,14 +476,16 @@ function mountWallet(box) {
       h("div", { class: "ag-grid2" },
         budgetLink("This wallet's caps, your own limits and the operator's now sit in one Budget, which shows the number that really applies."),
         h("div", { class: "panel ag-panel" }, h("h3", {}, "Withdraw to my wallet"),
-          h("div", { class: "row" }, h("label", { class: "field grow" }, h("span", {}, "Amount (ETH)"), h("div", { class: "row", style: { gap: "6px" } }, wAmt, wMax)), h("label", { class: "field" }, h("span", {}, "Network"), wChain)),
+          h("div", { class: "row" }, h("label", { class: "field grow" }, h("span", {}, "Amount (ETH on Robinhood Chain)"), h("div", { class: "row", style: { gap: "6px" } }, wAmt, wMax))),
           h("p", { class: "note" }, "Destination is fixed: ", h("span", { class: "mono" }, short(wallet.address, 6))),
           h("button", { class: "btn", type: "button", onclick: async () => {
             const amount = Number(wAmt.value);
             if (!(amount > 0)) return toast("Enter an amount.", "");
             if (!(await review({ title: "Withdraw", rows: [["Amount", `${amount} ETH`], ["Network", "Robinhood Chain"], ["To", short(wallet.address, 6)]], confirmLabel: "Withdraw" }))) return;
-            try { const r = await api.post("agent-wallet/withdraw", { chain: wChain.value, amount }); toast(r.executed ? "Withdrawal sent" : r.result?.note || (r.blocked ? r.reasons.join(" ") : "Not sent"), r.executed ? "ok" : "", 5000); render(); } catch (e) { toast(e.message, "error", 6000); }
+            try { const r = await api.post("agent-wallet/withdraw", { chain: "robinhood", amount }); toast(r.executed ? "Withdrawal sent" : r.result?.note || (r.blocked ? r.reasons.join(" ") : "Not sent"), r.executed ? "ok" : "", 5000); render(); } catch (e) { toast(e.message, "error", 6000); }
           } }, "Withdraw"))),
+      h("div", { class: "panel ag-panel" }, h("h3", {}, "Coins in the Agent Wallet"), coinBox,
+        h("p", { class: "note", style: { marginBottom: 0 } }, "Withdraw sends the whole balance of that coin to ", h("span", { class: "mono" }, short(wallet.address, 6)), ". Sell to ETH goes through Troya Gate and your Budget.")),
       h("div", { class: "panel ag-panel" }, h("h3", {}, "Hyperliquid trading"),
         h("p", { class: "note" }, "Let the Agent Wallet place perp orders on your own Hyperliquid account. You sign one approval in your wallet; the agent can trade but cannot move funds out of Hyperliquid."),
         h("button", { class: "btn", type: "button", onclick: () => approveOnHl(aw.address) }, icon("key"), "Approve on Hyperliquid")),
@@ -448,15 +494,24 @@ function mountWallet(box) {
           h("button", { class: "btn", type: "button", onclick: exportKey }, icon("key"), "Export private key"),
           h("button", { class: "btn danger", type: "button", onclick: del }, icon("trash"), "Delete Agent Wallet")),
         aw.exportedAt ? h("p", { class: "note" }, `Key last exported ${ago(aw.exportedAt)} ago.`) : null),
-      tokensPanel(),
-      gateApiPanel(),
-      activityPanel());
+      activityPanel(),
+      devSection(tokensPanel(), gateApiPanel()));
+    // the chain read only knows WETH and USDG by itself, so the coins panel names the coins to read: those the jobs bought
+    // (open lots) and those this Agent Wallet launched with a first buy (at most 10, the server's limit)
+    const coinTokens = Promise.all([api.get("agent-wallet/lots?open=1").catch(() => null), api.get("launch/mine").catch(() => null)]).then(([lots, mine]) => {
+      const set = new Set();
+      for (const l of lots?.items || []) if (/^0x[0-9a-fA-F]{40}$/.test(l.token || "")) set.add(l.token.toLowerCase());
+      for (const x of mine?.launches || []) if (/^0x[0-9a-fA-F]{40}$/.test(x.token || "") && String(x.wallet || "").toLowerCase() === String(aw.address || "").toLowerCase()) set.add(x.token.toLowerCase());
+      return [...set].slice(0, 10).join(",");
+    }).catch(() => "");
     stopBal = every(20000, async () => {
       try {
-        const b = await api.get("agent-wallet/balances");
+        const toks = await coinTokens;
+        const b = await api.get(`agent-wallet/balances${toks ? `?tokens=${toks}` : ""}`);
         lastEth = b.robinhoodEth ?? lastEth;
         const vals = [b.robinhoodEth != null ? `${num(b.robinhoodEth, 5)} ETH` : "–", b.robinhoodTokens?.length ? b.robinhoodTokens.slice(0, 2).map((x) => `${num(x.amount, 4)} ${x.symbol}`).join(" · ") : "None", b.hyperliquid ? usd(b.hyperliquid.accountValueUsd) : "–"];
         [...balBox.querySelectorAll(".v")].forEach((el, i) => (el.textContent = vals[i]));
+        paintCoins(b.robinhoodTokens || []);
       } catch {}
     });
   }
@@ -940,18 +995,19 @@ function mountArena(box) {
     if (!board) return clear(boardP, h("h3", {}, "The board"), h("p", { class: "faint", style: { margin: 0 } }, "The board is unavailable right now. It comes back on the next refresh."));
     const recent = board.recent || [], live = board.live || null;
     const sum = (f) => agents.reduce((t, a) => t + (f(a) || 0), 0);
-    const paperClosed = sum((a) => a.stats.pnlEth), paperTrades = sum((a) => a.stats.closed);
+    // totals from the server's one summary (same figures and labels as /arena)
+    const S = board.summary || {}, z = { pnlEth: 0, trades: 0, open: 0 };
+    const pc = S.paperClosed || z, po = S.paperOpen || z, lc = S.liveClosed || z, lo = S.liveOpen || z;
     const wins = recent.filter((p) => p.mode !== "live" && p.status === "closed" && p.pnlEth > 0).length, closedRecent = recent.filter((p) => p.mode !== "live" && p.status === "closed").length;
     const ais = agents.filter((a) => a.kind === "ai");
-    const liveAgents = agents.filter((a) => a.live);
-    const liveResult = liveAgents.length ? sum((a) => (a.live ? a.live.pnlEth + a.live.openPnlEth : 0)) : null;
+    const liveResult = S.anyLive ? lc.pnlEth : null;
     const liveBudget = live ? live.budgetPerTraderEth * ais.length : null;
     const liveLeft = live ? ais.reduce((t, a) => t + (a.live ? Number(a.live.equityEth) : live.budgetPerTraderEth), 0) : null;
     const stat = (k, v, sub, c = "") => h("div", { class: "stat" }, h("div", { class: "k" }, k), h("div", { class: `v ${c}` }, v), sub ? h("div", { class: "faint" }, sub) : null);
     const summary = h("div", { class: "stats ag-ar-sum" },
       stat("Live money", live ? `${liveLeft.toFixed(4)} ETH` : "Paper only", live ? `of ${liveBudget.toFixed(2)} ETH · ${live.budgetPerTraderEth} per AI trader` : "Live trading is off"),
-      stat("Live result", liveResult == null ? "No trade yet" : ethf(liveResult), liveResult == null ? "Waits for a launch that fits a trader's rules and passes the Gate" : `${sum((a) => a.live?.closed)} closed · ${sum((a) => a.live?.open)} open`, cls(liveResult)),
-      stat("Paper result", ethf(paperClosed), `${paperTrades} closed trades${closedRecent ? ` · ${Math.round((wins / closedRecent) * 100)}% wins lately` : ""}`, cls(paperClosed)),
+      stat("Live result", liveResult == null ? "No trade yet" : ethf(liveResult), liveResult == null ? "Waits for a launch that fits a trader's rules and passes the Gate" : `${lc.trades} closed · ${ethf(lo.pnlEth)} incl. ${lo.open} open`, cls(liveResult)),
+      stat("Paper result", ethf(pc.pnlEth), `${pc.trades} closed · ${ethf(po.pnlEth)} incl. ${po.open} open${closedRecent ? ` · ${Math.round((wins / closedRecent) * 100)}% wins lately` : ""}`, cls(pc.pnlEth)),
       stat("Traders", String(agents.length), `${ais.length} AI models${agents.length > ais.length ? " + strategies" : ""}`));
     const walletLine = live?.wallet ? h("p", { class: "ag-ar-wallet" }, "Live trades come from the Arena's own Agent Wallet ", h("a", { class: "mono link", href: `${SCAN}/address/${live.wallet}`, target: "_blank", rel: "noopener" }, short(live.wallet, 4)),
       ". Every buy and sell is a real transaction you can open on Blockscout.") : null;

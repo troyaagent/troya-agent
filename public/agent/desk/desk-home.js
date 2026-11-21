@@ -289,7 +289,7 @@ export async function mount(view, { go, ask: askDrawer }) {
     ["bridge", "Bridge", "Bring ETH in from Ethereum, Arbitrum or Base", "#/bridge"],
     ["spark", "Build an agent", "From your own playbooks", "#/social/agents"],
     STOCKS,
-    ["agent", "API and MCP", "Give your own agent a scoped token", "#/agent/wallet"],
+    ["agent", "API and MCP", "Give your own agent a scoped token", "#/agent/wallet?panel=api"],
   ];
   const toolsGrid = h("div", { class: "dk-tools-g" });
   const paintTools = () => clear(toolsGrid, tools.map(([ic, t, d, href]) => h("a", { class: "dk-tool", href }, h("span", { class: "dk-tool-ic d2-tile" }, chromeIcon(ic)), h("b", {}, t), h("span", {}, d))));
@@ -434,9 +434,8 @@ export async function mount(view, { go, ask: askDrawer }) {
   }));
   stops.push(every(30000, async () => {
     try {
-      const d = await cached("market/hl", 8000);
-      const liquid = d.markets.filter((m) => (m.volumeUsd || 0) >= 1e6 && m.change24h != null);
-      const movers = [...liquid].sort((a, b) => Math.abs(b.change24h) - Math.abs(a.change24h)).slice(0, 7);
+      // the server ranks and trims the movers ($1M+ volume, biggest 24 h move): a couple of KB instead of every market
+      const movers = (await cached("market/hl?top=7&sort=change", 8000)).markets || [];
       try { sparks = (await cached(`market/hl/sparks?coins=${movers.map((m) => encodeURIComponent(m.coin)).join(",")}`, 120000)).sparks || {}; } catch {}
       if (alive) hlTbl.setRows(movers);
     } catch (e) { if (alive) tblMsg(hlTbl, `Hyperliquid data is unavailable: ${e.message}`); }

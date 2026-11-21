@@ -10,13 +10,20 @@ const cur = (href) => (href === PAGE(file) ? ' aria-current="page"' : "");
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 const BIG = [["Troya", "/"], ["Open the desk", "/agent"], ["Capabilities", PAGE("capabilities")], ["Philosophy", PAGE("philosophy")], ["Plans", PAGE("plans")]];
-const SMALL = [
-  ["Market", "/agent#/market"], ["Swap", "/agent#/swap"], ["Perps", "/agent#/perps"], ["Bridge", "/agent#/bridge"],
-  ["Troya Launches", "/agent#/troya-launches"], ["Create coin", "/agent#/create"], ["Creator desk", "/agent#/creator"], ["Assistant", "/agent#/agent"], ["Docs", "/agent#/docs"],
-  ["Roadmap", PAGE("roadmap")], ["Launch on X guide", PAGE("launch-on-x")],
-  ["Market Analysis", PAGE("market-analysis")], ["API and MCP", PAGE("api-and-mcp")], ["Risk Controls", PAGE("risk-controls")], ["Safety", PAGE("safety")], ["Verify", PAGE("verify")], ["The Record", PAGE("record")], ["Flywheel", PAGE("flywheel")], ["Community", PAGE("community")], ["Gate badge", PAGE("badge")], ["Insights", PAGE("insights")],
+// One site navigation, shared by the homepage (index.html imports NAV and renderGroups) and every inner page, so the
+// menu and the footer can no longer drift apart. Proof pages sit in their own group: they are why people trust us.
+export const NAV = [
+  ["Product", [["Desk", "/agent"], ["Swap", "/agent#/swap"], ["Perps", "/agent#/perps"], ["Stocks", "/agent#/stocks"], ["Launch", "/agent#/launch"], ["Bridge", "/agent#/bridge"], ["Launch on X", PAGE("launch-on-x")]]],
+  ["Proof", [["Verify", PAGE("verify")], ["The Record", PAGE("record")], ["Seal", PAGE("seal")], ["Arena", PAGE("arena")], ["Oath", PAGE("oath")], ["Flywheel", PAGE("flywheel")]]],
+  ["Build", [["API and MCP", PAGE("api-and-mcp")], ["Gate badge", PAGE("badge")], ["Gate in MetaMask", PAGE("snap")], ["llms.txt", "/llms.txt"], ["Docs", "/agent#/docs"]]],
+  ["Company", [["Roadmap", PAGE("roadmap")], ["Community", PAGE("community")], ["Plans", PAGE("plans")], ["Capabilities", PAGE("capabilities")], ["Philosophy", PAGE("philosophy")], ["Market analysis", PAGE("market-analysis")], ["Insights", PAGE("insights")], ["Risk controls", PAGE("risk-controls")], ["Safety", PAGE("safety")], ["Privacy Policy", PAGE("privacy")], ["Terms of Use", PAGE("terms")]]],
 ];
-const PAGES = [["Roadmap", "roadmap"], ["Launch on X", "launch-on-x"], ["Capabilities", "capabilities"], ["Plans", "plans"], ["Gate badge", "badge"], ["API and MCP", "api-and-mcp"], ["Market analysis", "market-analysis"], ["Insights", "insights"], ["Philosophy", "philosophy"], ["Risk controls", "risk-controls"], ["Safety", "safety"]];
+// The same groups as HTML: one <div> per group with a small label, used by both menus and both footers.
+// Styling comes from the caller's class (pn-groups on inner pages, menu-groups / foot-groups on the homepage).
+export const renderGroups = (cls) => `<div class="${cls}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:24px 32px;text-align:left">${NAV.map(([g, links]) =>
+  `<div><p style="margin:0 0 10px;color:var(--accent)">${g}</p><ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px">${links.map(([t, h]) => `<li><a href="${h}"${cur(h)}>${t}</a></li>`).join("")}</ul></div>`).join("")}</div>`;
+export const LEGAL = "Troya Agent is software for reading markets and preparing orders on Robinhood Chain, Base, Arbitrum, Solana and Hyperliquid mainnet. It is in beta and handles real funds. You can sign every action in your own wallet, which Troya never holds, or switch on an optional Agent Wallet: a small custodial wallet whose key the operator stores encrypted, so the agent can act within the caps you and the operator set. Nothing on this site or in the app is investment, legal or tax advice, an offer or a solicitation. Digital assets are volatile and you can lose everything you put in. You are responsible for the limits you choose and for every action taken under them.";
+export const BAR = () => `<span>© ${new Date().getFullYear()} Troya Agent</span><span>Mainnet beta</span><span>All rights reserved</span>`;
 const ok = (re, u) => (re.test(u || "") ? u : "");
 const X = ok(/^https:\/\/(x|twitter)\.com\//, SITE.x), TG = ok(/^https:\/\/t\.me\//, SITE.telegram), GH = ok(/^https:\/\/github\.com\//, SITE.github);
 const ext = (href, label) => (href ? `<a href="${esc(href)}" target="_blank" rel="noopener">${label}</a>` : "");
@@ -35,7 +42,7 @@ function toast(text, kind = "") {
 const menu = $("[data-pn-menu]"), burger = $("[data-pn-burger]");
 if (menu && burger) {
   menu.innerHTML = `<ol>${BIG.map(([t, h], i) => `<li><a href="${h}"${cur(h)}><span>${String(i + 1).padStart(2, "0")}</span>${t}</a></li>`).join("")}</ol>
-    <ul>${SMALL.map(([t, h]) => `<li><a href="${h}"${cur(h)}>${t}</a></li>`).join("")}</ul>
+    ${renderGroups("pn-groups")}
     <div class="pn-menu-foot">${ext(TG, "Telegram")}${ext("https://t.me/troyasentry", "Sentry")}${ext(X, "X")}${ext(GH, "GitHub")}</div>`;
   const set = (open) => {
     menu.classList.toggle("open", open);
@@ -50,16 +57,15 @@ if (menu && burger) {
 /* ---------- footer: the home page's, with the legal note and bar every page had ---------- */
 const foot = $("[data-pn-foot]");
 if (foot) {
-  const year = new Date().getFullYear();
   foot.innerHTML = `
-  <nav class="pn-pages" aria-label="Pages">${PAGES.map(([t, p]) => `<a href="${PAGE(p)}"${cur(PAGE(p))}>${t}</a>`).join("")}</nav>
+  <nav class="pn-pages" aria-label="Pages" style="display:block">${renderGroups("pn-groups")}</nav>
   <div class="pn-row">
-    <div class="pn-l"><a href="${PAGE("community")}">Community</a>${ext(TG, "Telegram")}${ext(X, "X")}${ext(GH, "GitHub")}<a href="${PAGE("privacy")}">Privacy Policy</a></div>
+    <div class="pn-l"><a href="${PAGE("community")}">Community</a>${ext(TG, "Telegram")}${ext(X, "X")}${ext(GH, "GitHub")}</div>
     <button class="pn-ca" type="button" data-pn-ca><b>CA</b><span data-pn-ca-full></span></button>
-    <div class="pn-rr"><a href="${PAGE("terms")}">Terms of Use</a><a href="${PAGE("verify")}">Verify</a><a href="/agent#/docs">Docs</a></div>
+    <div class="pn-rr"><a href="${PAGE("privacy")}">Privacy Policy</a><a href="${PAGE("terms")}">Terms of Use</a></div>
   </div>
-  <p class="pn-legal">Troya Agent is software for reading markets and preparing orders on Robinhood Chain, Base, Arbitrum, Solana and Hyperliquid mainnet. It is in beta and handles real funds. You can sign every action in your own wallet, which Troya never holds, or switch on an optional Agent Wallet: a small custodial wallet whose key the operator stores encrypted, so the agent can act within the caps you and the operator set. Nothing on this site or in the app is investment, legal or tax advice, an offer or a solicitation. Digital assets are volatile and you can lose everything you put in. You are responsible for the limits you choose and for every action taken under them.</p>
-  <div class="pn-bar"><span>© ${year} Troya Agent</span><span>Mainnet beta</span><span>All rights reserved</span></div>`;
+  <p class="pn-legal">${LEGAL}</p>
+  <div class="pn-bar">${BAR()}</div>`;
 }
 
 /* ---------- contract address (nav + footer) ---------- */

@@ -10,6 +10,7 @@
 // every function returns a transaction for the user's own wallet to sign.
 import {
   AbiCoder, Interface, getAddress, isAddress, parseUnits, formatUnits, keccak256, id as selectorId, toBeHex, ZeroAddress, solidityPacked, hexlify, randomBytes,
+  verifyTypedData, MaxUint256,
 } from "ethers";
 import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -897,7 +898,54 @@ async function sharedQuote({ tokenIn, tokenOut, amountIn, amountInRaw, slippageB
  * buy the same coin for the same amount twice within seconds (Arena traders), and a stale quote would make the second
  * transaction revert, or an exit on a falling coin revert for the cache's lifetime.
  */
-export async function buildSwapTx({ from, tokenIn, tokenOut, amountIn, amountInRaw, minOutRaw, slippageBps, deadlineSec = 1200, _quote, _sim = false, _gate = false, _reuse = false }) {
+/* ---------- Permit2 signature mode (opt-in, Uniswap v4 through the Universal Router only) ----------
+ * Default: two exact approvals per sell (ERC-20 → Permit2, then Permit2 → Universal Router, 30 min). Opt-in (permit2: true
+ * on /api/swap/build): one unlimited ERC-20 approval to the canonical Permit2 contract, then per sell a free EIP-712
+ * PermitSingle signature for the exact amount (30 min), which the Universal Router consumes in the same transaction
+ * (command PERMIT2_PERMIT 0x0a before V4_SWAP 0x10). Kyber, LI.FI, v3 and Pons curve routes keep the exact-approval path. */
+const P2_WINDOW_S = 30 * 60;
+const P2_TYPES = {
+  PermitDetails: [{ name: "token", type: "address" }, { name: "amount", type: "uint160" }, { name: "expiration", type: "uint48" }, { name: "nonce", type: "uint48" }],
+  PermitSingle: [{ name: "details", type: "PermitDetails" }, { name: "spender", type: "address" }, { name: "sigDeadline", type: "uint256" }],
+};
+const P2_DOMAIN = { name: "Permit2", chainId: CHAIN_ID, verifyingContract: ADDR.permit2 };
+let p2Live = null; // Permit2 has code on chain 4663 (read once; 9,152 bytes and the canonical domain separator on 21 Nov 2026)
+async function permit2Live() {
+  if (p2Live !== null) return p2Live;
+  try { const code = await rpc("robinhood", "eth_getCode", [ADDR.permit2, "latest"]); p2Live = typeof code === "string" && code.length > 2; }
+  catch { return false; } // not cached: try again next time
+  return p2Live;
+}
+const UINT48_MAX = (1n << 48n) - 1n;
+// a signed permit from the client, checked against the swap being built before it is put into calldata
+function checkedPermit(permit, sig, { who, tin, amt }) {
+  const d = permit?.details || {};
+  const nowS = BigInt(Math.floor(Date.now() / 1000));
+  let v;
+  try {
+    v = { details: { token: getAddress(d.token), amount: BigInt(d.amount), expiration: BigInt(d.expiration), nonce: BigInt(d.nonce) }, spender: getAddress(permit.spender), sigDeadline: BigInt(permit.sigDeadline) };
+  } catch { throw new HttpError(400, "The Permit2 signature data is malformed."); }
+  if (!/^0x[0-9a-fA-F]{130}$/.test(String(sig || ""))) throw new HttpError(400, "The Permit2 signature is malformed.");
+  if (lower(v.details.token) !== lower(tin)) throw new HttpError(400, "The Permit2 signature is for a different token.");
+  if (lower(v.spender) !== lower(ADDR.universalRouter)) throw new HttpError(400, "The Permit2 signature names a spender other than the Uniswap Universal Router.");
+  // exactly the amount of this swap: a larger permit would leave a standing allowance behind, which is what this mode avoids
+  if (v.details.amount !== amt) throw new HttpError(400, "The Permit2 signature is not for exactly this amount. Sign again.");
+  if (v.details.expiration > UINT48_MAX || v.details.nonce > UINT48_MAX) throw new HttpError(400, "The Permit2 signature data is out of range.");
+  if (v.details.expiration < nowS + 60n || v.sigDeadline < nowS + 60n) throw new HttpError(400, "The Permit2 signature has expired. Sign again.");
+  if (v.details.expiration > nowS + 3600n || v.sigDeadline > nowS + 3600n) throw new HttpError(400, "The Permit2 signature lasts longer than one hour; Troya only accepts short ones.");
+  let signer;
+  try { signer = verifyTypedData(P2_DOMAIN, P2_TYPES, v, sig); } catch { throw new HttpError(400, "The Permit2 signature could not be read."); }
+  if (lower(signer) !== lower(who)) throw new HttpError(400, "The Permit2 signature was not made by this wallet.");
+  return v;
+}
+// prepend PERMIT2_PERMIT to a Universal Router execute(0x10, [v4Input], deadline)
+function withPermit(data, v, sig) {
+  const [cmds, inputs, deadline] = iface.ur.decodeFunctionData("execute", data);
+  const p = coder.encode(["((address token,uint160 amount,uint48 expiration,uint48 nonce) details,address spender,uint256 sigDeadline)", "bytes"], [v, sig]);
+  return iface.ur.encodeFunctionData("execute", ["0x0a" + String(cmds).slice(2), [p, ...inputs], deadline]);
+}
+
+export async function buildSwapTx({ from, tokenIn, tokenOut, amountIn, amountInRaw, minOutRaw, slippageBps, deadlineSec = 1200, _quote, _sim = false, _gate = false, _reuse = false, permit2 = false, permit, permitSig }) {
   const who = addr(from, "wallet address");
   if (given(minOutRaw)) rawUnits(minOutRaw, "minOutRaw"); // a malformed minimum is refused before any quote is made
   const q = _quote?.plan ? _quote : await sharedQuote({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps, from: who }, { fresh: !_reuse });
@@ -928,11 +976,40 @@ export async function buildSwapTx({ from, tokenIn, tokenOut, amountIn, amountInR
   } else {
     built = buildRouterTx(p.c, tin, tout, amt, min, deadline);
   }
+  // Permit2 signature mode: offered on Uniswap v4 routes that spend an ERC-20, only when Permit2 has code on this chain
+  const p2Capable = p.venue === "v4" && tin !== ZERO && !_gate && await permit2Live();
+  let permitSign = null, permitUsed = false;
+  if (p2Capable && (permit2 === true || permit2 === "true" || permitSig)) {
+    const [p2r, e2r] = await readMany([C(ADDR.permit2, iface.permit2, "allowance", [who, tin, ADDR.universalRouter]), C(tin, iface.erc20, "allowance", [who, ADDR.permit2])]);
+    const [pa, pe, pn] = p2r || [0n, 0n, 0n], [ea] = e2r || [0n];
+    const nowS = Math.floor(Date.now() / 1000);
+    const standing = BigInt(pa ?? 0n) >= amt && Number(pe ?? 0) >= nowS + 120; // an allowance already on Permit2 covers it
+    built.approvals = [{ kind: "erc20", token: tin, spender: ADDR.permit2, amount: amt, approveAmount: MaxUint256, name: "Permit2 (one-time, unlimited)" }];
+    if (permitSig && !standing) {
+      const v = checkedPermit(permit, permitSig, { who, tin, amt });
+      if (v.details.nonce !== BigInt(pn ?? 0n)) throw new HttpError(409, "The Permit2 signature was already used or replaced. Sign again.");
+      built.data = withPermit(built.data, v, permitSig);
+      permitUsed = true;
+      // the signed transaction is run once as an eth_call before it is handed back (only when the ERC-20 approval is in place)
+      if (BigInt(ea ?? 0n) >= amt && !_sim) {
+        const sim = await simulateTx({ from: who, to: built.to, data: built.data, value: built.value });
+        if (!sim.ok) throw new HttpError(422, `The swap with this Permit2 signature fails in simulation, so it was not built: ${sim.error}`);
+      }
+    } else if (!standing) {
+      const exp = nowS + P2_WINDOW_S;
+      permitSign = { domain: P2_DOMAIN, types: P2_TYPES, primaryType: "PermitSingle",
+        message: { details: { token: getAddress(tin), amount: amt.toString(), expiration: String(exp), nonce: String(BigInt(pn ?? 0n)) }, spender: ADDR.universalRouter, sigDeadline: String(exp) },
+        label: `Sign: let the Uniswap Universal Router spend exactly ${formatUnits(amt, q.tokenIn.decimals ?? 18)} ${symOf(tin)} via Permit2 for 30 min (free, no transaction)` };
+    }
+  }
   const approvals = await approvalTxs(who, built.approvals);
   const first = approvals.find((a) => a.needed);
   return {
     chainId: CHAIN_ID, from: who, to: built.to, data: built.data, value: built.value.toString(), deadline, quote: q,
     approvals, approval: first || { needed: false },
+    // the Gate's own build does not look Permit2 up (null = not checked), so the Swap page still offers it next to that build
+    permit2: { available: _gate ? null : p2Capable, mode: p2Capable && (permit2 === true || permit2 === "true" || !!permitSig) ? "signature" : "exact", contract: ADDR.permit2, spender: ADDR.universalRouter, permitUsed },
+    ...(permitSign ? { permitSign } : {}),
   };
 }
 async function approvalTxs(owner, specs) {
@@ -944,9 +1021,11 @@ async function approvalTxs(owner, specs) {
   return specs.map((a, i) => {
     if (a.kind === "erc20") {
       const allowance = BigInt(reads[i]?.[0] ?? 0n);
-      return { kind: "erc20", token: a.token, spender: a.spender, amount: a.amount.toString(), allowance: allowance.toString(), needed: allowance < a.amount,
-        label: `Approve ${symOf(a.token)} for ${a.name || (a.spender === ADDR.permit2 ? "Permit2" : a.spender === ADDR.swapRouter02 ? "Uniswap" : "the Pons curve")}`,
-        tx: { to: a.token, data: iface.erc20.encodeFunctionData("approve", [a.spender, a.amount]), value: "0" } };
+      const unlimited = a.approveAmount === MaxUint256;
+      return { kind: "erc20", token: a.token, spender: a.spender, amount: a.amount.toString(), allowance: allowance.toString(), needed: allowance < a.amount, unlimited,
+        label: unlimited ? `Approve unlimited ${symOf(a.token)} for the Permit2 contract (${a.spender}), once`
+          : `Approve ${symOf(a.token)} for ${a.name || (a.spender === ADDR.permit2 ? "Permit2" : a.spender === ADDR.swapRouter02 ? "Uniswap" : "the Pons curve")}`,
+        tx: { to: a.token, data: iface.erc20.encodeFunctionData("approve", [a.spender, a.approveAmount ?? a.amount]), value: "0" } };
     }
     const amount = BigInt(reads[i]?.[0] ?? 0n), exp = Number(reads[i]?.[1] ?? 0);
     const expiration = now + 30 * 60;
@@ -1637,7 +1716,7 @@ export async function register(r, ctx) {
   // a quote is made fresh here (or joins an identical one in flight); it is kept so the Gate and the build that follow the
   // same request can reuse it
   r.get("/api/swap/quote", ({ query }) => isSol(query.chain) ? sol().then((m) => m.solQuote({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query) })) : isEvm(query.chain) ? evm().then((m) => m.evmQuote({ chain: query.chain, tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query) })) : sharedQuote({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query), from: query.from }, { fresh: true }), { perMin: 240 });
-  r.post("/api/swap/build", ({ body }) => { const b = body || {}; if (isSol(b.chain)) return sol().then((m) => m.solBuild({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, slippageBps: b.slippageBps })); if (isEvm(b.chain)) return evm().then((m) => m.evmBuild({ chain: b.chain, from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps })); return buildSwapTx({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps, _reuse: true }); }, { perMin: 120 });
+  r.post("/api/swap/build", ({ body }) => { const b = body || {}; if (isSol(b.chain)) return sol().then((m) => m.solBuild({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, slippageBps: b.slippageBps })); if (isEvm(b.chain)) return evm().then((m) => m.evmBuild({ chain: b.chain, from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps })); return buildSwapTx({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps, _reuse: true, permit2: b.permit2 === true, permit: b.permit, permitSig: b.permitSig }); }, { perMin: 120 });
   r.get("/api/swap/gate", ({ query }) => isSol(query.chain) ? sol().then((m) => m.solGate({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) })) : isEvm(query.chain) ? evm().then((m) => m.evmGate({ chain: query.chain, tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) })) : gateCheck({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) }), { perMin: 90 });
 
   r.get("/api/token/health", ({ query }) => tokenHealth(query.address), { perMin: 120 });

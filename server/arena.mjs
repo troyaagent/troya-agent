@@ -363,6 +363,20 @@ const pubAgent = (d, ag) => ({ id: ag.id, kind: ag.kind, name: ag.kind === "ai" 
   livePaused: ag.kind === "ai" && LIVE_PAUSED().includes(ag.id) });
 const pubPos = (p) => ({ agent: p.agent, mode: p.mode === "live" ? "live" : "paper", tx: p.txSell || p.txBuy || null, txBuy: p.txBuy || null, txSell: p.txSell || null, seal: p.sealClose || p.sealOpen || null, token: p.token, symbol: p.symbol, amountEth: p.amountEth, openedAt: p.openedAt, status: p.status, reason: p.reason || null, pnlEth: p.pnlEth ?? null, valueEth: p.lastValueEth ?? null, closedAt: p.closedAt || null });
 
+// One summary for every page that shows Arena totals (21 Nov 2026): the Desk summed closed trades only while /arena added
+// open ones, so the two showed different numbers. Both now render these four figures with the same labels:
+// "closed" = realized on closed trades, "incl. open" = closed plus the marked value of open positions.
+export function arenaSummary(agents) {
+  const add = (f) => +agents.reduce((t, a) => t + (Number(f(a)) || 0), 0).toFixed(5);
+  return {
+    paperClosed: { pnlEth: add((a) => a.stats.pnlEth), trades: add((a) => a.stats.closed) },
+    paperOpen: { pnlEth: add((a) => a.stats.pnlEth + a.stats.openPnlEth), open: add((a) => a.stats.open) },
+    liveClosed: { pnlEth: add((a) => a.live?.pnlEth), trades: add((a) => a.live?.closed) },
+    liveOpen: { pnlEth: add((a) => (a.live ? a.live.pnlEth + a.live.openPnlEth : 0)), open: add((a) => a.live?.open) },
+    anyLive: agents.some((a) => a.live),
+  };
+}
+
 /** The public board, for the assistant and MCP tools. */
 export async function arenaBoard() {
   const d = await store.readJson(FILE, {});
@@ -438,7 +452,7 @@ export async function register(r, ctx) {
     const d = await store.readJson(FILE, {});
     const agents = Object.values(d.agents || {}).filter((a) => a.kind === "ai" || a.public !== false).map((a) => pubAgent(d, a)).sort((a, b) => (b.stats.pnlEth + b.stats.openPnlEth) - (a.stats.pnlEth + a.stats.openPnlEth));
     const liveWallet = LIVE() ? await (await import("./agentwallet.mjs")).getAgentWallet(process.env.ARENA_LIVE_OWNER).then((w) => w?.address || null).catch(() => null) : null;
-    return { mode: LIVE() ? "paper + live" : "paper", live: LIVE() ? { budgetPerTraderEth: LIVE_BUDGET(), maxBuyEth: LIVE_BUY(), wallet: liveWallet } : null, agents, recent: (d.positions || []).slice().sort((a, b) => (b.closedAt || b.openedAt) - (a.closedAt || a.openedAt)).slice(0, 40).map(pubPos),
+    return { mode: LIVE() ? "paper + live" : "paper", live: LIVE() ? { budgetPerTraderEth: LIVE_BUDGET(), maxBuyEth: LIVE_BUY(), wallet: liveWallet } : null, summary: arenaSummary(agents), agents, recent: (d.positions || []).slice().sort((a, b) => (b.closedAt || b.openedAt) - (a.closedAt || a.openedAt)).slice(0, 40).map(pubPos),
       how: LIVE() ? `Two books side by side. Paper: real prices quoted on chain the moment a trader buys or sells, nothing sent. Live: real transactions from the Arena's own Agent Wallet through Troya Gate, ${LIVE_BUDGET()} ETH per AI trader, each with its link on Blockscout. Every strategy, entry and exit is sealed (signed twice, anchored on Robinhood Chain) and linked as a receipt.`
         : "Paper money at real prices: entries and exits are quoted on chain the moment they happen, nothing is sent. Every strategy, entry and exit is sealed and linked as a receipt." };
   }, { weight: 1 });

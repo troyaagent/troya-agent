@@ -128,7 +128,7 @@ async function send(owner, w, tx, label) {
  * still gets its lot, and the job hears about it (onLots hooks) and can give it an exit.
  */
 const LOTS = "agentlots.json";
-const ERC20 = new Interface(["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)"]);
+const ERC20 = new Interface(["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)", "function transfer(address to,uint256 amount) returns (bool)"]);
 const isNative = (t) => !t || t === "native" || /^eth$/i.test(String(t));
 const sleep = (ms) => new Promise((x) => setTimeout(x, ms));
 const ratio = (a, b) => (b > 0n ? Number((a * 1_000_000_000n) / b) / 1e9 : 0);
@@ -563,6 +563,27 @@ async function execute(owner, { kind, params = {}, rationale = "", source = "app
       } else sent = await send(owner, w, launchTx, summary);
       result = { ...sent, token: tx.predicted?.token || null, curve, ponsUrl: tx.predicted?.ponsUrl || null, feeRecipient: params.feeRecipient || owner, launchFeeWei: tx.launchFeeWei,
         firstBuy: firstBuy > 0 ? (buy ? { eth: firstBuy, hash: buy.hash, status: buy.status, block: buy.block, launchBlock: sent?.block ?? null } : { eth: firstBuy, hash: null, status: "not-sent" }) : null };
+    } else if ((kind === "withdraw" || kind === "send") && params.token && !isNative(params.token)) {
+      // a coin bought by Sentry Autopilot, Champions, the War Table or Aegis (21 Nov 2026: only ETH could leave before, so
+      // those coins were stuck): an ERC-20 transfer whose recipient is always the owner, never an address from the request
+      if (!/^0x[0-9a-fA-F]{40}$/.test(String(params.token))) throw new HttpError(400, "That is not a token address.");
+      const token = getAddress(params.token);
+      const pc = await checkAction(owner, { kind: "withdraw" });
+      if (pc.reasons.some((x) => /kill switch/.test(x))) return await blocked(owner, kind, "Withdraw a token to the owner wallet", pc.reasons, null, source, proposalId);
+      const dec = await tokenDecimals(token);
+      const held = await tokenRaw(r.address, token);
+      if (held <= 0n) throw new HttpError(400, "The Agent Wallet holds none of this token.");
+      // "all" (or no amount) sends the whole balance; a typed amount is cut at the coin's decimals and never above what is held
+      const all = params.amount == null || params.amount === "" || String(params.amount).toLowerCase() === "all";
+      let raw = all ? held : toRaw(String(params.amount), dec);
+      if (!(raw > 0n)) throw new HttpError(400, "Enter an amount above zero.");
+      if (raw > held) raw = held;
+      const sym = String(params.symbol || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 16) || "token";
+      summary = `Withdraw ${formatUnits(raw, dec)} $${sym} on Robinhood Chain to the owner wallet`;
+      const w = signer(r, owner, "robinhood");
+      result = await send(owner, w, { to: token, data: ERC20.encodeFunctionData("transfer", [getAddress(owner), raw]) }, summary);
+      Object.assign(result, { token, amount: Number(formatUnits(raw, dec)) });
+      usd = 0; // withdrawals to the owner never count against trading caps
     } else if (kind === "withdraw" || kind === "send") {
       const chain = "robinhood";
       const amount = Number(params.amount);
@@ -728,7 +749,7 @@ export async function register(r, ctx) {
 
   r.post("/api/agent-wallet/withdraw", async ({ req, body }) => {
     const s = requireSession(req);
-    return executeForUser(s.address, { kind: "withdraw", params: { chain: body.chain, amount: body.amount }, rationale: "Owner withdrawal", source: "app" });
+    return executeForUser(s.address, { kind: "withdraw", params: { chain: body.chain, amount: body.amount, token: body.token || null, symbol: body.symbol || null }, rationale: "Owner withdrawal", source: "app" });
   });
 
   // the lot ledger: which job holds which coins in this Agent Wallet, and how each lot closed

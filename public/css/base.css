@@ -21,7 +21,7 @@
   --fg: #e8f4f8;
   --fg-2: #b4c8cf;
   --muted: #748b94;
-  --faint: #44585f;
+  --faint: #7f8c95;   /* AA on the dark page, even for small text */
   --blue: #3fb7d4;        /* Troya blue */
   --blue-2: #5fd3ef;
   --blue-3: #8ee6ff;

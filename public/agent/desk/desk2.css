@@ -4,7 +4,7 @@
 :root {
   --bg: #03060a; --bg-1: #0a1016; --bg-2: #0e151c; --bg-3: #141d25; --bg-4: #1b2630;
   --line: rgba(255, 255, 255, .07); --line-2: rgba(255, 255, 255, .11); --line-3: rgba(255, 255, 255, .18);
-  --fg: #f3f8fb; --fg-2: #c3cfd8; --muted: #7d8b97; --faint: #56636e;
+  --fg: #f3f8fb; --fg-2: #c3cfd8; --muted: #7d8b97; --faint: #7b8893;   /* faint stays AA (4.5:1+) on --bg for small text */
   --c1: #f7fdff; --c2: #bff0fd; --c3: #8edff5; --c4: #3c8fa8;
   --glass: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .018));
   --glass-solid: linear-gradient(180deg, rgba(18, 27, 35, .86), rgba(9, 14, 19, .9));
@@ -755,7 +755,7 @@ html[data-theme="light"] .ag2-hero::before { background: radial-gradient(480px 2
 .br-dirs button { display: inline-flex; align-items: center; justify-content: center; }
 .br-dir { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 .br-dir .br-ds { display: none; }
-.br-out-ico { width: 14px; height: 14px; flex: none; display: grid; place-items: center; border-radius: 50%; background: rgba(142, 223, 245, .16); color: var(--c3, #8edff5); }
+.br-out-ico { width: 14px; height: 14px; flex: none; display: grid; place-items: center; border-radius: 50%; background: rgba(142, 223, 245, .16); color: var(--c3); }
 .br-out-ico svg { width: 10px; height: 10px; stroke-width: 2.2; }
 /* the RPC stays on one line (never broken inside the domain), cut with an ellipsis next to Copy */
 .br-netrows > div > span:last-child { min-width: 0; }
@@ -794,7 +794,7 @@ html[data-theme="light"] .ag2-hero::before { background: radial-gradient(480px 2
 .sd-empty { display: grid; justify-items: center; gap: 10px; padding: 22px 12px 18px; text-align: center; }
 .sd-empty p { margin: 0; max-width: 440px; color: var(--fg-2); font-size: 13.5px; line-height: 1.5; }
 .sd-empty .btn { justify-self: center; min-width: 180px; }
-.sd-empty-ico { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; border: 1px solid rgba(142, 223, 245, .3); background: radial-gradient(circle at 50% 25%, rgba(142, 223, 245, .2), rgba(142, 223, 245, .03) 70%); color: var(--c3, #8edff5); }
+.sd-empty-ico { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; border: 1px solid rgba(142, 223, 245, .3); background: radial-gradient(circle at 50% 25%, rgba(142, 223, 245, .2), rgba(142, 223, 245, .03) 70%); color: var(--c3); }
 .sd-empty-ico svg { width: 20px; height: 20px; }
 /* the Morpho market picker */
 .sd-mk-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
@@ -1084,7 +1084,7 @@ body { touch-action: manipulation; }
 .born-pop.gold .born-pop-head small { color: #f2c26b; }
 .born-pop-link { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px; border-radius: 9px; color: var(--fg); font-size: 13px; text-decoration: none; }
 .born-pop-link:hover, .born-pop-link:focus-visible { background: rgba(142, 223, 245, .08); outline: none; }
-.born-pop-link i { font-style: normal; color: var(--accent, #8edff5); }
+.born-pop-link i { font-style: normal; color: var(--accent, var(--c3)); }
 
 /* Hippodrome (#/hippodrome): coins born through Troya, three lanes */
 .hp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
@@ -1098,7 +1098,7 @@ body { touch-action: manipulation; }
 .hp-opt.off:hover { background: none; }
 .hp-opt b { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .hp-opt small { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; margin-top: 2px; }
-.hp-opt-ic { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: rgba(142, 223, 245, .08); border: 1px solid rgba(142, 223, 245, .18); color: var(--accent, #8edff5); }
+.hp-opt-ic { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: rgba(142, 223, 245, .08); border: 1px solid rgba(142, 223, 245, .18); color: var(--accent, var(--c3)); }
 .hp-opt-ic svg { width: 18px; height: 18px; fill: currentColor; }
 .hp-opt-ic svg[fill="none"] { fill: none; }
 .hp-soon { font-size: 10px !important; letter-spacing: .08em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line-2, rgba(255,255,255,.14)); color: var(--muted); margin: 0 !important; }
@@ -1119,7 +1119,7 @@ html[data-theme="light"] .hp-pagetop h1 { background: linear-gradient(180deg, #1
 .hp-lane > header { display: flex; align-items: center; gap: 9px; padding: 14px 16px; border-bottom: 1px solid var(--line, rgba(255,255,255,.08)); flex-wrap: wrap; }
 .hp-lane > header b { font-size: 15px; }
 .hp-lane > header small { flex-basis: 100%; color: var(--muted); font-size: 12px; margin-left: 17px; }
-.hp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent, #8edff5); box-shadow: 0 0 10px currentColor; color: var(--accent, #8edff5); }
+.hp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent, var(--c3)); box-shadow: 0 0 10px currentColor; color: var(--accent, var(--c3)); }
 .hp-lane.almost .hp-dot { background: #f2c26b; color: #f2c26b; }
 .hp-lane.migrated .hp-dot { background: #6fd39a; color: #6fd39a; }
 .hp-count { margin-left: auto; font: 600 12px/1 var(--mono, monospace); color: var(--muted); padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line, rgba(255,255,255,.1)); }
@@ -1142,7 +1142,7 @@ html[data-theme="light"] .hp-pagetop h1 { background: linear-gradient(180deg, #1
 .hp-side { grid-area: side; display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
 .hp-mc small, .hp-vol small { color: var(--muted); font-size: 11px; margin-right: 4px; }
 .hp-mc b { font-size: 14px; font-weight: 650; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
-.hp-vol span { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent, #8edff5); }
+.hp-vol span { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent, var(--c3)); }
 .hp-foot { grid-area: foot; display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; padding-top: 4px; }
 /* the curve takes the rest of the row, or a row of its own when the lane is narrow */
 .hp-foot > .hp-bar { flex: 1 1 80px; min-width: 0; }
@@ -1218,7 +1218,7 @@ html[data-theme="light"] .hp-horse-ic { background: #3d9fd6; }
   .hp-tabs { display: flex; gap: 6px; margin: 0 0 12px; overflow-x: auto; }
   .hp-lane > header { display: none; }
   .hp-tab { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line, rgba(255,255,255,.1)); background: none; color: var(--fg); font: 600 13px/1 var(--sans, inherit); white-space: nowrap; cursor: pointer; }
-  .hp-tab i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent, #8edff5); }
+  .hp-tab i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent, var(--c3)); }
   .hp-tab.almost i { background: #f2c26b; } .hp-tab.migrated i { background: #6fd39a; }
   .hp-tab small { color: var(--muted); font-weight: 500; }
   .hp-tab[aria-selected="true"] { border-color: rgba(142, 223, 245, .5); background: rgba(142, 223, 245, .08); }
@@ -1248,7 +1248,7 @@ html[data-theme="light"] .hp-horse-ic { background: #3d9fd6; }
 .cc-card { padding: 22px; display: flex; flex-direction: column; gap: 10px; border-radius: 18px; }
 .cc-card.off { opacity: .72; }
 .cc-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.cc-ic { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; background: rgba(142, 223, 245, .08); border: 1px solid rgba(142, 223, 245, .22); color: var(--accent, #8edff5); }
+.cc-ic { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; background: rgba(142, 223, 245, .08); border: 1px solid rgba(142, 223, 245, .22); color: var(--accent, var(--c3)); }
 .cc-ic svg { width: 22px; height: 22px; fill: currentColor; }
 .cc-ic svg[fill="none"] { fill: none; }
 .cc-status { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line, rgba(255,255,255,.12)); color: var(--muted); }
@@ -1390,7 +1390,7 @@ html[data-theme="light"] .d-side::-webkit-scrollbar-thumb { background: #d6d1c7;
 .hp-tag.hp-gate.passed { color: #6fd39a; border-color: rgba(111, 211, 154, .5); background: rgba(111, 211, 154, .1); }
 .hp-tag.hp-gate.caution { color: #f5c84a; border-color: rgba(245, 200, 74, .5); background: rgba(245, 200, 74, .1); }
 .hp-tag.hp-gate.failed { color: #ff6b6b; border-color: rgba(255, 107, 107, .5); background: rgba(255, 107, 107, .1); }
-.hp-tag.hp-gate.untested, .hp-tag.hp-gate.launching { color: #8edff5; border-color: rgba(142, 223, 245, .4); background: rgba(142, 223, 245, .08); }
+.hp-tag.hp-gate.untested, .hp-tag.hp-gate.launching { color: var(--c3); border-color: rgba(142, 223, 245, .4); background: rgba(142, 223, 245, .08); }
 .hp-tag.hp-gate svg { fill: currentColor; }
 
 /* ---------- V8 F41 War Table (wartable.js): trade panel, Watchfire panel, labelled trades, chips, tags ---------- */
@@ -1697,3 +1697,19 @@ a.dk-sen-t:hover b { color: var(--blue); }
 }
 html[data-theme="light"] .dk-strip, html[data-theme="light"] .dk-intent, html[data-theme="light"] .dk-me { background: var(--bg-1); }
 html[data-theme="light"] .dk-mark img { filter: drop-shadow(0 8px 14px rgba(10, 60, 80, .2)); }
+
+/* ---------- light theme: chrome tokens and tags that were hard-coded for the dark room ----------
+   Without these, eyebrows, counts and tags dropped to 1.3-1.8:1 on the cream page. Every value below
+   holds 4.5:1 or better on --bg / --bg-1 so 10-11px uppercase text stays legible. */
+html[data-theme="light"] {
+  --c1: #0a3b4a; --c2: #075f7b; --c3: #08708f; --c4: #0a7ea3;
+  --faint: #716a5f;
+}
+html[data-theme="light"] .hp-tag.gold, html[data-theme="light"] .hp-chip.gold { color: var(--c2);   /* graduated: the deep end of --up, so it clears 4.5:1 on its own tint */ border-color: color-mix(in srgb, var(--up) 40%, transparent); background: color-mix(in srgb, var(--up) 10%, transparent); }
+html[data-theme="light"] .hp-tag.dev.red { color: #a8202f;   /* dev sold: --down, one step deeper for the tint */ border-color: color-mix(in srgb, var(--down) 40%, transparent); background: color-mix(in srgb, var(--down) 10%, transparent); }
+html[data-theme="light"] .hp-tag.dev.part { color: #8a5200; border-color: rgba(138, 82, 0, .4); background: rgba(138, 82, 0, .08); }
+html[data-theme="light"] .hp-tag.dev.green, html[data-theme="light"] .hp-tag.fire, html[data-theme="light"] .hp-chip.cto { color: #1d7346; border-color: rgba(29, 115, 70, .4); background: rgba(29, 115, 70, .08); }
+html[data-theme="light"] .hp-tag.fire.all, html[data-theme="light"] .hp-tag.cto.on { color: #7a5a00; border-color: rgba(122, 90, 0, .4); background: rgba(122, 90, 0, .08); }
+html[data-theme="light"] .hp-tag.cto, html[data-theme="light"] .hp-tag.dev { border-color: var(--line-3); }
+html[data-theme="light"] .hp-chip { background: var(--bg-3); }
+html[data-theme="light"] .hp-tag.hp-gate.untested, html[data-theme="light"] .hp-tag.hp-gate.launching { border-color: color-mix(in srgb, var(--c3) 40%, transparent); background: color-mix(in srgb, var(--c3) 8%, transparent); }

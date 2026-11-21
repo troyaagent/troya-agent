@@ -62,17 +62,27 @@ export function si(name, cls = "") {
   return el;
 }
 
-/* ---------- navigation: every page of the app, grouped by what you came to do ---------- */
+/* ---------- navigation: every page of the app, grouped by the job you came to do ---------- */
+// Labels are plain words; each page keeps its myth name (Scepter, Aegis, Herald, Treasury, Arena) as its eyebrow.
+// No route was removed in the regroup: every old address still resolves through ROUTES below.
 export const GROUPS = [
-  [null, [["Desk", "#/", "desk"]]],
-  ["Trade", [["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Lighter perps", "#/lighter", "lighter"], ["Stock desk", "#/stocks", "stocks"], ["Liquidity desk", "#/liquidity", "liquidity"], ["Bridge", "#/bridge", "bridge"]]],
-  ["Discover", [["Gate a coin", "#/gate", "gate"], ["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["Create coin", "#/create", "create"], ["Creator desk", "#/creator", "creator"], ["All launches", "#/launch", "launch"], ["Leaderboard", "#/leaderboard", "leaderboard"], ["Herald", "#/herald", "herald"], ["Treasury", "#/treasury", "treasury"], ["Agent registry", "#/registry", "agent"]]],
-  ["Agent", [["Chat", "#/agent", "chat"], ["Scepter", "#/agent/scepter", "scepter"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Sentry Autopilot", "#/agent/sentry", "sentry"], ["Aegis", "#/agent/aegis", "aegis"], ["Arena", "#/agent/arena", "arena"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Audited rail", "#/rail", "rail"]]],
-  ["You", [["Portfolio", "#/portfolio", "portfolio"], ["Inbox", "#/portfolio/inbox", "inbox"], ["History", "#/portfolio/history", "history"], ["Social", "#/social", "social"]]],
-  // Help also points at the public pages people ask for most: what shipped, what each tier unlocks, and where a bug goes
-  ["Help", [["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["What's new", "/roadmap#v8", "news"], ["Plans and tiers", "/plans", "plans"], ["Is it safe?", "/safety", "verify"], ["Verify", "/verify", "proof"], ["The Record", "/record", "record"], ["$TROYA flywheel", "#/flywheel", "flywheel"], ["Report a bug", "/community", "bug"]]],
+  [null, [["Home", "#/", "desk"]]],
+  ["Discover", [["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["All Robinhood coins", "#/launch", "launch"], ["Gate a coin", "#/gate", "gate"], ["Leaderboard", "#/leaderboard", "leaderboard"]]],
+  ["Trade", [["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Stock desk", "#/stocks", "stocks"], ["Liquidity desk", "#/liquidity", "liquidity"], ["Lighter perps", "#/lighter", "lighter"], ["Bridge", "#/bridge", "bridge"]]],
+  ["Launch", [["Create coin", "#/create", "create"], ["My coins & fees", "#/creator", "creator"]]],
+  // Autopilot keeps its place until the owner decides where it belongs
+  ["Agent", [["Chat", "#/agent", "chat"], ["Agent control", "#/agent/scepter", "scepter"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Launch Autopilot", "#/agent/sentry", "sentry"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Exit guard", "#/agent/aegis", "aegis"], ["Strategy arena", "#/agent/arena", "arena"]]],
+  ["Portfolio", [["Overview", "#/portfolio", "portfolio"], ["History", "#/portfolio/history", "history"], ["Weekly review", "#/portfolio/owl", "news"]]],
+  // Safety, Verify and The Record are public pages: one entry, opened in a new tab so the app keeps its place
+  ["More", [["Invite & earn", "#/herald", "herald"], ["Holder tiers", "#/treasury", "treasury"], ["$TROYA flywheel", "#/flywheel", "flywheel"], ["AI calls", "#/registry", "agent"], ["Robinhood MCP rail", "#/rail", "rail"], ["Social", "#/social", "social"], ["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Safety", "/safety", "verify"], ["What's new", "/roadmap#v8", "news"], ["Plans and tiers", "/plans", "plans"], ["Report a bug", "/community", "bug"]]],
 ];
-const FLAT = GROUPS.flatMap(([g, items]) => items.map(([t, href, ic]) => ({ g, t, href, ic })));
+// not in the sidebar, still found by Search (⌘K): the Inbox has the bell and the Portfolio badge; Verify and The Record sit under Safety
+const SEARCH_ONLY = [["Portfolio", [["Inbox", "#/portfolio/inbox", "inbox"]]], ["More", [["Verify", "/verify", "proof"], ["The Record", "/record", "record"]]]];
+const COLLAPSED_DEFAULT = { Agent: true, More: true };   // with these two shut the sidebar fits a 900 px screen
+const NAV_KEY = "troya.navGroups";
+const navState = (() => { try { return { ...COLLAPSED_DEFAULT, ...JSON.parse(localStorage.getItem(NAV_KEY) || "{}") }; } catch { return { ...COLLAPSED_DEFAULT }; } })();
+const saveNav = () => { try { localStorage.setItem(NAV_KEY, JSON.stringify(navState)); } catch {} };
+const FLAT = [...GROUPS, ...SEARCH_ONLY].flatMap(([g, items]) => items.map(([t, href, ic]) => ({ g, t, href, ic })));
 // route table: first path segment → page module (same as /agent) plus the Desk's own Gate page
 const ROUTES = {
   "": "home", market: "market", token: "token", swap: "swap", perps: "perps", launch: "launchpad",
@@ -142,8 +152,11 @@ async function route() {
   if (r.name === "hippodrome") { history.replaceState(null, "", "#/troya-launches" + r.raw.slice("hippodrome".length)); return route(); }
   const page = r.name == null ? null : ROUTES[r.name];
   const act = activeItem(r.path);
-  for (const a of document.querySelectorAll("[data-nav] a, [data-tabbar] a")) {
-    const on = !!act && a.getAttribute("href") === act.href;
+  // items only: the "Launch a coin" shortcut in the Discover header must not light up (or be revealed) as the page
+  for (const a of document.querySelectorAll("[data-nav] .d-group-items a, [data-tabbar] a")) {
+    // a tab lights for any page of its group (Troya Launches under Discover, Perps under Trade)
+    const tab = a.dataset.tab;
+    const on = !!act && (tab != null ? (tab ? act.g === tab : act.href === "#/") : a.getAttribute("href") === act.href);
     if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   }
   revealActive();
@@ -223,9 +236,27 @@ function startSilk() {
 setTimeout(startSilk, 6000);          // a first page whose mount never settles still gets its light
 
 /* ---------- sidebar ---------- */
-clear($("[data-nav]"), GROUPS.map(([g, items]) => h("div", { class: "d-group" },
-  g ? h("h5", {}, g) : null,
-  items.map(([t, href, ic]) => h("a", { href, ...(href.startsWith("/") ? { target: "_self" } : {}) }, si(ic), h("span", {}, t), href === "#/portfolio/inbox" ? h("i", { class: "d-count", "data-inbox": "" }) : null)))));
+const external = (href) => href.startsWith("/") ? { target: "_blank", rel: "noopener" } : {};
+function navGroup([g, items]) {
+  const list = h("div", { class: "d-group-items", style: { display: "grid", gap: "1px" } },
+    items.map(([t, href, ic]) => h("a", { href, ...external(href), ...(href === "#/leaderboard" ? { hidden: true, "data-leaderboard": "" } : {}) }, si(ic), h("span", {}, t))));
+  if (!g) return h("div", { class: "d-group" }, list);
+  const id = `d-grp-${g.toLowerCase()}`;
+  list.id = id;
+  list.hidden = !!navState[g];
+  const btn = h("button", { type: "button", "aria-expanded": String(!list.hidden), "aria-controls": id,
+    style: { all: "inherit", display: "flex", alignItems: "center", gap: "6px", width: "100%", margin: 0, padding: 0, cursor: "pointer" },
+    onclick: () => { list.hidden = !list.hidden; navState[g] = list.hidden; btn.setAttribute("aria-expanded", String(!list.hidden)); mark.textContent = list.hidden ? "+" : "−"; saveNav(); } },
+    h("span", { style: { flex: 1 } }, g));
+  const mark = h("i", { "aria-hidden": "true", style: { fontStyle: "normal", opacity: ".6" } }, list.hidden ? "+" : "−");
+  btn.append(mark);
+  // the shortcut people look for first: launching a coin, from the Discover header
+  const extra = g === "Discover" ? h("a", { href: "#/create", class: "link", style: { all: "unset", cursor: "pointer", textTransform: "none", letterSpacing: "normal", color: "var(--blue)" } }, "Launch a coin") : null;
+  return h("div", { class: "d-group" }, h("h5", { style: { display: "flex", alignItems: "center", gap: "8px" } }, btn, extra), list);
+}
+clear($("[data-nav]"), GROUPS.map(navGroup));
+// Leaderboard stays hidden until traders opt in (the same check as the Desk home); the route itself always works
+api.get("leaderboard?days=30").then((d) => { if (d?.rows?.length) for (const a of document.querySelectorAll("[data-leaderboard]")) a.hidden = false; }).catch(() => {});
 const caShort = SITE.ca ? short(SITE.ca, 4) : "Not live yet";
 clear($("[data-side-foot]"),
   h("button", { class: "d-ca", type: "button", title: "Copy contract address", onclick: async () => {
@@ -242,6 +273,8 @@ const side = $("[data-side]"), scrim = $("[data-scrim]");
 function revealActive() {
   const a = side.querySelector("[data-nav] a[aria-current]");
   if (!a) return;
+  const list = a.closest(".d-group-items");
+  if (list?.hidden) { list.hidden = false; list.parentElement.querySelector("h5 button")?.setAttribute("aria-expanded", "true"); const m = list.parentElement.querySelector("h5 button i"); if (m) m.textContent = "−"; }
   const ar = a.getBoundingClientRect(), sr = side.getBoundingClientRect();
   // the brand and Search stay pinned at the top of the sidebar, so an item under them counts as hidden too
   const pinned = side.querySelector(".d-side-top")?.offsetHeight || 90;
@@ -255,12 +288,14 @@ $("[data-burger]").addEventListener("click", () => (side.classList.contains("ope
 scrim.addEventListener("click", closeSide);
 
 /* ---------- mobile tab bar ---------- */
+// one tap to each job: Home, Discover, Ask, Trade, Portfolio (the Inbox count rides on Portfolio)
 clear($("[data-tabbar]"),
-  h("a", { href: "#/" }, si("desk"), h("span", {}, "Desk")),
-  h("a", { href: "#/market" }, si("market"), h("span", {}, "Market")),
+  h("a", { href: "#/", "data-tab": "" }, si("desk"), h("span", {}, "Home")),
+  h("a", { href: "#/market", "data-tab": "Discover" }, si("market"), h("span", {}, "Discover")),
   h("button", { type: "button", class: "d-tab-ask", onclick: () => askTroya() }, h("i", { class: "mark" }), h("span", {}, "Ask")),
-  h("a", { href: "#/swap" }, si("swap"), h("span", {}, "Swap")),
-  h("a", { href: "#/perps" }, si("perps"), h("span", {}, "Perps")));
+  h("a", { href: "#/swap", "data-tab": "Trade" }, si("swap"), h("span", {}, "Trade")),
+  h("a", { href: "#/portfolio", "data-tab": "Portfolio", style: { position: "relative" } }, si("portfolio"), h("span", {}, "Portfolio"),
+    h("i", { class: "badge", "data-inbox": "", style: { position: "absolute", top: "6px", left: "calc(50% + 6px)", fontStyle: "normal" } })));
 
 /* ---------- top bar right ---------- */
 $(".d-search-ico").append(si("search"));
@@ -336,7 +371,7 @@ function renderRight() {
   const light = document.documentElement.dataset.theme === "light";
   const mode = h("button", { class: "icon-btn d-mode", type: "button", "aria-label": light ? "Dark mode" : "Light mode", title: light ? "Dark mode" : "Light mode", onclick: () => setTheme(light ? "dark" : "light") }, si(light ? "moon" : "sun"));
   clear(right, chip, bell, mode, gear, wbtn);
-  for (const el of document.querySelectorAll("[data-inbox]")) el.textContent = inboxCount ? (inboxCount > 9 ? "9+" : inboxCount) : "";
+  for (const el of document.querySelectorAll("[data-inbox]")) { el.textContent = inboxCount ? (inboxCount > 9 ? "9+" : inboxCount) : ""; el.hidden = !inboxCount; }
 }
 function walletMenu() {
   const m = modal({ title: "Wallet", body: h("div", {},
@@ -591,5 +626,8 @@ addEventListener("hashchange", route);
 restore();
 renderRight();
 route();
+// a web launch whose record call missed (closed tab, slow block) is sent again on any Desk visit, not only from two pages;
+// the module loads only when this browser holds one
+try { if (JSON.parse(localStorage.getItem("troya.pendingLaunches") || "[]").length) import("/agent/js/pages/launch-create.js").then((m) => (m.hasPending() ? m.recordPending() : null)).catch(() => {}); } catch {}
 // Autopilot lives in the Agent page module and starts itself when switched on; load it on any page so it keeps running in this tab
 if (store("troya.autopilot", { on: false }).get().on) import("/agent/js/pages/agent.js").catch(() => {});

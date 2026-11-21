@@ -50,7 +50,7 @@ export async function mount(view, { parts, ask }) {
   const pxP = h("div", { class: "p" }), pxU = h("div", { class: "u" }), pxAt = h("div", { class: "fine muted tk-px-at", style: { marginTop: "4px" } });
   const paintPx = () => {
     pxP.textContent = t.priceUsd != null ? `$${price(t.priceUsd)}` : pons?.priceInPair != null ? `${tiny(pons.priceInPair)} ${pons.pair.symbol}` : "No price yet";
-    clear(pxU, t.priceEth != null ? `${tiny(t.priceEth)} ETH` : null, pctEl(t.change24h), h("span", { class: "faint" }, "24h"));
+    clear(pxU, t.priceEth != null ? h("span", { class: "tk-px-eth" }, `${tiny(t.priceEth)} ETH`) : null, pctEl(t.change24h), h("span", { class: "faint" }, "24h"));
     paintAt();
   };
   const paintAt = () => {
@@ -120,6 +120,10 @@ export async function mount(view, { parts, ask }) {
   };
   paintBadge();
 
+  // the Gate's verdict as a small chip: in the phone header and in the sticky bar (painted once the badge answers)
+  const gChips = [];
+  const gChip = (cls) => { const c = h("a", { class: `${cls} v-checking`, href: `#/gate/${address}` }, "Gate: checking"); gChips.push(c); return c; };
+  const paintChips = (v, label) => { for (const c of gChips) { c.className = `${c.className.split(" ")[0]} v-${v}`; c.textContent = `Gate: ${label}`; } };
   const head = h("div", { class: "tk-head" },
     h("div", { class: "tk-id" }, tokenIcon({ ...t, chain: "robinhood" }),
       h("div", { style: { minWidth: 0 } },
@@ -127,18 +131,29 @@ export async function mount(view, { parts, ask }) {
           pons ? curveBadge : null,
           !t.tradable ? h("span", { class: "badge-s warn" }, "Not routed by Troya") : null),
         strip,
-        h("div", { class: "tk-addr" }, h("span", { class: "mono tk2-ca" }, address), h("button", { type: "button", "aria-label": "Copy address", onclick: () => copyText(address, "Address copied") }, icon("copy"))),
+        // the full address on a wide screen; a phone shows 0x1fa8…a074 (it wrapped over two lines) with the same copy icon
+        h("div", { class: "tk-addr" }, h("span", { class: "mono tk2-ca tk-ca-full" }, address), h("span", { class: "mono tk2-ca tk-ca-short" }, short(address, 4)), h("button", { type: "button", "aria-label": "Copy address", onclick: () => copyText(address, "Address copied") }, icon("copy"))),
         socialRow(t))),
-    h("div", { class: "tk-px" }, pxP, pxU, pxAt));
+    h("div", { class: "tk-px" }, pxP, pxU, pxAt, gChip("tk-gchip")));
 
   // one Buy on the page: the Trade panel, plus the Gate card's button once the Gate passed. The address copies from the
   // icon beside it, the coin's accounts sit under the name, and Ask opens Troya right here instead of leaving the coin.
+  const doAsk = () => { if (ask) ask(askQ); else location.hash = `#/agent?q=${encodeURIComponent(askQ)}`; };
+  const doShare = () => import("../sharecard.js").then((m) => m.openShare({ address, symbol: t.symbol, stock: stockish })).catch((e) => console.error(e));
   const askQ = `Give me a read on ${t.symbol} (${address}) on Robinhood Chain: liquidity, contract risk and recent flow.`;
   const actions = h("div", { class: "tk-act" },
     h("a", { class: "btn", href: `#/gate/${address}` }, icon("shield"), "Run the Gate"),
-    h("button", { class: "btn", type: "button", onclick: () => { if (ask) ask(askQ); else location.hash = `#/agent?q=${encodeURIComponent(askQ)}`; } }, icon("spark"), "Ask about it"),
+    h("button", { class: "btn", type: "button", onclick: doAsk }, icon("spark"), "Ask about it"),
     // V8 F42 Herald: share cards (Gate verdict + Watchfire) with the viewer's referral link, drawn in the browser
-    h("button", { class: "btn", type: "button", onclick: () => import("../sharecard.js").then((m) => m.openShare({ address, symbol: t.symbol, stock: stockish })).catch((e) => console.error(e)) }, icon("ext"), "Share"));
+    h("button", { class: "btn", type: "button", onclick: doShare }, icon("ext"), "Share"));
+  // on a phone the three buttons took a row of their own above the chart: they fold into a "…" menu in the header
+  const moreMenu = h("details", { class: "tk-more" },
+    h("summary", { "aria-label": "More actions" }, "…"),
+    h("div", { class: "tk-more-m", onclick: (e) => { if (e.target.closest("button")) e.currentTarget.parentElement.open = false; } },
+      h("button", { type: "button", onclick: () => copyText(address, "Address copied") }, icon("copy"), "Copy address"),
+      h("button", { type: "button", onclick: doShare }, icon("ext"), "Share"),
+      h("button", { type: "button", onclick: doAsk }, icon("spark"), "Ask about it")));
+  head.append(moreMenu);
 
   /* ---------- chart ---------- */
   const chartBox = h("div", { class: "tk-chart" });
@@ -238,6 +253,7 @@ export async function mount(view, { parts, ask }) {
     // Web Test Troya had a buy and a sell on 18 Nov and still read "Nobody has bought" here
     const sell = checks.find((c) => c.key === "sell");
     const waitNote = `${sell?.detail || r.reason || "The test sell waits until the curve holds buyers' money."}${r.checkedAt ? ` Checked ${ago(r.checkedAt)} ago.` : ""}`;
+    paintChips(r.verdict || "unknown", r.verdict === "untested" ? "sell untested" : String(word[r.verdict] || r.verdict || "unknown").toLowerCase());
     if (!checks.length) { gVerdict.textContent = r.verdict === "untested" ? word.untested : "Not checked yet"; if (r.verdict === "untested") gNote.textContent = waitNote; return; }
     const pass = checks.filter((c) => c.status === "pass").length;
     gRing.className = `dk-ring tk2-ring v-${r.verdict}`;
@@ -249,7 +265,7 @@ export async function mount(view, { parts, ask }) {
     else if (r.checkedAt) gNote.textContent = `Checked ${ago(r.checkedAt)} ago. A snapshot, never a safe stamp.`;
     clear(gList, checks.map((c) => h("li", { class: `c-${c.status}` }, h("span", { class: "dk-ck" }, c.status === "pass" ? icon("check") : c.status === "fail" ? icon("close") : h("b", {}, c.status === "warn" ? "!" : "–")), h("span", {}, c.label))));
     if (r.verdict === "passed") clear(gBuy, h("a", { class: "btn primary tk2-buy", href: `#/swap?out=${address}` }, icon("swap"), `Buy $${t.symbol} with Troya Swap`));
-  }).catch(() => { gVerdict.textContent = "Gate unavailable"; });
+  }).catch(() => { gVerdict.textContent = "Gate unavailable"; paintChips("unknown", "unavailable"); });
 
   /* ---------- stats panel ---------- */
   const stat = (k, v, tip) => h("div", tip ? { title: tip } : {}, h("div", { class: "k" }, k), h("div", { class: "v" }, v ?? "–"));
@@ -333,6 +349,10 @@ export async function mount(view, { parts, ask }) {
   const loadCalls = async () => { try { calls = await api.get(`/api/callouts/${address}`); placeCalls?.(); if (curTab === "callouts") renderTab("callouts"); } catch { /* next round */ } };
   const tabBody = h("div", {}, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Reading this coin's trades…")));
   let curTab = stockish ? "activity" : "trades", tradeFilter = "all";
+  // a phone shows 20 trades and a Show more (120 rows pushed the Gate and the stats a long scroll down); wider screens 120
+  const narrow = () => matchMedia("(max-width: 560px)").matches;
+  let tradeLimit = narrow() ? 20 : 120;
+  const moreTrades = () => { tradeLimit = Math.min(120, tradeLimit + 40); renderTab(curTab); };
   const tabsEl = tabs(tabList, curTab, (v) => renderTab(v));
   const toTab = (v) => { tabsEl.set(v); renderTab(v); };
 
@@ -361,7 +381,7 @@ export async function mount(view, { parts, ask }) {
 
   function renderTab(v) {
     curTab = v;
-    if (v === "trades") { renderTrades(tabBody, board, tradeFilter, (f) => { tradeFilter = f; renderTab("trades"); }, t.symbol, sizeOf); return; }
+    if (v === "trades") { renderTrades(tabBody, board, tradeFilter, (f) => { tradeFilter = f; renderTab("trades"); }, t.symbol, sizeOf, { limit: tradeLimit, more: moreTrades }); return; }
     if (v === "early") { renderEarly(tabBody, board); return; }
     if (v === "callouts") { if (!calls) { clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Loading callouts and posts on X…"))); loadCalls(); return; } renderCallouts(tabBody, calls, address, t.symbol, loadCalls); return; }
     if (v === "activity") {
@@ -375,11 +395,12 @@ export async function mount(view, { parts, ask }) {
       }
       clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" },
         h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Time"), h("th", { class: "l" }, "Side"), h("th", {}, "USD"), h("th", {}, t.symbol), h("th", { class: "l" }, "Trader"))),
-        h("tbody", {}, d.trades.map((x) => h("tr", {},
+        h("tbody", {}, d.trades.slice(0, tradeLimit).map((x) => h("tr", {},
           h("td", { class: "l muted" }, `${ago(x.t)} ago`),
           h("td", { class: `l ${x.side === "buy" ? "tk-trade-buy" : "tk-trade-sell"}` }, x.side === "buy" ? "Buy" : "Sell"),
           h("td", {}, x.usd != null ? usd(x.usd, { compact: x.usd >= 1e4 }) : "–"), h("td", {}, x.tokens != null ? compact(x.tokens, 2) : "–"),
           h("td", { class: "l mono muted" }, h("a", { class: "link", href: `https://robinhoodchain.blockscout.com/tx/${x.tx}`, target: "_blank", rel: "noopener" }, short(x.trader, 4))))))))),
+        d.trades.length > tradeLimit && tradeLimit < 120 ? h("div", { class: "mk-more" }, h("button", { class: "btn sm", type: "button", onclick: moreTrades }, "Show more")) : null,
         h("p", { class: "fine" }, "Most recent trades in the main pool, from GeckoTerminal."));
     } else if (!d.holders) {
       clear(tabBody, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Loading the largest wallets…")));
@@ -441,8 +462,16 @@ export async function mount(view, { parts, ask }) {
   const wfCard = watchfirePanel();
   const trCard = stockish ? null : tributePanel(address);
   const tradeCard = t.tradable || pons ? tradePanel(t, address) : null;
+  // the phone's sticky bar, just above the app's tab bar: Buy presets, Sell and the Gate chip. Every button opens Troya
+  // Swap with the amount filled in, where the Gate runs and the user's own wallet signs: a bar that is always under the
+  // thumb never sends a trade by itself (the Trade panel's two-tap Agent Wallet buttons stay in the page)
+  const mbar = h("div", { class: "tk-mbar", role: "region", "aria-label": `Trade $${t.symbol}` },
+    tradeCard ? [h("span", { class: "tk-mbar-l" }, "Buy"),
+      [0.001, 0.005, 0.01].map((v) => h("a", { class: "tk-mbar-b", href: `#/swap?out=${address}&amount=${v}` }, `${v}`)),
+      h("a", { class: "tk-mbar-s", href: `#/swap?in=${address}&out=ETH` }, "Sell")] : h("span", { class: "fine muted tk-mbar-l" }, "Not routed by Troya"),
+    gChip("tk-mbar-g"));
   clear(view, back, head, actions,
-    h("div", { class: "tk-grid" }, h("div", {}, chartPanel, h("div", { class: "tk-tabs" }, tabsEl, tabBody)), h("div", { class: "tk-side" }, tradeCard, gateCard, wfCard, trCard, orcCard, stats, info)));
+    h("div", { class: "tk-grid" }, h("div", { class: "tk-main" }, chartPanel, h("div", { class: "tk-tabs" }, tabsEl, tabBody)), h("div", { class: "tk-side" }, tradeCard, gateCard, wfCard, trCard, orcCard, stats, info)), mbar);
   renderTab(curTab);
   if (!stockish) loadCalls();
   // a young curve: the holder list says whether anyone but the curve holds it yet ("None yet" in the stats)
@@ -455,7 +484,8 @@ export async function mount(view, { parts, ask }) {
   });
   if (stockish) wfCard.update({ level: "clear", why: ["Stock tokens and core tokens are not memecoins; Watchfire watches coins from launchpads and pools."] });
   view.classList.add("tk2");
-  const offClass = () => view.classList.remove("tk2");
+  document.body.classList.add("tk-has-mbar");
+  const offClass = () => { view.classList.remove("tk2"); document.body.classList.remove("tk-has-mbar"); };
 
   let chartSeq = 0, chartBusy = false;
   // callouts made while the chart's bars cover them (an older call has no bar to sit on)

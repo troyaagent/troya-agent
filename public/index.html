@@ -91,6 +91,7 @@
     <li><a href="/roadmap"><span>11</span>Roadmap</a></li>
     <li><a href="/launch-on-x"><span>12</span>Launch on X</a></li>
   </ol>
+  <div data-nav-groups></div>
   <div class="menu-foot"><a href="https://t.me/troyaagent" target="_blank" rel="noopener">Telegram</a><a href="https://t.me/troyasentry" target="_blank" rel="noopener">Sentry</a><a href="https://x.com/Troyaagent" target="_blank" rel="noopener">X</a><a href="https://github.com/troyaagent/troya-agent" target="_blank" rel="noopener">GitHub</a></div>
 </nav>
 
@@ -253,10 +254,12 @@
 </main>
 
 <footer class="foot">
-  <nav class="foot-pages" aria-label="Pages"><a href="/capabilities">Capabilities</a><a href="/plans">Plans</a><a href="/badge">Gate badge</a><a href="/api-and-mcp">API and MCP</a><a href="/market-analysis">Market analysis</a><a href="/insights">Insights</a><a href="/philosophy">Philosophy</a><a href="/risk-controls">Risk controls</a></nav>
-  <div class="foot-l"><a href="/community">Community</a><a href="https://t.me/troyaagent" target="_blank" rel="noopener">Telegram</a><a href="https://x.com/Troyaagent" target="_blank" rel="noopener">X</a><a href="https://github.com/troyaagent/troya-agent" target="_blank" rel="noopener">GitHub</a><a href="/privacy">Privacy policy</a></div>
+  <nav class="foot-pages" aria-label="Pages" data-nav-groups></nav>
+  <div class="foot-l"><a href="https://t.me/troyaagent" target="_blank" rel="noopener">Telegram</a><a href="https://x.com/Troyaagent" target="_blank" rel="noopener">X</a><a href="https://github.com/troyaagent/troya-agent" target="_blank" rel="noopener">GitHub</a></div>
   <button class="ca" type="button" data-ca><b>CA</b><span data-ca-full>0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074</span></button>
-  <div class="foot-r"><a href="/terms">Terms of service</a><a href="/verify">Verify</a><a href="/record">The Record</a><a href="/flywheel">Flywheel</a><a href="/agent#/docs">Docs</a></div>
+  <div class="foot-r"><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Use</a></div>
+  <p class="foot-legal" data-foot-legal></p>
+  <div class="foot-bar" data-foot-bar><span>© 2026 Troya Agent</span><span>Mainnet beta</span><span>All rights reserved</span></div>
 </footer>
 
 <div class="modal" data-modal hidden>
@@ -265,6 +268,19 @@
 </div>
 
 <div class="toast" role="status" aria-live="polite" data-toast></div>
+<style>/* the shared site groups (rendered from NAV in /home/pages.js): small type, not the menu's giant numbered links */
+.menu [data-nav-groups] li a, .foot [data-nav-groups] li a { display: inline; padding: 0; font: 600 12px/1.3 var(--sans); letter-spacing: .1em; text-transform: uppercase; }
+.menu [data-nav-groups] li a:hover { padding-left: 0; }
+.foot [data-nav-groups] { display: block; }
+.foot-legal { grid-column: 1 / -1; margin: 8px 0 0; font: 400 11px/1.6 var(--sans); letter-spacing: 0; text-transform: none; opacity: .6; }
+.foot-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; font: 400 10.5px/1.4 var(--sans); letter-spacing: .04em; text-transform: none; opacity: .6; }
+</style>
+<script type="module">
+import { renderGroups, LEGAL, BAR } from "/home/pages.js";
+document.querySelectorAll("[data-nav-groups]").forEach((el) => (el.innerHTML = renderGroups("site-groups")));
+const legal = document.querySelector("[data-foot-legal]"); if (legal) legal.textContent = LEGAL;
+const bar = document.querySelector("[data-foot-bar]"); if (bar) bar.innerHTML = BAR();
+</script>
 <script src="/home/home.js" defer></script>
 <script src="/js/buybar.js" defer></script>
 <script>document.querySelector("[data-gas-open]")?.addEventListener("click", () => document.querySelector("[data-gas-dlg]")?.showModal());

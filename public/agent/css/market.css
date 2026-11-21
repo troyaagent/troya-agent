@@ -114,3 +114,67 @@ html[data-theme="light"] .mk-buy { color: var(--blue-3); border-color: rgba(10, 
   .tk-chart-bar .fine { display: none; }
   .tk-act .btn.ghost { display: none; }
 }
+
+/* phone coin page (<= 560 px): a compact header (logo, $SYM, price, 24 h, Gate chip), the chart right under it, the Gate
+   card before the trades, and a sticky Buy / Sell / Gate bar above the app's tab bar. Wider screens hide the phone-only
+   parts. (.tk2.tk2 outranks the desk2.css header rules, whichever sheet loads last.) */
+.tk-ca-short, .tk-gchip, .tk-more, .tk-mbar { display: none; }
+.tk-gchip, .tk-mbar-g { align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid currentColor; font-size: 11px; font-weight: 600; white-space: nowrap; color: var(--muted); }
+.tk-gchip.v-passed, .tk-mbar-g.v-passed { color: var(--up); }
+.tk-gchip.v-caution, .tk-mbar-g.v-caution { color: var(--warn); }
+.tk-gchip.v-failed, .tk-mbar-g.v-failed { color: var(--down); }
+@media (max-width: 560px) {
+  .tk2.tk2 .tk-back { margin-top: 10px; }
+  .tk2.tk2 .tk-head { position: relative; flex-wrap: nowrap; align-items: center; gap: 10px; margin-top: 8px; padding: 12px 44px 12px 12px; border-radius: 18px; }
+  .tk2.tk2 .tk-id { gap: 10px; flex: 1; }
+  .tk2.tk2 .tk-id .tok-ico { width: 38px; height: 38px; box-shadow: 0 0 0 1px rgba(142, 223, 245, .35); }
+  /* $SYM is the name on a phone; the coin's full name, launchpad badges, the six-number strip and its accounts are in the
+     stats and info panels further down */
+  .tk2.tk2 .tk-id h1 { font-size: 0; gap: 6px; flex-wrap: nowrap; }
+  .tk2.tk2 .tk-id h1 .sym { font-size: 19px; color: var(--fg); font-weight: 700; letter-spacing: -0.02em; }
+  .tk2.tk2 .tk-id h1 .badge-s { display: none; }
+  .tk2.tk2 .tk2-strip, .tk2.tk2 .tk2-soc, .tk2.tk2 .tk2-nosoc, .tk2.tk2 .tk-px-at { display: none !important; }
+  .tk2.tk2 .tk-addr { margin-top: 2px; }
+  .tk2.tk2 .tk-ca-full { display: none; }
+  .tk2.tk2 .tk-ca-short { display: inline; font-size: 11px; word-break: normal; }
+  .tk2.tk2 .tk-px { text-align: right; flex: none; display: grid; justify-items: end; gap: 3px; }
+  .tk2.tk2 .tk-px .p { font-size: 19px; }
+  .tk2.tk2 .tk-px .u { justify-content: flex-end; margin: 0; font-size: 11.5px; gap: 5px; }
+  .tk2.tk2 .tk-px .u .tk-px-eth { display: none; }   /* the ETH price; the 24 h change stays */
+  .tk2.tk2 .tk-gchip { display: inline-flex; height: 20px; padding: 0 8px; font-size: 10.5px; }
+  /* Copy, Share and Ask fold into the "…" menu */
+  .tk2.tk2 .tk-act { display: none; }
+  .tk2.tk2 .tk-more { display: block; position: absolute; top: 8px; right: 6px; z-index: 5; }
+  .tk-more summary { list-style: none; cursor: pointer; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; color: var(--muted); font-size: 18px; line-height: 1; }
+  .tk-more summary::-webkit-details-marker { display: none; }
+  .tk-more[open] summary { color: var(--fg); background: rgba(142, 223, 245, .08); }
+  .tk-more-m { position: absolute; right: 0; top: 36px; min-width: 180px; display: grid; padding: 6px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg-1); box-shadow: 0 14px 40px rgba(0, 0, 0, .45); }
+  .tk-more-m button { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 9px; font-size: 13px; color: var(--fg); text-align: left; }
+  .tk-more-m button:hover, .tk-more-m button:focus-visible { background: rgba(142, 223, 245, .08); }
+  .tk-more-m svg { width: 15px; height: 15px; color: var(--muted); }
+  /* chart first, then the Gate, the Trade panel, the tabs and the rest */
+  .tk2.tk2 .tk-grid { display: flex; flex-direction: column; gap: 12px; }
+  .tk2.tk2 .tk-main, .tk2.tk2 .tk-side { display: contents; }
+  .tk2.tk2 .tk-grid > .tk-main > .panel:first-child { order: 1; }
+  .tk2.tk2 .tk2-gate { order: 2; }
+  .tk2.tk2 .wt-trade { order: 3; }
+  .tk2.tk2 .tk-tabs { order: 4; margin-top: 0; }
+  .tk2.tk2 .tk-side > * { order: 5; }
+  .tk2.tk2 .tk-side > .tk2-gate { order: 2; }
+  .tk2.tk2 .tk-side > .wt-trade { order: 3; }
+  .tk2.tk2 .tk-chart { height: 260px; }
+  /* the sticky bar sits on the tab bar (60 px + the safe area); the page ends with room for it */
+  .tk2.tk2 .tk-mbar { display: flex; align-items: center; gap: 6px; position: fixed; z-index: 69; left: 0; right: 0; bottom: calc(60px + env(safe-area-inset-bottom)); padding: 8px 16px;
+    background: rgba(5, 9, 13, .94); border-top: 1px solid var(--line); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  html[data-theme="light"] .tk2.tk2 .tk-mbar { background: rgba(250, 248, 244, .96); }
+  .tk-mbar-l { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-right: 2px; }
+  .tk-mbar-b, .tk-mbar-s { display: inline-flex; align-items: center; justify-content: center; height: 32px; min-width: 0; flex: 1 1 0; padding: 0 6px; border-radius: 999px; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .tk-mbar-b { color: var(--up); border: 1px solid rgba(95, 211, 239, .38); background: rgba(95, 211, 239, .07); }
+  .tk-mbar-s { color: var(--down); border: 1px solid rgba(255, 107, 125, .35); background: rgba(255, 107, 125, .06); }
+  .tk2.tk2 .tk-mbar-g { display: inline-flex; flex: none; height: 32px; padding: 0 10px; }
+  .tk2.tk2 { padding-bottom: 64px; }
+  /* the agent's orb and nudge sit above the bar instead of on it */
+  body.tk-has-mbar .g-orb { bottom: calc(126px + env(safe-area-inset-bottom)); }
+  body.tk-has-mbar .g-nudge { bottom: calc(184px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 370px) { .tk-mbar-l { display: none; } .tk2.tk2 .tk-mbar { padding: 8px 10px; gap: 5px; } }

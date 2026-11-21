@@ -3,7 +3,7 @@
 //   Almost bonded  a curve at least half full
 //   Migrated       graduated to its own Uniswap v4 pool ($TROYA leads it)
 // Numbers come from /api/launch/board (Pons on chain, DexScreener, GeckoTerminal, Blockscout), refreshed every 15 s.
-import { h, clear, useCss, pageHead, short, ago, tokenIcon, setBorn, compact, usd, every, icon, tipOn, copyText } from "/agent/js/ui.js";
+import { h, clear, useCss, pageHead, short, ago, tokenIcon, setBorn, compact, usd, every, icon, tipOn, copyText, modal } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
 
 const LANES = [
@@ -45,6 +45,16 @@ const VENUES = [
 // a coin's own links and a copy button for its contract address, beside its name
 const COPY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="11" height="11" rx="2.2"/><path d="M15.5 8.5V6.7a2.2 2.2 0 0 0-2.2-2.2H6.7a2.2 2.2 0 0 0-2.2 2.2v6.6a2.2 2.2 0 0 0 2.2 2.2h1.8"/></svg>';
 const CHECK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+// a label in two lengths: the short one for a mouse (the hover tip explains it), the full words on a phone,
+// where there is no hover (launch.css swaps them on coarse pointers)
+const lbl = (s, l) => [h("span", { class: "hp-ls" }, s), h("span", { class: "hp-ll" }, l)];
+// phones get one "Trade elsewhere" button instead of five icon-only venues: a sheet lists them by name, with logos
+function venueSheet(c) {
+  const m = modal({ title: `Trade ${c.symbol || "this coin"} elsewhere`, body: h("div", { class: "hp-vsheet" },
+    h("p", { class: "muted" }, "These venues open in a new tab. Buy on Troya to have the Gate check the trade first."),
+    VENUES.map(([name, logo, url]) => h("a", { class: "hp-vrow", href: url(c), target: "_blank", rel: "noopener", onclick: () => m.close() },
+      h("img", { src: `/img/logos/${logo}`, alt: "", width: 22, height: 22 }), h("b", {}, name), h("span", { class: "muted" }, "Opens in a new tab")))) });
+}
 const safeLink = (u) => { try { const x = new URL(String(u || "")); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
 const EXTRA_CSS = `
 .hp-copy { display: inline-flex; align-items: center; justify-content: center; align-self: center; flex: none; width: 18px; height: 18px; padding: 0; margin-left: -4px; border: 0; border-radius: 5px; background: none; color: var(--muted, #8a979c); cursor: pointer; transition: color .15s, background .15s; }
@@ -95,6 +105,7 @@ addEventListener("hashchange", hideZoom);
 
 export async function mount(view, ctx) {
   useCss("perps");
+  useCss("launch");   // the phone layout of this board (labels, lanes, the Trade elsewhere sheet) lives in launch.css
   extraCss();
   let alive = true;
   const asked = ctx?.query?.lane && LANES.some((l) => l.key === ctx.query.lane);
@@ -105,7 +116,9 @@ export async function mount(view, ctx) {
   // a slim header row so the three lanes and Create coin lead the page (owner, 18 Nov)
   clear(view, h("div", { class: "dk hp" },
     h("header", { class: "hp-pagetop" },
-      h("div", { class: "hp-pagetop-l" }, h("h1", {}, "Troya Launches"), kpis),
+      h("div", { class: "hp-pagetop-l" }, h("h1", {}, "Troya Launches"), kpis,
+        h("p", { class: "hp-sub" }, "Every coin launched through Troya from X, Telegram or the web. For all Robinhood Chain coins, see ",
+          h("a", { href: "#/launch" }, "All Robinhood coins"), ".")),   // the sidebar's "All Robinhood coins" page
       h("a", { class: "btn primary hp-create", href: "#/create" }, icon("plus"), "Create coin")),
     tabs, lanes));
 
@@ -155,7 +168,7 @@ export async function mount(view, ctx) {
         ? tipOn(h("span", { class: "hp-tag fire all ic" }, svg(FIRE, "hp-tag-ic")), "Dev burned everything", `The dev burned ${pc(dv.burnedPct)} of what they received and holds none.`, "yellow")
         : tipOn(h("span", { class: "hp-tag fire ic" }, svg(FIRE, "hp-tag-ic")), "Dev burned part", `The dev burned ${pc(dv.burnedPct)} of what they received and still holds ${pc(dv.heldPct)} of the supply.`, "green"));
       // dev sell: red, only when the dev really sold a meaningful share
-      if (dv.soldPct >= 5) tags.push(tipOn(h("span", { class: "hp-tag dev red" }, "DS"), dv.sold === "all" ? "Dev sold everything" : "Dev sold",
+      if (dv.soldPct >= 5) tags.push(tipOn(h("span", { class: "hp-tag dev red" }, lbl("DS", "Dev sold")), dv.sold === "all" ? "Dev sold everything" : "Dev sold",
         `The dev sold or moved out ${pc(dv.soldPct)} of what they received${dv.heldPct > 0 ? ` and still holds ${pc(dv.heldPct)} of the supply` : ""}.`, "red"));
     }
     // the dev holds 1M $TROYA: the Troya horse
@@ -192,8 +205,8 @@ export async function mount(view, ctx) {
           stat("Holders", c.holders != null ? compact(c.holders, 0) : "–"), stat("Txns", c.txns24h != null ? compact(c.txns24h, 0) : "–"),
           stat("Tax", `${taxOf(c.creatorTaxBps)}%`, taxTip(c.creatorTaxBps)), c.initialBuyEth ? stat("Dev buy", `${c.initialBuyEth} ETH`) : null)),
       h("div", { class: "hp-side" },
-        h("span", { class: "hp-vol", title: "Volume, last 24 hours" }, h("small", {}, "V"), h("span", {}, usd(c.volume24hUsd, { compact: true }))),
-        h("span", { class: "hp-mc", title: "Market cap" }, h("small", {}, "MC"), h("b", {}, usd(c.mcapUsd, { compact: true })))),
+        h("span", { class: "hp-vol", title: "Volume, last 24 hours" }, h("small", {}, lbl("V", "Vol 24h")), h("span", {}, usd(c.volume24hUsd, { compact: true }))),
+        h("span", { class: "hp-mc", title: "Market cap" }, h("small", {}, lbl("MC", "Mcap")), h("b", {}, usd(c.mcapUsd, { compact: true })))),
       h("div", { class: "hp-foot" },
         lane === "migrated" ? h("div", { class: "hp-grad" }, h("span", {}, "Graduated"), h("small", {}, c.liquidityUsd != null ? `Pool ${usd(c.liquidityUsd, { compact: true })}` : "Uniswap v4"))
           : h("div", { class: "hp-bar", title: `${pct.toFixed(1)}% of the curve filled` }, h("i", { style: { width: `${pct}%` } }), h("span", {}, pct < 0.05 ? "Just started" : `${pct.toFixed(pct < 10 ? 1 : 0)}% bonded`, c.raisedEth != null && c.raisedEth >= 0.0005 ? ` · ${c.raisedEth.toFixed(c.raisedEth < 1 ? 3 : 2)} ETH` : "")),
@@ -204,7 +217,8 @@ export async function mount(view, ctx) {
               h("img", { src: "/img/logo-3d-128.png", alt: "", width: 16, height: 16 }), "Buy"),
           VENUES.map(([name, logo, url]) =>
             h("a", { class: "hp-venue", href: url(c), target: "_blank", rel: "noopener", title: `Trade on ${name}`, "aria-label": `Trade ${c.symbol} on ${name}`, onclick: stop },
-              logo ? h("img", { src: `/img/logos/${logo}`, alt: "", width: 16, height: 16 }) : h("b", { class: "hp-venue-txt" }, name.slice(0, 2)))))));
+              logo ? h("img", { src: `/img/logos/${logo}`, alt: "", width: 16, height: 16 }) : h("b", { class: "hp-venue-txt" }, name.slice(0, 2)))),
+          h("button", { class: "btn hp-else", type: "button", "aria-haspopup": "dialog", onclick: (e) => { e.stopPropagation(); venueSheet(c); }, onkeydown: stop }, "Trade elsewhere"))));
   }
 
   function paint() {

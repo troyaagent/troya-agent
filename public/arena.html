@@ -136,13 +136,14 @@ async function load() {
   try { d = await (await fetch("/api/arena")).json(); } catch { $("[data-ar-grid]").innerHTML = '<p class="ar-note">Could not load the Arena right now.</p>'; return; }
   const ai = (d.agents || []).filter((a) => a.kind === "ai");
   const users = (d.agents || []).filter((a) => a.kind !== "ai");
-  const livePnl = ai.reduce((s, a) => s + (a.live?.pnlEth || 0), 0), liveOpen = ai.reduce((s, a) => s + (a.live?.open || 0), 0), liveTrades = ai.reduce((s, a) => s + (a.live?.closed || 0), 0);
-  const paperPnl = ai.reduce((s, a) => s + (a.stats.pnlEth || 0) + (a.stats.openPnlEth || 0), 0), paperTrades = ai.reduce((s, a) => s + a.stats.closed, 0);
+  // totals come from the server's one summary, so this page and the Desk always show the same numbers
+  const S = d.summary || {}, z = { pnlEth: 0, trades: 0, open: 0 };
+  const pc = S.paperClosed || z, po = S.paperOpen || z, lc = S.liveClosed || z, lo = S.liveOpen || z;
   const left = ai.reduce((s, a) => s + (a.live ? Number(a.live.equityEth) : (d.live?.budgetPerTraderEth || 0)), 0);
   $("[data-ar-sum]").innerHTML = [
-    ["Live money", d.live ? `${left.toFixed(4)} ETH` : "off", d.live ? `of ${(ai.length * d.live.budgetPerTraderEth).toFixed(2)} ETH · ${liveOpen} open` : "paper only"],
-    ["Live result", `<span class="${cls(livePnl)}">${eth(livePnl)}</span>`, `${liveTrades} closed live trades`],
-    ["Paper result", `<span class="${cls(paperPnl)}">${eth(paperPnl)}</span>`, `${paperTrades} closed paper trades`],
+    ["Live money", d.live ? `${left.toFixed(4)} ETH` : "off", d.live ? `of ${(ai.length * d.live.budgetPerTraderEth).toFixed(2)} ETH · ${lo.open} open` : "paper only"],
+    ["Live result", `<span class="${cls(lc.pnlEth)}">${eth(lc.pnlEth)}</span>`, `${lc.trades} closed · ${eth(lo.pnlEth)} incl. ${lo.open} open`],
+    ["Paper result", `<span class="${cls(pc.pnlEth)}">${eth(pc.pnlEth)}</span>`, `${pc.trades} closed · ${eth(po.pnlEth)} incl. ${po.open} open`],
     ["Traders", `${ai.length} AI${users.length ? ` + ${users.length}` : ""}`, users.length ? `${users.length} user strateg${users.length > 1 ? "ies" : "y"} proving` : "rules rewritten daily"],
   ].map(([k, v, s]) => `<div class="ar-stat"><small>${k}</small><b>${v}</b><span>${s}</span></div>`).join("");
   const opens = (id) => (d.recent || []).filter((p) => p.agent === id && p.status === "open");

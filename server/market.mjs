@@ -1956,6 +1956,13 @@ export async function searchCoins(q, limit = 12) {
   return { ...v, coins: coins.slice(0, limit), perps: await perpsP };
 }
 
+export function hlMovers(markets, { top = 7, sort = "change" } = {}) {
+  const n = Math.max(1, Math.min(Number(top) || 7, 25));
+  const liquid = (markets || []).filter((x) => (x.volumeUsd || 0) >= 1e6 && x.change24h != null);
+  const by = sort === "volume" ? (x) => x.volumeUsd || 0 : (x) => Math.abs(x.change24h);
+  return { markets: liquid.sort((a, b) => by(b) - by(a)).slice(0, n).map((x) => ({ coin: x.coin, displayName: x.displayName || undefined, mark: x.mark, change24h: x.change24h, volumeUsd: x.volumeUsd, oiUsd: x.oiUsd, fundingApr: x.fundingApr })) };
+}
+
 export async function register(r) {
   // the $TROYA chart is the most opened one: read its curve and pool history once at start, so nobody waits for it
   setTimeout(() => {
@@ -1990,6 +1997,9 @@ export async function register(r) {
     let m = d.markets;
     if (query.dex === "main") m = m.filter((x) => !x.dex);
     else if (query.dex) m = m.filter((x) => x.dex === query.dex);
+    // ?top=7&sort=change: the Desk's movers (21 Nov 2026: it downloaded every market, ~92 KB, to show 7 rows). Liquid perps
+    // only ($1M+ volume), ranked by the size of the 24 h move, with just the fields the movers table draws.
+    if (query.top) return hlMovers(m, query);
     return { ...d, markets: m };
   });
   r.get("/api/market/hl/spot", () => getHlSpot());

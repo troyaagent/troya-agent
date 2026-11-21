@@ -2,7 +2,7 @@
 // Base and Arbitrum (KyberSwap). The network picker sits above the card; ?chain=base|arbitrum opens on that network.
 // Quotes and the Troya Gate come from the server; every transaction is signed in the user's wallet.
 import { h, clear, pageHead, seg, icon, modal, review, toast, tokenIcon, chainLogo, venueLogo, padLogo, tiny, num, amount, compact, price, usd, pctEl, short, useCss, debounce, infoTip } from "../ui.js";
-import { wallet, onWallet, openConnect, CHAINS } from "../wallet.js";
+import { wallet, onWallet, openConnect, CHAINS, signerFor } from "../wallet.js";
 import { api } from "../api.js";
 import { ETH, isNative, balanceOf, toRaw, fromRaw, inputNum, rawInput, sendTx, waitReceipt, errText, journal, addTransfer, updateTransfer } from "../chain.js";
 import { sol, onSol, connectSol, restoreSol, signAndSendSol, solWallets } from "../solana.js";
@@ -94,6 +94,15 @@ export async function mount(view, ctx) {
   const tokParam = (t) => (isNative(t) ? natParam() : t.address);
   if (isSolNet()) st.sell = SOLT;
   const cq = () => (st.chain === "robinhood" ? {} : { chain: st.chain });
+  // Permit2 opt-in, per device (localStorage may be blocked: then it is simply off)
+  const p2Pref = () => { try { return localStorage.getItem("troya.permit2") === "yes"; } catch { return false; } };
+  const setP2 = (v) => { try { localStorage.setItem("troya.permit2", v ? "yes" : "no"); } catch {} };
+  const p2Review = (q, net) => review({
+    title: `Approve ${q.tokenIn.symbol} once for Permit2`,
+    summary: `One approval transaction gives the Permit2 contract an unlimited allowance for your ${q.tokenIn.symbol}. Permit2 can only move it when you sign a permit: each sell asks for a free signature for the exact amount, valid 30 minutes, and then needs one transaction. You can revoke the approval any time.`,
+    rows: [["Approve", `Unlimited ${q.tokenIn.symbol}`], ["Spender", "Permit2 · 0x0000…8BA3 (Uniswap's canonical contract)"], ["Token", `${q.tokenIn.symbol} · ${short(q.tokenIn.address)}`], ["Then", "A free signature for exactly this sell"], ["Network", net]],
+    confirmLabel: "Approve in wallet",
+  });
   const netName = () => (isSolNet() ? "Solana" : `${CHAINS[st.chain].name} · ${CHAINS[st.chain].id}`);
   if (![100, 300, 500].includes(st.slip)) st.slip = 100;
 
@@ -1265,16 +1274,46 @@ export async function mount(view, ctx) {
       st.busy = "Preparing…"; paint();
       const chain = st.chain, net = netName();
       const buildArgs = { from: wallet.address, tokenIn: isNative(q.tokenIn) ? "ETH" : q.tokenIn.address, tokenOut: isNative(q.tokenOut) ? "ETH" : q.tokenOut.address, amountInRaw: q.amountInRaw, slippageBps: st.slip, ...cq() };
-      let built = gateTx(g, q) || await api.post("swap/build", buildArgs);
-      const need = (built.approvals || []).filter((a) => a.needed);
-      if (need.length) {
+      // Permit2 signature mode (opt-in, remembered on this device): Uniswap v4 routes on Robinhood Chain that spend an ERC-20.
+      // One unlimited approval to Permit2, then a free signature for the exact amount per sell, so a later sell is one
+      // transaction. Kyber, v3, Pons curve and other networks keep the exact approvals. The server says whether it applies.
+      const v4In = chain === "robinhood" && q.venue === "uniswap-v4" && !isNative(q.tokenIn);
+      let p2 = v4In && p2Pref();
+      const bArgs = () => (p2 ? { ...buildArgs, permit2: true } : buildArgs);
+      let built = gateTx(g, q);
+      if (!built || (p2 && built.approvals.some((a) => a.needed))) built = await api.post("swap/build", bArgs());
+      if (p2 && built.permit2?.mode !== "signature") p2 = false; // Permit2 not on this route or chain: exact approvals
+      let need = (built.approvals || []).filter((a) => a.needed);
+      if (need.length && !p2 && v4In && built.permit2?.available !== false) {
+        // exact approvals, with Permit2 offered next to them
+        const box = h("input", { type: "checkbox" });
         const okA = await review({
+          title: need.length > 1 ? `${need.length} approvals first` : `Approve ${q.tokenIn.symbol}`,
+          summary: `Exactly ${amount(Number(q.amountIn))} ${q.tokenIn.symbol} for this swap, nothing more.`,
+          rows: [...need.map((a, i) => [`Step ${i + 1}`, a.label]), ["Token", `${q.tokenIn.symbol} · ${short(q.tokenIn.address)}`], ["Network", net]],
+          extra: h("label", { class: "muted", style: { display: "flex", gap: "8px", alignItems: "flex-start", margin: "8px 0 12px", fontSize: "13px" } }, box,
+            h("span", {}, `Instead, approve ${q.tokenIn.symbol} once for Permit2 (Uniswap's standard approval contract). Later sells of ${q.tokenIn.symbol} then need one transaction and a free signature for the exact amount. The approval to Permit2 is unlimited until you revoke it.`)),
+          confirmLabel: "Continue",
+        });
+        if (!okA) { st.busy = false; paint(); return; }
+        if (box.checked) {
+          p2 = true;
+          built = await api.post("swap/build", bArgs());
+          if (built.permit2?.mode !== "signature") { p2 = false; setP2(false); throw new Error("Permit2 is not available for this route right now. Nothing was approved; try again for the exact approvals."); }
+          need = (built.approvals || []).filter((a) => a.needed);
+          if (need.length && !(await p2Review(q, net))) { st.busy = false; paint(); return; }
+          setP2(true);   // remembered only once the unlimited approval itself was confirmed
+        }
+      } else if (need.length) {
+        const okA = p2 ? await p2Review(q, net) : await review({
           title: need.length > 1 ? `${need.length} approvals first` : `Approve ${q.tokenIn.symbol}`,
           summary: `Exactly ${amount(Number(q.amountIn))} ${q.tokenIn.symbol} for this swap, nothing more.`,
           rows: [...need.map((a, i) => [`Step ${i + 1}`, a.label]), ["Token", `${q.tokenIn.symbol} · ${short(q.tokenIn.address)}`], ["Network", net]],
           confirmLabel: "Approve in wallet",
         });
         if (!okA) { st.busy = false; paint(); return; }
+      }
+      if (need.length) {
         for (const [i, a] of need.entries()) {
           st.busy = `Approval ${i + 1} of ${need.length}: confirm in your wallet…`; paint();
           const ah = await sendTx(chain, a.tx);
@@ -1288,7 +1327,7 @@ export async function mount(view, ctx) {
         // The first try is the Gate's own transaction from the run just made, when it no longer needs an approval
         for (let tries = 0; ; tries++) {
           const fromGate = tries === 0 ? gateTx(g2, q) : null;
-          built = fromGate && !fromGate.approvals.some((a) => a.needed) ? fromGate : await api.post("swap/build", buildArgs);
+          built = fromGate && !fromGate.approvals.some((a) => a.needed) ? fromGate : await api.post("swap/build", bArgs());
           if (!(built.approvals || []).some((a) => a.needed)) break;
           if (tries >= 3 || !alive) throw new Error("The approval is not visible on chain yet. Wait a few seconds and try again.");
           st.busy = "Waiting for the approval to show on chain…"; paint();
@@ -1307,15 +1346,29 @@ export async function mount(view, ctx) {
           ["Price impact", fq.priceImpact == null ? "–" : `${(fq.priceImpact * 100).toFixed(2)}%`],
           feeRow(fq),
           ["Route", fq.route.label],
+          built.permitSign ? ["Approval", `Free Permit2 signature: the Uniswap Universal Router (${short(built.permit2.spender)}) may spend exactly ${amount(Number(fq.amountIn))} ${fq.tokenIn.symbol}, for 30 minutes`]
+            : built.permit2?.mode === "signature" ? ["Approval", `Covered by your current Permit2 allowance for ${fq.tokenIn.symbol}`] : null,
+          built.permitSign ? ["Wallet steps", "1 signature (free), then 1 transaction"] : null,
           gateRow(),
           ["Recipient", `${short(wallet.address)} (you)`],
           ["Network", net],
         ],
         warn: reviewWarn(fq),
-        confirmLabel: "Swap in wallet",
+        confirmLabel: built.permitSign ? "Sign and swap in wallet" : "Swap in wallet",
       });
       if (!ok) { st.busy = false; paint(); return; }
       if (Date.now() - st.gateAt > 45000) await regate(q, "Running Troya Gate again…");
+      if (built.permitSign) {
+        // the free signature, then the server checks it (signer, token, spender, exact amount, 30 min, nonce), puts the
+        // PERMIT2_PERMIT command in front of the swap and simulates it; the reviewed minimum received is kept as a floor
+        st.busy = "Sign the Permit2 message in your wallet (free)…"; paint();
+        const ps = built.permitSign;
+        const signer = await signerFor(chain);
+        const permitSig = await signer.signTypedData(ps.domain, ps.types, ps.message);
+        st.busy = "Preparing…"; paint();
+        built = await api.post("swap/build", { ...buildArgs, permit2: true, permit: ps.message, permitSig, minOutRaw: fq.minOutRaw });
+        if (built.permitSign || (built.approvals || []).some((a) => a.needed)) throw new Error("The Permit2 signature was not accepted. Nothing was sent; try again.");
+      }
       st.busy = "Confirm in your wallet…"; paint();
       const hash = await sendTx(chain, built);
       const cname = CHAINS[chain].name;

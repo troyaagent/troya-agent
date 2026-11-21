@@ -1,5 +1,6 @@
 // Limits live here, outside any model. data/policy.json (operator) is re-read on every call;
-// each user can only tighten them (data/limits.json) and can Pause at any time.
+// each user can only tighten them (data/limits.json) and can Pause at any time. Agent → Scepter shows them, with the
+// Agent Wallet's own caps, as one Budget (getBudget below).
 import { requireSession } from "./auth.mjs";
 import { HttpError } from "./api.mjs";
 
@@ -94,15 +95,62 @@ export async function getPolicy(address) {
   };
 }
 
+// V8 F44 Scepter, one Budget: what an agent may really spend. Caps used to live on four screens (Agent Wallet caps, the
+// Autopilot limits, Scepter job caps, Sentry rules) and Scepter printed the loose policy value ($1000 a trade) while the
+// Agent Wallet's own $100 / $250 was what applied. Every automated job trades from the Agent Wallet, so its budget is the
+// strictest of the operator caps, the user's own limits and the wallet's caps (agentwallet.mjs capCheck + checkAction),
+// and `from` names which of them binds. Read-only: it changes no limit, and the wallet's key never leaves agentwallets.json.
+const pickMin = (cands) => {
+  let best = null;
+  // on a tie the first candidate (the most specific: the wallet, then the user, then the operator) is named
+  for (const c of cands) if (c.v != null && isFinite(c.v) && (best == null || c.v < best.v)) best = c;
+  return best || { v: null, from: null };
+};
+export async function getBudget(address, pol = null) {
+  const p = pol || (await getPolicy(address));
+  const op = await operatorPolicy();
+  const u = address ? await userLimits(address) : {};
+  const w = address ? (await store.readJson("agentwallets.json", {}))[String(address).toLowerCase()] || null : null;
+  const wc = w?.caps || {};
+  const per = pickMin([{ v: num(wc.perTradeUsd), from: "agent-wallet" }, { v: num(u.perTradeUsd), from: "your-limit" }, { v: num(op.perTradeUsd), from: "operator" }]);
+  const day = pickMin([{ v: num(wc.dailyUsd), from: "agent-wallet" }, { v: num(u.dailyUsd), from: "your-limit" }, { v: num(op.dailyUsd), from: "operator" }, { v: num(op.agentWallet?.maxDailyUsd), from: "operator" }]);
+  // two counters run side by side: the policy's (every action) and the Agent Wallet's own; each is held to its own cap,
+  // so what is left today is the smaller of the two remainders
+  const usedPolicy = p.usedTodayUsd || 0;
+  const spentWallet = w?.spent?.day === today() ? Number(w.spent.usd) || 0 : 0;
+  const walletDaily = Math.min(num(wc.dailyUsd) ?? Infinity, num(op.agentWallet?.maxDailyUsd) ?? Infinity);
+  const leftRaw = Math.min(p.effective.dailyUsd - usedPolicy, walletDaily - spentWallet);
+  const leftTodayUsd = isFinite(leftRaw) ? Math.max(0, Math.round(leftRaw * 100) / 100) : null;
+  // a job's own daily cap sits inside the day budget: the smaller of the two is what that job can spend in a day
+  const jobCaps = {};
+  for (const j of AUTO_JOBS) { const c = num(p.effective.jobCaps?.[j]); jobCaps[j] = c == null ? day.v : day.v == null ? c : Math.min(c, day.v); }
+  const e = p.effective;
+  const agentWallet = w ? { exists: true, enabled: w.enabled !== false, perTradeUsd: num(wc.perTradeUsd), dailyUsd: num(wc.dailyUsd), spentTodayUsd: spentWallet } : { exists: false };
+  const stoppedBy = e.killSwitch ? "operator" : e.paused ? "you" : !op.agentWallet?.enabled ? "operator-agent-wallets" : !w ? "no-agent-wallet" : w.enabled === false ? "agent-wallet-off" : null;
+  return {
+    perTradeUsd: per.v, perTradeFrom: per.from,
+    dailyUsd: day.v, dailyFrom: day.from,
+    usedTodayUsd: Math.round(Math.max(usedPolicy, spentWallet) * 100) / 100,
+    leftTodayUsd,
+    maxLeverage: e.maxLeverage,
+    allowedPerps: e.allowedPerps,
+    jobCaps,
+    agentWallet,
+    operator: { perTradeUsd: op.perTradeUsd, dailyUsd: op.dailyUsd, agentWalletDailyUsd: op.agentWallet?.maxDailyUsd ?? null, maxLeverage: op.maxLeverage, agentWalletsOn: !!op.agentWallet?.enabled },
+    canTrade: stoppedBy == null,
+    stoppedBy,
+  };
+}
+
 // kind: swap | perp | send | withdraw | bridge | launch | watch
 export async function checkAction(address, { kind, usd = 0, leverage = 1, market, token } = {}) {
   const p = await getPolicy(address);
   const e = p.effective;
   const reasons = [];
   if (e.killSwitch) reasons.push("The operator kill switch is on: all execution is stopped.");
-  if (e.paused) reasons.push("You paused the agent. Resume it in Agent → Scepter.");
-  if (usd > 0 && usd > e.perTradeUsd) reasons.push(`This is about $${usd.toFixed(2)}, above your per-trade cap of $${e.perTradeUsd}.`);
-  if (usd > 0 && p.usedTodayUsd + usd > e.dailyUsd) reasons.push(`This would take today's total to $${(p.usedTodayUsd + usd).toFixed(2)}, above your daily cap of $${e.dailyUsd}.`);
+  if (e.paused) reasons.push("You stopped every agent. Resume in Agent → Scepter.");
+  if (usd > 0 && usd > e.perTradeUsd) reasons.push(`This is about $${usd.toFixed(2)}, above your per-trade cap of $${e.perTradeUsd} (Agent → Scepter, Budget).`);
+  if (usd > 0 && p.usedTodayUsd + usd > e.dailyUsd) reasons.push(`This would take today's total to $${(p.usedTodayUsd + usd).toFixed(2)}, above your daily cap of $${e.dailyUsd} (Agent → Scepter, Budget).`);
   if (kind === "perp") {
     if (leverage > e.maxLeverage) reasons.push(`Leverage ${leverage}x is above your cap of ${e.maxLeverage}x.`);
     if (e.allowedPerps.length && market && !e.allowedPerps.includes(String(market).toUpperCase())) reasons.push(`${market} is not on your allowed markets list.`);
@@ -121,7 +169,8 @@ export async function register(r, ctx) {
 
   r.get("/api/policy", async ({ req }) => {
     const s = requireSession(req);
-    return getPolicy(s.address);
+    const pol = await getPolicy(s.address);
+    return { ...pol, budget: await getBudget(s.address, pol) };
   });
   r.get("/api/policy/public", async () => (await getPolicy(null)).operator);
 
@@ -152,6 +201,7 @@ export async function register(r, ctx) {
     const { logAction } = await import("./journal.mjs");
     if ("paused" in body) await logAction({ address: s.address, kind: body.paused ? "pause" : "resume", summary: body.paused ? "Agent paused" : "Agent resumed", source: "app" });
     else await logAction({ address: s.address, kind: "limits", summary: "Limits updated", data: body, source: "app" });
-    return getPolicy(s.address);
+    const pol = await getPolicy(s.address);
+    return { ...pol, budget: await getBudget(s.address, pol) };
   });
 }

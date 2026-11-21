@@ -7,9 +7,8 @@
 //   Telegram (via tgterm.mjs): /autopilot · on|off · practice|live · set min 1 buy 0.01 tp 2 sl 30 max 3
 //   Web: Agent → Sentry Autopilot. Phase 9 reads the closed results of users who opted into the leaderboard.
 import { randomBytes } from "node:crypto";
-import { formatUnits } from "ethers";
 import { quoteSwap } from "./tools.mjs";
-import { getAgentWallet, executeForUser } from "./agentwallet.mjs";
+import { getAgentWallet, executeForUser, findLot, onLots } from "./agentwallet.mjs";
 import { getBalances } from "./robinhood.mjs";
 import { getPolicy } from "./policy.mjs";
 
@@ -33,7 +32,6 @@ async function tokenBal(addr, token) {
   const b = await getBalances(addr, [token]).catch(() => null);
   return b?.balances?.find((x) => x.address !== "native" && x.address.toLowerCase() === token.toLowerCase()) || null;
 }
-async function ethBal(addr) { return Number((await getBalances(addr).catch(() => null))?.balances?.find((x) => x.address === "native")?.amount ?? NaN); }
 // at most 15 significant digits, cut and never rounded up, so a Number of it stays at or below the balance
 function trunc(s, sig = 15) {
   const [i, f = ""] = String(s).split(".");
@@ -106,7 +104,8 @@ export async function positionsOf(address, { open } = {}) {
 }
 export function stats(list) {
   const closed = list.filter((p) => p.status === "closed");
-  const by = (mode) => { const c = closed.filter((p) => p.mode === mode); const pnl = c.reduce((a, p) => a + (p.pnlEth || 0), 0); const won = c.filter((p) => (p.pnlEth || 0) > 0).length; return { closed: c.length, pnlEth: pnl, winRate: c.length ? won / c.length : null, invested: c.reduce((a, p) => a + p.amountEth, 0) }; };
+  // a position whose coins were sold elsewhere has no result (pnlEth null): it is left out, never counted as a loss
+  const by = (mode) => { const c = closed.filter((p) => p.mode === mode && p.pnlEth != null); const pnl = c.reduce((a, p) => a + (p.pnlEth || 0), 0); const won = c.filter((p) => (p.pnlEth || 0) > 0).length; return { closed: c.length, pnlEth: pnl, winRate: c.length ? won / c.length : null, invested: c.reduce((a, p) => a + p.amountEth, 0) }; };
   return { practice: by("practice"), live: by("live"), open: list.filter((p) => p.status === "open").length };
 }
 async function savePosition(pos) {
@@ -149,12 +148,17 @@ async function open(address, mode, r, rules) {
   if (mode === "live") {
     const awPre = await getAgentWallet(address);
     const pre = Number((await tokenBal(awPre.address, r.token))?.amount || 0);
-    const ex = await executeForUser(address, { kind: "swap", params: { tokenIn: "ETH", tokenOut: r.token, amountIn: rules.buyEth, slippagePct: 3 }, rationale: `Sentry Autopilot: $${r.symbol} passed the Gate at ${Number(r.pons?.raised || 0).toFixed(2)} ETH raised`, source: "autopilot" });
+    // the lot names this position in the Agent Wallet's lot ledger: its exit then sells these coins only, never the coins
+    // Champions or the owner hold of the same launch (audit 3-10, 21 Nov 2026). A buy held for approval keeps the lot on
+    // its proposal, so a buy approved later still becomes a position with its take-profit and stop (positionFromLot).
+    const lot = { source: "autopilot", positionId: pos.id, meta: { symbol: pos.symbol, rules: pos.rules, raisedAtEntry: pos.raisedAtEntry } };
+    const ex = await executeForUser(address, { kind: "swap", params: { tokenIn: "ETH", tokenOut: r.token, amountIn: rules.buyEth, slippagePct: 3 }, rationale: `Sentry Autopilot: $${r.symbol} passed the Gate at ${Number(r.pons?.raised || 0).toFixed(2)} ETH raised`, source: "autopilot", lot });
     // held by the trust ladder: executeForUser already put the ask in the inbox and on Telegram, so no "skipped" message
     // that contradicts it, and the coin is noted so Sentry's re-checks of the same launch do not ask again
     if (!ex.executed && ex.proposed) { await noteAsk(address, r.token); return null; }
     if (!ex.executed) { await dm(address, `<b>Sentry Autopilot skipped $${esc(pos.symbol)}.</b> ${esc((ex.reasons || [ex.result?.note || "Not sent."]).join(" ").slice(0, 200))}`); return null; }
-    for (let i = 0; i < 6; i++) {
+    if (ex.lot?.tokens > 0) { pos.tokens = ex.lot.tokens; pos.lotId = ex.lot.id; }
+    else for (let i = 0; i < 6; i++) {
       const now = Number((await tokenBal(awPre.address, r.token))?.amount || 0);
       if (now - pre > q.amountOut * 0.5) { pos.tokens = now - pre; break; }
       await sleep(3000);
@@ -182,33 +186,65 @@ export function exitReason(pos, valueEth, now = Date.now()) {
   return null;
 }
 export async function close(pos, reason, valueEth) {
+  let pnl = null;
   if (pos.mode === "live") {
     // asked a moment ago and still held (not on Auto): wait for the owner's yes instead of asking again every tick
     if (pos.exitAskedAt > Date.now() - ASK_AGAIN_MS && (await getPolicy(pos.address)).effective.trust !== "auto") { await savePosition(pos); return null; }
-    const aw = await getAgentWallet(pos.address);
-    // a public RPC can lag right after the buy: wait until the coins show up before selling
-    let h = null;
-    for (let i = 0; i < 5; i++) {
-      const b = await getBalances(aw.address, [pos.token]).catch(() => null);
-      h = b?.balances?.find((x) => x.address !== "native" && x.address.toLowerCase() === pos.token.toLowerCase()) || null;
-      if (h && Number(h.amount) >= pos.tokens * 0.9) break;
-      await new Promise((r) => setTimeout(r, 3000));
-    }
-    if (!h || BigInt(h.raw) === 0n || Number(h.amount) < pos.tokens * 0.001) { pos.status = "closed"; pos.closedAt = Date.now(); pos.reason = "nothing left to sell"; pos.exitValueEth = 0; pos.pnlEth = -pos.amountEth; await savePosition(pos); return pos; }
-    const amount = trunc(formatUnits(BigInt(h.raw), h.decimals));   // a decimal string, cut and never rounded above what it holds
-    const before = await ethBal(aw.address);
-    const ex = await executeForUser(pos.address, { kind: "swap", params: { tokenIn: pos.token, tokenOut: "ETH", amountIn: amount, slippagePct: 8 }, rationale: `Sentry Autopilot: ${reason} on $${pos.symbol}`, source: "autopilot" });
-    if (!ex.executed) { if (ex.proposed) pos.exitAskedAt = Date.now(); pos.lastError = (ex.reasons || [ex.proposed ? "Waiting for your approval in Agent → Scepter." : ex.result?.note || "not sent"]).join(" ").slice(0, 200); await savePosition(pos); return null; }
-    let after = NaN;
-    for (let i = 0; i < 6; i++) { after = await ethBal(aw.address); if (isFinite(before) && after > before) break; await sleep(3000); }
-    if (isFinite(before) && isFinite(after) && after > before) valueEth = after - before;   // what actually came back
-    else if (!(valueEth > 0)) valueEth = await valueOf({ ...pos, tokens: Number(amount) }).catch(() => 0);
+    // the lot ledger sells this position's own coins only (audit 3-10, 21 Nov 2026): until then this sold the wallet's
+    // whole balance of the coin, Champions' coins of the same launch and the owner's own included, and the job that exited
+    // second found "nothing left to sell" and booked -100%. A position from before the ledger sells at most its own
+    // pos.tokens, and never coins another job's lot holds.
+    const ex = await executeForUser(pos.address, { kind: "swap", params: { tokenIn: pos.token, tokenOut: "ETH", amountIn: decStr(pos.tokens), slippagePct: 8 }, rationale: `Sentry Autopilot: ${reason} on $${pos.symbol}`, source: "autopilot",
+      lot: { source: "autopilot", positionId: pos.id, sell: true } });
+    // already closed (Aegis sold the coin on a red alert) or nothing of it left (sold elsewhere): no made-up result
+    if (ex.lotDone || ex.nothingToSell) return finishFromLot(pos, ex.lot || { how: "sold elsewhere", outEth: null, pnlEth: null });
+    if (!ex.executed) { if (ex.proposed) { pos.exitAskedAt = Date.now(); pos.pendingReason = reason; } pos.lastError = (ex.reasons || [ex.proposed ? "Waiting for your approval in Agent → Scepter." : ex.result?.note || "not sent"]).join(" ").slice(0, 200); await savePosition(pos); return null; }
+    if (ex.lot) return finishFromLot(pos, ex.lot, reason);
+    // no lot (a position from before the ledger): the ETH the sell brought in, on the part of the position it sold
+    if (ex.sale?.outEth != null) valueEth = ex.sale.outEth;
+    const part = pos.tokens > 0 && ex.sale?.soldTokens > 0 ? Math.min(1, ex.sale.soldTokens / pos.tokens) : 1;
+    pnl = valueEth - pos.amountEth * part;
+    if (part < 0.999) reason = `${reason}, part sold elsewhere`;
     pos.txSell = (ex.result?.steps || []).at(-1)?.hash || null;
   }
-  pos.status = "closed"; pos.closedAt = Date.now(); pos.reason = reason; pos.exitValueEth = valueEth; pos.pnlEth = valueEth - pos.amountEth;
+  pos.status = "closed"; pos.closedAt = Date.now(); pos.reason = reason; pos.exitValueEth = valueEth; pos.pnlEth = pnl ?? valueEth - pos.amountEth;
   await savePosition(pos);
-  await dm(pos.address, `<b>Sentry Autopilot${pos.mode === "practice" ? " (practice)" : ""} sold $${esc(pos.symbol)}</b> · ${esc(reason)}\nIn ${eth(pos.amountEth)}, out ${eth(valueEth)} · ${pos.pnlEth >= 0 ? "+" : ""}${eth(pos.pnlEth)} (${((valueEth / pos.amountEth - 1) * 100).toFixed(1)}%)`);
+  await dm(pos.address, closedText(pos));
   return pos;
+}
+function closedText(pos) {
+  const head = `<b>Sentry Autopilot${pos.mode === "practice" ? " (practice)" : ""} sold $${esc(pos.symbol)}</b> · ${esc(pos.reason)}`;
+  // sold elsewhere: the coins left the Agent Wallet another way, so there is no result to report for this position
+  if (pos.pnlEth == null) return `${head}\nIn ${eth(pos.amountEth)}. The coins were no longer in the Agent Wallet, so this position has no result.`;
+  const cost = pos.exitValueEth - pos.pnlEth;                 // the cost of the part this position itself sold
+  return `${head}\nIn ${eth(pos.amountEth)}, out ${eth(pos.exitValueEth)} · ${pos.pnlEth >= 0 ? "+" : ""}${eth(pos.pnlEth)}${cost > 0 ? ` (${((pos.exitValueEth / cost - 1) * 100).toFixed(1)}%)` : ""}`;
+}
+// a live position whose lot closed: by its own exit, by an exit approved later, by Aegis, or because the coins were gone
+async function finishFromLot(pos, lot, reason = null) {
+  // the lot hook and the exit tick can both see the same closed lot: the position closes (and messages the owner) once
+  if ((await positionsOf(pos.address)).some((p) => p.id === pos.id && p.status === "closed")) return pos;
+  const how = lot.how || "sold";
+  pos.status = "closed"; pos.closedAt = Date.now();
+  pos.reason = how === "sold" ? reason || pos.pendingReason || "sold" : how === "sold, part sold elsewhere" ? `${reason || pos.pendingReason || "sold"}, part sold elsewhere` : how;
+  pos.exitValueEth = lot.outEth ?? null; pos.pnlEth = lot.pnlEth ?? null;
+  if (lot.soldPct != null) pos.soldPct = lot.soldPct;
+  pos.txSell = lot.txSell || pos.txSell || null;
+  await savePosition(pos);
+  await dm(pos.address, closedText(pos));
+  return pos;
+}
+// a live buy held by the trust ladder and approved later: it becomes a position, with the take-profit and stop of the
+// rules it was asked with, so it gets an exit like any other (until 21 Nov 2026 an approved buy had none)
+async function positionFromLot(owner, lot) {
+  const s = await store.readJson(STATE, blank());
+  if ((s.positions || []).some((p) => p.id === lot.positionId)) return;
+  const u = s.users?.[owner.toLowerCase()] || {};
+  const rules = cleanRules(lot.meta?.rules || u.rules || {});
+  const pos = { id: lot.positionId, address: owner.toLowerCase(), mode: "live", token: lot.token, symbol: lot.meta?.symbol || lot.symbol || "?", amountEth: lot.costEth, tokens: lot.tokens,
+    entryPriceEth: lot.tokens > 0 ? lot.costEth / lot.tokens : null, raisedAtEntry: lot.meta?.raisedAtEntry ?? null, rules: { takeProfitX: rules.takeProfitX, stopPct: rules.stopPct },
+    openedAt: Date.now(), status: "open", lotId: lot.id, txBuy: lot.txBuy || null, approvedLate: true };
+  await savePosition(pos);
+  await dm(owner, `<b>Sentry Autopilot bought $${esc(pos.symbol)}</b> (approved)\n${eth(pos.amountEth)}. Take profit at ${rules.takeProfitX}x, stop at -${rules.stopPct}%.\n<code>${lot.token}</code>`);
 }
 export async function valueOf(pos) {
   // straight to the on-chain quote with the coin's address (19 Nov 2026): tools.quoteSwap first looked the coin up and built
@@ -224,6 +260,11 @@ async function tick() {
     const s = await store.readJson(STATE, blank());
     for (const pos of (s.positions || []).filter((p) => p.status === "open")) {
       try {
+        // its lot already closed (Aegis sold the coin, or an exit approved later went through): close with that result
+        if (pos.mode === "live") {
+          const lot = await findLot(pos.address, "autopilot", pos.id).catch(() => null);
+          if (lot && lot.status !== "open") { await finishFromLot(pos, lot); continue; }
+        }
         const v = await valueOf(pos);
         pos.lastValueEth = v; pos.lastCheck = Date.now();
         const why = exitReason(pos, v);
@@ -269,6 +310,16 @@ export async function command(address, arg) {
 /* ---------- web ---------- */
 export async function register(r, ctx) {
   store = ctx.store;
+  // the Agent Wallet's lot ledger reports this job's lots: a held buy approved later becomes a position; a lot closed by
+  // someone else (Aegis, or a held exit approved later) closes its position at once. Its own direct exits close() handles.
+  onLots("autopilot", {
+    opened: async (owner, lot, c) => { if (c?.approved) await positionFromLot(owner, lot); },
+    closed: async (owner, lot, c) => {
+      if (!c?.approved && c?.by === "autopilot") return;
+      const pos = (await positionsOf(owner, { open: true })).find((p) => p.id === lot.positionId);
+      if (pos) await finishFromLot(pos, lot);
+    },
+  });
   const { requireSession } = await import("./auth.mjs");
   r.get("/api/autopilot", async ({ req }) => {
     const s = requireSession(req);

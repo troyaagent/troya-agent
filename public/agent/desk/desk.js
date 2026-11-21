@@ -1,7 +1,7 @@
 // Troya Desk (concept shell). Same pages, same API and wallet modules as /agent; only the frame changes:
 // grouped sidebar, top bar with Search (⌘K), an agent drawer that stays open beside any page, and a new Desk home.
 // Pages live in /agent/js/pages/<name>.js (unchanged). Desk home and Gate live next to this file.
-import { h, $, clear, icon, toast, modal, short, store, chainLogo, tokenIcon, coinIcon, setBorn, price, seg } from "/agent/js/ui.js";
+import { h, $, clear, icon, toast, modal, short, store, chainLogo, tokenIcon, coinIcon, setBorn, price, seg, useCss } from "/agent/js/ui.js";
 import { padName } from "/agent/js/marketlib.js";
 import { wallet, onWallet, openConnect, restore, disconnect, signIn, ensureChain, CHAINS, chainById } from "/agent/js/wallet.js";
 import { api } from "/agent/js/api.js";
@@ -80,6 +80,15 @@ const ROUTES = {
   herald: "herald", treasury: "treasury",                    // V8 F42: /agent/js/pages/herald.js
 };
 const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js" };
+// The sheets each page asks for with useCss at mount. route() requests them together with the module, so the stylesheet
+// is not one more round trip after the code. The boot script in /agent/index.html keeps a copy of this table and of the
+// routes above to start the same downloads before this file has even arrived: change both together.
+const PAGE_CSS = {
+  home: ["home", "start"], market: ["home", "market"], token: ["home", "market"], launchpad: ["home", "market"], gate: ["home"], treasury: ["home", "agent"],
+  swap: ["swap"], perps: ["perps"], bridge: ["bridge"], agent: ["agent"], portfolio: ["portfolio", "start"], docs: ["docs"], start: ["start"], leaderboard: ["start"], herald: ["herald"],
+  spot: ["perps"], registry: ["perps"], rail: ["perps"], hippodrome: ["perps"], create: ["perps"], creator: ["perps"],
+  lighter: ["perps", "swap"], stocks: ["perps", "swap"], liquidity: ["perps", "swap"], flywheel: ["perps", "swap"], social: ["perps", "swap"],
+};
 export const prefs = store("troya.prefs", { slippage: 1, density: "comfortable", motion: "system", lang: "auto" });
 
 const view = $("#view");
@@ -149,13 +158,16 @@ async function route() {
   cleanup = null;
   view.classList.toggle("wide", page === "perps" || page === "hippodrome");   // hippodrome = the Troya Launches module
   view.dataset.page = page || "";
-  if (!page) { notFound(r); return; }
+  if (!page) { notFound(r); startSilk(); return; }
   clear(view, h("div", { style: { padding: "60px 0" } }, h("div", { class: "sk", style: { height: "40px", width: "240px" } })));
+  for (const c of PAGE_CSS[page] || []) useCss(c);
+  if (r.name === "launch" && (r.parts[0] === "create" || r.parts[0] === "x")) useCss("launch");
   let mod;
   try { mod = await import(LOCAL[page] || `/agent/js/pages/${page}.js`); }
   catch (e) {
     console.error(e);
     if (id === routeId) clear(view, h("div", { class: "empty", style: { padding: "120px 0" } }, h("b", {}, "This page failed to load."), h("div", {}, String(e.message || e))));
+    startSilk();
     return;
   }
   if (id !== routeId) return;
@@ -169,6 +181,7 @@ async function route() {
   // left before it finished loading: its timers stop now, never on the next page's watch
   if (id !== routeId) { try { cu?.(); } catch {} return; }
   cleanup = cu;
+  startSilk();
 }
 
 // a mistyped or retired address: say so plainly, offer a search for its words and the four places people go most
@@ -198,8 +211,16 @@ function notFound(r) {
 /* ---------- the room: soft chrome light behind every page (dark theme) ---------- */
 const room = h("div", { class: "d-room", "aria-hidden": "true" }, h("canvas", { class: "d-silk" }));
 document.body.prepend(room);
-let silk = null;
-import("./silk.js").then((m) => { silk = m.mountSilk(room.firstChild, 0.5); if (!silk) room.classList.add("flat"); }).catch(() => room.classList.add("flat"));
+let silk = null, silkStarted = false;
+// The light is decoration: it starts once the first page has mounted and the browser is idle (at most 2 s later), so
+// compiling its shader never competes with the page people came for. Until then the room shows its flat backdrop.
+function startSilk() {
+  if (silkStarted) return;
+  silkStarted = true;
+  const mount = () => import("./silk.js").then((m) => { silk = m.mountSilk(room.firstChild, 0.5); if (!silk) room.classList.add("flat"); }).catch(() => room.classList.add("flat"));
+  if ("requestIdleCallback" in window) requestIdleCallback(mount, { timeout: 2000 }); else setTimeout(mount, 300);
+}
+setTimeout(startSilk, 6000);          // a first page whose mount never settles still gets its light
 
 /* ---------- sidebar ---------- */
 clear($("[data-nav]"), GROUPS.map(([g, items]) => h("div", { class: "d-group" },
@@ -304,8 +325,12 @@ function renderRight() {
     chainLogo(wallet.address ? (c?.key || "") : "robinhood", 16), wallet.address ? name : MAIN.name);
   if (pop) closePop();          // the chip is drawn anew, so a card left open would point at nothing
   const bell = h("a", { class: "icon-btn", href: "#/portfolio/inbox", "aria-label": "Inbox" }, si("inbox"), inboxCount ? h("span", { class: "badge" }, inboxCount > 9 ? "9+" : inboxCount) : null);
+  // connected but not signed in: a small "Sign in" tag on the button, so the missing step is visible before a feature asks
+  const unsigned = !!wallet.address && !wallet.session;
   const wbtn = wallet.address
-    ? h("button", { class: "wallet-btn on", type: "button", onclick: walletMenu }, h("i", { class: "av" }), short(wallet.address))
+    ? h("button", { class: `wallet-btn on${unsigned ? " unsigned" : ""}`, type: "button", onclick: walletMenu,
+        ...(unsigned ? { title: "Connected, not signed in", "aria-label": `Wallet ${short(wallet.address)}, not signed in` } : {}) },
+        h("i", { class: "av" }), short(wallet.address), unsigned ? h("span", { class: "wb-sign", "aria-hidden": "true" }, "Sign in") : null)
     : h("button", { class: "wallet-btn d-connect", type: "button", onclick: () => openConnect(), "aria-label": "Connect wallet" }, si("wallet"), h("span", {}, "Connect", h("span", { class: "wb-more" }, " wallet")));
   const gear = h("button", { class: "icon-btn", type: "button", "aria-label": "Settings", onclick: openSettings }, si("gear"));
   const light = document.documentElement.dataset.theme === "light";

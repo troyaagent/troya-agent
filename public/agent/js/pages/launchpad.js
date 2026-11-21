@@ -44,7 +44,7 @@ export async function mount(view, ctx) {
     emptyText: "No launch matches.",
     cols: [
       { key: "token", label: "Token", align: "l", render: (t) => tokenCell(t) },
-      { key: "age", label: "Age", render: (t) => h("span", { class: "muted" }, ageText(t.createdAt)), hide: NARROW },
+      { key: "age", label: "Age", render: (t) => h("span", { class: "muted" }, ageText(t.bornAt || t.createdAt)), hide: NARROW },   // bornAt: the creation block, as the coin page shows it
       // phones: the market cap sits under the price (as on Market), so no column hides off-screen
       { key: "price", label: NARROW ? "Price · MC" : "Price", render: (t) => (NARROW ? h("div", { class: "pcell" }, h("span", {}, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"), h("span", { class: "sub" }, t.mcapUsd > 0 ? `MC ${usd(t.mcapUsd, { compact: true })}` : "MC –")) : priceCell(t.priceEth, t.priceUsd)) },
       { key: "change", label: "24h", render: (t) => pctEl(t.change24h) },
@@ -58,7 +58,7 @@ export async function mount(view, ctx) {
   // Desk 2.0: the first four of the current list as cards (newest, hottest or gainers, whichever tab is open)
   const topBox = h("div", { class: "mk2-top" });
   const paintTop = (rows) => clear(topBox, rows.slice(0, 4).map((t, i) => h("a", { class: "mk2-card", href: `#/token/${t.address}` },
-    h("div", { class: "mk2-c-h" }, tokenIcon({ ...t, chain: "robinhood" }), h("span", {}, h("b", {}, t.symbol), h("small", {}, t.createdAt ? `${ageText(t.createdAt)} old` : "New")), h("span", { class: "mk2-rank" }, padLogo(t.launchpad, 16))),
+    h("div", { class: "mk2-c-h" }, tokenIcon({ ...t, chain: "robinhood" }), h("span", {}, h("b", {}, t.symbol), h("small", {}, t.bornAt || t.createdAt ? `${ageText(t.bornAt || t.createdAt)} old` : "New")), h("span", { class: "mk2-rank" }, padLogo(t.launchpad, 16))),
     h("div", { class: "mk2-c-p" }, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"),
     h("div", { class: "mk2-c-f" }, pctEl(t.change24h), h("span", {}, `vol ${t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : "–"}`), h("span", {}, `liq ${t.liquidityUsd != null ? usd(t.liquidityUsd, { compact: true }) : "–"}`)),
     h("i", { class: "mk2-bar", style: { "--w": `${Math.min(100, Math.abs(t.change24h || 0))}%` }, "data-dir": (t.change24h || 0) >= 0 ? "up" : "down" }))));

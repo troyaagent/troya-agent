@@ -7,7 +7,7 @@ import { LAUNCHPADS, padName, tokenCell, priceCell, ethAmount, usdCell, mcapCell
 // createdAt is the main pool's date, so a coin that graduated to Uniswap looked as old as its graduation; it stays the
 // fallback until the birth is read.
 const BORN = new Map();
-const bornOf = (t) => BORN.get(String(t.address || "").toLowerCase()) || t.createdAt || null;
+const bornOf = (t) => BORN.get(String(t.address || "").toLowerCase()) || t.bornAt || t.createdAt || null;   // bornAt: the server's copy of the same birth
 const priceMcCell = (t) => h("div", { class: "pcell" }, h("span", {}, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"), h("span", { class: "sub" }, t.mcapUsd > 0 ? `MC ${usd(t.mcapUsd, { compact: true })}` : "MC –", bornOf(t) ? h("span", { title: "Age: how long ago the coin was created" }, ` · ${ageText(bornOf(t))}`) : null), staleNote(t));
 // Liquidity is the money side of a coin's pools (ETH, USDG or stock tokens): what a seller can take out. The pool total
 // also counts the coin at the pool's own price (MOW: $18.6M on 0.81 ETH), so it only shows in the tooltip.

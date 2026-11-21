@@ -1,11 +1,24 @@
 // Perps desk: Hyperliquid chart, order book, order ticket (own-wallet trading key), Troya Gate, positions.
 import { h, clear, icon, pageHead, table, review, toast, modal, num, fixed, usd, compact, pct, pctEl, short, useCss, every, debounce, store, coinIcon } from "../ui.js";
 import { api } from "../api.js";
-import { wallet, onWallet, openConnect, ensureChain } from "../wallet.js";
+import { wallet, onWallet, openConnect, ensureChain, reader, CHAINS } from "../wallet.js";
 import { getTradingKey, tradingKeyStatus, approveTradingKey, revokeTradingKey, placeOrder, cancelOrder, sendToDex, roundSz } from "../hl.js";
-import { sendTx } from "../chain.js";
-// F16: trade.xyz markets (stocks, indices, metals) sit beside the Hyperliquid perps; their margin is a separate balance
-const nameOf = (m) => (m?.dex ? `${m.label} · trade.xyz` : `${m?.coin}-PERP`);
+import { sendTx, waitReceipt, errText, balanceOf, ETH } from "../chain.js";
+// F16: trade.xyz markets (stocks, indices, metals) sit beside the Hyperliquid perps; their margin is a separate balance.
+// A trade.xyz ticker says little on its own (ANT, SKHX), so the page names it from the server's displayName:
+// "Anthropic · ANT perp". A crypto perp keeps its usual BTC-PERP. tagOf is the bare ticker for units and short labels.
+const tagOf = (m) => (m?.dex ? (m.label || String(m.coin || "").replace(/^[a-z]+:/i, "")) : m?.coin);
+function nameOf(m) {
+  const t = tagOf(m);
+  if (!m?.dex) return `${t}-PERP`;
+  const n = m.displayName;
+  return n && n.toUpperCase() !== String(t).toUpperCase() ? `${n} · ${t} perp` : `${t} perp`;
+}
+const HL_CHAIN = 1337;         // LI.FI's id for Hyperliquid (HyperCore), where Fund & open delivers the USDC
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Hyperliquid refuses approveAgent (and every other action) on an address that has never received a deposit
+const mustDeposit = (e) => /must deposit/i.test(String(e?.message || e || ""));
+const FUND_STEPS = ["Sent", "Bridging", "Landed", "Order placed"];
 
 const IVALS = ["1m", "5m", "15m", "1h", "4h", "1d"];
 const prefs = store("troya.perps", { interval: "1h", unit: "USD", lev: {} });
@@ -23,13 +36,15 @@ const press = (btns, on) => btns.forEach((b) => { const v = String(!!on(b)); if 
 // a small block with links or buttons is rebuilt only when what it says changes
 const patch = (el, sig, build) => { if (el._sig === sig) return; el._sig = sig; clear(el, build()); };
 const rejected = (e) => e?.code === 4001 || e?.code === "ACTION_REJECTED" || /reject|denied/i.test(e?.message || "");
-const errMsg = (e) => { const s = String(e?.shortMessage || e?.message || "Something went wrong."); return /[.!?…]$/.test(s) ? s : `${s}.`; };
+// errText (chain.js) turns wallet and RPC errors into plain words ("Not enough ETH to cover the amount plus network fee.")
+const errMsg = (e) => { const s = errText(e); return /[.!?…]$/.test(s) ? s : `${s}.`; };
 
-const pxDecimals = (p) => (!p ? 2 : p >= 10000 ? 0 : p >= 1000 ? 1 : p >= 100 ? 2 : p >= 1 ? 4 : p >= 0.01 ? 5 : 7);
-// fixed decimals, so the book, the axis and the header line up digit for digit (383.60 under 383.61)
+// price decimals by the size of the price: >= 10,000 -> 0, >= 1,000 -> 1, >= 100 -> 2, >= 10 -> 3, >= 1 -> 4 (5 or 7
+// under $1). The page picks them once per market from its mark price (decOf in mount), so the book, the axis, the
+// header and TP/SL line up digit for digit; picked per value, the axis read 100.00 beside 97.5000
+const pxDecimals = (p) => (!p ? 2 : p >= 10000 ? 0 : p >= 1000 ? 1 : p >= 100 ? 2 : p >= 10 ? 3 : p >= 1 ? 4 : p >= 0.01 ? 5 : 7);
 // a cap reads as a round number: $25K, $2.5K, $500 (not $25.0K)
 const capUsd = (v) => (v >= 1000 ? `$${+(v / 1000).toFixed(v % 1000 ? 1 : 0)}K` : usd(v));
-const fmtPx = (p) => (p == null || !isFinite(p) ? "–" : fixed(p, pxDecimals(p)));
 
 function readPolicy(p) {
   // /api/policy returns { operator, user, effective: { maxLeverage, perTradeUsd, dailyUsd, allowedPerps, paused, killSwitch }, usedTodayUsd }
@@ -85,14 +100,26 @@ export async function mount(view, ctx) {
     key: { state: "none" }, lastOk: 0,
     busy: null,      // set while an order or a funding is in flight: the main button shows it, disabled, so nothing goes out twice
     funding: null,
+    fundStep: null,  // { hash, step } while Fund & open runs: 1 Sent · 2 Bridging · 3 Landed · 4 Order placed
+    noDeposit: false, // Hyperliquid answered "Must deposit before performing actions" for this account
   };
-  let stage = null;  // where Fund & open is: "fund" | "wait" | "move" | "order", so a cancel says what really happened
+  let stage = null;  // where Fund & open is: "fund" | "bridge" | "landed" | "key" | "move" | "order", so a cancel says what really happened
+  const decs = new Map();   // coin -> price decimals, picked once from the first mark price seen
+  const decOf = (m) => { if (!m?.markPx) return null; let d = decs.get(m.coin); if (d == null) { d = pxDecimals(m.markPx); decs.set(m.coin, d); } return d; };
+  const fmtPx = (p, m = st.m) => (p == null || !isFinite(p) ? "–" : fixed(p, decOf(m) ?? pxDecimals(p)));
+  // the market behind a coin the account panel shows (a position can sit on a market the list has not loaded)
+  const mOf = (coin) => st.markets.find((x) => x.coin === coin) || { coin, dex: /^[a-z]+:/i.test(coin) ? coin.split(":")[0] : null, label: String(coin).replace(/^[a-z]+:/i, "") };
+  // started before the market list arrives: the chart library and the first candles load alongside it, so the chart
+  // no longer waits for the list (about 1.5 s sooner). A bare ticker resolves on the server the way the link does.
+  const lwP = import("lightweight-charts");
+  lwP.catch(() => {});
+  let early = api.get(`hl/candles?coin=${encodeURIComponent(st.coin)}&interval=${st.interval}`).catch(() => null);
 
   /* ---------- layout ---------- */
   // the button already holds the asked-for market's name, so the header keeps its height when the list arrives
   const asked = String(ctx.parts[0] || "BTC").replace(/-PERP$/i, "");
   const mktBtn = h("button", { class: "pp-mkt", type: "button", "aria-label": "Choose market", onclick: () => pickMarket() },
-    coinIcon(asked, "pp-coin"), asked.includes(":") ? `${asked.split(":")[1]} · trade.xyz` : `${asked.toUpperCase()}-PERP`, icon("arrowRight"));
+    coinIcon(asked, "pp-coin"), asked.includes(":") ? `${asked.split(":")[1].toUpperCase()} perp` : `${asked.toUpperCase()}-PERP`, icon("arrowRight"));
   mktBtn.lastChild.style.transform = "rotate(90deg)";
   const pxEl = h("span", { class: "pp-px" }, "–");
   const chgEl = h("span", {});
@@ -150,19 +177,43 @@ export async function mount(view, ctx) {
   // the market asked for in the link (e.g. Anthropic, xyz:ANT). If the list comes back without it (the trade.xyz list
   // failed for a moment) BTC shows meanwhile, and the page switches to it as soon as a refresh brings it back.
   const want = (ctx.parts[0] || "").toUpperCase().replace(/-PERP$/, "");
-  let fellBack = false;
+  // a bare ticker (#/perps/ANT, #/perps/NVDA) with no main-dex perp of that name is the trade.xyz market; before, it
+  // fell back to BTC
+  const find = (name) => {
+    const w = String(name || "").toUpperCase();
+    return st.markets.find((x) => x.coin.toUpperCase() === w) || (w && !w.includes(":") ? st.markets.find((x) => x.dex === "xyz" && x.coin.toUpperCase() === `XYZ:${w}`) : null) || null;
+  };
+  let fellBack = false, metaAt = 0;
   async function loadMeta() {
     const r = await api.get("hl/meta?all=1");
+    if (!alive) return;
     st.markets = r.markets.filter((m) => !m.isDelisted);
-    if (fellBack && st.markets.some((x) => x.coin.toUpperCase() === want)) { fellBack = false; ctx.go(location.hash); return; }
-    const m = st.markets.find((x) => x.coin.toUpperCase() === String(st.coin).toUpperCase()) || st.markets.find((x) => x.coin === "BTC");
-    if (!st.m && want && m.coin.toUpperCase() !== want) fellBack = true;
+    metaAt = Date.now();
+    if (fellBack && find(want)) { fellBack = false; ctx.go(location.hash); return; }
+    // a refresh that comes back without the open market (a trade.xyz read failed for a moment) keeps the market shown
+    if (st.m && !fellBack && !find(st.coin)) { st.lastOk = Date.now(); return; }
+    const m = (!st.m && want && find(want)) || find(st.coin) || find("BTC");
+    if (!st.m && want && !find(want)) fellBack = true;
     if (!st.m || m.coin !== st.m.coin) { st.coin = m.coin; }
     st.m = m;
     if (st.lev == null) st.lev = Math.min(prefs.get().lev?.[m.coin] || 3, m.maxLeverage, st.limits.maxLeverage);
     st.lastOk = Date.now();
     renderHead();
   }
+  // the header's 5 s refresh reads this one market (about 1 KB) instead of the whole list (about 150 KB); the list is
+  // read again every 60 s, when the picker opens, and while a market asked for in the link has not arrived
+  async function loadCtx() {
+    if (!st.m) return;
+    const coin = st.m.coin;
+    try {
+      const r = await api.get(`hl/ctx?coin=${encodeURIComponent(coin)}`);
+      if (!alive || !st.m || st.m.coin !== coin || r?.market?.coin !== coin) return;
+      Object.assign(st.m, r.market);   // st.m is the list's own entry, so the ticket and the tables see the new mark too
+      st.lastOk = Date.now();
+      renderHead();
+    } catch {}
+  }
+  const headTick = () => { if (fellBack || Date.now() - metaAt > 60_000) loadMeta().catch(() => {}); else loadCtx(); };
   function renderHead() {
     const m = st.m;
     if (!m) return;
@@ -180,7 +231,7 @@ export async function mount(view, ctx) {
   stops.push(every(1000, () => live.classList.toggle("stale", Date.now() - st.lastOk > 15000)));
 
   function pickMarket() {
-    const q = h("input", { class: "input", placeholder: "Search a market (BTC, ETH, NVDA, GOLD…)", "aria-label": "Search markets" });
+    const q = h("input", { class: "input", placeholder: "Search a market or company (BTC, Anthropic, NVIDIA, Gold…)", "aria-label": "Search markets" });
     const list = h("div", { class: "pp-pick-list" });
     let sel = 0, group = st.m?.dex ? "xyz" : "all";
     const groupSeg = h("div", { class: "seg pp-pick-g" });
@@ -188,7 +239,9 @@ export async function mount(view, ctx) {
       h("button", { type: "button", "aria-pressed": String(group === v), onclick: () => { group = v; sel = 0; drawGroups(); render(); } }, t)));
     const rows = () => {
       const s = q.value.trim().toUpperCase();
-      return st.markets.filter((m) => (group === "all" || (group === "xyz" ? m.dex === "xyz" : !m.dex)) && (!s || m.coin.toUpperCase().includes(s) || (m.label || "").toUpperCase().includes(s)))
+      // the ticker, the label and the name: "anthropic" finds ANT, "nvidia" NVDA, "tesla" TSLA
+      const hit = (m) => `${m.coin} ${m.label || ""} ${m.displayName || ""}`.toUpperCase().includes(s);
+      return st.markets.filter((m) => (group === "all" || (group === "xyz" ? m.dex === "xyz" : !m.dex)) && (!s || hit(m)))
         .sort((a, b) => (b.dayNtlVlm || 0) - (a.dayNtlVlm || 0)).slice(0, 150);
     };
     const choose = (m) => { md.close(); ctx.go(`#/perps/${m.coin}`); };
@@ -197,7 +250,7 @@ export async function mount(view, ctx) {
       sel = Math.min(sel, Math.max(0, rs.length - 1));
       clear(list, h("div", { class: "pp-pick-row pp-pick-hd" }, h("b", {}, "Market"), h("span", {}, "Price"), h("span", {}, "24h"), h("span", { class: "vol" }, "Volume")),
         rs.length ? rs.map((m, i) => h("button", { type: "button", class: `pp-pick-row ${i === sel ? "sel" : ""}`, onclick: () => choose(m) },
-          h("b", {}, coinIcon(m.coin, "sm"), m.dex ? m.label : `${m.coin}-PERP`, m.dex ? h("small", { class: "pp-xyz" }, "trade.xyz") : null, h("small", {}, `${m.maxLeverage}x`)), h("span", {}, fmtPx(m.markPx)), h("span", { class: m.change24h >= 0 ? "up" : "down" }, pct(m.change24h)), h("span", { class: "vol muted" }, usd(m.dayNtlVlm, { compact: true }))))
+          h("b", {}, coinIcon(m.coin, "sm"), nameOf(m), m.dex ? h("small", { class: "pp-xyz" }, "trade.xyz") : null, h("small", {}, `${m.maxLeverage}x`)), h("span", {}, fmtPx(m.markPx, m)), h("span", { class: m.change24h >= 0 ? "up" : "down" }, pct(m.change24h)), h("span", { class: "vol muted" }, usd(m.dayNtlVlm, { compact: true }))))
           : h("div", { class: "empty" }, "No market matches."));
     };
     q.addEventListener("input", () => { sel = 0; render(); });
@@ -210,6 +263,8 @@ export async function mount(view, ctx) {
     const md = modal({ title: "Perps markets", wide: true, body: h("div", { class: "pp-pick" }, q, groupSeg, list) });
     drawGroups();
     render();
+    // the list is refreshed every 60 s; opening the picker brings it up to date (prices, new listings)
+    if (Date.now() - metaAt > 10_000) loadMeta().then(() => { if (alive && list.isConnected) render(); }).catch(() => {});
     setTimeout(() => q.focus(), 40);
   }
 
@@ -226,9 +281,9 @@ export async function mount(view, ctx) {
   });
   const candleLook = (light) => (light ? { upColor: "#0a7ea3", downColor: "#c8303f", wickUpColor: "#0a7ea3", wickDownColor: "#c8303f" } : { upColor: "#8edff5", downColor: "#ff7d8a", wickUpColor: "#8edff5", wickDownColor: "#ff7d8a" });
   const volColor = (up, light) => (light ? (up ? "rgba(10,126,163,.22)" : "rgba(200,48,63,.2)") : (up ? "rgba(95,211,239,.28)" : "rgba(255,107,125,.28)"));
-  async function initChart() {
+  async function initChart(metaP) {
     let LW;
-    try { LW = await import("lightweight-charts"); } catch { clear(chartBox, h("div", { class: "pp-chart-msg" }, "Chart library failed to load.")); return; }
+    try { LW = await lwP; } catch { clear(chartBox, h("div", { class: "pp-chart-msg" }, "Chart library failed to load.")); return; }
     if (!alive) return;
     clear(chartBox);
     const light = isLight();
@@ -246,6 +301,9 @@ export async function mount(view, ctx) {
     });
     themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+    // the candles were asked for at mount; they are drawn once the list has named the market (its exact coin and decimals)
+    await metaP?.catch(() => {});
+    if (!alive) return;
     await loadCandles(true);
   }
   function renderIvals() {
@@ -255,13 +313,14 @@ export async function mount(view, ctx) {
     if (!candles || !st.coin) return;
     try {
       const from = !full && lastBar ? lastBar.t : 0;
-      const r = await api.get(`hl/candles?coin=${st.coin}&interval=${st.interval}${from ? `&from=${from}` : ""}`);
+      let r = null;
+      if (full && early) { const e = early; early = null; r = await e; if (r && (r.coin !== st.coin || r.interval !== st.interval)) r = null; }
+      r ||= await api.get(`hl/candles?coin=${encodeURIComponent(st.coin)}&interval=${st.interval}${from ? `&from=${from}` : ""}`);
       if (!alive || r.coin !== st.coin || r.interval !== st.interval) return;
       const toBar = (c) => ({ time: Math.floor(c.t / 1000), open: c.o, high: c.h, low: c.l, close: c.c });
       const light = isLight();
       const toVol = (c) => ({ time: Math.floor(c.t / 1000), value: c.v, color: volColor(c.c >= c.o, light) });
-      const p = st.m?.markPx || r.candles.at(-1)?.c;
-      const d = pxDecimals(p);
+      const d = decOf(st.m) ?? pxDecimals(r.candles.at(-1)?.c);
       candles.applyOptions({ priceFormat: { type: "price", precision: d, minMove: 1 / 10 ** d } });
       if (full || !lastBar) {
         candles.setData(r.candles.map(toBar));
@@ -280,7 +339,7 @@ export async function mount(view, ctx) {
   async function loadBook() {
     if (!st.coin) return;
     try {
-      const b = await api.get(`hl/book?coin=${st.coin}`);
+      const b = await api.get(`hl/book?coin=${encodeURIComponent(st.coin)}`);
       if (!alive || b.coin !== st.coin) return;
       st.book = b;
       st.lastOk = Date.now();
@@ -299,9 +358,11 @@ export async function mount(view, ctx) {
   const midNow = () => (st.book.bids[0] && st.book.asks[0] ? (st.book.bids[0].px + st.book.asks[0].px) / 2 : st.m?.midPx || st.m?.markPx || null);
 
   /* ---------- account ---------- */
-  async function loadUser() {
+  // fresh: a read at most 1 s old (after a funding or a move); the server's ordinary copy can be 2.5 s old and still
+  // show the balance from before, which stopped Move & open with "margin"
+  async function loadUser({ fresh = false } = {}) {
     if (!wallet.address) { st.user = null; renderPositions(); renderTicket(); return; }
-    try { st.user = await api.get(`hl/user?address=${wallet.address}`); } catch { st.user = null; }
+    try { st.user = await api.get(`hl/user?address=${wallet.address}${fresh ? "&fresh=1" : ""}`); } catch { st.user = null; }
     if (!alive) return;
     renderPositions();
     renderTicket();
@@ -336,24 +397,24 @@ export async function mount(view, ctx) {
     else if (!st.user) body = h("div", { class: "empty" }, "Reading your Hyperliquid account…");
     else if (posTab === "positions") {
       const t = table({ emptyText: "No open positions.", cols: [
-        { key: "coin", label: "Market", align: "l", render: (p) => h("a", { class: "link tok-link", href: `#/perps/${p.coin}` }, coinIcon(p.coin, "sm"), `${p.coin}-PERP`) },
+        { key: "coin", label: "Market", align: "l", render: (p) => h("a", { class: "link tok-link", href: `#/perps/${p.coin}` }, coinIcon(p.coin, "sm"), nameOf(mOf(p.coin))) },
         { key: "side", label: "Side", render: (p) => h("span", { class: p.size > 0 ? "side-l" : "side-s" }, p.size > 0 ? "Long" : "Short", p.leverage ? ` ${p.leverage}x` : "") },
         { key: "size", label: "Size", render: (p) => num(Math.abs(p.size), 5) },
         { key: "val", label: "Value", render: (p) => usd(p.positionValue) },
-        { key: "entry", label: "Entry", render: (p) => fmtPx(p.entryPx) },
-        { key: "mark", label: "Mark", render: (p) => fmtPx(st.markets.find((m) => m.coin === p.coin)?.markPx) },
+        { key: "entry", label: "Entry", render: (p) => fmtPx(p.entryPx, mOf(p.coin)) },
+        { key: "mark", label: "Mark", render: (p) => fmtPx(mOf(p.coin).markPx, mOf(p.coin)) },
         { key: "pnl", label: "PnL (ROE)", render: (p) => h("span", { class: p.unrealizedPnl >= 0 ? "up" : "down" }, `${p.unrealizedPnl >= 0 ? "+" : ""}${usd(p.unrealizedPnl)} (${pct(p.returnOnEquity * 100)})`) },
-        { key: "liq", label: "Liq. price", render: (p) => fmtPx(p.liquidationPx) },
+        { key: "liq", label: "Liq. price", render: (p) => fmtPx(p.liquidationPx, mOf(p.coin)) },
         { key: "act", label: "", render: (p) => h("button", { class: "btn sm", type: "button", onclick: (e) => { e.stopPropagation(); closePosition(p); } }, "Close") },
       ] });
       t.setRows(st.user.positions);
       body = t;
     } else if (posTab === "orders") {
       const t = table({ emptyText: "No open orders.", cols: [
-        { key: "coin", label: "Market", align: "l", render: (o) => h("span", { class: "tok-link" }, coinIcon(o.coin, "sm"), `${o.coin}-PERP`) },
+        { key: "coin", label: "Market", align: "l", render: (o) => h("span", { class: "tok-link" }, coinIcon(o.coin, "sm"), nameOf(mOf(o.coin))) },
         { key: "side", label: "Side", render: (o) => h("span", { class: o.side === "buy" ? "side-l" : "side-s" }, o.side === "buy" ? "Buy" : "Sell") },
         { key: "type", label: "Type", render: (o) => `${o.orderType || "Limit"}${o.reduceOnly ? " · reduce" : ""}` },
-        { key: "px", label: "Price", render: (o) => (o.isTrigger ? `trigger ${fmtPx(o.triggerPx)}` : fmtPx(o.limitPx)) },
+        { key: "px", label: "Price", render: (o) => (o.isTrigger ? `trigger ${fmtPx(o.triggerPx, mOf(o.coin))}` : fmtPx(o.limitPx, mOf(o.coin))) },
         { key: "size", label: "Size", render: (o) => num(o.size, 5) },
         { key: "age", label: "Placed", render: (o) => new Date(o.timestamp).toLocaleString() },
         { key: "act", label: "", render: (o) => h("button", { class: "btn sm", type: "button", onclick: (e) => { e.stopPropagation(); cancel(o); } }, "Cancel") },
@@ -363,9 +424,9 @@ export async function mount(view, ctx) {
     } else {
       const t = table({ emptyText: "No fills yet.", cols: [
         { key: "time", label: "Time", align: "l", render: (f) => new Date(f.time).toLocaleString() },
-        { key: "coin", label: "Market", render: (f) => h("span", { class: "tok-link" }, coinIcon(f.coin, "sm"), f.coin) },
+        { key: "coin", label: "Market", render: (f) => h("span", { class: "tok-link" }, coinIcon(f.coin, "sm"), f.coin.includes("/") ? f.coin : nameOf(mOf(f.coin))) },
         { key: "dir", label: "Direction", render: (f) => f.dir || f.side },
-        { key: "px", label: "Price", render: (f) => fmtPx(f.px) },
+        { key: "px", label: "Price", render: (f) => fmtPx(f.px, mOf(f.coin)) },
         { key: "size", label: "Size", render: (f) => num(f.size, 5) },
         { key: "pnl", label: "Closed PnL", render: (f) => h("span", { class: f.closedPnl > 0 ? "up" : f.closedPnl < 0 ? "down" : "muted" }, usd(f.closedPnl)) },
         { key: "fee", label: "Fee", render: (f) => usd(f.fee) },
@@ -411,6 +472,7 @@ export async function mount(view, ctx) {
   let btnAct = null;
   const mainBtn = h("button", { class: "btn big", type: "button", onclick: () => btnAct?.() }, "…");
   const keyNote = h("p", { class: "pp-key", style: { margin: 0 }, hidden: true });
+  const venueNote = h("p", { class: "fine", style: { margin: 0 } }, "Hyperliquid and trade.xyz are separate venues; not available where their terms exclude (incl. the US).");
   const xyzText = h("p", { class: "fine", style: { margin: 0 } });
   const xyzMove = h("button", { class: "btn sm blue", type: "button", hidden: true, onclick: () => moveUsdc(xyzMove._amt, "", "xyz") });
   const xyzBack = h("button", { class: "link fine", type: "button", hidden: true, onclick: () => moveUsdc(xyzBack._amt, "xyz", "") });
@@ -437,7 +499,7 @@ export async function mount(view, ctx) {
       h("div", { class: "pp-rows" }, valRow("Order size", rv.size), h("div", {}, rv.fillK, rv.fill), valRow("Margin", rv.margin), valRow("Est. fee", rv.fee), valRow("Est. liquidation", rv.liq)),
       xyzBox,
       h("div", { class: "gate-box" }, h("div", { class: "gh" }, icon("shield"), "Troya Gate", gateChip), gateWait, gateList, gateFoot),
-      mainBtn, keyNote);
+      mainBtn, keyNote, venueNote);
   }
 
   function setType(v) {
@@ -514,7 +576,7 @@ export async function mount(view, ctx) {
     // checked before anything is funded or signed: Hyperliquid refuses a smaller order (a reduce-only one may still close)
     const small = !(c.minValue >= MIN_ORDER_USD);
     add("Minimum", small ? (c.reduce ? "warn" : "fail") : "pass", small ? `$10 per order · this is ${usd(c.minValue)}` : "$10 per order");
-    add("Size", c.usdSize <= L.perTradeUsd ? "pass" : "fail", `${usd(c.usdSize)} of ${usd(L.perTradeUsd, { compact: true })} max`);
+    add("Size", c.usdSize <= L.perTradeUsd ? "pass" : "fail", `${usd(c.usdSize)} of ${capUsd(L.perTradeUsd)} max`);
     if (L.dailyLeftUsd != null) add("Daily cap", c.usdSize <= L.dailyLeftUsd ? "pass" : "fail", `${usd(L.dailyLeftUsd, { compact: true })} left today`);
     add("Leverage", c.lev <= Math.min(L.maxLeverage, m.maxLeverage) ? "pass" : "fail", `${c.lev}x of ${Math.min(L.maxLeverage, m.maxLeverage)}x cap`);
     if (st.user) {
@@ -554,7 +616,7 @@ export async function mount(view, ctx) {
     press(sideBtns, (b) => b.dataset.v === st.side);
     press(typeBtns, (b) => b.dataset.v === st.type);
     press(unitBtns, (b) => b.dataset.v === st.unit);
-    setText(unitBtns[1], (m.label || m.coin).slice(0, 5));
+    setText(unitBtns[1], String(tagOf(m)).slice(0, 5));
     limitField.hidden = st.type !== "limit";
     const leftToday = st.limits.dailyLeftUsd != null ? `Left today ${usd(st.limits.dailyLeftUsd, { compact: true })} · ` : "";
     setText(sizeHint, `${leftToday}max ${capUsd(st.limits.perTradeUsd)} per order`);
@@ -585,7 +647,9 @@ export async function mount(view, ctx) {
     const lis = gateList.children;
     if (lis.length !== g.items.length || g.items.some((it, i) => lis[i].firstChild.textContent !== it.label)) clear(gateList, g.items.map((it) => h("li", {}, h("span", {}, it.label), h("b", {}))));
     g.items.forEach((it, i) => { setCls(lis[i], it.state); setText(lis[i].lastChild, it.value); });
-    setText(gateFoot, `${st.limits.source === "your policy" ? "Your limits" : "Default limits"}: ${capUsd(st.limits.perTradeUsd)} per order, up to ${st.limits.maxLeverage}x.`);
+    // the leverage a trade here can really use: the lower of the policy's cap and the market's own (ANT stops at 10x)
+    const m = st.m;
+    setText(gateFoot, `${st.limits.source === "your policy" ? "Your limits" : "Default limits"}: ${capUsd(st.limits.perTradeUsd)} per order, up to ${Math.min(st.limits.maxLeverage, m?.maxLeverage || Infinity)}x on ${tagOf(m)}.`);
   }
 
   function fillXyz(m, c) {
@@ -613,6 +677,18 @@ export async function mount(view, ctx) {
     const sideCls = st.side === "long" ? "blue" : "danger";
     let label, cls = "btn big", act = null, note = null;   // note = [signature, build]
     if (!wallet.address) { label = "Connect wallet"; cls += " primary"; act = () => openConnect(); }
+    else if (st.key.state !== "approved" && noDeposit()) {
+      // Hyperliquid refuses approveAgent before any deposit, so a new account funds first (that needs no key), then
+      // approves the key, then the order goes out: one flow, three wallet steps
+      const fails = g.items.filter((i) => i.state === "fail");
+      const ok = g.state !== "wait" && !c.reduce && fails.every((i) => i.label === "Margin");
+      cls += ` ${sideCls}`;
+      if (g.state === "wait") { label = `Fund Hyperliquid & ${st.side} ${tagOf(m)}`; act = () => { sizeIn.focus(); toast("Enter a size first: the funding is sized to the order.", ""); }; }
+      else if (ok) { label = `Fund Hyperliquid & ${st.side} ${tagOf(m)}`; act = fundAndOpen; }
+      else label = c.reduce ? "Nothing to reduce yet" : "Blocked by Troya Gate";
+      note = ["new", () => ["Your Hyperliquid account has no USDC yet. One transaction on Robinhood Chain funds it (no trading key needed for that), then one signature approves a ", h("b", {}, "trade-only key"), " that ", h("b", {}, "cannot withdraw"), ", and the order opens. ",
+        h("button", { class: "link", type: "button", onclick: enableTrading }, "Already funded? Enable trading")]];
+    }
     else if (st.key.state !== "approved") {
       label = st.key.state === "expired" ? "Re-enable trading" : "Enable trading"; cls += " blue"; act = enableTrading;
       note = ["key", () => ["One wallet signature approves a ", h("b", {}, "trade-only key"), " kept in this browser. It can place and cancel Hyperliquid orders but ", h("b", {}, "cannot withdraw"), ". You can revoke it any time."]];
@@ -639,11 +715,15 @@ export async function mount(view, ctx) {
         note = [`key:${k}`, () => [`Trading key ${short(k)} active. `, h("button", { class: "link", type: "button", onclick: revoke }, "Revoke")]];
       }
     }
-    if (st.funding) {
-      const hash = st.funding.hash;
-      label = "Waiting for the USDC on Hyperliquid…"; act = null;
-      note = [`fund:${hash}`, () => ["Funding sent ", h("a", { class: "mono link", href: `https://robinhoodchain.blockscout.com/tx/${hash}`, target: "_blank", rel: "noopener" }, short(hash, 6)), ". The order goes out from this page the moment it lands, usually within a minute or two. Keep the page open."]];
-    } else if (st.busy) { label = st.busy; act = null; }
+    if (st.funding) { label = st.funding.step === 1 ? "Confirming on Robinhood Chain…" : "Waiting for the USDC on Hyperliquid…"; act = null; }
+    else if (st.busy) { label = st.busy; act = null; }
+    // while Fund & open runs (and a few seconds after the order), the note tracks it: 1 Sent · 2 Bridging · 3 Landed · 4 Order placed
+    if (st.fundStep) {
+      const { hash, step } = st.fundStep;
+      const steps = FUND_STEPS.map((t, i) => [i ? " · " : "", i + 1 === step ? h("b", {}, `${i + 1} ${t}`) : `${i + 1} ${t}`]);
+      note = [`fund:${hash}:${step}`, () => ["Funding ", h("a", { class: "mono link", href: `https://robinhoodchain.blockscout.com/tx/${hash}`, target: "_blank", rel: "noopener" }, short(hash, 6)), ": ", steps,
+        step < 3 ? ". The order goes out from this page when the USDC lands, usually within a minute or two. Keep the page open." : step < 4 ? ". Keep the page open while the order goes out." : "."]];
+    }
     setCls(mainBtn, cls);
     setText(mainBtn, label);
     mainBtn.disabled = !act;
@@ -653,7 +733,13 @@ export async function mount(view, ctx) {
   }
 
   function freeOf(m) { return m?.dex ? +(st.user?.dexes?.[m.dex]?.withdrawable || 0) : +(st.user?.withdrawable || 0); }
-  const tagOf = (m) => (m?.dex ? (m.label || m.coin.replace(/^[a-z]+:/i, "")) : m?.coin);
+  // an account Hyperliquid has never seen a deposit on: no value anywhere and no fills or spot balance, or Hyperliquid
+  // itself said "Must deposit" (until a balance shows)
+  function noDeposit() {
+    const u = st.user;
+    if (!u || u.accountValue > 0 || u.withdrawable > 0 || u.dexes?.xyz?.accountValue > 0 || u.positions?.length) return false;
+    return st.noDeposit || (!(u.fills || []).length && !(u.spot || []).length);
+  }
   // what an order short of margin needs: USDC bridged in from Robinhood Chain, and for a trade.xyz market (own balance,
   // unless the account is unified) a move from the Hyperliquid perps balance into trade.xyz
   function fundPlan(m, c) {
@@ -672,26 +758,49 @@ export async function mount(view, ctx) {
       await ensureChain("arbitrum");
       await sendToDex(wallet.address, wallet.eip, amount, from, to);
       toast(`Moved ${usd(amount)} USDC ${to === "xyz" ? "to trade.xyz" : "back to perps"}`, "ok");
-      await loadUser();
+      await loadUser({ fresh: true });
     } catch (e) { toast(rejected(e) ? "Cancelled. Nothing was moved." : errMsg(e), "error", 6000); }
     finally { st.busy = null; if (alive) renderTicket(); }
+  }
+  // one wallet signature approves the trade-only key; true once it is approved. inFlow: asked by Fund & open after the
+  // USDC landed, so the review does not ask for a deposit that was just made
+  async function approveKey({ inFlow = false } = {}) {
+    const ok = await review({ title: "Enable trading on Hyperliquid", summary: inFlow ? "Your USDC is on Hyperliquid. Approve a trade-only key for this browser so the order can go out." : "Approve a trade-only key for this browser.", confirmLabel: "Approve in wallet", rows: [
+      ["Account", short(wallet.address, 6)], ["Key name", "Troya"], ["Can", "place and cancel perp orders, change leverage"], ["Cannot", "withdraw or transfer funds"], ["Stored", "in this browser only"], ["Signature network", "Arbitrum (EIP-712 typed data, no gas)"],
+    ], warn: `${inFlow ? "" : "Your Hyperliquid account must already hold USDC. You can fund it from this ticket with ETH on Robinhood Chain (Fund & open). "}If someone gets this browser's storage they could trade (not withdraw) until you revoke it.` });
+    if (!ok) return false;
+    await ensureChain("arbitrum");
+    await approveTradingKey(wallet.address, wallet.eip);
+    toast("Trading key approved", "ok");
+    api.post("journal", { kind: "perp_key", summary: "Approved a trade-only Hyperliquid key for this browser", data: { key: getTradingKey(wallet.address)?.address } }).catch(() => {});
+    // Hyperliquid's agent list can take a few seconds to show the new key: it counts as approved now, and is read back later
+    st.noDeposit = false;
+    st.key = { state: "approved", key: getTradingKey(wallet.address) };
+    setTimeout(() => { if (alive) loadKey(); }, 6000);
+    return true;
   }
   async function enableTrading() {
     if (st.busy) return;
     st.busy = "Confirm in your wallet…";
     renderTicket();
-    try {
-      const ok = await review({ title: "Enable trading on Hyperliquid", summary: "Approve a trade-only key for this browser.", confirmLabel: "Approve in wallet", rows: [
-        ["Account", short(wallet.address, 6)], ["Key name", "Troya"], ["Can", "place and cancel perp orders, change leverage"], ["Cannot", "withdraw or transfer funds"], ["Stored", "in this browser only"], ["Signature network", "Arbitrum (EIP-712 typed data, no gas)"],
-      ], warn: "Your Hyperliquid account must already hold USDC (fund it from Robinhood Chain: Bridge → To Hyperliquid). If someone gets this browser's storage they could trade (not withdraw) until you revoke it." });
-      if (!ok) return;
-      await ensureChain("arbitrum");
-      await approveTradingKey(wallet.address, wallet.eip);
-      toast("Trading key approved", "ok");
-      api.post("journal", { kind: "perp_key", summary: "Approved a trade-only Hyperliquid key for this browser", data: { key: getTradingKey(wallet.address)?.address } }).catch(() => {});
-      await loadKey();
-    } catch (e) { toast(rejected(e) ? "Request cancelled in the wallet." : errMsg(e), "error", 6000); }
+    let fund = false;
+    try { await approveKey(); }
+    catch (e) {
+      // "Must deposit before performing actions": the account has never been funded, so the ticket switches to Fund first
+      if (mustDeposit(e)) { st.noDeposit = true; fund = true; }
+      else toast(rejected(e) ? "Request cancelled in the wallet." : errMsg(e), "error", 6000);
+    }
     finally { st.busy = null; if (alive) renderTicket(); }
+    if (fund && alive) askFund();
+  }
+  async function askFund() {
+    const m = st.m;
+    const ok = await review({ title: "Fund your Hyperliquid account first", confirmLabel: `Fund & ${st.side} ${tagOf(m)}`,
+      summary: "Hyperliquid approves a trading key only on an account that has received a deposit. Fund it from this ticket with ETH on Robinhood Chain: one transaction sends the USDC, then one signature approves the key and the order opens.",
+      rows: [["Account", short(wallet.address, 6)], ["Hyperliquid balance", usd(+(st.user?.withdrawable || 0))], ["Market", nameOf(m)]] });
+    if (!ok || !alive) return;
+    if (!(calc().sz > 0)) { sizeIn.focus(); toast("Enter a size: the funding is sized to the order.", ""); return; }
+    fundAndOpen();
   }
   async function revoke() {
     const ok = await review({ title: "Revoke trading key", summary: "Remove the trading key from this browser?", confirmLabel: "Revoke", danger: true, rows: [["Key", short(st.key.key?.address, 6)]],
@@ -733,7 +842,7 @@ export async function mount(view, ctx) {
       const r = await placeOrder({ owner: wallet.address, market: m, isBuy: c.isBuy, size: c.sz, limitPx: c.type === "limit" ? c.limitPx : null, reduceOnly: c.reduce, leverage: lp.set ? c.lev : null, isCross: lp.isCross, tp: c.tp, sl: c.sl, refPx: c.fill || undefined });
       const failed = /error/.test(r.text) && !/filled|resting/.test(r.text);
       toast(`${tagOf(m)}: ${r.text || "sent"}`, failed ? "error" : "ok", 6000);
-      api.post("journal", { kind: "perp_order", summary: `${st.side === "long" ? "Long" : "Short"} ${num(r.size, m.szDecimals)} ${m.coin} @ ${c.type === "market" ? "market" : fmtPx(r.px)} · ${r.text}`,
+      api.post("journal", { kind: "perp_order", summary: `${st.side === "long" ? "Long" : "Short"} ${num(r.size, m.szDecimals)} ${tagOf(m)} @ ${c.type === "market" ? "market" : fmtPx(r.px)} · ${r.text}`,
         data: { coin: m.coin, side: st.side, type: c.type, size: r.size, px: r.px, leverage: c.lev, leverageSet: lp.set, tp: c.tp, sl: c.sl, reduceOnly: c.reduce, result: r.text, via: "own wallet trading key" } }).catch(() => {});
       if (!failed) { sizeIn.value = ""; typed = null; }
       setTimeout(loadUser, 800);
@@ -744,92 +853,182 @@ export async function mount(view, ctx) {
   // Fund & open: ETH on Robinhood Chain → USDC on this address on Hyperliquid (one LI.FI transaction), then the order.
   // trade.xyz markets (e.g. Anthropic, xyz:ANT): the USDC lands in the perps balance, so one signature moves it into
   // trade.xyz before the order; when the perps balance already covers it, only the move and the order.
+  // A new account (no deposit yet, so no trading key either): fund first, then the key, then the order.
   async function fundAndOpen() {
     if (st.busy) return;
     const m = st.m, c = calc(), g = gateChecks(c);
     // only the margin may be missing: the $10 minimum, the caps and the book must already pass before anything is funded
     if (g.state === "wait" || g.items.some((i) => i.state === "fail" && i.label !== "Margin")) return;
     const plan = fundPlan(m, c);
-    if (!(plan.missing > 0)) return submit();
+    const needKey = st.key.state !== "approved";
+    if (!(plan.missing > 0)) return needKey ? enableTrading() : submit();
     st.busy = "Confirm in your wallet…";
     stage = null;
     renderTicket();
-    try { await fundFlow(m, c, plan); }
+    try { await fundFlow(m, c, plan, needKey); }
     catch (e) {
       const no = rejected(e);
-      // what the cancel or error really left behind, by stage: nothing sent yet, or USDC already on Hyperliquid
-      const msg = stage === "move" ? (no ? "Cancelled. Your USDC is safe on Hyperliquid; move it to trade.xyz and place the order when ready." : `The move to trade.xyz failed: ${errMsg(e)} Your USDC is safe on Hyperliquid.`)
-        : stage === "wait" || stage === "order" ? `${errMsg(e)} Your USDC is on Hyperliquid; place the order when ready.`
+      // what the cancel or error really left behind, by stage: nothing sent yet, funding on its way, or USDC on Hyperliquid
+      const msg = stage === "key" ? (no ? "Cancelled. Your USDC is safe on Hyperliquid; enable trading and place the order when ready."
+          : mustDeposit(e) ? "Hyperliquid has not credited the deposit yet. Wait a minute, then enable trading and place the order from the ticket."
+          : `${errMsg(e)} Your USDC is safe on Hyperliquid; enable trading and place the order when ready.`)
+        : stage === "move" ? (no ? "Cancelled. Your USDC is safe on Hyperliquid; move it to trade.xyz and place the order when ready." : `The move to trade.xyz failed: ${errMsg(e)} Your USDC is safe on Hyperliquid.`)
+        : stage === "bridge" ? `${errMsg(e)} The funding is on its way: the USDC reaches your Hyperliquid account and you can place the order then.`
+        : stage === "landed" || stage === "order" ? `${errMsg(e)} Your USDC is on Hyperliquid; place the order when ready.`
         : no ? "Cancelled. Nothing was sent." : errMsg(e);
       toast(msg, "error", 8000);
     } finally {
       st.funding = null;
       st.busy = null;
       stage = null;
+      // the steps stay on the note for a few seconds after the order went out, then the ticket is back to normal
+      if (st.fundStep?.step === 4) { const f = st.fundStep; setTimeout(() => { if (st.fundStep !== f) return; st.fundStep = null; if (alive) renderTicket(); }, 10_000); }
+      else st.fundStep = null;
       if (alive) renderTicket();
     }
   }
-  async function fundFlow(m, c, plan) {
+  // the wallet's ETH on Robinhood Chain must cover the amount plus gas: checked before the review, so a short wallet hears
+  // it here and not from a failed transaction. A balance read that fails does not block (the wallet refuses a short send).
+  async function ethCheck(q) {
+    const ethUsd = q.amountEth > 0 && q.fundUsd > 0 ? q.fundUsd / q.amountEth : 0;
+    const [bal, fee] = await Promise.all([balanceOf(wallet.address, ETH, "robinhood").catch(() => null), reader("robinhood").getFeeData().catch(() => null)]);
+    const gasPrice = BigInt(fee?.maxFeePerGas ?? fee?.gasPrice ?? 100_000_000n);   // 0.1 gwei when the fee read fails
+    const needWei = BigInt(q.tx.value) + ((BigInt(q.tx.gasLimit) * 13n) / 10n) * gasPrice;
+    const eth = (wei) => Number(wei) / 1e18;
+    const short_ = bal && bal.raw < needWei
+      ? `Not enough ETH on Robinhood Chain: this needs about ${num(eth(needWei), 6)} ETH (${usd(eth(needWei) * ethUsd)}) including gas, and your wallet holds ${num(bal.amount, 6)} ETH. Add ETH and try again.`
+      : null;
+    return { bal, ethUsd, short: short_ };
+  }
+  async function fundFlow(m, c, plan, needKey) {
     const what = `${st.side === "long" ? "Long" : "Short"} ${num(c.sz, m.szDecimals)} ${tagOf(m)} · ${usd(c.usdSize)} at ${c.lev}x`;
     // the order as reviewed; placeAfter works it out again with the live book before it goes out
     const order = { coin: m.coin, isBuy: c.isBuy, sz: c.sz, limitPx: c.type === "limit" ? c.limitPx : null, lev: c.lev, tp: c.tp, sl: c.sl, need: c.need, side: st.side, type: c.type, usdSize: c.usdSize, fill: c.fill, mid: midNow(), what };
     const typeRow = c.type === "limit" ? ["Limit price", fmtPx(c.limitPx)] : ["Type", "Market (IOC, 1% max slippage)"];
     const marginRow = ["Margin", `${usd(c.margin)} + ${usd(c.fee)} est. fee`];
+    const keyRow = needKey ? ["Then", "approve a trade-only key (one signature, no gas)"] : null;
+    // the key is asked for only once the USDC is there: Hyperliquid refuses it on an account with no deposit
+    const askKey = async () => {
+      if (!needKey) return true;
+      stage = "key";
+      st.busy = "Approve the trading key in your wallet…";
+      renderTicket();
+      if (await approveKey({ inFlow: true })) return true;
+      toast("Not placed. Your USDC is safe on Hyperliquid; enable trading and place the order from the ticket when ready.", "", 9000);
+      return false;
+    };
     if (!plan.bridge) {           // trade.xyz, the perps balance covers it: move, then open
-      const ok = await review({ title: `Move USDC to trade.xyz, then ${st.side} ${tagOf(m)}`, confirmLabel: "Sign the move", danger: st.side === "short",
+      const ok = await review({ title: `Move USDC to trade.xyz, then ${st.side} ${nameOf(m)}`, confirmLabel: "Sign the move", danger: st.side === "short",
         summary: `One signature (no gas) moves ${usd(plan.move)} from your Hyperliquid perps balance into trade.xyz, then the order is placed.`,
-        rows: [["Move", `${usd(plan.move)} USDC · perps → trade.xyz`], ["Then", what], marginRow, typeRow] });
+        rows: [["Move", `${usd(plan.move)} USDC · perps → trade.xyz`], keyRow, ["Then", what], marginRow, typeRow] });
       if (!ok) return;
       stage = "move";
       st.busy = "Sign the move in your wallet…";
       renderTicket();
       await ensureChain("arbitrum");
       await sendToDex(wallet.address, wallet.eip, plan.move, "", m.dex);
-      await loadUser();
+      await loadUser({ fresh: true });
+      if (!(await askKey())) return;
       return placeAfter(order, null);
     }
-    let q;
-    try { q = await api.get(`hl/fund-quote?${new URLSearchParams({ address: wallet.address, usd: plan.bridgeUsd.toFixed(2) })}`); }
+    const quote = () => api.get(`hl/fund-quote?${new URLSearchParams({ address: wallet.address, usd: plan.bridgeUsd.toFixed(2) })}`);
+    let q, qAt;
+    try { q = await quote(); qAt = Date.now(); }
     catch (e) { toast(`No funding route right now: ${e.message}`, "error", 6000); return; }
     if (!alive) return;
-    const usdc = Number(q.toAmount) / 10 ** q.toDecimals, usdcMin = Number(q.toAmountMin) / 10 ** q.toDecimals;
-    const ok = await review({ title: `Fund Hyperliquid, then ${st.side} ${plan.xyz ? tagOf(m) : `${m.coin}-PERP`}`, confirmLabel: "Fund in wallet", danger: st.side === "short",
-      summary: plan.xyz
-        ? `One transaction on Robinhood Chain sends about ${usd(usdc)} USDC to your Hyperliquid account. When it lands, one signature (no gas) moves ${usd(plan.move)} into trade.xyz and the order is placed from this page.`
-        : `One transaction on Robinhood Chain sends about ${usd(usdc)} USDC to your Hyperliquid account. The order is placed from this page the moment it lands.`,
-      rows: [["You send", `${q.amountEth} ETH on Robinhood Chain`], ["Lands on Hyperliquid (est.)", `${usdc.toFixed(2)} USDC (min ${usdcMin.toFixed(2)})`], ["Route", `${q.tool} via LI.FI`], ["Route fees", usd(q.feeUsd + q.gasUsd)],
-        plan.xyz ? ["Then", `move ${usd(plan.move)} USDC into trade.xyz (one signature)`] : null, ["Then", what], marginRow, typeRow],
-      warn: "The funding goes through a third-party route and cannot be reversed. Keep this page open until the order is placed; if you leave, the USDC still lands on your Hyperliquid account and you can place the order later." });
-    if (!ok) return;
+    let moved = null;   // set when the quote was priced again and came back worse
+    for (;;) {
+      const fund = await ethCheck(q);
+      if (!alive) return;
+      if (fund.short) { toast(fund.short, "error", 10000); return; }
+      const usdc = Number(q.toAmount) / 10 ** q.toDecimals, usdcMin = Number(q.toAmountMin) / 10 ** q.toDecimals;
+      const after = [needKey && "one signature (no gas) approves a trade-only key", plan.xyz && `one signature (no gas) moves ${usd(plan.move)} into trade.xyz`].filter(Boolean);
+      const ok = await review({ title: `Fund Hyperliquid, then ${st.side} ${nameOf(m)}`, confirmLabel: "Fund in wallet", danger: st.side === "short",
+        summary: `One transaction on Robinhood Chain sends about ${usd(usdc)} USDC to your Hyperliquid account. ${after.length ? `When it lands, ${after.join(", then ")}, and the order is placed from this page.` : "The order is placed from this page the moment it lands."}`,
+        rows: [["You send", `${q.amountEth} ETH (${usd(q.amountEth * fund.ethUsd)}) on Robinhood Chain`],
+          fund.bal ? ["Your ETH", `${num(fund.bal.amount, 6)} ETH (${usd(fund.bal.amount * fund.ethUsd)})`] : null,
+          ["Lands on Hyperliquid (est.)", `${usdc.toFixed(2)} USDC (min ${usdcMin.toFixed(2)})`], ["Route", `${q.tool} via LI.FI`], ["Route fees", usd(q.feeUsd + q.gasUsd)],
+          keyRow, plan.xyz ? ["Then", `move ${usd(plan.move)} USDC into trade.xyz (one signature)`] : null, ["Then", what], marginRow, typeRow],
+        warn: `${moved ? `${moved} ` : ""}The funding goes through a third-party route and cannot be reversed. Keep this page open until the order is placed; if you leave, the USDC still lands on your Hyperliquid account and you can place the order later.` });
+      if (!ok) return;
+      if (Date.now() - qAt <= 30_000) break;
+      // the review stayed open more than 30 s: the route is priced again. A quote no worse goes out as it is; a worse one
+      // (less USDC, or more ETH) is shown again
+      const old = q;
+      st.busy = "Refreshing the quote…";
+      renderTicket();
+      try { q = await quote(); qAt = Date.now(); }
+      catch (e) { toast(`No funding route right now: ${e.message}`, "error", 6000); return; }
+      if (!alive) return;
+      const worse = Number(q.toAmountMin) < Number(old.toAmountMin) * 0.99 || BigInt(q.tx.value) > (BigInt(old.tx.value) * 101n) / 100n;
+      if (!worse) {
+        const f2 = await ethCheck(q);
+        if (f2.short) { toast(f2.short, "error", 10000); return; }
+        break;
+      }
+      moved = "The route was priced again after 30 s and moved: check the new numbers.";
+      st.busy = "Confirm in your wallet…";
+      renderTicket();
+    }
     stage = "fund";
-    const hash = await sendTx("robinhood", { to: q.tx.to, data: q.tx.data, value: q.tx.value, gasLimit: (BigInt(q.tx.gasLimit) * 13n) / 10n });
-    stage = "wait";
-    api.post("journal", { kind: "bridge", summary: `Fund Hyperliquid for a ${tagOf(m)} order: ${q.amountEth} ETH → about ${usdc.toFixed(2)} USDC`, data: { hash, route: q.tool, via: "Perps · Fund & open" } }).catch(() => {});
-    st.funding = { hash, at: Date.now() };
-    toast("Funding sent. The order goes out as soon as the USDC lands.", "ok", 6000);
+    st.busy = "Confirm the funding in your wallet…";
     renderTicket();
+    const hash = await sendTx("robinhood", { to: q.tx.to, data: q.tx.data, value: q.tx.value, gasLimit: (BigInt(q.tx.gasLimit) * 13n) / 10n });
+    stage = "bridge";
+    const usdcEst = Number(q.toAmount) / 10 ** q.toDecimals;
+    api.post("journal", { kind: "bridge", summary: `Fund Hyperliquid for a ${tagOf(m)} order: ${q.amountEth} ETH → about ${usdcEst.toFixed(2)} USDC`, data: { hash, route: q.tool, via: "Perps · Fund & open" } }).catch(() => {});
+    st.funding = { hash, at: Date.now(), step: 1 };
+    st.fundStep = { hash, step: 1 };
+    renderTicket();
+    // 1 Sent: the receipt first. A reverted transaction bridged nothing, so the flow stops here and says so (it used to
+    // wait ten minutes for USDC that could never land)
+    const rc = await waitReceipt("robinhood", hash, { timeoutMs: 180_000 });
+    if (!alive) return;
+    if (!rc) { toast("The funding transaction has not confirmed after 3 minutes. Check it on the explorer: if it confirms, the USDC reaches your Hyperliquid account and you can place the order then.", "error", 12000); return; }
+    if (Number(rc.status) !== 1) { toast("The funding transaction failed on Robinhood Chain (reverted): nothing was bridged and no order was placed. Only the network fee was spent. Try again for a fresh quote.", "error", 12000); return; }
+    st.funding.step = st.fundStep.step = 2;
+    toast("Funding confirmed on Robinhood Chain. The order goes out as soon as the USDC lands.", "ok", 6000);
+    renderTicket();
+    // 2 Bridging: the route's own status and a fresh balance read every 5 s, for ten minutes at most
     const mainNow = () => +(st.user?.withdrawable || 0);
     const mkNow = () => st.markets.find((x) => x.coin === order.coin) || m;
     const landedNow = () => (plan.xyz ? mainNow() >= plan.move * 0.98 || freeOf(mkNow()) + mainNow() >= order.need * 1.01 : freeOf(mkNow()) >= order.need * 1.01);
+    let routeDone = false;
     while (alive && Date.now() - st.funding.at < 10 * 60_000) {
-      await new Promise((r) => setTimeout(r, 5000));
-      await loadUser();
+      await sleep(5000);
+      if (!routeDone) {
+        const s = await api.get(`bridge/status?${new URLSearchParams({ txHash: hash, fromChain: String(CHAINS.robinhood.id), toChain: String(HL_CHAIN) })}`).catch(() => null);
+        if (s?.status === "DONE") routeDone = true;
+        if (s?.status === "FAILED") {
+          const why = s.substatus ? ` (${String(s.substatus).toLowerCase().replace(/_/g, " ")})` : "";
+          toast(`The funding route reports a failure${why}. No order was placed. Check the transaction on the explorer; any refund from the route goes back to your wallet.`, "error", 12000);
+          return;
+        }
+      }
+      await loadUser({ fresh: true });
       if (landedNow()) break;
     }
     const landed = landedNow();
     st.funding = null;
     if (!alive) return;
-    if (!landed) { toast(`The USDC has not landed yet. It will reach your Hyperliquid account; ${plan.xyz ? "move it to trade.xyz and " : ""}place the order once it shows.`, "", 9000); return; }
+    if (!landed) { toast(`The USDC has not landed yet. It will reach your Hyperliquid account; ${needKey ? "enable trading, " : ""}${plan.xyz ? "move it to trade.xyz and " : ""}place the order once it shows.`, "", 9000); return; }
+    // 3 Landed: the key (a new account), the move (trade.xyz), then the order
+    stage = "landed";
+    st.fundStep.step = 3;
+    st.busy = "USDC landed · preparing the order…";
+    renderTicket();
+    if (needKey) toast("USDC landed. Approve the trading key to place the order.", "ok", 7000);
+    if (!(await askKey())) return;
     if (plan.xyz) {
       const need = Math.max(0, order.need * 1.05 + 0.5 - freeOf(mkNow())), amt = Math.min(Math.ceil(need * 100) / 100, Math.floor(mainNow() * 100) / 100);
       if (amt > 0) {
         stage = "move";
         st.busy = "Sign the move in your wallet…";
         renderTicket();
-        toast("USDC landed. Sign the move into trade.xyz to place the order.", "ok", 7000);
+        toast("Sign the move into trade.xyz to place the order.", "ok", 7000);
         await ensureChain("arbitrum");
         await sendToDex(wallet.address, wallet.eip, amt, "", m.dex);
-        await loadUser();
+        await loadUser({ fresh: true });
       }
     }
     return placeAfter(order, hash);
@@ -839,14 +1038,17 @@ export async function mount(view, ctx) {
   // one (or a Gate warning) asks once more instead of firing
   async function placeAfter(order, fundTx) {
     stage = "order";
+    st.busy = "Preparing the order…";
+    renderTicket();
     const mk = () => st.markets.find((x) => x.coin === order.coin) || st.m;
     const again = () => { const c = orderCalc({ m: mk(), sz: order.sz, refPx: order.limitPx || mk().markPx, isBuy: order.isBuy, type: order.type, limitPx: order.limitPx, lev: order.lev, tp: order.tp, sl: order.sl }); return { c, g: gateChecks(c) }; };
     const stopped = (g) => toast(`Not placed: ${g.items.filter((i) => i.state === "fail").map((i) => `${i.label} ${i.value}`).join(" · ")}. Your USDC is safe on Hyperliquid; place the order from the ticket when ready.`, "error", 10000);
-    let { c, g } = again();
-    // a balance read right after a move can still be the old one: give the margin a few seconds to show before stopping
-    const marginOnly = () => g.state === "fail" && g.items.filter((i) => i.state === "fail").every((i) => i.label === "Margin");
-    for (let i = 0; i < 4 && alive && marginOnly(); i++) { await new Promise((r) => setTimeout(r, 1500)); await loadUser(); ({ c, g } = again()); }
+    // a balance read right after a funding or a move can still be the old one: fresh reads, for up to 6 s, until the
+    // free margin covers the order
+    const t0 = Date.now();
+    while (alive && freeOf(mk()) < order.need && Date.now() - t0 < 6000) { await sleep(1000); await loadUser({ fresh: true }); }
     if (!alive) return;
+    let { c, g } = again();
     if (g.state === "fail") { stopped(g); return; }
     const nowPx = order.type === "market" ? c.fill || midNow() : midNow();
     const thenPx = order.type === "market" ? order.fill || order.mid : order.mid;
@@ -854,7 +1056,7 @@ export async function mount(view, ctx) {
     if (moved > 0.01 || g.state === "warn") {
       st.busy = "Confirm the order…";
       renderTicket();
-      const ok = await review({ title: `Place the ${tagOf(mk())} order?`, confirmLabel: "Place anyway", danger: order.side === "short",
+      const ok = await review({ title: `Place the ${nameOf(mk())} order?`, confirmLabel: "Place anyway", danger: order.side === "short",
         summary: moved > 0.01 ? `Price moved from ${fmtPx(thenPx)} to ${fmtPx(nowPx)} — place anyway?` : "The Troya Gate flagged this order after you reviewed it. Place anyway?",
         rows: [["Order", order.what], [order.type === "market" ? "Est. fill now" : "Limit price", fmtPx(c.fill)], ["Margin", `${usd(c.margin)} + ${usd(c.fee)} est. fee`]],
         warn: g.items.filter((i) => i.state === "warn").map((i) => `${i.label}: ${i.value}`).join(" · ") || null });
@@ -871,7 +1073,7 @@ export async function mount(view, ctx) {
       toast(`${tagOf(m)}: ${r.text || "sent"}`, failed ? "error" : "ok", 7000);
       api.post("journal", { kind: "perp_order", summary: `${order.side === "long" ? "Long" : "Short"} ${num(r.size, m.szDecimals)} ${tagOf(m)} @ ${order.type === "market" ? "market" : fmtPx(r.px)} · ${r.text} (${fundTx ? "after funding" : "after a move to trade.xyz"})`,
         data: { coin: order.coin, side: order.side, type: order.type, size: r.size, px: r.px, leverage: order.lev, leverageSet: lp.set, tp: order.tp, sl: order.sl, result: r.text, via: `own wallet trading key · ${fundTx ? "Fund & open" : "Move & open"}`, fundTx } }).catch(() => {});
-      if (!failed) { sizeIn.value = ""; typed = null; }
+      if (!failed) { sizeIn.value = ""; typed = null; if (fundTx && st.fundStep) st.fundStep.step = 4; }
     } catch (e) { toast(`${errMsg(e)} Your USDC is on Hyperliquid; place the order when ready.`, "error", 8000); }
     setTimeout(loadUser, 800);
   }
@@ -880,7 +1082,7 @@ export async function mount(view, ctx) {
     const m = st.markets.find((x) => x.coin === p.coin);
     if (!m) return;
     if (st.key.state !== "approved") { toast("Enable trading first to close from here.", ""); return; }
-    const ok = await review({ title: `Close ${p.coin} position`, confirmLabel: "Close at market", danger: true, rows: [["Side", p.size > 0 ? "Long" : "Short"], ["Size", num(Math.abs(p.size), 5)], ["Mark", fmtPx(m.markPx)], ["Unrealised PnL", usd(p.unrealizedPnl)]] });
+    const ok = await review({ title: `Close ${nameOf(m)} position`, confirmLabel: "Close at market", danger: true, rows: [["Side", p.size > 0 ? "Long" : "Short"], ["Size", `${num(Math.abs(p.size), 5)} ${tagOf(m)}`], ["Mark", fmtPx(m.markPx, m)], ["Unrealised PnL", usd(p.unrealizedPnl)]] });
     if (!ok) return;
     try {
       // the 1% cap is set from the live book, not the market list: /api/hl/meta may answer from a copy up to a minute old
@@ -888,10 +1090,10 @@ export async function mount(view, ctx) {
       const b = await api.get(`hl/book?coin=${encodeURIComponent(p.coin)}`).catch(() => null);
       const live = b?.bids?.[0] && b?.asks?.[0] ? (b.bids[0].px + b.asks[0].px) / 2 : undefined;
       const r = await placeOrder({ owner: wallet.address, market: m, isBuy: p.size < 0, size: Math.abs(p.size), reduceOnly: true, refPx: live });
-      toast(`${p.coin}: ${r.text}`, /error/.test(r.text) ? "error" : "ok", 6000);
-      api.post("journal", { kind: "perp_order", summary: `Closed ${p.coin} ${p.size > 0 ? "long" : "short"} at market · ${r.text}`, data: { coin: p.coin, reduceOnly: true, size: Math.abs(p.size), result: r.text } }).catch(() => {});
+      toast(`${tagOf(m)}: ${r.text}`, /error/.test(r.text) ? "error" : "ok", 6000);
+      api.post("journal", { kind: "perp_order", summary: `Closed ${tagOf(m)} ${p.size > 0 ? "long" : "short"} at market · ${r.text}`, data: { coin: p.coin, reduceOnly: true, size: Math.abs(p.size), result: r.text } }).catch(() => {});
       setTimeout(loadUser, 800);
-    } catch (e) { toast(e.message, "error", 7000); }
+    } catch (e) { toast(errMsg(e), "error", 7000); }
   }
   async function cancel(o) {
     const m = st.markets.find((x) => x.coin === o.coin);
@@ -900,22 +1102,38 @@ export async function mount(view, ctx) {
     try {
       await cancelOrder({ owner: wallet.address, market: m, oid: o.oid });
       toast("Order cancelled", "ok");
-      api.post("journal", { kind: "perp_cancel", summary: `Cancelled ${o.coin} ${o.side} order ${o.oid}`, data: o }).catch(() => {});
+      api.post("journal", { kind: "perp_cancel", summary: `Cancelled ${tagOf(m)} ${o.side} order ${o.oid}`, data: o }).catch(() => {});
       setTimeout(loadUser, 600);
-    } catch (e) { toast(e.message, "error", 6000); }
+    } catch (e) { toast(errMsg(e), "error", 6000); }
   }
 
   /* ---------- boot ---------- */
-  try {
+  // the market list, with two quick retries when the market asked for is missing; the chart is built meanwhile and draws
+  // its candles (already asked for at mount) once the list has named the market
+  const metaP = (async () => {
     await loadMeta();
-    for (let i = 0; i < 2 && fellBack && alive; i++) { await new Promise((r) => setTimeout(r, 1500)); st.m = null; fellBack = false; await loadMeta(); }
-  } catch (e) { clear(view, h("div", { class: "empty", style: { padding: "100px 0" } }, h("b", {}, "Hyperliquid markets could not be loaded."), h("div", {}, e.message), h("button", { class: "btn", type: "button", onclick: () => ctx.go(location.hash) }, "Try again"))); return; }
-  if (fellBack) toast(want.includes(":") ? `${ctx.parts[0]} (trade.xyz) has not loaded yet; showing ${st.m.coin} and switching the moment it does.` : `No perp called ${ctx.parts[0]}; showing ${st.m.coin}.`, "", 7000);
+    for (let i = 0; i < 2 && fellBack && alive; i++) { await sleep(1500); st.m = null; fellBack = false; await loadMeta(); }
+  })();
+  initChart(metaP);
+  try { await metaP; }
+  catch (e) {
+    // nothing to trade without the list: stop what already runs (the live dot, the chart) before the message replaces the page
+    alive = false;
+    stops.forEach((f) => { try { f(); } catch {} });
+    themeObs?.disconnect();
+    try { chart?.remove(); } catch {}
+    clear(view, h("div", { class: "empty", style: { padding: "100px 0" } }, h("b", {}, "Hyperliquid markets could not be loaded."), h("div", {}, e.message), h("button", { class: "btn", type: "button", onclick: () => ctx.go(location.hash) }, "Try again")));
+    return;
+  }
+  if (!alive) return;
+  if (fellBack) {
+    const xyzMissing = !st.markets.some((x) => x.dex);
+    toast(want.includes(":") || xyzMissing ? `${ctx.parts[0]} has not loaded yet (the trade.xyz list is on its way); showing ${nameOf(st.m)} and switching the moment it does.` : `No perp called ${ctx.parts[0]}; showing ${nameOf(st.m)}.`, "", 7000);
+  }
   renderTicket();
   renderPositions();
-  initChart();
   loadPolicy();
-  stops.push(every(5000, loadMeta));
+  stops.push(every(5000, headTick));
   stops.push(every(1500, loadBook));
   const candleTimer = setInterval(() => { if (!document.hidden) loadCandles(false); }, 5000);
   stops.push(() => clearInterval(candleTimer));

@@ -6,6 +6,7 @@ import { wallet, onWallet, openConnect, CHAINS } from "../wallet.js";
 import { api } from "../api.js";
 import { ETH, isNative, balanceOf, toRaw, fromRaw, inputNum, rawInput, sendTx, waitReceipt, errText, journal, addTransfer, updateTransfer } from "../chain.js";
 import { sol, onSol, connectSol, restoreSol, signAndSendSol, solWallets } from "../solana.js";
+import { verdictOf, tallyOf } from "../verdict.js";
 
 const SLIPS = [{ value: 100, label: "1%" }, { value: 300, label: "3%" }, { value: 500, label: "5%" }];
 const NETS = [{ key: "robinhood", label: "Robinhood" }, { key: "base", label: "Base" }, { key: "arbitrum", label: "Arbitrum" }, { key: "solana", label: "Solana" }];
@@ -37,15 +38,13 @@ function cleanAmt(s) {
 }
 /** "about 40 s" under a minute and a half, "about 10 min" from there (route times from LI.FI). */
 const secText = (s) => (s ? `about ${s < 90 ? `${Math.max(1, Math.round(s))} s` : `${Math.round(s / 60)} min`}` : "a few minutes");
-/** The Gate's own count: a check that did not run ("skip") is neither passed nor failed, so the ring and the tally leave it out. */
-function gateCount(g) {
-  const cs = g?.checks || [];
-  const n = (s) => cs.filter((c) => c.status === s).length;
-  const passed = n("pass"), failed = n("fail"), notes = n("warn"), skipped = n("skip");
-  // "6 passed · 1 not measured" reads clearer than "6 of 7 passed" next to a Passed verdict (the Gate card's wording)
-  const tally = [`${passed} passed`, failed ? `${failed} failed` : "", notes ? `${notes} to note` : "", skipped ? `${skipped} not measured` : ""].filter(Boolean).join(" · ");
-  return { passed, failed, notes, skipped, total: cs.length - skipped, tally };
-}
+/** The Gate's own count: a check that did not run ("skip") is neither passed nor failed, so the ring and the tally leave it
+ *  out. The wording is verdict.js's, shared with the Gate page ("6 passed · 1 not measured"). */
+function gateCount(g) { const t = tallyOf(g?.checks); return { ...t, tally: t.text }; }
+// a Gate result older than this is run again at the click; the same limit the review already used before signing
+const GATE_REUSE_MS = 45_000;
+// ?review=1 (the Gate page's and the launch page's buy chips): the review opens once the Gate passes, within this long
+const AUTO_REVIEW_MS = 60_000;
 const GATE_COPY = "Pick a coin and an amount. Troya runs its checks (seven on Robinhood Chain), a simulated swap and a test sell included, before your wallet can sign.";
 // A stand-in sender for cross-chain quotes before a wallet is connected (LI.FI quotes the burn address like any wallet).
 // A quote made for it is a preview only: it is never signed, Review always fetches the route again for the real wallet.
@@ -80,10 +79,13 @@ export async function mount(view, ctx) {
   let alive = true;
   const st = {
     sell: ETH, buy: null, amount: "", slip: Math.round((ctx.prefs.get().slippage || 1) * 100),
-    quote: null, quoteAt: 0, quoteErr: null, loading: false, refreshing: false, loadAt: 0, gate: null, gateAt: 0, gating: false, bal: null, busy: false, seq: 0, ethUsd: null,
+    quote: null, quoteAt: 0, quoteErr: null, loading: false, refreshing: false, loadAt: 0, gate: null, gateAt: 0, gateKey: "", gating: false, bal: null, busy: false, seq: 0, ethUsd: null,
     chain: NETS.some((n) => n.key === ctx.query.chain) ? ctx.query.chain : "robinhood",
   };
-  const blocked = () => !!(st.gate && !st.gate.pass);
+  // one verdict for the Gate card, the phone strip, the button and the review (verdict.js, shared with the Gate page and
+  // the badge); "blocked" is wherever the server's own pass is false, so this never unlocks what the server refuses
+  const verdict = () => (st.gate ? verdictOf(st.gate) : null);
+  const blocked = () => !!st.gate && (!st.gate.pass || verdict().word === "blocked");
   // Solana uses its own wallet (Wallet Standard) and SOL as the native coin; the EVM chains share the connected EVM wallet
   const isSolNet = () => st.chain === "solana";
   const nativeOf = () => (isSolNet() ? SOLT : ETH);
@@ -112,6 +114,12 @@ export async function mount(view, ctx) {
     if (st.sell && st.buy && !isNative(st.sell) && st.sell.address === st.buy.address) st.buy = null;
   }
   if (ctx.query.amount && /^\d*\.?\d+$/.test(ctx.query.amount)) st.amount = ctx.query.amount;
+  // what a Gate run was asked about: network, both coins, the raw amount, slippage and the wallet it simulated from. A
+  // result is reused at the click only for the identical request (see gateReusable)
+  const gateKeyOf = (tin, tout, rawAmt, from) => [st.chain, akey(tokParam(tin)), akey(tokParam(tout)), String(rawAmt), st.slip, akey(from || "")].join("|");
+  // ?review=1: open the review the moment the Gate passes for this coin and amount, once, within a minute. Never a
+  // signature: the review still waits for Confirm and the wallet for its own approval
+  const auto = { until: ctx.query.review === "1" && st.buy && st.amount ? Date.now() + AUTO_REVIEW_MS : 0, key: `${st.chain}|${akey(st.buy?.address)}|${st.amount}` };
 
   /* ---------- layout ---------- */
   // network picker: Robinhood Chain is home; Base and Arbitrum route through KyberSwap, Solana through Jupiter, each with its own Gate
@@ -486,7 +494,11 @@ export async function mount(view, ctx) {
     el.classList.toggle("empty", !t);
   }
 
-  function reset() { st.quote = null; st.quoteAt = 0; st.quoteErr = null; st.gate = null; st.gateAt = 0; st.gating = false; st.refreshing = false; st.seq++; }
+  // the quote and Gate requests in flight: a new requote (or any change that clears the quote) cancels them, so a stale
+  // answer never keeps the server and the connection busy while the person types
+  let quoteAbort = null;
+  const cancelQuote = () => { try { quoteAbort?.abort(); } catch {} quoteAbort = null; };
+  function reset() { cancelQuote(); st.quote = null; st.quoteAt = 0; st.quoteErr = null; st.gate = null; st.gateAt = 0; st.gateKey = ""; st.gating = false; st.refreshing = false; st.seq++; }
 
   function paint() {
     tokBtn(sellTok, st.sell);
@@ -552,13 +564,30 @@ export async function mount(view, ctx) {
     else if (st.bal && amt > st.bal.raw) { label = `Not enough ${st.sell.symbol}`; disabled = true; }
     else if (st.loading) { label = "Getting a quote…"; disabled = true; }
     else if (!q) { label = st.quoteErr ? "No route" : "Getting a quote…"; disabled = true; }
-    else if (st.gate && !st.gate.pass) { label = "Blocked by Troya Gate"; disabled = true; }
+    else if (blocked()) { label = "Blocked by Troya Gate"; disabled = true; }
     if (st.busy) { label = st.busy; disabled = true; }
     btn.textContent = label;
     btn.disabled = disabled;
     paintStrip();
     tickBusy();
     tickFresh();
+    autoReview(label === "Review swap" && !disabled);
+  }
+  // ?review=1: once the quote and the Gate are in for the linked coin and amount, with a wallet and its balance read and
+  // the button at "Review swap", the review opens by itself (act() reuses this Gate run and its transaction). Anything
+  // else (blocked, not enough ETH, a changed coin or amount, a minute gone) simply drops the shortcut: nothing navigates
+  // away and nothing is signed without the person.
+  function autoReview(ready) {
+    if (!auto.until) return;
+    const key = `${st.chain}|${akey(st.buy?.address)}|${st.amount}`;
+    const drop = () => {
+      auto.until = 0;
+      try { const [path, qs = ""] = location.hash.slice(1).split("?"); const p = new URLSearchParams(qs); if (p.has("review")) { p.delete("review"); history.replaceState(null, "", `#${path}${String(p) ? `?${p}` : ""}`); } } catch {}
+    };
+    if (!alive || Date.now() > auto.until || key !== auto.key || blocked()) return drop();
+    if (st.busy || st.loading || st.gating || !st.quote || !st.gate || !who() || !st.bal) return;   // still arriving
+    drop();
+    if (ready) setTimeout(() => { if (alive && !st.busy && st.quote) act(); }, 0);
   }
   // the Gate in one line above the button (phones): verdict, checks passed and the first reason that failed (or a note)
   function paintStrip() {
@@ -568,12 +597,10 @@ export async function mount(view, ctx) {
     let verdict = "idle", pill = st.gating ? "Checking…" : "Routing…", count = "",
       why = st.gating ? "Simulating the exact swap and a test sell…" : "Finding a route, then Troya runs its checks.";
     if (g) {
-      const c = gateCount(g);
-      verdict = g.pass ? (c.notes ? "caution" : "passed") : "failed";
-      pill = g.pass ? (verdict === "caution" ? "Passed with notes" : "Passed") : "Blocked";
+      const c = gateCount(g), v = verdictOf(g);
+      verdict = v.cls; pill = v.label;
       count = `${c.passed}/${c.total}`;
-      const first = (g.checks || []).find((x) => x.status === "fail") || (g.checks || []).find((x) => x.status === "warn");
-      why = first ? `${first.label}${first.detail ? `: ${first.detail}` : ""}` : c.tally;
+      why = v.word === "passed" ? c.tally : v.answer;
     }
     const k = `${verdict}|${pill}|${count}|${why}`;
     if (gateStrip.dataset.k === k) return;
@@ -664,16 +691,15 @@ export async function mount(view, ctx) {
               : st.loading ? "Then Troya runs its checks (seven on Robinhood Chain) before your wallet can sign." : GATE_COPY))));
       return;
     }
-    const c = gateCount(g);
-    const verdict = g.pass ? (c.notes ? "caution" : "passed") : "failed";
+    const c = gateCount(g), v = verdictOf(g);
     clear(gateCard,
       h("div", { class: "sw2-gh" }, title, st.gateAt ? h("span", { class: "fine muted", "data-gate-age": "" }, gateAge()) : null,
-        h("span", { class: `dk-v v-${verdict}` }, g.pass ? (verdict === "caution" ? "Passed with notes" : "Passed") : "Blocked")),
-      h("div", { class: "sw2-gb" }, ringEl(c.passed, c.total, verdict),
+        h("span", { class: `dk-v v-${v.cls}` }, v.label)),
+      h("div", { class: "sw2-gb" }, ringEl(c.passed, c.total, v.cls),
         h("ul", { class: "sw2-checks" }, g.checks.map((x) => h("li", { class: `c-${x.status}` },
           h("span", { class: "dk-ck" }, x.status === "pass" ? icon("check") : x.status === "fail" ? icon("close") : h("b", {}, x.status === "warn" ? "!" : "–")),
           h("span", { class: "l" }, x.label), h("span", { class: "d", title: x.detail || "" }, x.status === "skip" ? (x.detail || "Skipped") : x.detail || ""))))),
-      h("p", { class: "fine muted sw2-gnote" }, `${c.tally}. Runs again the moment you press Swap, on the pool as it is then.`));
+      h("p", { class: "fine muted sw2-gnote" }, h("b", {}, v.sentence), ` ${c.tally}. Runs again before you sign whenever this result is more than 45 s old.`));
   }
   /* ---------- Popular now: a few coins to start from while none is chosen ----------
      Robinhood Chain: $TROYA, the top five Troya picks (a read of live data, never advice) and three stock tokens.
@@ -785,7 +811,7 @@ export async function mount(view, ctx) {
     const tf = seg(["15m", "1h", "4h"], iv, (v) => { try { chartObj?.remove(); } catch {} chartObj = null; loadSwapChart(t, v); });
     tf.classList.add("sm");
     chartCard.hidden = false;
-    clear(chartCard, h("div", { class: "sw2-ch-h" }, tokenIcon({ ...t, chain: st.chain }, "sm"), h("b", {}, `$${t.symbol}`), st.gate?.pass ? h("span", { class: "dk-v v-passed" }, `Gate ${gateCount(st.gate).passed}/${gateCount(st.gate).total}`) : null, h("span", { class: "sw2-sp" }), tf), box);
+    clear(chartCard, h("div", { class: "sw2-ch-h" }, tokenIcon({ ...t, chain: st.chain }, "sm"), h("b", {}, `$${t.symbol}`), st.gate && !blocked() ? h("span", { class: `dk-v v-${verdict().cls}`, title: verdict().label }, `Gate ${gateCount(st.gate).passed}/${gateCount(st.gate).total}`) : null, h("span", { class: "sw2-sp" }), tf), box);
     try {
       const c = await api.get(`market/robinhood/candles?address=${a}&interval=${iv}`);
       if (!alive || my !== chartSeq || a !== chartAddr) return;
@@ -827,12 +853,35 @@ export async function mount(view, ctx) {
     try { g = await api.get(`swap/gate?${qs}`); }
     catch (e) { const err = new Error(`Troya Gate could not run again just now (${e.message}). Nothing was sent. Try again in a moment.`); err.gate = true; throw err; }
     if (!alive) { const err = new Error("Swap cancelled."); err.gate = true; throw err; }
-    st.gate = g; st.gateAt = Date.now(); paintGate();
-    if (!g.pass) {
+    st.gate = g; st.gateAt = Date.now(); st.gateKey = gateKeyOf(q.tokenIn, q.tokenOut, q.amountInRaw, who()); paintGate();
+    if (!g.pass || verdictOf(g).word === "blocked") {
       const why = g.checks.filter((c) => c.status === "fail").map((c) => `${c.label}: ${c.detail}`).join(" · ");
       const err = new Error(`Troya Gate ran again and blocked this swap. ${why}`.slice(0, 300)); err.gate = true; throw err;
     }
     return g;
+  }
+  // The Gate on screen stands in for a new run at the click only when it passed less than 45 s ago for this exact request
+  // (network, coins, raw amount, slippage, this wallet) on the same venue the quote now takes. Past that, regate() runs.
+  // The 45 s are the limit the review already used before sending; the swap stays bounded by the quote's minimum.
+  function gateReusable(q) {
+    const g = st.gate;
+    if (!g?.pass || !q || blocked() || !who() || Date.now() - st.gateAt >= GATE_REUSE_MS) return null;
+    if (st.gateKey !== gateKeyOf(q.tokenIn, q.tokenOut, q.amountInRaw, who())) return null;
+    if (g.quote?.venue && q.venue && g.quote.venue !== q.venue) return null;
+    return g;
+  }
+  // The transaction the Gate built and simulated for this wallet (from=wallet), so Swap need not ask /swap/build for the
+  // same thing again. Used only when it is plainly the swap being reviewed: this wallet, this network, the same coins and
+  // raw amount, and a deadline well ahead. Anything else falls back to /swap/build, which quotes on the server again.
+  function gateTx(g, q) {
+    const t = g?.tx;
+    if (!t?.to || !t?.data || !t.quote || !Array.isArray(t.approvals)) return null;
+    if (akey(t.from) !== akey(wallet.address)) return null;
+    if (t.chainId != null && Number(t.chainId) !== Number(CHAINS[st.chain]?.id)) return null;
+    if (String(t.quote.amountInRaw) !== String(q.amountInRaw)) return null;
+    if (akey(tokParam(t.quote.tokenIn)) !== akey(tokParam(q.tokenIn)) || akey(tokParam(t.quote.tokenOut)) !== akey(tokParam(q.tokenOut))) return null;
+    if (t.deadline && t.deadline * 1000 - Date.now() < 5 * 60_000) return null;
+    return t;
   }
 
   /* ---------- quote + gate ---------- */
@@ -841,28 +890,34 @@ export async function mount(view, ctx) {
   async function runQuote(quiet = false) {
     const amt = toRaw(st.amount, st.sell?.decimals ?? 18);
     if (!st.sell || !st.buy || !amt || amt <= 0n) { st.loading = false; st.refreshing = false; paint(); return; }
+    // the previous quote or Gate request, if still running, is cancelled: its answer would be thrown away anyway
+    cancelQuote();
+    const ac = (quoteAbort = typeof AbortController === "function" ? new AbortController() : null), signal = ac?.signal;
     const seq = ++st.seq;
     st.refreshing = quiet;
     if (!quiet) { st.loading = true; st.loadAt = Date.now(); }
     paint();
     const qs = new URLSearchParams({ tokenIn: tokParam(st.sell), tokenOut: tokParam(st.buy), amountInRaw: amt.toString(), slippageBps: String(st.slip), ...cq() });
     try {
-      const q = await api.get(`swap/quote?${qs}`);
+      const q = await api.get(`swap/quote?${qs}`, { signal });
       if (!alive || seq !== st.seq) return;
       st.quote = q; st.quoteAt = Date.now(); st.quoteErr = null;
       if (q.ethUsd > 0) st.ethUsd = q.ethUsd;
-      if (quiet) { st.refreshing = false; paint(); return; }
+      if (quiet) { st.refreshing = false; if (quoteAbort === ac) quoteAbort = null; paint(); return; }
       st.loading = false; st.gating = true;
       paint();
-      if (who()) qs.set("from", who());
-      // fail closed: if the Gate can't run, the swap stays locked until it can
-      const g = await api.get(`swap/gate?${qs}`).catch((e) => ({ pass: false, checks: [{ key: "gate", status: "fail", label: "Troya Gate", detail: `Could not run the checks just now (${e.message}). The swap stays locked until they pass. Try again in a moment.` }] }));
-      if (!alive || seq !== st.seq) return;
+      const from = who();
+      if (from) qs.set("from", from);
+      // fail closed: if the Gate can't run, the swap stays locked until it can (a cancelled run is simply dropped below)
+      const g = await api.get(`swap/gate?${qs}`, { signal }).catch((e) => ({ pass: false, checks: [{ key: "gate", status: "fail", label: "Troya Gate", detail: `Could not run the checks just now (${e.message}). The swap stays locked until they pass. Try again in a moment.` }] }));
+      if (!alive || seq !== st.seq || signal?.aborted) return;
+      if (quoteAbort === ac) quoteAbort = null;
       st.gate = g; st.gateAt = Date.now(); st.gating = false;
+      st.gateKey = gateKeyOf(st.sell, st.buy, amt, from);
       paint();
       tellTroya();
     } catch (e) {
-      if (!alive || seq !== st.seq) return;
+      if (!alive || seq !== st.seq || e?.name === "AbortError") return;
       // (called straight away: the 500 ms ticker would keep pushing a debounced call back)
       if (quiet) { st.refreshing = false; runQuote(false); return; }
       st.quote = null; st.quoteErr = e.message; st.loading = false;
@@ -878,11 +933,13 @@ export async function mount(view, ctx) {
     const notes = g ? g.checks.filter((c) => c.status === "warn").map((c) => `${c.label}: ${c.detail}`) : [];
     const text = [`Swap on ${CHAINS[st.chain]?.name || st.chain}: ${st.amount || "?"} ${st.sell?.symbol || "?"} for ${st.buy?.symbol || "?"}${st.buy?.address && st.buy.address !== "native" ? ` (${st.buy.address})` : ""}.`,
       q ? `Quote ${amount(Number(q.amountOut))} ${q.tokenOut.symbol}, price impact ${q.priceImpact == null ? "?" : (q.priceImpact * 100).toFixed(2) + "%"}, fees and taxes ${q.feePct == null ? "?" : q.feePct + "%"}, route ${q.route?.label}.` : st.quoteErr ? `No quote: ${st.quoteErr}.` : "",
-      g ? `Troya Gate ${g.pass ? "passed" : "blocked"} (${gateCount(g).tally}).` : "",
+      g ? `Troya Gate: ${verdict().label}. ${verdict().sentence} (${gateCount(g).tally}).` : "",
       fails.length ? `Failed: ${fails.join("; ")}.` : "", notes.length ? `Notes: ${notes.join("; ")}.` : ""].filter(Boolean).join(" ");
     dispatchEvent(new CustomEvent("troya:ctx", { detail: { text } }));
-    if (g && !g.pass) dispatchEvent(new CustomEvent("troya:nudge", { detail: { key: `swap-gate-${st.gateAt}`, text: `Troya Gate blocked this swap of ${st.buy?.symbol || "the coin"}. Want me to explain why?`, q: "Why did Troya Gate block this swap, and what can I do instead?" } }));
-    else if (g && notes.length) dispatchEvent(new CustomEvent("troya:nudge", { detail: { key: `swap-note-${st.buy?.address}`, text: `The Gate passed ${st.buy?.symbol || "this coin"} with a note. Want to know what it means?`, q: "The Gate passed this swap with a note. What does the note mean for me?" } }));
+    // the offer to explain follows the shared verdict, as on the Gate page: blocked, or passed with a note
+    const v = verdict(), coin = st.buy?.symbol ? `$${st.buy.symbol}` : "This coin";
+    if (v?.word === "blocked") dispatchEvent(new CustomEvent("troya:nudge", { detail: { key: `swap-gate-${st.gateAt}`, text: `${coin} ${v.nudge}, so this swap is off. Want me to explain why?`, q: "Why did Troya Gate block this swap, and what can I do instead?" } }));
+    else if (v?.word === "notes") dispatchEvent(new CustomEvent("troya:nudge", { detail: { key: `swap-note-${st.buy?.address}`, text: `${coin} ${v.nudge}. Want to know what it means?`, q: "The Gate passed this swap with a note. What does the note mean for me?" } }));
   }
   const swapFailed = (e) => dispatchEvent(new CustomEvent("troya:nudge", { detail: { key: `swap-err-${Date.now()}`, text: "That swap didn't go through. Want me to explain what happened?", q: `My swap didn't go through. The app said: "${String(e?.gate ? e.message : errText(e)).slice(0, 300)}". What does it mean and what should I do?` } }));
 
@@ -1092,7 +1149,15 @@ export async function mount(view, ctx) {
   }
   // the two rows every review adds: what the route keeps in fees and taxes, and the Gate as it just ran
   const feeRow = (fq) => ["Fees and taxes", fq.feePct == null ? "–" : `${Number(fq.feePct).toFixed(2)}%`];
-  const gateRow = () => { const g = st.gate, c = gateCount(g); return g?.pass ? ["Troya Gate", `${c.notes ? "Passed with notes" : "Passed"} ${c.passed}/${c.total}`] : null; };
+  const gateRow = () => { const g = st.gate, c = gateCount(g); return g?.pass && !blocked() ? ["Troya Gate", `${verdict().label} ${c.passed}/${c.total}`] : null; };
+  // the review's warning: the route's own warnings, then the Gate's amber line or its "not testable yet", so a review
+  // that opens by itself (?review=1) still puts that line in front of the person before Confirm
+  const reviewWarn = (fq) => {
+    const v = verdict(), parts = [...(fq.warnings || [])];
+    if (v?.word === "notes" && v.why) parts.push(`Gate note: ${v.why.label}: ${v.why.detail}`.replace(/[.\s]*$/, "."));
+    else if (v?.word === "untestable") parts.push(`${v.answer}. ${v.note}`);
+    return parts.length ? parts.join(" ") : null;
+  };
   // after a confirmed swap: the next things people do with the coin they now hold (each opens a page; nothing is sent)
   function doneChips(chain, paid, got, outRaw) {
     const coin = !isNative(got) ? got : !isNative(paid) ? paid : null;
@@ -1139,7 +1204,7 @@ export async function mount(view, ctx) {
           ["Recipient", `${short(sol.address)} (you)`],
           ["Network", "Solana"],
         ],
-        warn: fq.warnings?.length ? fq.warnings.join(" ") : null,
+        warn: reviewWarn(fq),
         confirmLabel: "Swap in wallet",
       });
       if (!ok) { st.busy = false; paint(); return; }
@@ -1193,11 +1258,14 @@ export async function mount(view, ctx) {
     if (!q) return;
     const paid = st.sell, got = st.buy;
     try {
-      await regate(q);
+      // one Gate run per click at most, and none when the one on screen is under 45 s old for this exact swap and wallet
+      // (a ?review=1 link lands here straight after its first run). The Gate built and simulated the transaction for this
+      // wallet (from=wallet), so that very transaction is reviewed and sent; /swap/build is asked only when it is missing
+      const g = gateReusable(q) || await regate(q);
       st.busy = "Preparing…"; paint();
       const chain = st.chain, net = netName();
       const buildArgs = { from: wallet.address, tokenIn: isNative(q.tokenIn) ? "ETH" : q.tokenIn.address, tokenOut: isNative(q.tokenOut) ? "ETH" : q.tokenOut.address, amountInRaw: q.amountInRaw, slippageBps: st.slip, ...cq() };
-      let built = await api.post("swap/build", buildArgs);
+      let built = gateTx(g, q) || await api.post("swap/build", buildArgs);
       const need = (built.approvals || []).filter((a) => a.needed);
       if (need.length) {
         const okA = await review({
@@ -1215,10 +1283,12 @@ export async function mount(view, ctx) {
           if (!ar || ar.status !== 1) throw new Error("The approval did not go through. Nothing was swapped.");
         }
         toast(`${q.tokenIn.symbol} approved`, "ok");
-        await regate(q, "Running Troya Gate again after the approval…");
-        // the RPC that builds the swap can lag a block behind the receipt: three more tries, 1.5 s apart, before giving up
+        const g2 = await regate(q, "Running Troya Gate again after the approval…");
+        // the RPC that builds the swap can lag a block behind the receipt: three more tries, 1.5 s apart, before giving up.
+        // The first try is the Gate's own transaction from the run just made, when it no longer needs an approval
         for (let tries = 0; ; tries++) {
-          built = await api.post("swap/build", buildArgs);
+          const fromGate = tries === 0 ? gateTx(g2, q) : null;
+          built = fromGate && !fromGate.approvals.some((a) => a.needed) ? fromGate : await api.post("swap/build", buildArgs);
           if (!(built.approvals || []).some((a) => a.needed)) break;
           if (tries >= 3 || !alive) throw new Error("The approval is not visible on chain yet. Wait a few seconds and try again.");
           st.busy = "Waiting for the approval to show on chain…"; paint();
@@ -1241,7 +1311,7 @@ export async function mount(view, ctx) {
           ["Recipient", `${short(wallet.address)} (you)`],
           ["Network", net],
         ],
-        warn: fq.warnings?.length ? fq.warnings.join(" ") : null,
+        warn: reviewWarn(fq),
         confirmLabel: "Swap in wallet",
       });
       if (!ok) { st.busy = false; paint(); return; }
@@ -1286,5 +1356,5 @@ export async function mount(view, ctx) {
   if (isSolNet()) restoreSol().then(() => { refreshBal(); paint(); });
   render();
   if (st.amount) requote();
-  return () => { alive = false; off(); offSol(); clearInterval(ageTick); fitObs?.disconnect(); phoneMq?.removeEventListener?.("change", placeNote); try { chartObj?.remove(); } catch {} };
+  return () => { alive = false; cancelQuote(); off(); offSol(); clearInterval(ageTick); fitObs?.disconnect(); phoneMq?.removeEventListener?.("change", placeNote); try { chartObj?.remove(); } catch {} };
 }

@@ -15,7 +15,8 @@ import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { HttpError, send } from "./api.mjs";
+import { HttpError, send, requestLane } from "./api.mjs";
+import { getSession } from "./auth.mjs";
 import { KYBER_ON, KYBER_LIVE, kyberRoute, kyberBuild, splitLoss } from "./kyber.mjs";
 
 /* ------------------------------------------------------------------ */
@@ -67,35 +68,173 @@ const failedAt = new Map(); // upstream → time it last failed
 const hits = new Map();     // upstream host → requests sent since the server started (infra watch reads it for quotas)
 export const rpcHits = () => Object.fromEntries(hits);
 
-async function post(url, payload, timeoutMs) {
-  try { const h = new URL(url).host; hits.set(h, (hits.get(h) || 0) + (Array.isArray(payload) ? payload.length : 1)); } catch {}
+/* ---------- the official RPC broker ---------- */
+// The free official RPC answers 429 when pressed, and many modules read it (wide eth_getLogs for Tribute, Watchfire, the
+// flywheel, Sentry, the buy bot; and every fallback when Chainstack fails). Every request this module sends to it passes
+// one shared gate: a token bucket (4 requests a second after a first one, so no 1-second window holds more than 5; at
+// most 3 in flight) with two lanes. A person's request (an
+// API call, the browser relay) is served before background work (scans, bots, timers), so a burst of scans can no
+// longer push a user's read into a 429. A 429 honours Retry-After: the lane pauses and the request is tried once more.
+// A request that cannot get a slot in time fails as "busy", so forward() moves on to the next upstream.
+// Modules that fetch the official RPC on their own (not through rpc()) are not covered: they should move to rpc().
+const BROKER_HOSTS = new Set(list("RPC_BROKER_HOSTS", [new URL(OFFICIAL_RPC).host]));
+const B_RPS = Math.max(0.5, Number(process.env.OFFICIAL_RPC_RPS) || 4);
+const B_BURST = Math.max(1, Number(process.env.OFFICIAL_RPC_BURST) || 1);
+const B_INFLIGHT = Math.max(1, Number(process.env.OFFICIAL_RPC_INFLIGHT) || 3);
+const B_WAIT = { fg: 5_000, bg: 30_000 };       // longest a request waits for a slot before it counts as busy
+const B_WAIT_NEXT = { fg: 1_500, bg: 5_000 };   // the same when another upstream can take it: move on sooner
+const B_RETRY_MAX = { fg: 3_000, bg: 20_000 };  // a longer Retry-After is not waited out: the request fails over instead
+const B_QCAP = { fg: 200, bg: 400 };            // waiting requests per lane; past that a new one is busy at once
+// a store older than this is not a person waiting any more (a timer started inside a request inherits the store)
+const USER_TTL = 60_000;
+const broker = { tokens: B_BURST, at: Date.now(), busy: 0, timer: null, fg: { q: [], until: 0 }, bg: { q: [], until: 0 } };
+/** lane of one request: opts.bg wins; otherwise a request made while serving an API call is a person's, the rest background */
+function laneOf(opts) {
+  if (opts?.bg === true) return "bg";
+  if (opts?.bg === false) return "fg";
+  const s = requestLane.getStore();
+  return s && Date.now() - s.at < USER_TTL ? "fg" : "bg";
+}
+const busyError = () => Object.assign(new Error("upstream busy (the official RPC queue is full, trying the next one)"), { transient: true, busy: true });
+function bPump() {
+  if (broker.timer) { clearTimeout(broker.timer); broker.timer = null; }
+  for (;;) {
+    const now = Date.now();
+    broker.tokens = Math.min(B_BURST, broker.tokens + ((now - broker.at) / 1000) * B_RPS);
+    broker.at = now;
+    if (broker.busy >= B_INFLIGHT) return;                        // a finished request pumps again
+    const fg = broker.fg, bg = broker.bg;
+    // strict priority: background runs only when no person is waiting (a 429 on the user lane pauses both lanes)
+    const L = fg.q.length && now >= fg.until ? fg : bg.q.length && !fg.q.length && now >= bg.until ? bg : null;
+    if (!L) {
+      // nothing ready: the lane at the front is paused, so wake when its pause ends
+      const next = fg.q.length ? fg.until : bg.q.length ? bg.until : 0;
+      if (next > now) broker.timer = setTimeout(bPump, next - now);
+      return;
+    }
+    const job = L.q[0];
+    // a batch spends one token per call: it starts once a full bucket's worth is there, and the bucket goes below zero
+    const need = Math.min(job.cost, B_BURST);
+    if (broker.tokens < need) { broker.timer = setTimeout(bPump, Math.ceil(((need - broker.tokens) / B_RPS) * 1000)); return; }
+    broker.tokens -= job.cost;
+    broker.busy++;
+    L.q.shift();
+    job.go();
+  }
+}
+function bSlot(lane, cost, waitMs = B_WAIT[lane]) {
+  const L = broker[lane];
+  if (L.q.length >= B_QCAP[lane]) return Promise.reject(busyError());
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const release = () => { if (done) return; done = true; broker.busy--; bPump(); };
+    const job = { cost: Math.max(1, cost), go: () => { clearTimeout(t); resolve(release); } };
+    const t = setTimeout(() => { const i = L.q.indexOf(job); if (i >= 0) { L.q.splice(i, 1); reject(busyError()); bPump(); } }, waitMs);
+    L.q.push(job);
+    bPump();
+  });
+}
+function bPause(lane, ms) {
+  const until = Date.now() + ms;
+  broker[lane].until = Math.max(broker[lane].until, until);
+  if (lane === "fg") broker.bg.until = Math.max(broker.bg.until, until); // the user lane backing off means everyone does
+  bPump();
+}
+// Retry-After is seconds or an HTTP date; without one, a short pause
+function retryAfterMs(v) {
+  const s = String(v || "").trim();
+  if (/^\d+(\.\d+)?$/.test(s)) return Math.max(250, Math.min(60_000, Number(s) * 1000));
+  const d = Date.parse(s);
+  return Number.isFinite(d) ? Math.max(250, Math.min(60_000, d - Date.now())) : 1_000;
+}
+
+/* ---------- 429s per module (infra watch alerts on them) ---------- */
+// n: 429 answers seen · gaveUp: requests that still failed on a 429 after the retry · busy: requests the broker turned
+// away (no slot in time) · recent: times of the last hour's 429s
+const throttles = new Map();
+function callerModule(opts) {
+  if (opts?.module) return String(opts.module).slice(0, 40);
+  const lim = Error.stackTraceLimit;
+  Error.stackTraceLimit = 50;
+  const stack = String(new Error().stack || "");
+  Error.stackTraceLimit = lim;
+  for (const m of stack.matchAll(/[\\/]server[\\/]([\w.-]+)\.mjs/g)) if (m[1] !== "robinhood") return m[1];
+  return /robinhood\.mjs/.test(stack) ? "robinhood" : "other";
+}
+function noteThrottle(opts, kind) {
+  const mod = callerModule(opts);
+  let t = throttles.get(mod);
+  if (!t) { t = { n: 0, gaveUp: 0, busy: 0, recent: [] }; throttles.set(mod, t); }
+  t[kind]++;
+  if (kind === "n") { t.recent.push(Date.now()); if (t.recent.length > 5000) t.recent.splice(0, t.recent.length - 5000); }
+}
+/** 429s per module since the server started: { module: { n, gaveUp, busy, lastHour } } */
+export function rpcThrottles() {
+  const cut = Date.now() - 3600_000, out = {};
+  for (const [mod, t] of throttles) {
+    while (t.recent.length && t.recent[0] < cut) t.recent.shift();
+    out[mod] = { n: t.n, gaveUp: t.gaveUp, busy: t.busy, lastHour: t.recent.length };
+  }
+  return out;
+}
+
+async function send1(url, host, payload, timeoutMs, opts) {
+  if (host) hits.set(host, (hits.get(host) || 0) + (Array.isArray(payload) ? payload.length : 1));
   const res = await fetch(url, {
     method: "POST", headers: { "content-type": "application/json", accept: "application/json", "user-agent": "troya-agent/0.2" },
     body: JSON.stringify(payload), signal: AbortSignal.timeout(timeoutMs),
   });
+  if (res.status === 429) {
+    noteThrottle(opts, "n");
+    res.body?.cancel?.().catch?.(() => {});
+    throw Object.assign(new Error("upstream 429"), { transient: true, status: 429, retryAfter: retryAfterMs(res.headers.get("retry-after")) });
+  }
   // 402: a paid node over its quota (extra usage off) answers this; the next upstream takes over
-  if (res.status >= 500 || res.status === 429 || res.status === 403 || res.status === 402) throw Object.assign(new Error(`upstream ${res.status}`), { transient: true });
+  if (res.status >= 500 || res.status === 403 || res.status === 402) throw Object.assign(new Error(`upstream ${res.status}`), { transient: true, status: res.status });
   const text = await res.text();
   try { return JSON.parse(text); } catch { throw Object.assign(new Error(`upstream sent non-JSON (${res.status})`), { transient: true }); }
 }
+async function post(url, payload, timeoutMs, opts = {}) {
+  let host = "";
+  try { host = new URL(url).host; } catch {}
+  if (!BROKER_HOSTS.has(host)) return send1(url, host, payload, timeoutMs, opts);
+  const lane = laneOf(opts), cost = Array.isArray(payload) ? payload.length : 1;
+  for (let attempt = 0; ; attempt++) {
+    let release;
+    try { release = await bSlot(lane, cost, (opts.hasNext ? B_WAIT_NEXT : B_WAIT)[lane]); }
+    catch (e) { noteThrottle(opts, "busy"); throw e; }
+    try { return await send1(url, host, payload, timeoutMs, opts); }
+    catch (e) {
+      if (e.status !== 429) throw e;
+      bPause(lane, e.retryAfter);
+      // once more after the pause (bSlot waits it out), unless the node asks for longer than this lane can wait
+      if (attempt >= 1 || e.retryAfter > B_RETRY_MAX[lane]) { noteThrottle(opts, "gaveUp"); throw e; }
+    } finally { release(); }
+  }
+}
+/** the broker's queue right now (tests and /api/infra) */
+export const rpcBroker = () => ({ rps: B_RPS, inFlight: broker.busy, waiting: { user: broker.fg.q.length, background: broker.bg.q.length }, paused: { user: Math.max(0, broker.fg.until - Date.now()), background: Math.max(0, broker.bg.until - Date.now()) } });
+
 function ordered(chain) {
   const ups = CHAINS[chain]?.upstreams;
   if (!ups?.length) throw new HttpError(404, `Unknown chain: ${chain}`);
   return [...ups].sort((a, b) => ((failedAt.get(a) || 0) > Date.now() - 60_000 ? 1 : 0) - ((failedAt.get(b) || 0) > Date.now() - 60_000 ? 1 : 0));
 }
-async function forward(chain, payload, { noRetry = false, timeoutMs = Number(process.env.RPC_TIMEOUT_MS) || 9000, only } = {}) {
+// an answer that means "not here, ask another node": a log range this upstream refuses (Chainstack: 10,000 blocks; a free
+// mirror: 100 blocks, "ranges over 100 blocks are not supported on free plan"), or a node over its quota
+const TRY_NEXT = /block range|range limit|too many blocks|more than \d+ (blocks|results)|ranges? over [0-9]+ blocks|not supported on (the )?free (plan|tier)|freetier|limit exceeded|quota|credits/i;
+async function forward(chain, payload, { noRetry = false, timeoutMs = Number(process.env.RPC_TIMEOUT_MS) || 9000, only, ...opts } = {}) {
   let lastErr;
   const urls = only ? [only] : ordered(chain);
   for (const [i, url] of urls.entries()) {
     try {
-      const r = await post(url, payload, timeoutMs);
-      // a log range one upstream refuses (Chainstack: 10,000 blocks) or a node over its quota: try the next one
-      if (r?.error && i < urls.length - 1 && /block range|range limit|too many blocks|more than \d+ (blocks|results)|limit exceeded|quota|credits/i.test(String(r.error.message || ""))) { lastErr = new Error(r.error.message); continue; }
+      const r = await post(url, payload, timeoutMs, { ...opts, hasNext: i < urls.length - 1 });
+      if (r?.error && i < urls.length - 1 && TRY_NEXT.test(String(r.error.message || ""))) { lastErr = new Error(r.error.message); continue; }
       return r;
     }
     catch (e) {
       lastErr = e;
-      failedAt.set(url, Date.now());
+      if (!e.busy) failedAt.set(url, Date.now()); // our own queue being full says nothing about the node
       if (noRetry && !(e.transient || e.name === "TimeoutError" || e.cause)) break;
     }
   }
@@ -1276,6 +1415,7 @@ export async function buildLaunchTx(o = {}) {
   if (Buffer.byteLength(name) > 64 || Buffer.byteLength(symbol) > 16) throw new HttpError(400, "Name is limited to 64 bytes and symbol to 16 bytes.");
   const logo = clip(o.logo, 512);
   if (logo && !/^(https:\/\/|ipfs:\/\/)/.test(logo)) throw new HttpError(400, "The logo must be an https:// or ipfs:// link (or upload an image).");
+  await holdLogo(logo);
   const menu = await launchMenu();
   if (!menu.launchEnabled) throw new HttpError(409, "Pons has paused launches right now.");
   const cfg = menu.configs.find((c) => c.id === Number(o.configId ?? menu.configs[0]?.id));
@@ -1305,10 +1445,19 @@ export async function buildLaunchTx(o = {}) {
     simulation: { ok: sim.ok, error: sim.ok ? null : sim.error },
   };
 }
-// logo hosting for launches: the image is stored on this server and its https URL goes on chain
+// logo hosting for launches: the image is stored on this server and its https URL goes on chain.
+// Uploads need a signed-in wallet (anyone could otherwise host any image on troya.codes, served with a one-year cache).
+// logos.json records who uploaded each file and when; once a day a file that no launch uses after 24 hours is removed
+// (sweepLogos). A file that was here before that record existed is never removed: it may be a live coin's logo.
 const LOGO_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" };
-export const saveLaunchLogo = (buf, type) => saveLogo(buf, type);
-async function saveLogo(buf, type) {
+const LOGO_INDEX = "logos.json", LOGO_GRACE_MS = 24 * 3600_000, LOGO_PER_DAY = 40;
+const LOGO_NAME = /([0-9a-f]{32}\.(?:png|jpg|gif|webp))/;
+let STORE = null;
+const logoCount = new Map(); // uploader → { day, n }: at most LOGO_PER_DAY uploads a wallet a day
+/** saveLaunchLogo(buf, type, { by, src }) → { file, url, permanent, note }. by: the uploader's address (X and Telegram
+ *  launches pass the owner when they have it); src: where it came from. */
+export const saveLaunchLogo = (buf, type, meta) => saveLogo(buf, type, meta);
+async function saveLogo(buf, type, { by = null, src = "server" } = {}) {
   const ext = LOGO_TYPES[type];
   if (!ext) throw new HttpError(415, "Upload a PNG, JPEG, GIF or WebP image.");
   if (buf.length > 1024 * 1024) throw new HttpError(413, "The image is over 1 MB.");
@@ -1317,9 +1466,85 @@ async function saveLogo(buf, type) {
   const name = createHash("sha256").update(buf).digest("hex").slice(0, 32) + "." + ext;
   const dir = path.join(DATA_DIR, "logos");
   await mkdir(dir, { recursive: true });
+  const existed = await stat(path.join(dir, name)).then(() => true, () => false);
   await writeFile(path.join(dir, name), buf);
+  const who = by && isAddress(String(by)) ? lower(by) : null;
+  // a failed write of the record only means this file is never swept (the safe side)
+  if (STORE) await STORE.update(LOGO_INDEX, {}, (x) => {
+    const now = Date.now();
+    const e = x[name] || { first: now, by: [], legacy: existed };
+    e.at = now; e.src = src;
+    if (who && !e.by.includes(who)) e.by = [...e.by, who].slice(-5);
+    x[name] = e;
+    return x;
+  }).catch(() => {});
   const base = SITE_URL();
   return { file: name, url: `${base || ""}/api/launch/logo/${name}`, permanent: /^https:\/\//.test(base), note: /^https:\/\//.test(base) ? null : "This server has no public https address (SITE_URL), so the logo link only works locally. Use an ipfs:// or https:// link for a real launch." };
+}
+/** the file name of a logo this server hosts, from its link (null for any other link) */
+function ownLogo(link) {
+  const s = String(link || "");
+  const m = s.match(/\/api\/launch\/logo\/([0-9a-f]{32}\.(?:png|jpg|gif|webp))$/);
+  if (!m) return null;
+  const base = SITE_URL();
+  if (base && !s.startsWith(base + "/")) return null;
+  return m[1];
+}
+// a launch about to be built with a hosted logo: the file must still be here, and it counts as in use for another day
+async function holdLogo(link) {
+  const name = ownLogo(link);
+  if (!name || !DATA_DIR) return;
+  try { await stat(path.join(DATA_DIR, "logos", name)); }
+  catch { throw new HttpError(410, "That uploaded logo is no longer on Troya (an upload no launch used is removed after a day). Upload the image again."); }
+  if (STORE) await STORE.update(LOGO_INDEX, {}, (x) => { if (x[name]) x[name].at = Date.now(); return x; }).catch(() => {});
+}
+const T_PONS_LAUNCH = "0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607"; // Pons factory TokenLaunched
+/**
+ * Removes uploaded logos that no launch used 24 hours after their last upload or build. A file is kept when a record in
+ * launches.json names it (X and Telegram launches), or when any Pons launch since its first upload carries it on chain
+ * (web launches, and any launch Troya never recorded). If a chain read fails, nothing is removed this time.
+ * → { checked, kept, removed } (or { skipped })
+ */
+export async function sweepLogos({ now = Date.now(), readChain = true } = {}) {
+  if (!STORE || !DATA_DIR) return { skipped: "not ready" };
+  const idx = await STORE.readJson(LOGO_INDEX, {});
+  const due = Object.entries(idx).filter(([, e]) => e && !e.legacy && !e.kept && now - (e.at || 0) > LOGO_GRACE_MS);
+  if (!due.length) return { checked: 0, kept: 0, removed: 0 };
+  const used = new Map(); // file → why it stays
+  for (const l of await STORE.readJson("launches.json", [])) { const m = String(l?.logo || "").match(LOGO_NAME); if (m) used.set(m[1], "record"); }
+  if (readChain) {
+    // every Pons launch since the oldest candidate first came (12 blocks a second over-counts the chain's ~9.5, so the
+    // window starts early), read in 270k-block parts (each goes to Chainstack in 9,000-block pieces), background lane
+    const head = await headBlock("robinhood");
+    const oldest = Math.min(...due.map(([, e]) => e.first || e.at || now));
+    const from = Math.max(0, head - Math.ceil(((now - oldest) / 1000) * 12) - 40_000);
+    const tokens = [];
+    for (let a = from; a <= head; a += 270_000) {
+      const logs = await rpc("robinhood", "eth_getLogs", [{ address: ADDR.ponsFactory, topics: [T_PONS_LAUNCH], fromBlock: qty(a), toBlock: qty(Math.min(head, a + 269_999)) }], { only: CHAINS.robinhood.wide, timeoutMs: 45_000, bg: true, module: "logosweep" });
+      if (!Array.isArray(logs)) return { skipped: "launch logs unreadable" };
+      for (const l of logs) if (l.topics?.[1]) tokens.push(getAddress("0x" + l.topics[1].slice(26)));
+    }
+    const logos = await readMany(tokens.map((t) => C(t, iface.ponsToken, "logo")));
+    if (logos.some((x) => x == null)) return { skipped: "a coin's logo was unreadable" };
+    // any link naming the file keeps it, whatever host it names (keeping too much is the safe side)
+    logos.forEach((x, i) => { const m = String(x[0] || "").match(LOGO_NAME); if (m) used.set(m[1], tokens[i]); });
+  }
+  const { unlink } = await import("node:fs/promises");
+  let kept = 0, removed = 0;
+  const gone = [];
+  for (const [name] of due) {
+    if (used.has(name)) { kept++; continue; }
+    try { await unlink(path.join(DATA_DIR, "logos", name)); } catch (e) { if (e.code !== "ENOENT") continue; }
+    gone.push(name); removed++;
+  }
+  await STORE.update(LOGO_INDEX, {}, (x) => {
+    for (const [name] of due) if (used.has(name) && x[name]) x[name].kept = used.get(name);
+    // an upload that came again while the sweep ran stays (its file was written again after the unlink)
+    for (const name of gone) if (x[name] && now - (x[name].at || 0) > LOGO_GRACE_MS) delete x[name];
+    return x;
+  });
+  if (removed) console.log(`[logos] removed ${removed} unused upload(s), kept ${kept}`);
+  return { checked: due.length, kept, removed };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1379,6 +1604,13 @@ let solMod = null;
 const sol = () => (solMod ||= import("./solana.mjs"));
 export async function register(r, ctx) {
   DATA_DIR = ctx.dataDir;
+  STORE = ctx.store || null;
+  // the daily logo sweep (first 30 minutes after a start, then every 24 hours); a failed sweep removes nothing
+  if (STORE && process.env.LOGO_SWEEP !== "0") {
+    const sweep = () => sweepLogos().then((x) => { if (x?.skipped) console.warn(`[logos] sweep skipped: ${x.skipped}`); }).catch((e) => console.warn("[logos] sweep failed:", e.message));
+    setTimeout(sweep, 30 * 60_000).unref?.();
+    setInterval(sweep, 24 * 3600_000).unref?.();
+  }
   try { v4.keys = JSON.parse(await readFile(path.join(DATA_DIR, "v4keys.json"), "utf8")) || {}; } catch { v4.keys = {}; }
 
   for (const chain of Object.keys(CHAINS)) {
@@ -1392,7 +1624,7 @@ export async function register(r, ctx) {
       let answers = [];
       if (todo.length) {
         const hasSend = todo.some((c) => c.method === "eth_sendRawTransaction");
-        const out = await forward(chain, todo.length === 1 ? todo[0] : todo, { noRetry: hasSend });
+        const out = await forward(chain, todo.length === 1 ? todo[0] : todo, { noRetry: hasSend, module: "relay" });
         answers = Array.isArray(out) ? out : [out];
       }
       const byId = new Map(answers.map((a) => [JSON.stringify(a?.id), a]));
@@ -1427,9 +1659,18 @@ export async function register(r, ctx) {
 
   r.get("/api/launch/menu", ({ query }) => launchMenu(query.fresh === "1"), { perMin: 120 });
   r.post("/api/launch/build", ({ body }) => buildLaunchTx(body || {}), { perMin: 60 });
+  // signed-in wallets only: the uploader and the time go into logos.json, and an upload no launch uses is removed after a day
   r.post("/api/launch/logo", async ({ req, body }) => {
+    const me = getSession(req);
+    if (!me) throw new HttpError(401, "Sign in with your wallet to upload a logo (one signature, no gas), or paste an https:// or ipfs:// image link instead.");
     if (!Buffer.isBuffer(body)) throw new HttpError(400, "Send the image bytes with an image content-type.");
-    return saveLogo(body, String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase());
+    const who = lower(me.address), day = new Date().toISOString().slice(0, 10);
+    let c = logoCount.get(who);
+    if (!c || c.day !== day) { c = { day, n: 0 }; logoCount.set(who, c); }
+    if (c.n >= LOGO_PER_DAY) throw new HttpError(429, `That is ${LOGO_PER_DAY} logo uploads from this wallet today. Try again tomorrow (UTC), or paste an image link.`);
+    c.n++;
+    if (logoCount.size > 20000) for (const [k, v] of logoCount) if (v.day !== day) logoCount.delete(k);
+    return saveLogo(body, String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase(), { by: me.address, src: "web" });
   }, { perMin: 20, maxBody: 1100 * 1024 });
   r.get("/api/launch/logo/:file", async ({ params, res }) => {
     const f = String(params.file || "");

@@ -5,6 +5,7 @@
 // through executeForUser (kind perp / close: Troya Gate, caps) for the Arena owner, $10 of margin a trader.
 //   GET /api/arena/anthropic     the round: mark, each trader's open call and record, recent closes
 import { randomBytes } from "node:crypto";
+import { tidyThesis } from "./arena.mjs";
 
 const FILE = "antround.json";
 const COIN = "xyz:ANT", STAKE = 10, MAX_LEV = 3, ROUND_MS = 6 * 3600_000, HOLD_MS = 24 * 3600_000, TICK_MS = 60_000;
@@ -32,7 +33,7 @@ async function ask(agent, m, d) {
   let x = null; try { x = j ? JSON.parse(j[0]) : null; } catch { x = null; }
   if (!x || !["long", "short", "flat"].includes(x.side)) return null;
   return { side: x.side, lev: Math.max(1, Math.min(MAX_LEV, Math.round(Number(x.leverage) || 1))), stopPct: Math.max(5, Math.min(60, Number(x.stopPct) || 25)),
-    tpPct: Math.max(5, Math.min(150, Number(x.takeProfitPct) || 30)), thesis: (out.match(/THESIS:\s*(.+)/i)?.[1] || "").slice(0, 200) };
+    tpPct: Math.max(5, Math.min(150, Number(x.takeProfitPct) || 30)), thesis: tidyThesis(out.match(/THESIS:\s*(.+)/i)?.[1]) };
 }
 
 async function tick() {
@@ -67,7 +68,7 @@ async function tick() {
       const c = { id: randomBytes(6).toString("hex"), agent: a.id, name: a.name, model: a.model, side: v.side, lev: v.lev, stopPct: v.stopPct, tpPct: v.tpPct, thesis: v.thesis, entry: m.mark, at: Date.now(), status: v.side === "flat" ? "closed" : "open", stake: STAKE };
       if (v.side === "flat") Object.assign(c, { closedAt: Date.now(), exit: m.mark, pnlPct: 0, pnlUsd: 0, reason: "flat" });
       if (v.side !== "flat" && aw) {
-        const r = await aw.executeForUser(process.env.ARENA_LIVE_OWNER, { kind: "perp", params: { coin: COIN, side: v.side, sizeUsd: STAKE * v.lev, leverage: v.lev }, rationale: `Arena Anthropic Round: ${a.name} ${v.side} ${v.lev}x. ${v.thesis}`, source: "arena" }).catch((e) => ({ error: e.message }));
+        const r = await aw.executeForUser(process.env.ARENA_LIVE_OWNER, { kind: "perp", params: { coin: COIN, side: v.side, sizeUsd: STAKE * v.lev, leverage: v.lev }, rationale: `Arena Anthropic Round: ${a.name} ${v.side} ${v.lev}x.${v.thesis ? ` ${v.thesis}` : ""}`, source: "arena" }).catch((e) => ({ error: e.message }));
         c.live = { opened: !!r?.executed, result: r?.executed ? (r.summary || "opened") : (r?.error || (r?.reasons || []).join(" ")).slice(0, 200) };
       }
       d.calls.unshift(c);
@@ -80,6 +81,9 @@ async function tick() {
   finally { busy = false; }
 }
 
+// calls stored before theses were tidied on write (cut at exactly 200 characters, or a cut-short reply) read cleanly too
+const pub = (c) => ({ ...c, thesis: tidyThesis(c.thesis) });
+
 export async function register(r, ctx) {
   store = ctx.store;
   setInterval(() => tick().catch(() => {}), TICK_MS).unref?.();
@@ -90,11 +94,11 @@ export async function register(r, ctx) {
     const by = {};
     for (const c of calls) {
       const b = (by[c.agent] ||= { agent: c.agent, name: c.name, model: c.model, closed: 0, pnlUsd: 0, wins: 0, open: null });
-      if (c.status === "open" && !b.open) b.open = c;
+      if (c.status === "open" && !b.open) b.open = pub(c);
       if (c.status === "closed" && c.reason !== "flat") { b.closed++; b.pnlUsd += c.pnlUsd || 0; if ((c.pnlUsd || 0) > 0) b.wins++; }
     }
     return { name: "Arena: Anthropic Round", coin: COIN, mark: d.mark || null, at: d.at || null, stake: STAKE, live: LIVE(),
       traders: Object.values(by).map((b) => ({ ...b, pnlUsd: +b.pnlUsd.toFixed(2) })).sort((a, b) => b.pnlUsd - a.pnlUsd),
-      recent: calls.slice(0, 25), how: `Each AI trader takes a view on Anthropic (xyz:ANT, the trade.xyz perp that tracks the Nasdaq share) every ${ROUND_MS / 3600_000} hours when it has no open call: long, short or flat, 1-${MAX_LEV}x, a stop and a target on a $${STAKE} stake, closed at the stop, the target or after 24 hours. ${LIVE() ? "Live: the calls trade real money on the Arena's Hyperliquid account." : "Paper for now: priced on the live mark, every call sealed."}` };
+      recent: calls.slice(0, 25).map(pub), how: `Each AI trader takes a view on Anthropic (xyz:ANT, the trade.xyz perp that tracks the Nasdaq share) every ${ROUND_MS / 3600_000} hours when it has no open call: long, short or flat, 1-${MAX_LEV}x, a stop and a target on a $${STAKE} stake, closed at the stop, the target or after 24 hours. ${LIVE() ? "Live: the calls trade real money on the Arena's Hyperliquid account." : "Paper for now: priced on the live mark, every call sealed."}` };
   }, { weight: 1 });
 }

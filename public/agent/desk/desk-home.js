@@ -1,65 +1,167 @@
 // Desk (#/): one calm page that answers "where am I, what's moving, what is my agent doing, what next".
-// Everything the old Home had (ask box, the Get started steps, live stats, brief, signals, movers) plus
-// the Gate, the agent's status, Sentry's latest results and shortcuts to every tool.
-import { h, clear, icon, useCss, every, sparkline, pctEl, usd, tiny, toast, store, infoTip, tokenIcon, coinIcon, short, ago, greeting } from "/agent/js/ui.js";
+// Audit, 21 Nov 2026: the big hero filled the whole first screen (558 px on desktop, 821 px on a phone) and the coin list
+// started at y=5843 on a phone, while a connected wallet saw none of its own money. So now:
+//   first visit   a slim intent bar (no modal, no loader), then the big hero with the ask bar in it
+//   returning     a compact top strip (one line, the ask bar, three chips, the fee line, a small horse mark), at most 220 px
+//   connected     a "You" row: Robinhood Chain and Hyperliquid balances, open positions, today's PnL, approvals waiting
+//   then          Troya picks and trending coins with quick buy chips, Sentry's latest checks, quick tiles, the rest.
+// The intent ("Buy a coin", "Check a coin" …) only reorders the sections; it is kept in this browser and nothing else.
+import { h, clear, icon, useCss, every, sparkline, pctEl, usd, tiny, toast, store, infoTip, tokenIcon, coinIcon, short, ago, table } from "/agent/js/ui.js";
 import { api, cached } from "/agent/js/api.js";
 import { wallet, onWallet, openConnect, signIn } from "/agent/js/wallet.js";
 import { getStarted } from "/agent/js/pages/start.js";
-import { tokenCell, priceCell, usdCell, perpPrice, fmtApr, perpName, cleanPerpText } from "/agent/js/marketlib.js";
+import { tokenCell, priceCell, perpPrice, fmtApr, perpName, cleanPerpText } from "/agent/js/marketlib.js";
 import { gatePanel } from "./gate.js";
 import { chromeIcon } from "./chrome-icons.js";
 
 const hideSteps = store("troya.home.hideSteps", false);
 const autoPref = store("troya.autopilot", { on: false, playbooks: true, chat: false });
+const visited = store("troya.desk.visited", 0);
+const intentPref = store("troya.desk.intent", null);
+const coinTab = store("troya.desk.coins", "picks");
+const HORSE = "/img/logo-3d-512.webp";   // 66 KB; the 1024 px PNG it replaces was 651 KB
+const BUY_ETH = ["0.005", "0.01", "0.05"];
+const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
+const INTENTS = [["buy", "Buy a coin"], ["check", "Check a coin"], ["launch", "Launch a coin"], ["perps", "Trade perps"], ["look", "Just looking"]];
+
+// The big hero is for the first visit only: this browser has never opened the Desk, or first did so in this browser
+// session (so moving around the app on day one keeps the same page). Storage that throws counts as a first visit.
+function isFirstVisit() {
+  let firstThisSession = false;
+  try { firstThisSession = sessionStorage.getItem("troya.desk.first") === "1"; } catch {}
+  if (firstThisSession) return true;
+  if (visited.get()) return false;
+  visited.set(Date.now());
+  try { sessionStorage.setItem("troya.desk.first", "1"); } catch {}
+  return true;
+}
+// a quick buy opens Swap on its review: the Gate checks the coin and the wallet still signs (or not)
+const buyHref = (a, eth) => `#/swap?${new URLSearchParams({ in: "eth", out: a, amount: eth, review: "1" })}`;
 
 export async function mount(view, { go, ask: askDrawer }) {
   useCss("home");
   const stops = [];
+  let alive = true;
+  stops.push(() => { alive = false; });
   const ask = (q) => (askDrawer ? askDrawer(q) : go(`#/agent?q=${encodeURIComponent(q)}`));
+  const first = isFirstVisit();
+  let intent = INTENTS.some(([k]) => k === intentPref.get()) ? intentPref.get() : null;
 
-  /* ---------- greeting + ask ---------- */
-  const input = h("input", { class: "ask-in", type: "text", placeholder: "Ask Troya… \"is NVDA still being bought on Robinhood Chain?\"", "aria-label": "Ask your agent", maxlength: "500" });
-  const submit = () => { const q = input.value.trim(); if (q) { ask(q); input.value = ""; } else input.focus(); };
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
-  const slash = (e) => { if (e.key === "/" && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "")) { e.preventDefault(); input.focus(); } };
-  void slash;
-
-  const head = h("section", { class: "dk-head" },
-    h("div", { class: "dk-hello" },
-      h("p", { class: "dk-eyebrow" }, h("i", { class: "live-dot" }), "Agent desk · Robinhood · Base · Arbitrum · Solana · Hyperliquid"),
-      h("h1", {}, h("em", {}, `${greeting()}.`), " Where should your agent look today?"),
-      h("p", { class: "dk-sub" }, "Say it in plain words. Troya pulls the numbers and checks the route; you sign off.")),
-    h("div", { class: "dk-ask" },
+  /* ---------- the ask bar: paste a coin (opens it in the Gate) or ask Troya ---------- */
+  const CHIPS = [["What's running hot?", "What is moving most on Robinhood Chain and Hyperliquid in the last 24 hours?"],
+    ["Crowded funding", "Which Hyperliquid perps have the most stretched funding right now, and who is paying whom?"],
+    ["How Troya works", "How does Troya work, and what can it do without my signature?"]];
+  const inputs = [];
+  function askBlock(cls) {
+    const input = h("input", { class: "ask-in", type: "text", placeholder: "Paste a coin or ask Troya…", "aria-label": "Paste a coin address or ask your agent", maxlength: "500", autocomplete: "off", spellcheck: "false" });
+    inputs.push(input);
+    const submit = () => {
+      const q = input.value.trim();
+      if (!q) { input.focus(); return; }
+      input.value = "";
+      if (ADDR_RE.test(q)) go(`#/gate/${q}`); else ask(q);
+    };
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+    return h("div", { class: `dk-askb ${cls}` },
       h("div", { class: "ask-bar" }, icon("spark", "ask-ico"), input, h("kbd", {}, "/"), h("button", { class: "btn primary", type: "button", onclick: submit }, "Ask", icon("arrowUp"))),
-      h("div", { class: "chips ask-chips" },
-        [["What's running hot?", "What is moving most on Robinhood Chain and Hyperliquid in the last 24 hours?"],
-         ["Crowded funding", "Which Hyperliquid perps have the most stretched funding right now, and who is paying whom?"],
-         ["How Troya works", "How does Troya work, and what can it do without my signature?"]]
-          .map(([t, q]) => h("button", { class: "chip", type: "button", onclick: () => ask(q) }, t)))));
+      h("div", { class: "chips ask-chips dk-chips" }, CHIPS.map(([t, q]) => h("button", { class: "chip", type: "button", onclick: () => ask(q) }, t))));
+  }
+  // "/" jumps to whichever ask bar is on screen
+  const slash = (e) => {
+    if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "") || document.activeElement?.isContentEditable) return;
+    const el = inputs.find((x) => x.isConnected && x.offsetParent);
+    if (el) { e.preventDefault(); el.focus(); }
+  };
+  document.addEventListener("keydown", slash);
+  stops.push(() => document.removeEventListener("keydown", slash));
+  const feeLine = h("a", { class: "dk-fee", href: "/plans", target: "_self" }, "0% Troya fee · Gate on every order · your keys");
+
+  /* ---------- returning visitors and connected wallets: the compact top strip ---------- */
+  const strip = h("section", { class: "dk-strip", "aria-label": "Ask Troya" },
+    h("a", { class: "dk-mark", href: "#/flywheel", "aria-label": "$TROYA flywheel" }, h("img", { src: HORSE, alt: "", width: "512", height: "512", decoding: "async" })),
+    h("div", { class: "dk-strip-b" },
+      h("p", { class: "dk-promise" }, h("b", {}, "Every coin opened at the gate."), h("span", {}, " Troya checks the coin and simulates your trade before your wallet signs.")),
+      askBlock("in-strip"),
+      feeLine));
+
+  /* ---------- first visit: what brought you here (reorders the page, nothing else) ---------- */
+  const intentChips = h("div", { class: "chips dk-intent-c", role: "group", "aria-label": "What brings you here?" });
+  const paintIntent = () => clear(intentChips, INTENTS.map(([k, t]) => h("button", { class: "chip", type: "button", "aria-pressed": String(intent === k), onclick: () => { intent = intent === k ? null : k; intentPref.set(intent); paintIntent(); layout(); } }, t)));
+  paintIntent();
+  const intentBar = h("section", { class: "dk-intent" },
+    h("div", { class: "dk-intent-h" }, h("b", {}, "What brings you here?"), intentChips),
+    h("p", { class: "dk-intent-n" }, "No wallet needed to look around: ask Troya or gate any coin."));
 
   /* ---------- Get started: the same three steps (then the optional Level up) as Portfolio and #/start ---------- */
   const setup = getStarted({ layout: "card", hide: hideSteps });
   stops.push(setup.stop);
 
-  /* ---------- live stats ---------- */
-  const statEth = h("div", { class: "v" }, "–"), statEthS = h("div", { class: "s" }, "Hyperliquid mid");
-  const statTop = h("div", { class: "v" }, "–"), statTopS = h("div", { class: "s" }, " ");
-  const statSig = h("div", { class: "v" }, "–"), statSigS = h("div", { class: "s" }, " ");
-  const statYou = h("div", { class: "v dk-you" }), statYouS = h("div", { class: "s" });
-  const stats = h("section", { class: "stats dk-stats" },
-    h("div", { class: "stat" }, h("div", { class: "k" }, tokenIcon({ symbol: "ETH" }, "sm k-ico"), "ETH", infoTip("Live ETH/USD mid price from Hyperliquid. Gas on Robinhood Chain is paid in ETH, and ETH amounts convert to dollars at this price.")), statEth, statEthS),
-    h("div", { class: "stat" }, h("div", { class: "k" }, "Top mover", infoTip("Largest 24h change among Hyperliquid perps with more than $1M of daily volume.")), statTop, statTopS),
-    h("div", { class: "stat" }, h("div", { class: "k" }, "Signals", infoTip("Live thresholds: stretched funding, big moves, hot new Robinhood Chain coins.")), statSig, statSigS),
-    h("div", { class: "stat" }, h("div", { class: "k" }, "Your desk", infoTip("Your wallet and whether Autopilot is running in this browser.")), statYou, statYouS));
-  function renderYou() {
-    const on = !!autoPref.get().on;
-    clear(statYou, wallet.address ? short(wallet.address) : "No wallet");
-    clear(statYouS,
-      wallet.address ? h("a", { class: "link", href: "#/portfolio" }, "Portfolio") : h("button", { class: "link", type: "button", onclick: () => openConnect() }, "Connect"),
-      " · Autopilot ", h("b", { class: on ? "up" : "" }, on ? "On" : "Off"), " ", h("a", { class: "link", href: "#/agent/autopilot" }, on ? "Open" : "Set up"));
+  /* ---------- You: the connected wallet's money and what waits for it ---------- */
+  const youCell = (label, tip, href) => {
+    const v = h("div", { class: "v" }, "…"), s = h("div", { class: "s" }, " ");
+    return { v, s, el: h("a", { class: "dk-me-c", href }, h("div", { class: "k" }, label, tip ? infoTip(tip) : null), v, s) };
+  };
+  const yRh = youCell("Robinhood Chain", "ETH plus the coins and stock tokens this wallet holds on Robinhood Chain, at live prices.", "#/portfolio");
+  const yHl = youCell("Hyperliquid", "Perp account value in USDC on your own Hyperliquid account.", "#/portfolio");
+  const yPos = youCell("Open positions", "Hyperliquid perps open now, with their unrealised PnL.", "#/perps");
+  const yPnl = youCell("PnL today", "Closed Hyperliquid trades since midnight on this device's clock, after fees. Open positions are shown apart.", "#/portfolio/history");
+  const yWait = youCell("Waiting for you", "Agent tickets waiting for your approval in Scepter, and unread messages in your Inbox.", "#/agent/scepter");
+  const you = h("section", { class: "dk-me", "aria-label": "You" }, yRh.el, yHl.el, yPos.el, yPnl.el, yWait.el);
+  const signed = (v) => h("span", { class: v > 0 ? "up" : v < 0 ? "down" : "" }, `${v > 0 ? "+" : v < 0 ? "−" : ""}${usd(Math.abs(v))}`);
+  let youSeq = 0;
+  async function loadYou() {
+    const addr = wallet.address;
+    if (!addr || !alive) return;
+    const my = ++youSeq;
+    const [bal, toks, px, hl, props, inbox] = await Promise.all([
+      api.get(`chain/balances?address=${addr}`).catch(() => null),
+      api.get(`/api/portfolio/tokens?address=${addr}`).catch(() => null),
+      api.get("price/eth").catch(() => null),
+      api.get(`hl/user?address=${addr}`).catch(() => null),
+      wallet.session ? api.get("inbox/proposals?due=1").catch(() => null) : null,
+      wallet.session ? api.get("inbox?unread=1&limit=1").catch(() => null) : null]);
+    if (!alive || my !== youSeq || addr !== wallet.address) return;
+    const ethUsd = Number(px?.usd) || Number(toks?.ethUsd) || 0;
+    const list = bal?.balances || [];
+    const ethAmt = Number(list.find((b) => b.address === "native" || b.symbol === "ETH")?.amount ?? NaN);
+    // coins at live prices from Portfolio's own source; without it, at least WETH and USDG from the chain read
+    let tokUsd = toks ? Number(toks.totalUsd) || 0 : null, nToks = toks ? (toks.tokens || []).filter((t) => Number(t.valueUsd) > 0.01).length : null;
+    if (tokUsd == null && list.length) {
+      tokUsd = list.reduce((s, b) => s + (b.symbol === "USDG" ? Number(b.amount) : b.symbol === "WETH" ? Number(b.amount) * ethUsd : 0), 0);
+      nToks = list.filter((b) => b.address !== "native" && Number(b.amount) > 0).length;
+    }
+    if (!bal && !toks) { yRh.v.textContent = "–"; yRh.s.textContent = "balances unavailable right now"; }
+    else {
+      yRh.v.textContent = usd((Number.isFinite(ethAmt) && ethUsd ? ethAmt * ethUsd : 0) + (tokUsd || 0));
+      yRh.s.textContent = `${Number.isFinite(ethAmt) ? `${tiny(ethAmt)} ETH` : "ETH –"}${nToks ? ` · ${nToks} coin${nToks === 1 ? "" : "s"}` : ""}`;
+    }
+    if (!hl) {
+      for (const c of [yHl, yPos, yPnl]) { c.v.textContent = "–"; c.s.textContent = "Hyperliquid unavailable right now"; }
+    } else {
+      yHl.v.textContent = usd(hl.accountValue || 0);
+      yHl.s.textContent = `withdrawable ${usd(hl.withdrawable || 0)}`;
+      const n = (hl.positions || []).length;
+      yPos.v.textContent = String(n);
+      clear(yPos.s, n ? h("span", {}, "open PnL ", signed(hl.unrealizedPnl || 0)) : "none open");
+      const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+      const today = (hl.fills || []).filter((f) => f.time >= midnight.getTime());
+      const closed = today.reduce((s, f) => s + (Number(f.closedPnl) || 0) - (Number(f.fee) || 0), 0);
+      clear(yPnl.v, today.length ? signed(closed) : usd(0));
+      yPnl.s.textContent = today.length ? `${today.length} fill${today.length === 1 ? "" : "s"} on Hyperliquid` : "no closed trades today";
+    }
+    if (!wallet.session) {
+      yWait.v.textContent = "–";
+      clear(yWait.s, h("button", { class: "link", type: "button", onclick: async (e) => { e.preventDefault(); e.stopPropagation(); try { await signIn(); } catch (err) { toast(err.message, "error"); } } }, "Sign in to see approvals"));
+    } else {
+      const pend = (props?.items || []).filter((p) => p.status === "pending" && (!p.expiresAt || p.expiresAt > Date.now())).length;
+      const unread = Number(inbox?.unread || 0);
+      yWait.v.textContent = props || inbox ? String(pend + unread) : "–";
+      yWait.s.textContent = props || inbox ? `${pend} to approve · ${unread} unread` : "unavailable right now";
+      yWait.el.setAttribute("href", pend || !unread ? "#/agent/scepter" : "#/portfolio/inbox");
+      yWait.el.classList.toggle("hot", pend + unread > 0);
+    }
   }
-  renderYou();
-  stops.push(onWallet(renderYou));
+  stops.push(every(60000, () => loadYou()));
 
   /* ---------- the agent: wallet, autopilots, playbooks, alerts ---------- */
   const agentBody = h("div", { class: "dk-agent-b" });
@@ -93,8 +195,6 @@ export async function mount(view, { go, ask: askDrawer }) {
       line("clock", "Playbooks", wt ? `${active} active of ${(wt.items || []).length}` : "None yet", "#/agent/playbooks", active ? "on" : ""),
       line("bell", "Telegram alerts", nt?.configured ? (nt.linked ? "Linked" : "Not linked") : "Not available here", "#/settings", nt?.linked ? "on" : ""));
   }
-  renderAgent();
-  stops.push(onWallet(renderAgent));
 
   /* ---------- brief + signals (same sources as before) ---------- */
   const briefBody = h("div", { class: "panel-b" }, h("div", { class: "sk", style: { height: "80px" } }));
@@ -105,41 +205,89 @@ export async function mount(view, { go, ask: askDrawer }) {
   const sigBody = h("div", { class: "panel-b sig-list" }, h("div", { class: "sk", style: { height: "80px" } }));
   const sigs = h("section", { class: "panel signals" }, h("div", { class: "panel-h" }, h("h2", {}, "Signals", infoTip("Things worth a look right now. They are thresholds, not recommendations."))), sigBody);
 
-  /* ---------- movers ---------- */
-  const hlBody = h("tbody"), rhBody = h("tbody");
+  /* ---------- Hyperliquid movers: real links, so cmd-click opens a new tab ---------- */
+  let sparks = {};
+  const hlTbl = table({
+    href: (m) => `#/perps/${encodeURIComponent(m.coin)}`,
+    emptyText: "No Hyperliquid perp moved enough to list.",
+    cols: [
+      { key: "coin", label: "Market", align: "l", render: (m) => h("div", { class: "tok" }, coinIcon(m.coin), h("div", {}, h("b", {}, perpName(m)), h("small", {}, `OI ${usd(m.oiUsd, { compact: true })}`))) },
+      { key: "spark", label: "", cls: "hide-s", render: (m) => sparkline(sparks[m.coin]) },
+      { key: "mark", label: "Price", render: (m) => perpPrice(m.mark) },
+      { key: "change24h", label: "24h", render: (m) => pctEl(m.change24h) },
+      { key: "fundingApr", label: "Funding/yr", cls: "hide-s", render: (m) => h("span", { class: Math.abs(m.fundingApr) >= 100 ? (m.fundingApr > 0 ? "warnc" : "down") : "muted" }, fmtApr(m.fundingApr)) },
+      { key: "volumeUsd", label: "Volume", cls: "hide-s", render: (m) => usd(m.volumeUsd, { compact: true }) },
+    ] });
+  hlTbl.setLoading(6);
   const hlTable = h("section", { class: "panel movers" },
     h("div", { class: "panel-h" }, h("h2", {}, "Hyperliquid movers", infoTip("Perps with more than $1M of 24h volume, sorted by the size of the 24h move.")), h("a", { class: "link fine", href: "#/market?tab=perps" }, "All perps")),
-    h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Market"), h("th", { class: "hide-s" }, ""), h("th", {}, "Price"), h("th", {}, "24h"), h("th", { class: "hide-s" }, "Funding/yr"), h("th", { class: "hide-s" }, "Volume"))), hlBody)));
-  const rhTable = h("section", { class: "panel movers" },
-    h("div", { class: "panel-h" }, h("h2", {}, "Hot on Robinhood Chain", infoTip("Robinhood Chain coins with the most volume in the last 24 hours (wash-traded pools left out), with the same price as the Market and each coin's page. Liquidity is the ETH, USDG or stock-token side of its pools, the money a seller can take out.")), h("a", { class: "link fine", href: "#/market" }, "Full market")),
-    h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Token"), h("th", {}, "Price"), h("th", {}, "24h"), h("th", { class: "hide-s" }, "Volume"), h("th", { class: "hide-s" }, "Liquidity"))), rhBody)));
-  hlBody.append(...skel(6, 6));
-  rhBody.append(...skel(6, 5));
-  // the money side of a coin's pools; the pool total (which also counts the coin at its own price) only in the tooltip
-  const liqCell = (t) => h("div", { class: "pcell", title: t.liquidityUsd != null ? (t.realLiquidityUsd != null ? `${usd(t.liquidityUsd, { compact: true })} incl. the coin side` : `Pool total ${usd(t.liquidityUsd, { compact: true })} incl. the coin side; the ETH or USDG side is not read yet`) : "" },
-    h("span", {}, t.realLiquidityUsd != null ? usd(t.realLiquidityUsd, { compact: true }) : "–"));
+    hlTbl);
+
+  /* ---------- coins: Troya picks first (not raw volume), trending a tap away, quick buy chips on each row ---------- */
   // a price no source refreshed for 15 minutes says how old it is, as on the Market (server clock: d.now)
-  const hotPrice = (t, now) => {
-    const c = priceCell(t.priceEth, t.priceUsd), age = t.priceAt ? now - t.priceAt : 0;
+  let coinNow = Date.now();
+  const hotPrice = (t) => {
+    const c = priceCell(t.priceEth, t.priceUsd), age = t.priceAt ? coinNow - t.priceAt : 0;
     if (age > 15 * 60_000) c.append(h("span", { class: "sub warnc" }, `price ${age < 3600_000 ? `${Math.round(age / 60_000)} min` : `${Math.floor(age / 3600_000)} h`} old`));
     return c;
   };
+  const liqCell = (t) => h("div", { class: "pcell", title: t.liquidityUsd != null ? `Pool total ${usd(t.liquidityUsd, { compact: true })} incl. the coin side` : "" },
+    h("span", {}, t.realLiquidityUsd != null ? usd(t.realLiquidityUsd, { compact: true }) : "–"));
+  const buyChips = (t) => h("div", { class: "dk-buy", role: "group", "aria-label": `Buy ${t.symbol || "this coin"} with ETH` },
+    BUY_ETH.map((a) => h("a", { class: "chip", href: buyHref(t.address, a), title: `Review a ${a} ETH buy of ${t.symbol || "this coin"}: the Gate checks it and your wallet signs` }, a)));
+  const coinTbl = table({
+    href: (t) => `#/token/${t.address}`,
+    emptyText: "No coins to show right now.",
+    cols: [
+      { key: "symbol", label: "Coin", align: "l", render: (t) => h("div", { class: "dk-coin" }, tokenCell(t), t.pick?.why?.[0] ? h("span", { class: "dk-why" }, t.pick.why[0]) : null) },
+      { key: "priceUsd", label: "Price", cls: "hide-s", render: hotPrice },
+      { key: "change24h", label: "24h", render: (t) => pctEl(t.change24h) },
+      { key: "realLiquidityUsd", label: "Liquidity", cls: "hide-s", render: liqCell },
+      { key: "buy", label: "Buy (ETH)", cls: "dk-buy-td", render: buyChips },
+    ] });
+  coinTbl.setLoading(6);
+  const coinSeg = h("div", { class: "seg dk-coin-seg" });
+  const coinNote = h("p", { class: "fine muted dk-coin-note" });
+  const paintSeg = () => clear(coinSeg, [["picks", "Troya picks"], ["trending", "Trending"]].map(([k, t]) => h("button", { type: "button", "aria-pressed": String(coinTab.get() === k), onclick: () => { if (coinTab.get() === k) return; coinTab.set(k); paintSeg(); coinTbl.setLoading(6); loadCoins(); } }, t)));
+  paintSeg();
+  const coins = h("section", { class: "panel movers dk-coins" },
+    h("div", { class: "panel-h" }, h("h2", {}, "Coins on Robinhood Chain", infoTip("Troya picks: coins with real money in their pools, real trading and spread-out holders, scored by the Market. Trending: the most traded today, wash-traded pools left out. A buy chip opens Swap on its review: the Gate checks the coin and nothing moves until your wallet signs.")),
+      h("span", { class: "row" }, coinSeg, h("a", { class: "link fine", href: "#/market" }, "Full market"))),
+    coinTbl, coinNote);
+  let coinSeq = 0;
+  async function loadCoins() {
+    const my = ++coinSeq, tab = coinTab.get() === "trending" ? "trending" : "picks";
+    try {
+      const d = await cached(tab === "picks" ? "market/robinhood?cat=picks&sort=picks&limit=7" : "market/robinhood?cat=trending&sort=volume&limit=7", 15000);
+      if (!alive || my !== coinSeq) return;
+      coinNow = d.now || Date.now();
+      coinTbl.setRows((d.tokens || []).slice(0, 7));
+      coinNote.textContent = tab === "picks" ? `${d.catCounts?.picks ?? d.total ?? 0} coins pass the picks bar today. Scores, not advice.` : "Most traded in the last 24 hours. Volume alone is not quality: open the Gate before you buy.";
+    } catch (e) { if (my === coinSeq && alive) { tblMsg(coinTbl, `The Robinhood Chain board is unavailable: ${e.message}`); coinNote.textContent = ""; } }
+  }
 
-  /* ---------- Sentry: latest results ---------- */
+  /* ---------- Sentry: latest results, green only for real buying ---------- */
   const senBody = h("div", { class: "dk-sentry-b" }, h("div", { class: "sk", style: { height: "120px" } }));
   const sentry = h("section", { class: "panel dk-sentry" },
-    h("div", { class: "panel-h" }, h("h2", {}, "Sentry", infoTip("Every new Pons launch, and every new pool on Uniswap and the other Robinhood Chain launchpads, goes through the Gate. Only clean passes with real buying reach the channel; every result stays here.")),
+    h("div", { class: "panel-h" }, h("h2", {}, "Sentry", infoTip("Every new Pons launch, and every new pool on Uniswap and the other Robinhood Chain launchpads, goes through the Gate. Green means it passed and has real buying (at least 0.5 ETH in from 25 independent buyers), the channel's bar. Checks passed means nothing failed, but real buying has not shown up yet.")),
       h("span", { class: "row" }, h("a", { class: "link fine", href: "#/agent/sentry" }, "Sentry Autopilot"), h("a", { class: "link fine", href: "https://t.me/troyasentry", target: "_blank", rel: "noopener" }, "Channel"))),
     senBody);
+
+  /* ---------- quick tiles ---------- */
+  const tile = (ic) => h("span", { class: "d2-tile" }, chromeIcon(ic));
+  const quick = h("section", { class: "d2-quick" },
+    [["market", "Buy a coin", "Every coin on Robinhood Chain", "#/market"], ["gate", "Gate a coin", "Seven checks before you buy", "#/gate"],
+     ["launch", "Launch", "Create a coin with the Gate on it", "#/create"], ["perps", "Perps", "Crypto, stocks and metals", "#/perps"]]
+      .map(([ic, t, d, href]) => h("a", { class: "d2-q", href }, tile(ic), h("span", {}, h("b", {}, t), h("small", {}, d)))));
 
   /* ---------- shortcuts: every tool, one line each ---------- */
   const COPY = ["leaderboard", "Copy", "Follow traders from the leaderboard", "#/leaderboard"];
   const STOCKS = ["stocks", "Stocks", "Tokenized stocks with live prices and dividends", "#/stocks"];
   const tools = [
     ["swap", "Swap", "Coins and tokenized stocks on Robinhood Chain", "#/swap"],
-    ["perps", "Perps", "Hyperliquid perps with stops and take-profit", "#/perps"],
+    ["liquidity", "Earn on liquidity", "Ranges set from volatility", "#/liquidity"],
     ["bridge", "Bridge", "Bring ETH in from Ethereum, Arbitrum or Base", "#/bridge"],
-    ["launch", "Launch", "Create a coin on Pons with the Gate on it", "#/create"],
+    ["spark", "Build an agent", "From your own playbooks", "#/social/agents"],
     STOCKS,
     ["agent", "API and MCP", "Give your own agent a scoped token", "#/agent/wallet"],
   ];
@@ -147,7 +295,7 @@ export async function mount(view, { go, ask: askDrawer }) {
   const paintTools = () => clear(toolsGrid, tools.map(([ic, t, d, href]) => h("a", { class: "dk-tool", href }, h("span", { class: "dk-tool-ic d2-tile" }, chromeIcon(ic)), h("b", {}, t), h("span", {}, d))));
   paintTools();
   // the leaderboard is empty until traders opt in; until then the Copy shortcut would lead nowhere, so Stocks takes its place
-  api.get("leaderboard?days=30").then((d) => { if (d?.rows?.length) { tools[4] = COPY; paintTools(); } }).catch(() => {});
+  api.get("leaderboard?days=30").then((d) => { if (d?.rows?.length && alive) { tools[4] = COPY; paintTools(); } }).catch(() => {});
   const shortcuts = h("section", { class: "panel dk-tools" },
     h("div", { class: "panel-h" }, h("h2", {}, "Tools"), h("a", { class: "link fine", href: "#/docs" }, "Docs")),
     toolsGrid);
@@ -155,7 +303,7 @@ export async function mount(view, { go, ask: askDrawer }) {
   const gate = gatePanel({ go, ask, compact: true });
   stops.push(gate.stop);
 
-  /* ---------- Desk 2.0 hero: the Troya horse, the promise, live numbers ---------- */
+  /* ---------- first-visit hero: the Troya horse, the promise, the ask bar, live numbers ---------- */
   const CA = (window.SITE && window.SITE.ca) || "";
   const compact = (n) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(Math.round(n)));
   const troyaPx = (n) => `$${tiny(n)}`;
@@ -166,26 +314,37 @@ export async function mount(view, { go, ask: askDrawer }) {
   const kBurn = h("div", { class: "v" }, "–"), kBurnS = h("div", { class: "s" }, "of the 1B minted");
   const tagGateB = h("b", {}, "Troya Gate"), tagGateS = h("small", {}, "$TROYA, checking…");
   const tagFlyB = h("b", {}, "Flywheel"), tagFlyS = h("small", {}, "reading the chain…");
-  const horseLogo = h("img", { class: "d2-logo", src: "/img/logo-3d-hd.png", alt: "", width: "1024", height: "1024", decoding: "async" });
-  const tile = (ic) => h("span", { class: "d2-tile" }, chromeIcon(ic));
-  const hero = h("section", { class: "d2-hero" },
+  const hero = h("section", { class: "d2-hero dk-first" },
     h("div", { class: "d2-beams", "aria-hidden": "true" }),
     h("div", { class: "d2-txt" },
       h("p", { class: "d2-mic" }, h("i", { class: "live-dot" }), "Live · Robinhood Chain"),
       h("h1", {}, "Every coin", h("br"), h("em", {}, "opened"), h("span", {}, " at the"), h("br"), h("span", {}, "gate.")),
       h("p", { class: "d2-lead" }, "Troya reads the chain, simulates every trade from your own address and tells you what it found, before your wallet signs anything."),
-      h("div", { class: "d2-acts" },
-        h("a", { class: "btn primary d2-big", href: "#/gate" }, chromeIcon("gate"), "Gate a coin"),
-        h("button", { class: "btn d2-big", type: "button", onclick: () => (askDrawer ? askDrawer() : go("#/agent")) }, chromeIcon("spark"), "Ask Troya")),
+      askBlock("in-hero"),
       h("div", { class: "d2-kpis" }, kpi("ETH", kEth, kEthS), kpi("$TROYA", kTro, kTroS), kpi("Sentry", kSen, kSenS), kpi("Burned", kBurn, kBurnS))),
     h("div", { class: "d2-stage" },
-      h("div", { class: "d2-floor", "aria-hidden": "true" }), h("div", { class: "d2-logo-w", "aria-hidden": "true" }, horseLogo),
+      h("div", { class: "d2-floor", "aria-hidden": "true" }), h("div", { class: "d2-logo-w", "aria-hidden": "true" }, h("img", { class: "d2-logo", src: HORSE, alt: "", width: "512", height: "512", decoding: "async" })),
       h("a", { class: "d2-tag t1", href: CA ? `#/gate/${CA}` : "#/gate" }, tile("verify"), h("span", {}, tagGateB, tagGateS)),
       h("a", { class: "d2-tag t2", href: "#/flywheel" }, tile("flywheel"), h("span", {}, tagFlyB, tagFlyS))));
-  const quick = h("section", { class: "d2-quick" },
-    [["swap", "Swap", "The Gate checks every trade", "#/swap"], ["perps", "Perps", "Crypto, stocks and metals", "#/perps"],
-     ["liquidity", "Earn on liquidity", "Ranges set from volatility", "#/liquidity"], ["spark", "Build an agent", "From your own playbooks", "#/social/agents"]]
-      .map(([ic, t, d, href]) => h("a", { class: "d2-q", href }, tile(ic), h("span", {}, h("b", {}, t), h("small", {}, d)))));
+  // the hero's numbers are read only while the hero is on the page
+  const heroOn = () => alive && hero.isConnected;
+  async function heroNumbers() {
+    if (!heroOn()) return;
+    try {
+      const f = await api.get("flywheel");
+      if (f.price?.troyaUsd) kTro.textContent = troyaPx(f.price.troyaUsd);
+      if (f.burned) { kBurn.textContent = compact(f.burned.total); kBurnS.textContent = `${f.burned.pctOfMinted.toFixed(2)}% of the 1B minted`; tagFlyB.textContent = `${compact(f.burned.total)} burned`; }
+      const c = f.totals?.cycles || 0; tagFlyS.textContent = `flywheel · ${c} cycle${c === 1 ? "" : "s"}`;
+    } catch { tagFlyS.textContent = "flywheel"; }
+    try { const r = await api.get("record?limit=1"); kSen.textContent = String(r.stats.calls); kSenS.textContent = `calls, ${r.stats.graded} graded in public`; } catch {}
+    if (CA) try {
+      const b = await api.get(`/api/badge/${CA}`);
+      const n = (b.checks || []).length, pass = (b.checks || []).filter((c) => c.status === "pass").length;
+      if (n) { tagGateB.textContent = `${pass} / ${n} passed`; tagGateS.textContent = `$TROYA · Gate${b.checkedAt ? `, ${ago(b.checkedAt)}` : ""}`; }
+    } catch { tagGateS.textContent = "$TROYA · open the Gate"; }
+  }
+
+  /* ---------- ETH / $TROYA chart ---------- */
   const TF = { "1D": { hl: ["15m", 24], rh: "15m" }, "1W": { hl: ["1h", 168], rh: "1h" }, "1M": { hl: ["4h", 720], rh: "4h" } };
   const cst = { sym: "ETH", tf: "1W", chart: null, series: null, seq: 0 };
   const chBox = h("div", { class: "d2-chart-box" }), chPx = h("span", { class: "d2-chart-px" }, "–"), chCh = h("span", { class: "d2-chart-ch" }), chSrc = h("span", { class: "fine muted" });
@@ -212,15 +371,14 @@ export async function mount(view, { go, ask: askDrawer }) {
         const LW = await import("lightweight-charts");
         // two loads can overlap at mount: only the newest one draws, and only one chart is ever made
         if (!alive || my !== cst.seq) return;
-      }
-      if (!cst.chart) {
-        const LW = await import("lightweight-charts");
-        const light = document.documentElement.dataset.theme === "light";
-        cst.chart = LW.createChart(chBox, { autoSize: true, layout: { background: { type: "solid", color: "transparent" }, textColor: light ? "#6e685f" : "#6f7c89", fontFamily: "Instrument Sans, system-ui, sans-serif", fontSize: 11 },
-          grid: { vertLines: { color: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.035)" }, horzLines: { color: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.035)" } },
-          rightPriceScale: { borderVisible: false }, timeScale: { borderVisible: false, timeVisible: true }, handleScroll: false, handleScale: false,
-          crosshair: { vertLine: { color: "rgba(142,223,245,.4)", labelBackgroundColor: "#0f1820" }, horzLine: { color: "rgba(142,223,245,.4)", labelBackgroundColor: "#0f1820" } } });
-        cst.series = cst.chart.addCandlestickSeries({ ...{ upColor: "#8edff5", downColor: "#ff7d8a", borderVisible: false, wickUpColor: "#8edff5", wickDownColor: "#ff7d8a" }, ...(light ? { upColor: "#0a7ea3", wickUpColor: "#0a7ea3", downColor: "#c8303f", wickDownColor: "#c8303f" } : {}) });
+        if (!cst.chart) {
+          const light = document.documentElement.dataset.theme === "light";
+          cst.chart = LW.createChart(chBox, { autoSize: true, layout: { background: { type: "solid", color: "transparent" }, textColor: light ? "#6e685f" : "#6f7c89", fontFamily: "Instrument Sans, system-ui, sans-serif", fontSize: 11 },
+            grid: { vertLines: { color: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.035)" }, horzLines: { color: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.035)" } },
+            rightPriceScale: { borderVisible: false }, timeScale: { borderVisible: false, timeVisible: true }, handleScroll: false, handleScale: false,
+            crosshair: { vertLine: { color: "rgba(142,223,245,.4)", labelBackgroundColor: "#0f1820" }, horzLine: { color: "rgba(142,223,245,.4)", labelBackgroundColor: "#0f1820" } } });
+          cst.series = cst.chart.addCandlestickSeries({ ...{ upColor: "#8edff5", downColor: "#ff7d8a", borderVisible: false, wickUpColor: "#8edff5", wickDownColor: "#ff7d8a" }, ...(light ? { upColor: "#0a7ea3", wickUpColor: "#0a7ea3", downColor: "#c8303f", wickDownColor: "#c8303f" } : {}) });
+        }
       }
       cst.series.applyOptions({ priceFormat: cst.sym === "ETH" ? { type: "price", precision: 2, minMove: 0.01 } : { type: "price", precision: 10, minMove: 1e-10 } });
       cst.series.setData(rows.map(({ value, ...c }) => c));
@@ -228,66 +386,62 @@ export async function mount(view, { go, ask: askDrawer }) {
     } catch (e) { if (my === cst.seq) chSrc.textContent = `Chart unavailable (${e.message}).`; }
   }
   paintChartHead();
-  let horse = null, alive = true;
   stops.push(() => { try { cst.chart?.remove(); } catch {} });
-  setTimeout(loadChart, 60);
-  stops.push(every(120000, () => loadChart()));
-  stops.push(() => { alive = false; void horse; });
-  stops.push(every(60000, async () => {
-    try {
-      const f = await api.get("flywheel");
-      if (f.price?.troyaUsd) kTro.textContent = troyaPx(f.price.troyaUsd);
-      if (f.burned) { kBurn.textContent = compact(f.burned.total); kBurnS.textContent = `${f.burned.pctOfMinted.toFixed(2)}% of the 1B minted`; tagFlyB.textContent = `${compact(f.burned.total)} burned`; }
-      const c = f.totals?.cycles || 0; tagFlyS.textContent = `flywheel · ${c} cycle${c === 1 ? "" : "s"}`;
-    } catch { tagFlyS.textContent = "flywheel"; }
-    try { const r = await api.get("record?limit=1"); kSen.textContent = String(r.stats.calls); kSenS.textContent = `calls, ${r.stats.graded} graded in public`; } catch {}
-  }));
-  if (CA) stops.push(every(300000, async () => {
-    try {
-      const b = await api.get(`/api/badge/${CA}`);
-      const n = (b.checks || []).length, pass = (b.checks || []).filter((c) => c.status === "pass").length;
-      if (n) { tagGateB.textContent = `${pass} / ${n} passed`; tagGateS.textContent = `$TROYA · Gate${b.checkedAt ? `, ${ago(b.checkedAt)}` : ""}`; }
-    } catch { tagGateS.textContent = "$TROYA · open the Gate"; }
-  }));
 
-  // two columns: the left one is for looking (Gate, brief, markets), the right one for your agent and what it watches
-  clear(view, h("div", { class: "dk" },
-    hero, quick, setup.el,
-    h("div", { class: "dk-cols" },
-      h("div", { class: "dk-col" }, chart, gate.el, brief, hlTable),
-      h("div", { class: "dk-col" }, agent, sentry, sigs, rhTable, shortcuts))));
+  /* ---------- layout: first visit or returning, connected or not, ordered by the intent ---------- */
+  // The lead section moves to just under the top; the rest keep their places. An element can sit in one place only, so
+  // whatever leads is left out of the columns below.
+  const LEAD = { check: gate.el, perps: hlTable, launch: quick };
+  const live = h("div", { class: "dk-live" }, coins, sentry);
+  const root = h("div", { class: "dk" });
+  let wasHero = null;
+  function layout() {
+    const showHero = first && !wallet.address;
+    const lead = LEAD[intent] || null;
+    const parts = showHero ? [intentBar, hero] : [strip];
+    if (wallet.address) parts.push(you);
+    if (lead) parts.push(lead);
+    if (intent === "launch") parts.push(live); else parts.push(live, quick);
+    parts.push(setup.el,
+      h("div", { class: "dk-cols" },
+        h("div", { class: "dk-col" }, chart, lead === gate.el ? null : gate.el, brief, lead === hlTable ? null : hlTable),
+        h("div", { class: "dk-col" }, agent, sigs, shortcuts)));
+    clear(root, parts);
+    if (showHero && wasHero !== true) heroNumbers();
+    wasHero = showHero;
+  }
+  layout();
+  clear(view, root);
+  let lastAddr = wallet.address || null, lastSession = !!wallet.session;
+  stops.push(onWallet(() => {
+    const a = wallet.address || null, s = !!wallet.session;
+    if (a === lastAddr && s === lastSession) return;
+    const relayout = !!a !== !!lastAddr;
+    lastAddr = a; lastSession = s;
+    if (relayout) layout();
+    renderAgent();
+    loadYou();
+  }));
+  renderAgent();
 
   /* ---------- data ---------- */
+  setTimeout(() => { if (alive) loadChart(); }, 60);
+  stops.push(every(120000, () => loadChart()));
+  stops.push(every(60000, () => heroNumbers()));
   stops.push(every(10000, async () => {
-    try { const p = await api.get("price/eth"); statEth.textContent = usd(p.usd); kEth.textContent = usd(p.usd); } catch { statEthS.textContent = "price unavailable"; kEthS.textContent = "price unavailable"; }
+    if (!heroOn()) return;
+    try { const p = await api.get("price/eth"); kEth.textContent = usd(p.usd); } catch { kEthS.textContent = "price unavailable"; }
   }));
   stops.push(every(30000, async () => {
     try {
       const d = await cached("market/hl", 8000);
       const liquid = d.markets.filter((m) => (m.volumeUsd || 0) >= 1e6 && m.change24h != null);
       const movers = [...liquid].sort((a, b) => Math.abs(b.change24h) - Math.abs(a.change24h)).slice(0, 7);
-      // perps by what they are ("Anthropic", "SK hynix"): trade.xyz's "xyz:" prefix is an id, not a label
-      if (movers[0]) { clear(statTop, h("span", { class: "tok-link" }, coinIcon(movers[0].coin, "k-big"), perpName(movers[0]))); clear(statTopS, h("span", { class: movers[0].change24h >= 0 ? "up" : "down" }, `${movers[0].change24h >= 0 ? "+" : ""}${movers[0].change24h.toFixed(2)}%`), " · 24h"); }
-      let sparks = {};
       try { sparks = (await cached(`market/hl/sparks?coins=${movers.map((m) => encodeURIComponent(m.coin)).join(",")}`, 120000)).sparks || {}; } catch {}
-      clear(hlBody, movers.map((m) => h("tr", { class: "click", onclick: () => go(`#/perps/${encodeURIComponent(m.coin)}`) },
-        h("td", { class: "l" }, h("div", { class: "tok" }, coinIcon(m.coin), h("div", {}, h("b", {}, perpName(m)), h("small", {}, `OI ${usd(m.oiUsd, { compact: true })}`)))),
-        h("td", { class: "hide-s" }, sparkline(sparks[m.coin])),
-        h("td", {}, perpPrice(m.mark)), h("td", {}, pctEl(m.change24h)),
-        h("td", { class: `hide-s ${Math.abs(m.fundingApr) >= 100 ? (m.fundingApr > 0 ? "warnc" : "down") : "muted"}` }, fmtApr(m.fundingApr)),
-        h("td", { class: "hide-s" }, usd(m.volumeUsd, { compact: true })))));
-    } catch (e) { clear(hlBody, h("tr", {}, h("td", { colspan: 6, class: "l muted" }, `Hyperliquid data is unavailable: ${e.message}`))); }
+      if (alive) hlTbl.setRows(movers);
+    } catch (e) { if (alive) tblMsg(hlTbl, `Hyperliquid data is unavailable: ${e.message}`); }
   }));
-  stops.push(every(30000, async () => {
-    try {
-      const d = await cached("market/robinhood?sort=volume&limit=7", 15000);
-      const now = d.now || Date.now();
-      clear(rhBody, d.tokens.slice(0, 7).map((t) => h("tr", { class: "click", onclick: () => go(`#/token/${t.address}`), style: t.priceAt && now - t.priceAt > 15 * 60_000 ? { opacity: ".55" } : null },
-        h("td", { class: "l" }, tokenCell(t)),
-        h("td", {}, hotPrice(t, now)), h("td", {}, pctEl(t.change24h)), h("td", { class: "hide-s" }, usdCell(t.volume24hUsd, null)), h("td", { class: "hide-s" }, liqCell(t)))));
-      if (!d.tokens.length) clear(rhBody, h("tr", {}, h("td", { colspan: 5, class: "l muted" }, "No Robinhood Chain coins returned.")));
-    } catch (e) { clear(rhBody, h("tr", {}, h("td", { colspan: 5, class: "l muted" }, `The Robinhood Chain board is unavailable: ${e.message}`))); }
-  }));
+  stops.push(every(30000, () => loadCoins()));
   stops.push(every(60000, async () => {
     try {
       const b = await api.get("brief");
@@ -315,8 +469,6 @@ export async function mount(view, { go, ask: askDrawer }) {
     try {
       const d = await api.get("signals");
       lastSignals = d.signals || [];
-      statSig.textContent = String(d.total ?? lastSignals.length);
-      statSigS.textContent = `${Math.min(5, lastSignals.length)} on screen`;
       renderSignals();
     } catch (e) { clear(sigBody, h("p", { class: "muted" }, `Signals are unavailable right now (${e.message}).`)); }
   }));
@@ -328,16 +480,20 @@ export async function mount(view, { go, ask: askDrawer }) {
         clear(senBody, h("div", { class: "dk-empty" }, h("b", {}, d.live ? "Nothing checked in the last while." : "Sentry is not watching on this server."), h("p", {}, "Every result the channel sees is listed here as it comes in. "), h("a", { class: "btn sm", href: d.channel || "https://t.me/troyasentry", target: "_blank", rel: "noopener" }, "Open t.me/troyasentry")));
         return;
       }
-      const word = { passed: "Passed", caution: "Caution", failed: "Failed" };
-      clear(senBody, h("ul", { class: "dk-sen" }, items.map((it) => h("li", {},
-        tokenIcon({ symbol: it.symbol, address: it.token }, "sm"),
-        h("div", { class: "dk-sen-t" }, h("b", {}, it.symbol ? `$${it.symbol}` : short(it.token)), h("span", {}, [it.name, it.source || "Pons", it.buyers != null ? (it.buyers === 0 ? "no buyers yet" : `${it.buyers} buyer${it.buyers === 1 ? "" : "s"}`) : null].filter(Boolean).join(" · "))),
-        h("span", { class: `dk-v v-${it.verdict}` }, word[it.verdict] || it.verdict || "Checked"),
-        h("span", { class: "fine dk-sen-at" }, ago(it.at)),
-        h("span", { class: "dk-sen-a" },
-          h("a", { class: "link", href: `#/gate/${it.token}` }, "Gate"),
-          h("a", { class: "link", href: `#/token/${it.token}` }, "Open"),
-          it.post ? h("a", { class: "link", href: it.post, target: "_blank", rel: "noopener" }, "Post") : null)))));
+      clear(senBody, h("ul", { class: "dk-sen" }, items.map((it) => {
+        const p = senPill(it);
+        const who = it.symbol ? `$${it.symbol}` : it.name || short(it.token);
+        const meta = [it.name && it.name.toUpperCase() !== String(it.symbol || "").toUpperCase() ? it.name : null, it.source || "Pons", p.note].filter(Boolean).join(" · ");
+        return h("li", {},
+          tokenIcon({ symbol: it.symbol, address: it.token }, "sm"),
+          h("a", { class: "dk-sen-t", href: `#/gate/${it.token}`, title: it.reason || "" }, h("b", {}, who), h("span", {}, meta)),
+          h("span", { class: `dk-v ${p.cls}`, title: it.reason || "" }, p.word),
+          h("span", { class: "fine dk-sen-at" }, ago(it.at)),
+          h("span", { class: "dk-sen-a" },
+            h("a", { class: "link", href: `#/gate/${it.token}` }, "Gate"),
+            h("a", { class: "link", href: `#/token/${it.token}` }, "Open"),
+            it.post ? h("a", { class: "link", href: it.post, target: "_blank", rel: "noopener" }, "Post") : null));
+      })));
     } catch (e) { clear(senBody, h("p", { class: "muted" }, `Sentry results are unavailable right now (${e.message}).`)); }
   }));
 
@@ -349,6 +505,22 @@ export async function mount(view, { go, ask: askDrawer }) {
   return () => stops.forEach((f) => { try { f(); } catch {} });
 }
 
-function skel(n, cols) {
-  return Array.from({ length: n }, () => h("tr", {}, Array.from({ length: cols }, (_, i) => h("td", { class: i === 0 ? "l" : "" }, h("div", { class: "sk", style: { height: "14px", width: i === 0 ? "110px" : "48px", marginLeft: i === 0 ? "0" : "auto" } })))));
+// a table from ui.js that could not load: one muted line in place of its rows (its empty text would say "nothing moved")
+function tblMsg(tbl, text) {
+  const body = tbl.querySelector("tbody"), n = tbl.querySelectorAll("thead th").length || 1;
+  if (body) body.replaceChildren(h("tr", {}, h("td", { colspan: n, class: "l muted" }, text)));
+}
+
+// Sentry's pill. Green only for a pass that met the channel's bar (eligible: at least 0.5 ETH in from 25 independent
+// buyers); a pass without that is neutral, never green. An older server without the flag: green only when it was posted.
+export function senPill(it) {
+  const buyers = it.buyers != null ? (it.buyers === 0 ? "no buyers yet" : `${it.buyers} buyer${it.buyers === 1 ? "" : "s"}`) : null;
+  if (it.stock) return { word: "Stock", cls: "v-quiet", note: "tokenized stock, not a launch" };
+  if (it.verdict === "passed") {
+    const ok = typeof it.eligible === "boolean" ? it.eligible : !!it.posted;
+    return ok ? { word: "Passed", cls: "v-passed", note: buyers } : { word: "Checks passed", cls: "v-quiet", note: `no real buying yet${it.buyers ? ` (${buyers})` : ""}` };
+  }
+  if (it.verdict === "caution") return { word: "Caution", cls: "v-caution", note: buyers };
+  if (it.verdict === "failed") return { word: "Failed", cls: "v-failed", note: null };
+  return { word: "Checked", cls: "v-quiet", note: buyers };
 }

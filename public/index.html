@@ -52,7 +52,14 @@
 <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
 <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/home/fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
 <script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<!-- after the import map (module preloads resolve "three" through it): the 3D horse starts after load; fetch its code and model early but behind the hero still -->
+<link rel="modulepreload" href="/vendor/three/three.module.min.js" fetchpriority="low">
+<link rel="modulepreload" href="/vendor/three/addons/loaders/GLTFLoader.js" fetchpriority="low">
+<link rel="modulepreload" href="/vendor/three/addons/utils/BufferGeometryUtils.js" fetchpriority="low">
+<link rel="modulepreload" href="/vendor/three/addons/libs/meshopt_decoder.module.js" fetchpriority="low">
+<link rel="preload" href="/img/hero/horse.glb" as="fetch" type="model/gltf-binary" crossorigin fetchpriority="low">
 <link rel="stylesheet" href="/home/home.css">
 <link rel="stylesheet" href="/css/buybar.css">
 <script src="/config.js"></script>
@@ -120,7 +127,7 @@
       <span class="l2"><span>Inside the</span><span class="gap"></span><span>walls</span></span>
       <em class="script">Troya</em>
     </h1>
-    <figure class="horse3d" data-horse aria-hidden="true"><img src="/img/logo-3d-hd.png" alt="" width="1024" height="1024"><canvas data-horse3d></canvas></figure>
+    <figure class="horse3d" data-horse aria-hidden="true"><picture><source type="image/webp" srcset="/img/hero/horse-still-512.webp 512w, /img/logo-3d-hd.webp 1024w" sizes="(max-width: 640px) 390px, (max-width: 1024px) 760px, 690px"><img src="/img/logo-3d-hd.png" alt="" width="1024" height="1024" fetchpriority="high" decoding="async"></picture><canvas data-horse3d></canvas></figure>
     <div class="hero-pills">
     <a class="ant-pill" href="/agent#/perps/xyz:ANT"><i></i><span>Trade Anthropic<small>ANT perp · bridge in from Robinhood Chain</small></span><b>Trade</b></a>
     <a class="rm-pill" href="/roadmap"><i></i><span>V8 Agamemnon live · V9 Achilles next</span><b>Roadmap</b></a>
@@ -147,7 +154,7 @@
         <div class="iw-acts"><button class="watch" type="button" data-play><span class="tri"></span>Watch the film · 1 min</button><a class="ulink" href="/agent">Open the app</a></div>
       </div>
       <button class="iw-film rv" type="button" data-play aria-label="Play the film">
-        <img src="/home/art/p5-final.webp" alt="The Troya chrome horse rearing on a marble pedestal among clouds and broken columns, warriors kneeling below" width="2800" height="1563" loading="lazy">
+        <picture><source media="(max-width: 699px)" srcset="/home/art/p5-final-sm.webp"><img src="/home/art/p5-final.webp" alt="The Troya chrome horse rearing on a marble pedestal among clouds and broken columns, warriors kneeling below" width="2800" height="1563" loading="lazy" fetchpriority="low" decoding="async"></picture>
         <span class="play"><i></i></span>
       </button>
     </div>
@@ -193,9 +200,9 @@
       <div class="iw-stage" aria-hidden="true">
         <div class="iw-frame">
           <img class="on" src="/home/art/p5-gate.webp" alt="" width="2800" height="1563" loading="lazy">
-          <img src="/home/art/p5-telegram.webp" alt="" width="2800" height="1563" loading="lazy">
-          <img src="/home/art/p5-storm.webp" alt="" width="2800" height="1192" loading="lazy">
-          <img src="/home/art/p5-beach.webp" alt="" width="2800" height="1563" loading="lazy">
+          <img data-src="/home/art/p5-telegram.webp" alt="" width="2800" height="1563" decoding="async">
+          <img data-src="/home/art/p5-storm.webp" alt="" width="2800" height="1192" decoding="async">
+          <img data-src="/home/art/p5-beach.webp" alt="" width="2800" height="1563" decoding="async">
         </div>
         <div class="iw-dots"><button type="button" class="on" data-go="0" tabindex="-1"><b>I</b>Gate</button><button type="button" data-go="1" tabindex="-1"><b>II</b>Telegram</button><button type="button" data-go="2" tabindex="-1"><b>III</b>Sentry</button><button type="button" data-go="3" tabindex="-1"><b>IV</b>Autopilot</button></div>
       </div>
@@ -254,7 +261,7 @@
 
 <div class="modal" data-modal hidden>
   <button class="modal-x" type="button" data-close aria-label="Close">Close</button>
-  <video data-video src="/home/art/film-v6.mp4" playsinline controls preload="none"></video>
+  <video data-video playsinline controls preload="none" data-poster="/home/art/p5-final-sm.webp"><source media="(max-width: 899px)" src="/home/art/film-v6-720.mp4" type="video/mp4"><source src="/home/art/film-v6.mp4" type="video/mp4"></video>
 </div>
 
 <div class="toast" role="status" aria-live="polite" data-toast></div>

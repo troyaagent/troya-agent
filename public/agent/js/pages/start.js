@@ -8,7 +8,8 @@
 import { h, clear, icon, pageHead, toast, useCss, copyText, short } from "../ui.js";
 import { api } from "../api.js";
 import { wallet, onWallet, openConnect, signIn, reader } from "../wallet.js";
-import { tradingKeyStatus } from "../hl.js";
+// hl.js pulls in ethers; the Desk home shows this checklist to read-only visitors too, so it loads only for a connected wallet
+const tradingKeyStatus = (owner) => import("../hl.js").then((m) => m.tradingKeyStatus(owner));
 
 // t = title, s = one line for the Desk and Portfolio tiles, d = the full line on #/start
 const STEPS = {

@@ -188,17 +188,22 @@ async function deliver(ev, holders) {
       const amountIn = spot ? (Number(BigInt(spot.raw)) / 10 ** spot.decimals * 0.999).toPrecision(12).replace(/\.?0+$/, "") : null;
       if (spot && amountIn) {
         const params = { tokenIn: ev.token, tokenOut: "ETH", amountIn, slippagePct: 10 };
+        // a sell from the Agent Wallet still sells everything of the coin, but tells the lot ledger so: every open lot of
+        // the coin (Sentry Autopilot, Champions) then closes with its share of the real ETH that came back, instead of the
+        // next job finding nothing to sell and booking -100% (audit 3-10, 21 Nov 2026). At the moment it sends, the ledger
+        // reads the whole balance again, so a sell approved later is not stuck on an amount from the alert.
+        const lot = spot.agent ? { source: "aegis", closeAll: true } : null;
         if (autoExit && spot.agent) {
           try {
             const aw = await import("./agentwallet.mjs");
-            const r = await aw.executeForUser(h.owner, { kind: "swap", params, rationale: `Aegis exit: ${ev.text}`, source: "aegis" });
+            const r = await aw.executeForUser(h.owner, { kind: "swap", params, rationale: `Aegis exit: ${ev.text}`, source: "aegis", lot });
             // held by the trust ladder (Approve, the default for a wallet that never picked a step): the sell is already
             // waiting in Scepter and the Inbox as a proposal, so this line says so instead of "exit blocked"
             await addInbox(h.owner, { kind: "aegis", title: `${title} · ${r.executed ? "sold to ETH" : r.proposed ? "exit waiting for your approval" : "exit blocked"}`, body: r.executed ? body : r.proposed ? `${body} Approve the sell in Agent → Scepter or Portfolio → Inbox.` : `${body} ${(r.reasons || []).join(" ")}`, data: { aegis: ev } });
             continue;
           } catch (e) { await addInbox(h.owner, { kind: "aegis", title: `${title} · exit failed`, body: `${body} ${e.message}`, data: { aegis: ev } }); continue; }
         }
-        const p = await createProposal(h.owner, { kind: "swap", params, summary: `Aegis exit: sell $${ev.symbol} to ETH`, rationale: ev.text, source: "aegis" });
+        const p = await createProposal(h.owner, { kind: "swap", params, summary: `Aegis exit: sell $${ev.symbol} to ETH`, rationale: ev.text, source: "aegis", lot });
         await addInbox(h.owner, { kind: "proposal", title: `${title} · exit ready`, body: `${body} Approve the sell in Portfolio → Inbox.`, data: { proposalId: p.id, aegis: ev } });
         continue;
       }

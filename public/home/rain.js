@@ -24,6 +24,28 @@
   $$(".rv").forEach((el) => io.observe(el));
   if (reduce) $$(".rv").forEach((el) => el.classList.add("in"));
 
+  // the Inside-the-walls posters 2-4 wait in data-src until their frame is about to scroll in (frame 1 loads
+  // lazily as usual), so the first screen only downloads what it shows. A frame that never shows (the stage
+  // is hidden on phones) never downloads them.
+  // The film's poster waits the same way, for the film button: a poster attribute is fetched at once, even
+  // inside the hidden modal.
+  const frames = $$(".iw-frame").filter((f) => f.querySelector("img[data-src]"));
+  const fill = (f) => $$("img[data-src]", f).forEach((img) => { img.src = img.dataset.src; img.removeAttribute("data-src"); });
+  const film = $(".iw-film"), vid = $("video[data-poster]");
+  const poster = () => { if (vid && !vid.getAttribute("poster")) vid.poster = vid.dataset.poster; };
+  if (!("IntersectionObserver" in window)) { frames.forEach(fill); poster(); }
+  else {
+    const fio = new IntersectionObserver((es) => es.forEach((e) => {
+      if (!e.isIntersecting) return;
+      if (e.target === film) poster(); else fill(e.target);
+      fio.unobserve(e.target);
+    }), { rootMargin: "200px 0px" });
+    frames.forEach((f) => fio.observe(f));
+    if (film && vid) fio.observe(film);
+  }
+  // the other Play button ("Watch the film") sets the poster before the modal opens
+  $$("[data-play]").forEach((b) => { b.addEventListener("pointerdown", poster, { passive: true }); b.addEventListener("focus", poster); });
+
   /* ---------- code rain: TROYA anagrams and 0x hex fall from wherever the cursor moves ---------- */
   const cv = $("[data-rain]");
   if (!cv || reduce) return;

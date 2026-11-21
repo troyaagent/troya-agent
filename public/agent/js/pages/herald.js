@@ -4,7 +4,7 @@
 import { h, clear, useCss, pageHead, seg, toast, modal, ago } from "../ui.js";
 import { api } from "../api.js";
 import { wallet, onWallet, openConnect, signIn } from "../wallet.js";
-import { W, H, drawCard, gateSpec, watchfireSpec, pnlSpec, shareUrl, actions, refNote, xIntent } from "../sharecard.js";
+import { W, H, drawCard, gateSpec, watchfireSpec, cupPnlSpec, shareUrl, actions, refNote, refOf, xIntent } from "../sharecard.js";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 const pct = (v) => (v == null ? "–" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(Math.abs(v) >= 100 ? 0 : 1)}%`);
@@ -30,44 +30,41 @@ export async function mount(view) {
     jump, linkBox, h("div", { class: "hr-grid" }, lbBox, cupBox), boardBox));
 
   /* ---------- the card maker (also used signed out: the card then carries the plain site link) ---------- */
+  // A PnL card is never typed in here (21 Nov audit, 3-13: a free symbol and % made a fake "+10,000%" Troya card easy).
+  // Real trades are shared from Portfolio (Share PnL on a token or a closed Hyperliquid trade, read from the chain); this
+  // page offers only your Arena Cup week, from the Cup's own table and marked as paper.
   const maker = (() => {
     let kind = "gate", cur = null, drawnWith;          // drawnWith: the referral code on the last card drawn
     const canvas = h("canvas", { class: "hr-canvas", width: W, height: H, "aria-label": "Share card preview" });
     const msg = h("p", { class: "fine muted hr-msg" }, "Pick a card, fill it in and press Make card.");
     const addr = h("input", { class: "input mono", placeholder: "Coin address on Robinhood Chain (0x…)", spellcheck: "false", autocomplete: "off", value: window.SITE?.ca || "" });
-    const sym = h("input", { class: "input", placeholder: "Symbol, e.g. TROYA", maxlength: "16" });
-    const entry = h("input", { class: "input", placeholder: "Entry price", inputmode: "decimal" });
-    const exit = h("input", { class: "input", placeholder: "Exit price", inputmode: "decimal" });
-    const pnl = h("input", { class: "input", placeholder: "or PnL %", inputmode: "decimal" });
-    const label = h("input", { class: "input", placeholder: "Line under it (optional), e.g. Paper trade in the Arena", maxlength: "60" });
-    let title = "";
     const fields = h("div", { class: "hr-fields" });
     const cupFill = h("button", { class: "btn sm", type: "button", hidden: true, onclick: () => {
-      const m = st.cup?.mine;
-      if (!m) return;
-      kind = "pnl"; pick.querySelector('[data-v="pnl"]')?.click();
-      title = `Arena Cup ${st.cup.season}`; sym.value = ""; entry.value = ""; exit.value = ""; pnl.value = String(m.pnlPct ?? 0);
-      label.value = `${m.closed} closed paper trades${m.rank ? `, #${m.rank} this week` : ""}`; make();
+      if (!st.cup?.mine) return;
+      if (kind !== "pnl") pick.querySelector('[data-v="pnl"]')?.click();
+      make();
     } }, "Use my Arena Cup week");
-    const paintFields = () => clear(fields, kind === "pnl"
-      ? h("div", { class: "hr-pnl" }, sym, h("div", { class: "hr-row3" }, entry, exit, pnl), label)
-      : addr);
-    const pick = seg([{ value: "gate", label: "Gate verdict" }, { value: "watchfire", label: "Watchfire" }, { value: "pnl", label: "PnL" }], kind, (v) => { kind = v; if (v !== "pnl") title = ""; paintFields(); });
+    const pnlInfo = () => h("div", { class: "hr-pnl" },
+      h("p", { class: "fine", style: { margin: 0 } }, "PnL cards are read, never typed: open Portfolio and press Share PnL on a token or a closed Hyperliquid trade. The card carries the transaction it was read from, so anyone can check it."),
+      h("div", { class: "hr-acts" }, h("a", { class: "btn sm", href: "#/portfolio" }, "Open Portfolio"), h("a", { class: "btn sm", href: "#/portfolio/history" }, "Hyperliquid trades")),
+      st.cup?.mine ? null : h("p", { class: "fine muted", style: { margin: 0 } }, "Your Arena Cup week can be shared here too, as paper, once a strategy of yours has closed trades this week."));
+    const paintFields = () => clear(fields, kind === "pnl" ? pnlInfo() : addr);
+    const pick = seg([{ value: "gate", label: "Gate verdict" }, { value: "watchfire", label: "Watchfire" }, { value: "pnl", label: "PnL" }], kind, (v) => { kind = v; paintFields(); });
     async function make() {
       if (drawnWith === undefined) drawnWith = null;
       msg.textContent = "Drawing…";
       try {
         let spec;
         if (kind === "pnl") {
-          if (!title && !sym.value.trim()) throw new Error("Add the coin's symbol.");
-          spec = pnlSpec({ symbol: sym.value, entry: entry.value, exit: exit.value, pnlPct: pnl.value, label: label.value, title });
+          if (!st.cup?.mine) throw new Error("Share a real trade from Portfolio, or come back once you have an Arena Cup week.");
+          spec = cupPnlSpec(st.cup);
         } else {
           const a = addr.value.trim();
           if (!ADDR.test(a)) throw new Error("Paste a coin address (0x and 40 characters).");
           spec = kind === "gate" ? await gateSpec(a) : await watchfireSpec(a);
         }
         canvas.classList.add("busy");
-        await drawCard(spec, st.me ? { code: st.me.code, link: st.me.link, linkShort: st.me.linkShort } : null, canvas);
+        await drawCard(spec, refOf(st.me), canvas);
         cur = { canvas, spec, url: shareUrl(st.me, spec.address) };
         drawnWith = st.me?.code || null;
         msg.textContent = spec.loading ? "Watchfire is still reading this coin. Try again in a few seconds for a full card." : "Download the card, then attach it to your post.";
@@ -83,7 +80,8 @@ export async function mount(view) {
       h("div", { class: "hr-frame" }, canvas), msg, actions(() => cur), note);
     return { el, refresh() {
       cupFill.hidden = !st.cup?.mine;
-      clear(note, refNote(st.me ? { linkShort: st.me.linkShort } : null, () => loadMe()));
+      if (kind === "pnl") paintFields();                 // the Cup line depends on whether you have a week yet
+      clear(note, refNote(refOf(st.me), () => loadMe()));
       // a first card ($TROYA's Gate verdict) so the preview is never empty; redrawn once the link is known
       if (wallet.session && !st.me && !st.meErr) return;
       const code = st.me?.code || null;
@@ -103,14 +101,15 @@ export async function mount(view) {
     } else if (!st.me) {
       left = h("div", { class: "hr-link-l" }, st.meErr ? h("div", { class: "alert error" }, st.meErr) : h("div", { class: "sk", style: { height: "180px" } }));
     } else {
-      const m = st.me, s = m.stats;
+      // the short /r/ link: its page carries a proper link preview on X and Telegram (server/share.mjs), and keeps the code
+      const m = st.me, s = m.stats, link = refOf(m)?.link || m.link;
       const tile = (k, v, sub) => h("div", { class: "hr-tile" }, h("span", {}, k), h("b", {}, v), sub ? h("small", {}, sub) : null);
       const intro = "I check coins on Robinhood Chain with Troya Agent before I buy: the Gate tests a buy and a sell, Watchfire reads every transfer.";
       left = h("div", { class: "hr-link-l" },
         h("div", { class: "hr-code" }, h("span", { class: "fine muted" }, "Your code"), h("b", { class: "mono" }, m.code)),
-        h("div", { class: "hr-copy" }, h("input", { class: "input mono", readonly: true, value: m.link, "aria-label": "Your referral link", onclick: (e) => e.target.select() }),
-          h("button", { class: "btn", type: "button", onclick: async () => { try { await navigator.clipboard.writeText(m.link); toast("Link copied", "ok"); } catch { toast(m.link); } } }, "Copy"),
-          h("a", { class: "btn", href: xIntent(intro, m.link), target: "_blank", rel: "noopener" }, "Post on X")),
+        h("div", { class: "hr-copy" }, h("input", { class: "input mono", readonly: true, value: link, "aria-label": "Your referral link", onclick: (e) => e.target.select() }),
+          h("button", { class: "btn", type: "button", onclick: async () => { try { await navigator.clipboard.writeText(link); toast("Link copied", "ok"); } catch { toast(link); } } }, "Copy"),
+          h("a", { class: "btn", href: xIntent(intro, link), target: "_blank", rel: "noopener" }, "Post on X")),
         h("div", { class: "hr-tiles" },
           tile("Joined", n(s.referred), "through your link"),
           tile("Active", n(s.active), "did something after"),

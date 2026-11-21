@@ -170,7 +170,7 @@ html[data-theme="light"] .d-drawer-b .ag-dock { background: linear-gradient(to b
 .d2-stage { position: relative; z-index: 1; min-height: 360px; }
 .d2-horse { position: absolute; left: -8%; top: 6%; width: 110%; height: 92%; display: block; }
 .d2-floor { position: absolute; left: 18%; right: 8%; bottom: 7%; height: 70px; background: radial-gradient(50% 50% at 50% 50%, rgba(142, 223, 245, .3), transparent 70%); filter: blur(10px); }
-.d2-hero.no-3d .d2-stage { background: url(/img/logo-3d-hd.png) center 45% / auto 78% no-repeat; }
+.d2-hero.no-3d .d2-stage { background: url(/img/logo-3d-512.webp) center 45% / auto 78% no-repeat; }
 .d2-tag { position: absolute; z-index: 3; display: flex; gap: 10px; align-items: center; padding: 10px 14px 10px 10px; border-radius: 16px; color: var(--fg);
   background: rgba(6, 12, 18, .62); border: 1px solid var(--line-2); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 12px 30px rgba(0, 0, 0, .4);
   animation: d2-float 8s ease-in-out infinite; will-change: transform; transition: border-color .3s; }
@@ -1588,3 +1588,112 @@ body.desk :is(.mk2-cats, .lp-tabs .tabs, .sd-tabs .seg, .hp-tabs) > * { flex-shr
       -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
   }
 }
+
+/* ---------- Desk home (21 Nov 2026): compact top strip, first-visit intent, You row, live lists first ---------- */
+/* returning visitors and connected wallets: one strip of at most 220 px, then the live lists */
+.dk-strip { position: relative; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 18px; align-items: center; padding: 16px 20px; border-radius: 22px;
+  border: 1px solid var(--line); background: var(--glass); overflow: hidden; isolation: isolate; max-height: 220px; }
+.dk-strip::before { content: ""; position: absolute; inset: 0; z-index: -1; background: repeating-linear-gradient(180deg, rgba(160, 230, 255, .035) 0 1px, transparent 1px 9px); pointer-events: none; }
+.dk-mark { display: block; width: 76px; height: 76px; border-radius: 18px; }
+.dk-mark img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .5)) drop-shadow(0 0 16px rgba(110, 200, 235, .2)); }
+.dk-strip-b { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "p p" "a a" "c f"; gap: 10px 16px; min-width: 0; }
+.dk-promise { grid-area: p; margin: 0; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-promise b { color: var(--fg); font-weight: 600; letter-spacing: -0.01em; }
+.dk-strip .dk-askb { display: contents; }
+.dk-strip .ask-bar { grid-area: a; max-width: none; height: 48px; }
+.dk-strip .dk-chips { grid-area: c; margin: 0; min-width: 0; }
+.dk-fee { grid-area: f; align-self: center; justify-self: end; font-size: 12px; color: var(--muted); white-space: nowrap; text-decoration: none; border-bottom: 1px dashed var(--line-3); }
+.dk-fee:hover { color: var(--fg); border-bottom-color: var(--fg-2); }
+.dk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+/* first visit: the ask bar lives in the hero, in place of its two big buttons */
+.d2-hero .dk-askb { margin-top: 24px; max-width: 560px; }
+.d2-hero .dk-askb .ask-bar { max-width: none; }
+.d2-hero .dk-askb .dk-chips { margin-top: 10px; }
+/* the ask bar adds a row, so the first-visit headline is a little smaller to keep the hero near its old height */
+.d2-hero.dk-first .d2-txt { padding-top: 36px; padding-bottom: 30px; }
+.d2-hero.dk-first h1 { font-size: clamp(38px, 3.7vw, 60px); }
+.d2-hero.dk-first .d2-kpis { padding-top: 24px; }
+
+/* first visit: what brings you here (reorders the page; no modal, no loader) */
+.dk-intent { display: grid; gap: 6px; padding: 12px 16px; border-radius: 16px; border: 1px solid var(--line); background: var(--glass); }
+.dk-intent-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.dk-intent-h > b { font-size: 13px; font-weight: 600; }
+.dk-intent-c { display: flex; flex-wrap: wrap; gap: 6px; }
+.dk-intent-c .chip { height: 30px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; }
+.dk-intent-n { margin: 0; font-size: 12px; color: var(--muted); }
+
+/* You: the connected wallet's money and what waits for it */
+.dk-me { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-radius: 16px; border: 1px solid var(--line); background: var(--glass); overflow: hidden; }
+.dk-me-c { display: grid; align-content: start; gap: 3px; padding: 14px 16px; min-width: 0; color: var(--fg); text-decoration: none; border-left: 1px solid var(--line); transition: background .3s; }
+.dk-me-c:first-child { border-left: 0; }
+.dk-me-c:hover { background: rgba(142, 223, 245, .04); }
+.dk-me-c .k { display: flex; align-items: center; gap: 6px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.dk-me-c .v { font-size: 19px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-me-c .s { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-me-c.hot .v { color: var(--warn); }
+
+/* the live lists: coins next to Sentry on a wide screen */
+.dk-live { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 16px; align-items: start; }
+.dk-live > * { min-width: 0; }
+.dk-coins .panel-h { flex-wrap: wrap; gap: 8px 12px; }
+.dk-coin-seg button { height: 26px; padding: 0 10px; font-size: 12px; }
+.dk-coin { display: grid; gap: 4px; min-width: 0; }
+.dk-why { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 34px; }
+.dk-buy { display: inline-flex; gap: 4px; justify-content: flex-end; }
+.dk-buy .chip { height: 26px; padding: 0 8px; font-size: 11.5px; font-variant-numeric: tabular-nums; text-decoration: none; }
+.dk-buy .chip:hover { border-color: rgba(142, 223, 245, .5); color: var(--blue); }
+.dk-coin-note { margin: 0; padding: 8px 16px 12px; }
+.dk-buy-td { white-space: nowrap; }
+
+/* Sentry: a neutral pill for a pass without real buying (green is only for the channel's bar) */
+.dk-v.v-quiet { color: var(--fg-2); border-color: var(--line-3); background: transparent; }
+.dk-v.v-quiet::before { background: var(--faint); }
+.dk-sen li { grid-template-columns: 22px minmax(0, 1fr) auto 34px auto; }
+a.dk-sen-t { color: inherit; text-decoration: none; }
+a.dk-sen-t:hover b { color: var(--blue); }
+
+@media (max-width: 1100px) {
+  .dk-live { grid-template-columns: minmax(0, 1fr); }
+  .dk-me { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dk-me-c:nth-child(4) { border-left: 0; }
+  .dk-me-c:nth-child(n+4) { border-top: 1px solid var(--line); }
+}
+@media (max-width: 720px) {
+  /* the mark sits in the corner, so the ask bar gets the full width */
+  .dk-strip { grid-template-columns: minmax(0, 1fr); padding: 12px 14px; border-radius: 18px; }
+  .dk-mark { position: absolute; top: 8px; right: 10px; width: 40px; height: 40px; border-radius: 12px; }
+  .dk-strip-b { grid-template-columns: minmax(0, 1fr); grid-template-areas: "p" "a" "c" "f"; gap: 8px; }
+  .dk-promise { white-space: normal; font-size: 13px; line-height: 1.4; padding-right: 48px; min-height: 30px; display: flex; align-items: center; }
+  .dk-promise span { display: none; }
+  .dk-fee { justify-self: start; }
+  /* chips in one row that scrolls on its own, so the strip stays short */
+  .dk-chips { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+  .dk-chips::-webkit-scrollbar { display: none; }
+  .dk-chips > * { flex-shrink: 0; }
+  .dk-why { display: none; }
+  .dk-me { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dk-me-c { padding: 12px 14px; }
+  .dk-me-c:nth-child(n) { border-left: 1px solid var(--line); border-top: 1px solid var(--line); }
+  .dk-me-c:nth-child(odd) { border-left: 0; }
+  .dk-me-c:nth-child(-n+2) { border-top: 0; }
+  .dk-me-c:last-child { grid-column: 1 / -1; border-left: 0; }
+  .dk-me-c .v { font-size: 17px; }
+  .dk-me-c .s { white-space: normal; font-size: 11.5px; line-height: 1.35; }
+  .dk-sen li { grid-template-columns: 22px minmax(0, 1fr) auto; }
+}
+@media (max-width: 560px) {
+  /* first visit on a phone: the horse moves behind the headline, so the ask bar and the first coins fit the first screen */
+  .d2-hero.dk-first .d2-stage { position: absolute; right: -8%; top: 0; width: 52%; height: 210px; min-height: 0; opacity: .55; pointer-events: none; z-index: 0; }
+  .d2-hero.dk-first .d2-tag, .d2-hero.dk-first .d2-floor, .d2-hero.dk-first .d2-kpis { display: none; }
+  .d2-hero.dk-first .d2-txt { padding: 22px 18px 20px; }
+  .d2-hero.dk-first h1 { margin-top: 12px; font-size: 34px; }
+  .d2-hero.dk-first .d2-lead { margin-top: 12px; font-size: 14px; }
+  .d2-hero .dk-askb { margin-top: 16px; }
+  .dk-intent { padding: 10px 12px; }
+  .dk-intent-c { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-right: -12px; padding-right: 12px; }
+  .dk-intent-c::-webkit-scrollbar { display: none; }
+  .dk-intent-c > * { flex-shrink: 0; }
+  .dk-buy .chip { padding: 0 6px; font-size: 11px; }
+}
+html[data-theme="light"] .dk-strip, html[data-theme="light"] .dk-intent, html[data-theme="light"] .dk-me { background: var(--bg-1); }
+html[data-theme="light"] .dk-mark img { filter: drop-shadow(0 8px 14px rgba(10, 60, 80, .2)); }

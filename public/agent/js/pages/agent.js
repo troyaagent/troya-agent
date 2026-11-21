@@ -5,7 +5,7 @@ import { coinSuggest } from "../coinsearch.js";
 import { wallet, onWallet, signIn, openConnect, signerFor, reader } from "../wallet.js";
 import { waitReceipt, errText } from "../chain.js";
 import { parseEther } from "ethers";
-import { mountScepter } from "./scepter.js";
+import { mountScepter, guestPreview, exampleRow } from "./scepter.js";
 
 const TABS = [["chat", "Chat"], ["scepter", "Scepter"], ["wallet", "Wallet"], ["autopilot", "Autopilot"], ["sentry", "Sentry Autopilot"], ["aegis", "Aegis"], ["arena", "Arena"], ["playbooks", "Playbooks"]];
 const autoPref = store("troya.autopilot", { on: false, playbooks: true, chat: false });
@@ -36,6 +36,17 @@ function needSignIn(box, text) {
     h("div", {}, h("b", {}, wallet.address ? "Sign in to continue" : "Connect a wallet to continue"), h("p", {}, text)),
     h("button", { class: "btn primary", type: "button", onclick: async () => { try { if (!wallet.address) await openConnect(); if (wallet.address) await signIn(); } catch (e) { toast(e.message, "error"); } } }, icon("key"), wallet.address ? "Sign in" : "Connect wallet"));
 }
+
+// Caps live in one place now, the Budget on Agent → Scepter (the strictest of the Agent Wallet caps, the user's limits and
+// the operator caps, server/policy.mjs getBudget). The Wallet and Autopilot tabs used to carry their own cap forms, and the
+// numbers on them disagreed with what applied; they keep a short link instead.
+function budgetLink(text) {
+  return h("div", { class: "panel ag-panel" }, h("h3", {}, "Caps"),
+    h("p", { class: "note", style: { margin: 0 } }, text),
+    h("div", { class: "row" }, h("a", { class: "btn", href: "#/agent/scepter" }, "Open Budget in Scepter")));
+}
+// an Example log line for a guest preview: text and a dot, no amount and no time
+const exampleLog = (text, kind) => h("li", {}, h("span", { class: `ag-dot s-${kind}` }), h("div", { class: "grow" }, text), h("span", { class: "faint" }, "Example"));
 
 // a tab repaints only when who is looking changes (wallet or sign-in). onWallet also fires on every network switch, and a
 // switch in the middle of a signature (Add ETH, Buy checks, Follow) must not rebuild the page under the user or wipe a field.
@@ -349,7 +360,7 @@ function mountWallet(box) {
 
   async function render() {
     stopBal?.();
-    if (!wallet.session) { clear(main, intro(), needSignIn(main, "The Agent Wallet belongs to the wallet you sign in with.")); return; }
+    if (!wallet.session) { clear(main, ...guestWallet()); return; }
     let aw;
     try { aw = await api.get("agent-wallet"); } catch (e) { clear(main, h("div", { class: "alert error" }, e.message)); return; }
     if (!aw.exists) {
@@ -358,7 +369,7 @@ function mountWallet(box) {
           h("div", { class: "alert warn" }, h("b", {}, "Custodial. "), "The operator stores this wallet's key, encrypted. Keep only what you are willing to lose in it. Your own wallet is never touched."),
           h("ul", { class: "ag-points" },
             h("li", {}, "Withdrawals go only to your address: ", h("span", { class: "mono" }, short(wallet.address, 6))),
-            h("li", {}, "Daily and per-trade caps, plus your limits, apply to every action"),
+            h("li", {}, "Every action stays inside your Budget (Agent → Scepter): the strictest of its caps, your limits and the operator's"),
             h("li", {}, "Export the key any time with a fresh signature"),
             h("li", {}, "On Hyperliquid it trades as an approved agent on your account: trade-only, it cannot withdraw there")),
           h("button", { class: "btn primary", type: "button", onclick: async () => { try { await api.post("agent-wallet/create"); toast("Agent Wallet ready", "ok"); render(); } catch (e) { toast(e.message, "error"); } } }, icon("plus"), "Create Agent Wallet")),
@@ -367,8 +378,6 @@ function mountWallet(box) {
     }
     const balBox = h("div", { class: "stats ag-bal" }, [["robinhood", "Robinhood Chain"], ["robinhood", "Tokens"], ["hyperliquid", "Hyperliquid"]].map(([lk, k]) => h("div", { class: "stat" }, h("div", { class: "k" }, chainLogo(lk, 14), k), h("div", { class: "v" }, h("span", { class: "sk", style: { display: "inline-block", width: "90px", height: "22px" } })))));
     const toggle = h("button", { class: `btn sm ${aw.enabled ? "" : "blue"}`, type: "button", onclick: async () => { try { await api.post("agent-wallet/settings", { enabled: !aw.enabled }); render(); } catch (e) { toast(e.message, "error"); } } }, aw.enabled ? icon("pause") : icon("play"), aw.enabled ? "Switch off" : "Switch on");
-    const per = h("input", { class: "input", type: "number", min: "0", step: "1", value: aw.caps.perTradeUsd });
-    const day = h("input", { class: "input", type: "number", min: "0", step: "1", value: aw.caps.dailyUsd });
     const wAmt = h("input", { class: "input", type: "number", min: "0", step: "any", placeholder: "0.0" });
     // Max: the Agent Wallet's ETH minus 0.0001 ETH it needs for the withdrawal's own gas, cut (never rounded up) to 6 decimals
     let lastEth = null;
@@ -421,11 +430,7 @@ function mountWallet(box) {
         h("p", { class: "note" }, "The Agent Wallet is separate from your own wallet: launches from X and Telegram, and every agent trade, are paid from it. Add ETH here in one signature, or send ETH on Robinhood Chain to the address above. Keep it small: this is pocket money for the agent."),
         h("div", { class: "alert warn" }, "Custodial: the operator holds this key encrypted. Withdrawals only go to ", h("span", { class: "mono" }, short(wallet.address, 6)), ".")),
       h("div", { class: "ag-grid2" },
-        h("div", { class: "panel ag-panel" }, h("h3", {}, "Caps"),
-          h("label", { class: "field" }, h("span", {}, "Per action (USD)"), per),
-          h("label", { class: "field" }, h("span", {}, "Per day (USD)"), day),
-          h("p", { class: "note" }, "Your general limits (Agent → Autopilot) still apply. The stricter value wins."),
-          h("button", { class: "btn", type: "button", onclick: async () => { try { await api.post("agent-wallet/settings", { perTradeUsd: Number(per.value), dailyUsd: Number(day.value) }); toast("Caps saved", "ok"); render(); } catch (e) { toast(e.message, "error"); } } }, "Save caps")),
+        budgetLink("This wallet's caps, your own limits and the operator's now sit in one Budget, which shows the number that really applies."),
         h("div", { class: "panel ag-panel" }, h("h3", {}, "Withdraw to my wallet"),
           h("div", { class: "row" }, h("label", { class: "field grow" }, h("span", {}, "Amount (ETH)"), h("div", { class: "row", style: { gap: "6px" } }, wAmt, wMax)), h("label", { class: "field" }, h("span", {}, "Network"), wChain)),
           h("p", { class: "note" }, "Destination is fixed: ", h("span", { class: "mono" }, short(wallet.address, 6))),
@@ -456,8 +461,38 @@ function mountWallet(box) {
     });
   }
 
+  const INTRO = "A small hot wallet the agent can use on its own, so swaps, perps and playbook actions run from chat without a wallet popup each time. Optional, capped, and yours to empty at any time.";
   function intro() {
-    return h("div", { class: "ag-intro" }, h("h2", {}, "Agent Wallet"), h("p", {}, "A small hot wallet the agent can use on its own, so swaps, perps and playbook actions run from chat without a wallet popup each time. Optional, capped, and yours to empty at any time."));
+    return h("div", { class: "ag-intro" }, h("h2", {}, "Agent Wallet"), h("p", {}, INTRO));
+  }
+  // a guest sees the page's real layout with Example content: dashes where a balance would be, sample receipts
+  function guestWallet() {
+    const example = [
+      h("div", { class: "panel ag-panel ag2-hero" },
+        h("div", { class: "ag-aw-h" },
+          h("div", {}, h("div", { class: "faint" }, "Agent Wallet"), h("div", { class: "ag-addr mono" }, "0x… its own address, made when you create it")),
+          h("div", { class: "row" }, h("span", { class: "badge-s" }, "Off"))),
+        h("div", { class: "stats ag-bal" }, ["Robinhood Chain", "Tokens", "Hyperliquid"].map((k) => h("div", { class: "stat" }, h("div", { class: "k" }, chainLogo(k === "Hyperliquid" ? "hyperliquid" : "robinhood", 14), k), h("div", { class: "v" }, "–")))),
+        h("p", { class: "note" }, "Add ETH from your wallet in one signature. Launches from X and Telegram, and every agent trade, are paid from here.")),
+      h("div", { class: "ag-grid2" },
+        budgetLink("Per-trade and daily caps for every agent, with the number that really applies."),
+        h("div", { class: "panel ag-panel" }, h("h3", {}, "Withdraw to my wallet"), h("p", { class: "note", style: { margin: 0 } }, "Destination is fixed: the wallet you sign in with. Nothing else can be typed in."))),
+      h("div", { class: "panel ag-panel" }, h("h3", {}, "Activity"),
+        h("ul", { class: "sc-list", style: { padding: 0 } },
+          exampleRow("Swap ETH → $EXAMPLE", "Sentry Autopilot · passed the Gate and your Budget", "executed"),
+          exampleRow("Buy $EXAMPLE not sent", "Playbook · above the daily cap · the reason is kept", "blocked"),
+          exampleRow("Withdraw ETH to your wallet", "You · to the one address it can go to", "executed", "done"))),
+    ];
+    return guestPreview({
+      title: "Agent Wallet", intro: INTRO,
+      sentence: "The Agent Wallet belongs to the wallet you sign in with. Signing costs nothing and sends nothing.",
+      bullets: [
+        "A small hot wallet the agent trades from, so swaps, perps and playbooks run without a wallet popup each time",
+        "Withdrawals go only to the wallet you sign in with, and you can export the key at any time",
+        "Every action passes Troya Gate and stays inside your Budget in Scepter",
+      ],
+      example,
+    });
   }
 
   async function approveOnHl(agentAddress) {
@@ -639,11 +674,41 @@ function startAuto() { if (!autoTimer) { autoTimer = setInterval(() => { if (!do
 function stopAuto() { clearInterval(autoTimer); autoTimer = null; }
 if (autoPref.get().on) startAuto();
 
+const AP_INTRO = "When a playbook fires, Autopilot runs it with your Agent Wallet instead of waiting for you. It works only while this browser tab is open on Troya, and only inside your Budget.";
+// a guest sees the switch, the two choices and a sample log, marked Example
+function guestAutopilot() {
+  const example = [
+    h("div", { class: "panel ag-panel" },
+      h("div", { class: "ag-auto-h" },
+        h("div", {}, h("b", {}, "Autopilot is off"), h("div", { class: "faint" }, "Checks for due proposals every 30 seconds while the tab is open.")),
+        h("span", { class: "ag-switch" }, h("i"))),
+      h("div", { class: "row", style: { flexWrap: "wrap", gap: "18px" } },
+        h("label", { class: "ag-check" }, h("input", { type: "checkbox", checked: true }), "Act on playbook triggers"),
+        h("label", { class: "ag-check" }, h("input", { type: "checkbox" }), "Also act on chat tickets"))),
+    budgetLink("Autopilot spends inside your Budget. Caps, leverage and markets are changed there, next to the switch that stops every agent."),
+    h("div", { class: "panel ag-panel" }, h("h3", {}, "This tab's Autopilot log"),
+      h("ul", { class: "ag-jl" },
+        exampleLog("Stop-loss ETH: executed through the Gate and your Budget", "executed"),
+        exampleLog("DCA into $EXAMPLE: held for your yes (trust ladder on Approve)", "built"),
+        exampleLog("Checked: nothing due.", "built"))),
+  ];
+  return guestPreview({
+    title: "Autopilot", intro: AP_INTRO,
+    sentence: "Autopilot belongs to the wallet you sign in with. Signing costs nothing and sends nothing.",
+    bullets: [
+      "Runs due playbook tickets with your Agent Wallet while this tab stays open on Troya",
+      "Your choice to let it act on chat tickets too, or only on playbooks",
+      "Inside your Budget and trust ladder in Scepter; Stop every agent halts it on the server",
+    ],
+    example,
+  });
+}
+
 function mountAutopilot(box) {
   const main = h("div", { class: "ag-col" });
   clear(box, main);
   async function render() {
-    if (!wallet.session) { clear(main, h("div", { class: "ag-intro" }, h("h2", {}, "Autopilot"), h("p", {}, "Let the Agent Wallet act on playbook triggers without asking each time, while this tab stays open.")), needSignIn(main, "Autopilot and limits belong to the wallet you sign in with.")); return; }
+    if (!wallet.session) { clear(main, ...guestAutopilot()); return; }
     let pol, aw;
     try { [pol, aw] = await Promise.all([api.get("policy"), api.get("agent-wallet")]); } catch (e) { clear(main, h("div", { class: "alert error" }, e.message)); return; }
     const pref = autoPref.get();
@@ -656,28 +721,17 @@ function mountAutopilot(box) {
     const drawLog = () => clear(logBox, autoLog.length ? autoLog.map((l) => h("li", {}, h("span", { class: `ag-dot s-${l.kind === "ok" ? "executed" : l.kind === "error" ? "failed" : "built"}` }), h("div", { class: "grow" }, l.text), h("span", { class: "faint num" }, `${ago(l.t)} ago`))) : h("li", { class: "faint" }, "Nothing yet."));
     drawLog();
     addEventListener("troya:autopilot", drawLog);
-    const f = (k, v, step = "1") => h("input", { class: "input", type: "number", min: "0", step, value: v ?? "" });
-    const per = f("perTradeUsd", pol.user.perTradeUsd ?? e.perTradeUsd), day = f("dailyUsd", pol.user.dailyUsd ?? e.dailyUsd), lev = f("maxLeverage", pol.user.maxLeverage ?? e.maxLeverage);
-    const perps = h("input", { class: "input", placeholder: "Empty = all markets, e.g. BTC, ETH, HYPE", value: (pol.user.allowedPerps || []).join(", ") });
     clear(main,
-      h("div", { class: "ag-intro" }, h("h2", {}, "Autopilot"), h("p", {}, "When a playbook fires, Autopilot runs it with your Agent Wallet instead of waiting for you. It works only while this browser tab is open on Troya, and only inside your caps.")),
+      h("div", { class: "ag-intro" }, h("h2", {}, "Autopilot"), h("p", {}, AP_INTRO)),
       e.killSwitch ? h("div", { class: "alert error" }, "The operator kill switch is on. Nothing executes until it is lifted.") : null,
+      // the one Stop switch lives in Scepter; this tab only says so, it does not carry a second Pause
+      !e.killSwitch && e.paused ? h("div", { class: "alert warn" }, "Every agent is stopped in Scepter, so Autopilot will not act. ", h("a", { class: "link", href: "#/agent/scepter" }, "Resume in Scepter")) : null,
       h("div", { class: "panel ag-panel" },
         h("div", { class: "ag-auto-h" },
           h("div", {}, h("b", {}, pref.on ? "Autopilot is on in this tab" : "Autopilot is off"), h("div", { class: "faint" }, aw.exists ? "Checks for due proposals every 30 seconds." : "Create an Agent Wallet first (Agent → Wallet).")),
           sw),
-        h("div", { class: "row", style: { flexWrap: "wrap", gap: "18px" } }, chk("playbooks", "Act on playbook triggers"), chk("chat", "Also act on chat tickets")),
-        h("hr", { class: "hr" }),
-        h("div", { class: "ag-auto-h" },
-          h("div", {}, h("b", {}, e.paused ? "Agent paused" : "Agent active"), h("div", { class: "faint" }, "Pause stops every Agent Wallet action at once, on the server, in every tab.")),
-          h("button", { class: `btn ${e.paused ? "blue" : "danger"}`, type: "button", onclick: async () => { try { await api.post("policy", { paused: !e.paused }); toast(e.paused ? "Resumed" : "Paused", "ok"); render(); } catch (er) { toast(er.message, "error"); } } }, e.paused ? icon("play") : icon("pause"), e.paused ? "Resume" : "Pause"))),
-      h("div", { class: "panel ag-panel" }, h("h3", {}, "Your limits"),
-        h("p", { class: "note", style: { marginTop: 0 } }, `Operator caps: $${pol.operator.perTradeUsd}/action · $${pol.operator.dailyUsd}/day · ${pol.operator.maxLeverage}x. You can only go stricter. Used today: ${usd(pol.usedTodayUsd)}.`),
-        h("div", { class: "ag-grid3" }, h("label", { class: "field" }, h("span", {}, "Per action (USD)"), per), h("label", { class: "field" }, h("span", {}, "Per day (USD)"), day), h("label", { class: "field" }, h("span", {}, "Max leverage"), lev)),
-        h("label", { class: "field", style: { marginTop: "10px" } }, h("span", {}, "Allowed perps"), perps),
-        h("div", { class: "row", style: { marginTop: "12px" } }, h("button", { class: "btn primary", type: "button", onclick: async () => {
-          try { await api.post("policy", { perTradeUsd: per.value, dailyUsd: day.value, maxLeverage: lev.value, allowedPerps: perps.value.split(/[\s,]+/).filter(Boolean) }); toast("Limits saved", "ok"); render(); } catch (er) { toast(er.message, "error"); }
-        } }, "Save limits"))),
+        h("div", { class: "row", style: { flexWrap: "wrap", gap: "18px" } }, chk("playbooks", "Act on playbook triggers"), chk("chat", "Also act on chat tickets"))),
+      budgetLink(pol.budget ? `Autopilot spends inside your Budget: ${usd(pol.budget.perTradeUsd)} a trade and ${usd(pol.budget.dailyUsd)} a day, ${usd(pol.budget.usedTodayUsd)} used today. Change caps, leverage and markets there, next to the switch that stops every agent.` : "Autopilot spends inside your Budget. Change caps, leverage and markets there, next to the switch that stops every agent."),
       h("div", { class: "panel ag-panel" }, h("h3", {}, "This tab's Autopilot log"), logBox));
     main._cleanup = () => removeEventListener("troya:autopilot", drawLog);
   }
@@ -1095,6 +1149,37 @@ function mountAegis(box) {
 /* =====================================================================================
    SENTRY AUTOPILOT (Phase 7): rules run on the server around the clock, practice or live
    ===================================================================================== */
+// a guest sees the rules as a template (the starting rules every wallet gets, server/autopilot.mjs DEFAULTS), and the
+// results and positions as empty Example rows: no invented PnL, no invented trades
+const SENTRY_TEMPLATE = [["Curve raised at least", "1 ETH"], ["Buy per coin", "0.01 ETH"], ["Take profit at", "2x"], ["Stop at", "30% down"], ["Open at once", "3"], ["Buys a day", "5"]];
+function guestSentry() {
+  const example = [
+    h("div", { class: "panel ag-panel" },
+      h("div", { class: "ag-auto-h" }, h("div", {}, h("b", {}, "Off"), h("div", { class: "faint" }, "Practice runs on play money at real prices. Live trades from your Agent Wallet.")),
+        h("div", { class: "row" }, h("div", { class: "seg" }, h("button", { type: "button", "aria-pressed": "true" }, "Practice"), h("button", { type: "button", "aria-pressed": "false" }, "Live")), h("span", { class: "ag-switch" }, h("i")))),
+      h("hr", { class: "hr" }), h("h3", {}, "Your rules (template: the starting rules)"),
+      h("div", { class: "rows" }, SENTRY_TEMPLATE.map(([k, v]) => h("div", {}, h("span", {}, k), h("span", {}, v)))),
+      h("p", { class: "note", style: { margin: 0 } }, "Same rules in Telegram: /autopilot set min 1 buy 0.01 tp 2 sl 30 max 3")),
+    h("div", { class: "panel ag-panel" }, h("h3", {}, "Results"),
+      h("div", { class: "rows" }, h("div", {}, h("span", {}, "Practice"), h("span", {}, "–")), h("div", {}, h("span", {}, "Live"), h("span", {}, "–")), h("div", {}, h("span", {}, "Open now"), h("span", {}, "–")))),
+    h("div", { class: "panel ag-panel" }, h("h3", {}, "Open"),
+      h("ul", { class: "sc-list", style: { padding: 0 } },
+        exampleRow("$EXAMPLE", "practice · bought after it passed the Gate and its curve raised what you set", "executed", "open"),
+        exampleRow("$EXAMPLE", "closed at your take-profit, your stop or after 7 days, with the reason", "built", "closed"))),
+  ];
+  return guestPreview({
+    title: "Sentry Autopilot",
+    intro: "Give the agent your rules and it buys Pons launches that pass Troya Gate, then sells at your take-profit or stop. It runs on the server around the clock.",
+    sentence: "Your rules belong to the wallet you sign in with. Signing costs nothing and sends nothing.",
+    bullets: [
+      "Buys Pons launches that pass Troya Gate and your rules, then sells at your take-profit or stop, or after 7 days",
+      "Runs on the server around the clock; practice mode uses play money at real prices",
+      "Live mode, once it is open, trades from your Agent Wallet inside your Budget and trust ladder",
+    ],
+    example,
+  });
+}
+
 function mountSentryAuto(box) {
   const main = h("div", { class: "ag-col" });
   clear(box, main);
@@ -1147,7 +1232,7 @@ function mountSentryAuto(box) {
   async function build() {
     const g = ++gen;
     d = null;
-    if (!wallet.session) { clear(main, h("div", { class: "ag-intro" }, h("h2", {}, "Sentry Autopilot"), h("p", {}, "Give the agent your rules and it buys Pons launches that pass Troya Gate, then sells at your take-profit or stop. It runs on the server around the clock.")), needSignIn(main, "Sign in to set your rules.")); return; }
+    if (!wallet.session) { clear(main, ...guestSentry()); return; }
     let x;
     try { x = await api.get("autopilot"); } catch (e) { if (g === gen) clear(main, h("div", { class: "alert error" }, e.message)); return; }
     if (g !== gen || !main.isConnected) return;

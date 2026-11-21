@@ -659,7 +659,8 @@ async function badgeText(arg) {
   if (!a) return { text: "The Troya Gate badge shows a coin's live Gate result on its own website, re-checked at most every 10 minutes. Send <code>/badge 0x…</code> with the coin's address, or open the page.", markup: page };
   const { badgeResult } = await import("./badge.mjs");
   const r = await badgeResult(a);
-  const word = { passed: "PASSED", caution: "CAUTION", failed: "FAILED", untested: "NOT TESTED YET" }[r.verdict] || "UNAVAILABLE";
+  // the shared Gate words (verdict.js LABEL), the same the badge image, Swap and the Gate page show
+  const word = { passed: "PASSED", caution: "PASSED WITH NOTES", failed: "BLOCKED", untested: "NOT TESTABLE YET" }[r.verdict] || "UNAVAILABLE";
   const sym = r.symbol ? `$${esc(r.symbol)}` : esc(a.slice(0, 10) + "…");
   const why = r.reason && r.verdict !== "passed" ? `\n${esc(String(r.reason).slice(0, 140))}` : "";
   return { text: `<b>Troya Gate badge · ${sym}: ${word}</b>${why}\nChecked ${new Date(r.checkedAt).toISOString().slice(11, 16)} UTC. A snapshot, never a "safe" stamp.\n\nPut it on your site with one line from the badge page:\n<code>${SITE}/api/badge/${a}.svg</code>`, markup: page };

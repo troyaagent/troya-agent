@@ -2,9 +2,13 @@
 //   GET /api/badge/:address.svg   SVG, re-checked at most every 10 minutes per coin
 //   GET /api/badge/:address       the same result as JSON (checks, verdict, time, the buy size checked, cached or not)
 //   GET /api/badge/:address?fresh=1   JSON from a new check now (the Gate page's "Run the Gate"), six a minute per IP
-// The verdict is Sentry's: route, simulation, test sell, transfer tax and fees decide; a thin young curve is reported,
-// not failed. The badge says what was checked and when. It never says "safe", and a coin can change after a check.
+// The verdict is the one Swap and the Gate page show (public/agent/js/verdict.js, imported here so the three can never
+// drift apart): "word" is passed | notes | blocked | untestable, "label" the words on screen, "answer" the plain
+// "Can I buy?" line. "verdict" keeps the older names (passed | caution | failed | untested | error) for the readers that
+// use them. A thin young curve is reported, not failed. The badge says what was checked and when. It never says "safe",
+// and a coin can change after a check.
 import { checkLaunch } from "./sentry.mjs";
+import { verdictOf } from "../public/agent/js/verdict.js";
 
 const TTL = 10 * 60_000;
 const memo = new Map();                       // address → { at, done, p }
@@ -31,13 +35,18 @@ function lookup(a, fresh = false) {
   // a fresh run joins a check already under way: nothing is fresher, and the chain is not asked twice
   if (hit && (!hit.done || (!fresh && Date.now() - hit.at < TTL))) return { p: hit.p, cached: hit.done };
   const e = { at: Date.now(), done: false, p: null };
-  e.p = checkLaunch(a).then((r) => ({
-    token: r.token, symbol: r.symbol, name: r.name, verdict: r.v === "nobuys" ? "untested" : r.v,
-    reason: r.why ? `${r.why.label}: ${r.why.detail}` : null,
-    checks: r.checks.map((c) => ({ key: c.key, label: c.label, status: c.status, detail: c.detail })),
-    curve: r.pons && !r.pons.graduated ? { raised: r.pons.raised, pair: r.pons.pair?.symbol || "ETH", progressPct: r.pons.progressPct } : null,
-    checkedAt: r.at,
-  }));
+  e.p = checkLaunch(a).then((r) => {
+    const checks = r.checks.map((c) => ({ key: c.key, label: c.label, status: c.status, detail: c.detail }));
+    const curve = r.pons && !r.pons.graduated ? { raised: r.pons.raised, pair: r.pons.pair?.symbol || "ETH", progressPct: r.pons.progressPct } : null;
+    // read by the shared rule, not Sentry's channel filter: a depth line that fails off a curve blocks Swap, so it blocks
+    // here too, and a curve with no buyers is "untestable" on every surface alike
+    const v = verdictOf({ checks, curve });
+    return {
+      token: r.token, symbol: r.symbol, name: r.name, verdict: v.legacy, word: v.word, label: v.label, answer: v.answer,
+      reason: v.why && v.word !== "passed" ? `${v.why.label}: ${v.why.detail}` : null,
+      checks, curve, checkedAt: r.at,
+    };
+  });
   // errors are never kept; a failed fresh run only drops its own entry
   e.p.then(() => { e.done = true; }, () => { if (memo.get(k) === e) memo.delete(k); });
   memo.delete(k);                             // re-inserted at the end, so the size cap below drops the oldest check first
@@ -49,11 +58,12 @@ const result = (a) => lookup(a).p;
 
 export const badgeResult = result;           // for the bot's /badge
 
+// the shared labels in capitals (verdict.js LABEL), so the badge on a dev's site reads as Swap and the Gate page do
 const LOOK = {
   passed: { word: "PASSED", fg: "#5fd38d", bg: "rgba(95,211,141,.14)" },
-  caution: { word: "CAUTION", fg: "#f2c26b", bg: "rgba(242,194,107,.14)" },
-  failed: { word: "FAILED", fg: "#f0606d", bg: "rgba(240,96,109,.14)" },
-  untested: { word: "NOT TESTED YET", fg: "#9fb0bf", bg: "rgba(159,176,191,.12)" },
+  caution: { word: "PASSED WITH NOTES", fg: "#f2c26b", bg: "rgba(242,194,107,.14)" },
+  failed: { word: "BLOCKED", fg: "#f0606d", bg: "rgba(240,96,109,.14)" },
+  untested: { word: "NOT TESTABLE YET", fg: "#9fb0bf", bg: "rgba(159,176,191,.12)" },
   error: { word: "UNAVAILABLE", fg: "#9fb0bf", bg: "rgba(159,176,191,.12)" },
 };
 // the mark inside the shield: a tick, a cross, a "!" or a dash
@@ -86,7 +96,8 @@ export async function register(r) {
     const wantFresh = !m[2] && query?.fresh === "1";
     const fresh = wantFresh && freshOk(ip || "?");
     let data = null, cached = false;
-    try { const l = lookup(m[1], fresh); cached = l.cached; data = await l.p; } catch (e) { data = { verdict: "error", error: String(e.message).slice(0, 200) }; }
+    // a check that could not run fails closed, as Swap does: the word is "blocked", the badge itself reads UNAVAILABLE
+    try { const l = lookup(m[1], fresh); cached = l.cached; data = await l.p; } catch (e) { const error = String(e.message).slice(0, 200); const v = verdictOf({ verdict: "error", error }); data = { verdict: "error", word: v.word, label: "Unavailable", answer: v.answer, error }; }
     if (m[2]) {
       res.writeHead(200, {
         "content-type": "image/svg+xml; charset=utf-8",

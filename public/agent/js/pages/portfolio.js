@@ -123,12 +123,21 @@ export async function mount(view, ctx) {
     tokPnlChip.className = `pf2-chip ${sum > 0 ? "up" : sum < 0 ? "down" : ""}`;
     tokPnlChip.textContent = `Token PnL ${sum > 0 ? "+" : ""}${usd(sum)}`;
   }
-  function paintPnl(box, p) {
+  function paintPnl(box, p, x) {
     if (!p || p.status !== "ok") { clear(box, p?.status === "none" && p.transfersIn ? h("span", { class: "muted" }, "Received by transfer") : null); return; }
     const up = (p.pnlEth || 0) >= 0, sign = up ? "+" : "−";
     clear(box,
       h("span", { class: up ? "up" : "down" }, `PnL ${sign}${num(Math.abs(p.pnlEth), 4)} ETH`, p.pnlUsd != null ? ` · ${sign}${usd(Math.abs(p.pnlUsd))}` : "", p.pnlPct != null ? ` · ${sign}${Math.abs(p.pnlPct).toFixed(1)}%` : ""),
-      h("small", { class: "muted" }, `${p.buys} buy${p.buys === 1 ? "" : "s"}${p.sells ? ` · ${p.sells} sell${p.sells === 1 ? "" : "s"}` : ""}${p.avgEntryUsd != null ? ` · avg entry $${tiny(p.avgEntryUsd)}` : ""}`));
+      h("small", { class: "muted" }, `${p.buys} buy${p.buys === 1 ? "" : "s"}${p.sells ? ` · ${p.sells} sell${p.sells === 1 ? "" : "s"}` : ""}${p.avgEntryUsd != null ? ` · avg entry $${tiny(p.avgEntryUsd)}` : ""}`),
+      // the card re-reads these numbers from the chain itself and prints the last trade's tx, so it cannot be typed in
+      p.pnlEth != null && x?.address ? h("button", { class: "link pf2-share", type: "button", style: { justifySelf: "start", fontSize: "12px" }, onclick: (e) => {
+        e.preventDefault(); e.stopPropagation();       // the row is a link to the coin page
+        sharePnl(() => import("../sharecard.js").then((s) => s.chainPnlSpec({ wallet: p.addr || wallet.address, token: x.address, symbol: x.symbol })), `Share PnL · $${x.symbol}`);
+      } }, "Share PnL") : null);
+  }
+  // the share dialog is loaded on first use (it brings the card drawer and the QR code)
+  function sharePnl(make, title) {
+    import("../sharecard.js").then((s) => s.openPnlShare({ title, make })).catch((e) => toast(e.message, "error"));
   }
   async function fillPnl(slots) {
     const addr = wallet.address;
@@ -140,7 +149,7 @@ export async function mount(view, ctx) {
         pnlCache.set(key, p ? { ...p, addr } : null);
       }
       if (!alive || addr !== wallet.address) return;
-      paintPnl(box, pnlCache.get(key));
+      paintPnl(box, pnlCache.get(key), x);
       paintPnlChip();
     }
   }
@@ -348,6 +357,14 @@ export async function mount(view, ctx) {
           { key: "size", label: "Size", render: (f) => num(f.size, 6) },
           { key: "pnl", label: "Closed PnL", render: (f) => h("span", { class: f.closedPnl > 0 ? "up" : f.closedPnl < 0 ? "down" : "muted" }, usd(f.closedPnl)) },
           { key: "fee", label: "Fee", render: (f) => usd(f.fee) },
+          // a fill that closed a position can be shared as a PnL card, read from these same public fills (all fills of
+          // that order, same hash and market, add up to the trade)
+          { key: "share", label: "", render: (f) => (f.closedPnl ? h("button", { class: "link", type: "button", style: { fontSize: "12px" }, onclick: (e) => {
+            e.stopPropagation();
+            const one = !f.hash || /^0x0*$/.test(f.hash);
+            const fills = one ? [f] : u.fills.filter((g) => g.hash === f.hash && g.coin === f.coin);
+            sharePnl(() => import("../sharecard.js").then((s) => s.hlPnlSpec({ wallet: u.address || wallet.address, fills })), `Share PnL · ${f.coin}`);
+          } }, "Share PnL") : "") },
         ] });
         t.setRows(u.fills);
         fBox.lastChild.replaceWith(h("div", { style: { padding: "0 6px 8px" } }, t));

@@ -129,7 +129,7 @@ export async function mount(view, ctx = {}) {
       P("Token names, tickers and social posts come from the internet. Troya treats them as untrusted text: shown as data, never followed as instructions."),
     ]],
     ["limits", "Limits and policy", [
-      P("Limits live outside any model, in a policy file the server re-reads on every action. The operator sets the ceiling; you can only go stricter, in Agent → Autopilot."),
+      P("Limits live outside any model, in a policy file the server re-reads on every action. The operator sets the ceiling; you can only go stricter, in the Budget on Agent → Scepter."),
       UL(["Per-action and per-day USD caps", "Maximum leverage", "Allowed perp markets (empty means all)", "Pause: stops every Agent Wallet action at once", "Operator kill switch: stops all execution for everyone"]),
       P("Swaps, perps and bridges: Troya adds no fee of its own. Network gas and venue fees (pool fees, token taxes, Hyperliquid fees) still apply and are shown before you sign. Launches: free, and Troya takes 0.1% of a coin's volume from creators without 1,000,000 $TROYA (see Launch a coin)."),
     ]],

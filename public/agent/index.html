@@ -23,12 +23,66 @@
 <link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
 <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/home/fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
+<script type="importmap">{"imports":{"ethers":"/vendor/ethers.min.js","three":"/vendor/three/three.module.min.js","lightweight-charts":"/vendor/lightweight-charts.mjs"}}</script>
+<!-- the shell's modules, fetched in parallel with desk.js instead of one round trip after it. Order matters: the import map
+     must come before any module load, and the boot script below sits before the stylesheets, because an inline script
+     after a stylesheet waits for that sheet to download before it runs. ethers is not here: a read-only visit never needs it. -->
+<link rel="modulepreload" href="/agent/desk/desk.js">
+<link rel="modulepreload" href="/agent/js/ui.js">
+<link rel="modulepreload" href="/agent/js/api.js">
+<link rel="modulepreload" href="/agent/js/wallet.js">
+<link rel="modulepreload" href="/agent/js/marketlib.js">
+<link rel="modulepreload" href="/agent/desk/chrome-icons.js">
+<link rel="modulepreload" href="/agent/desk/guide.js">
+<link rel="modulepreload" href="/agent/js/herald-ref.js">
+<script>
+/* Boot: the page in the address starts downloading now (its module, the modules it imports, its stylesheets), together with
+   the shell, rather than after desk.js has loaded and run. Keep this table in step with ROUTES, LOCAL and PAGE_CSS in
+   /agent/desk/desk.js. A missing or stale entry only costs the head start: desk.js still loads whatever the page needs. */
+(function () {
+  var D = "/agent/desk/", P = "/agent/js/pages/", J = "/agent/js/", E = "/vendor/ethers.min.js", CH = [J + "chain.js", E];
+  var R = {
+    "": [D + "desk-home.js", D + "gate.js", J + "verdict.js", J + "coinsearch.js", P + "start.js", "home", "start"],
+    market: [P + "market.js", "home", "market"],
+    token: [P + "token.js", P + "wartable.js", "home", "market"],
+    launch: [P + "launchpad.js", "home", "market"],
+    gate: [D + "gate.js", J + "verdict.js", J + "coinsearch.js", "home"],
+    swap: [P + "swap.js", J + "solana.js", J + "verdict.js", "swap"].concat(CH),
+    perps: [P + "perps.js", J + "hl.js", "perps"].concat(CH),
+    bridge: [P + "bridge.js", "bridge"].concat(CH),
+    agent: [P + "agent.js", P + "scepter.js", J + "coinsearch.js", "agent"].concat(CH),
+    portfolio: [P + "portfolio.js", P + "start.js", "portfolio", "start"],
+    docs: [P + "docs.js", "docs"], start: [P + "start.js", "start"], leaderboard: [P + "leaderboard.js", "start"],
+    herald: [P + "herald.js", J + "sharecard.js", J + "qr.js", "herald"], treasury: [P + "treasury.js", "home", "agent"],
+    spot: [D + "spot.js", J + "hl.js", E, "perps"], lighter: [D + "lighter.js", J + "lighter.js", E, "perps", "swap"],
+    stocks: [D + "stocks.js", "perps", "swap"].concat(CH), liquidity: [D + "liquidity.js", J + "coinsearch.js", "perps", "swap"].concat(CH),
+    flywheel: [D + "flywheel.js", "perps", "swap"].concat(CH), social: [D + "social.js", J + "coinsearch.js", "perps", "swap"].concat(CH),
+    registry: [D + "registry.js", J + "coinsearch.js", "perps"], rail: [D + "rail.js", "perps"],
+    "troya-launches": [D + "hippodrome.js", "perps"], create: [D + "create.js", "perps"], creator: [D + "creator.js", "perps"].concat(CH)
+  };
+  R.assistant = R.agent; R.hippodrome = R["troya-launches"];
+  var seg = location.hash.replace(/^#\/?/, "").split("?")[0].split("/");
+  var list = R[seg[0] || ""];
+  if (!list) return;
+  if (seg[0] === "launch" && (seg[1] === "create" || seg[1] === "x")) list = list.concat([P + (seg[1] === "x" ? "launch-x.js" : "launch-create.js"), "launch"]).concat(CH);
+  var seen = {};
+  for (var i = 0; i < list.length; i++) {
+    var x = list[i], l = document.createElement("link");
+    if (seen[x]) continue;
+    seen[x] = 1;
+    if (x.charAt(0) === "/") { l.rel = "modulepreload"; l.href = x; }
+    else { l.rel = "preload"; l.as = "style"; l.href = "/agent/css/" + x + ".css"; }
+    document.head.appendChild(l);
+  }
+})();
+</script>
 <script src="/agent/desk/theme.js"></script>
 <link rel="stylesheet" href="/css/base.css">
 <link rel="stylesheet" href="/css/app.css">
 <link rel="stylesheet" href="/agent/desk/desk.css">
 <link rel="stylesheet" href="/agent/desk/desk2.css">
-<script type="importmap">{"imports":{"ethers":"/vendor/ethers.min.js","three":"/vendor/three/three.module.min.js","lightweight-charts":"/vendor/lightweight-charts.mjs"}}</script>
 <script src="/config.js"></script>
 </head>
 <body class="app desk">

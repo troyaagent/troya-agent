@@ -61,7 +61,7 @@
 <li class="lg-step rv"><span class="lg-n">1</span><div><b>Connect your wallet</b><span>Open <a class="ulink" href="/agent#/launch/x">troya.codes/agent → Launch from X</a> and connect your wallet (the one that holds your $TROYA, if you have any).</span></div></li>
 <li class="lg-step rv"><span class="lg-n">2</span><div><b>Sign in</b><span>One signature, no transaction.</span></div></li>
 <li class="lg-step rv"><span class="lg-n">3</span><div><b>Link your X account</b><span>Only posts from the X account linked to your wallet can launch for it. Keep that account public.</span></div></li>
-<li class="lg-step rv"><span class="lg-n">4</span><div><b>Agent Wallet with a little ETH</b><span>Create your Agent Wallet, then press <b>Add ETH</b> on its page to move about 0.002 ETH from your wallet in one signature. It is a separate wallet from your own: it pays the Pons launch fee (0.0005 ETH today) and your initial buy; Troya pays the gas.</span></div></li>
+<li class="lg-step rv"><span class="lg-n">4</span><div><b>Agent Wallet with a little ETH</b><span>Create your Agent Wallet, then press <b>Add ETH</b> on Launch from X to move what it needs from your wallet in one signature: <span data-launch-need>0.0006</span> ETH for one launch (the Pons launch fee, <span data-launch-fee>0.0005</span> ETH today, plus 0.0001), or the fee, your initial buy and 0.0002. It is a separate wallet from your own; Troya pays the gas.</span></div></li>
 <li class="lg-step rv"><span class="lg-n">5</span><div><b>Optional: hold 1,000,000 $TROYA</b><span>No daily limit and the whole creator fee. Counted across your wallet and its Agent Wallet, checked when you post.</span></div></li>
 <li class="lg-step rv"><span class="lg-n">6</span><div><b>Switch Launch from X on</b><span>It stays off until you switch it on, so nobody can launch for you by surprise.</span></div></li>
     </ol>
@@ -73,9 +73,10 @@
     <h2 id="post-h" class="h2 words" data-words>Write it like this</h2>
     <div class="lg-grid">
       <div class="lg-card rv"><small>The short way</small><code>@Troyaagent launch Wooden Horse $HORSE</code><p>That alone is a clean launch: 0% creator tax and no initial buy. Add <code class="in">tax 2%</code> for a creator tax (<span style="white-space:nowrap">0–4%</span>, all yours) and <code class="in">buy 0.01</code> for an initial buy in ETH, only if you want them.</p><code>@Troyaagent launch Wooden Horse $HORSE tax 2% buy 0.01</code></div>
+      <div class="lg-card rv"><small>Website and Telegram (optional)</small><code>@Troyaagent launch Wooden Horse $HORSE site: woodenhorse.xyz tg: t.me/woodenhorse</code><p>Written into the coin with it, for good, so every site shows them. <code class="in">site:</code> takes any https address, <code class="in">tg:</code> a t.me link or your group's @name.</p></div>
       <div class="lg-card rv"><small>In your own words (English)</small><code>Hey @Troyaagent, please create a token called Moon Cat, ticker MCAT, 2% tax and buy 0.01 ETH</code><p>Troya reads it and checks that the name, the ticker and every number are really in your post. If it is unsure, it replies with the format instead of guessing.</p></div>
-      <div class="lg-card rv"><small>The image</small><p>Attach it to the same post. <b>Square (1:1) works best</b>: every site shows coin logos in a square or circle and crops other shapes to the middle. PNG or JPEG; GIFs turn into video on X and don't work. Without an image, the coin launches with none, for good.</p></div>
-      <div class="lg-card rv"><small>Name and ticker</small><p>Written into the coin forever. Any name and ticker you like: letters and numbers for the ticker (16 at most), up to 48 characters for the name.</p></div>
+      <div class="lg-card rv"><small>The image</small><p>Attach it to the same post, PNG or JPEG. Troya <b>crops it to its centre square</b> (up to 1024 px), since every site shows coin logos in a square or circle; the web form and Telegram do the same. GIFs turn into video on X and don't work. No image? Post without one: the coin then has none, for good.</p></div>
+      <div class="lg-card rv"><small>Name and ticker</small><p>Written into the coin forever. Any name and ticker you like: up to 48 characters for the name, letters and numbers for the ticker (16 at most), <b>saved exactly as you write it</b>: <code class="in">$horse</code> stays horse on X, in Telegram and on troya.codes.</p></div>
     </div>
   </section>
 
@@ -96,7 +97,7 @@
     <div class="eyebrow-line"><span>04 / Creator fees</span></div>
     <h2 id="money-h" class="h2 words" data-words>Where the money goes</h2>
     <div class="lg-grid">
-      <div class="lg-card rv"><small>Launching</small><p>The Pons launch fee (0.0005 ETH today) comes from your Agent Wallet. <b>Troya pays the gas.</b> Troya charges nothing to launch.</p></div>
+      <div class="lg-card rv"><small>Launching</small><p>The Pons launch fee (<span data-launch-fee>0.0005</span> ETH today) comes from your Agent Wallet, which needs <span data-launch-need>0.0006</span> ETH for a launch without a buy. <b>Troya pays the gas.</b> Troya charges nothing to launch.</p></div>
       <div class="lg-card rv"><small>Your creator fee</small><p><b>Holders of 1M $TROYA: 100% yours</b>, to your own wallet (the one linked to X): 70% of the 1% trading fee, so 0.7% of every trade's volume, plus your whole creator tax, before and after the coin graduates. <b>Everyone else: 0.6% of volume plus the whole tax</b>; Troya takes 0.1% of volume.</p></div>
       <div class="lg-card rv"><small>Claiming it</small><p>Creator fees wait on the coin's Pons curve and in the Pons fee escrow. Claim them in one click on Troya's <a class="ulink" href="/agent#/creator">Creator desk</a> with the wallet you launch with: it shows what is waiting for each coin and sends it to your wallet.</p></div>
       <div class="lg-card rv"><small>Your initial buy</small><p>The coins land in your Agent Wallet. See <a class="ulink" href="#sell">Selling your initial buy</a> below.</p></div>
@@ -124,7 +125,8 @@
       <li>Creator tax from 0% to 4%, fixed for good.</li>
       <li>Initial buy up to 1 ETH, and within your Agent Wallet caps (by default $100 a trade and $250 a day; you can change them).</li>
       <li>One coin per post: the same post is never launched twice.</li>
-      <li>A launch is final: name, ticker, image and tax can't be changed.</li>
+      <li>A launch is final: name, ticker, image, links and tax can't be changed.</li>
+      <li>Names and tickers are free: any name up to 48 characters, any ticker of letters and numbers up to 16, saved exactly as typed. The image is optional on X and in Telegram, and required on troya.codes.</li>
     </ul>
   </section>
 
@@ -161,8 +163,8 @@
 <details class="lg-faq rv"><summary>How do I sell my initial buy?</summary><p>Launch from X → Your launches → Sell 25%, 50% or 100%. Or paste the coin address in a private chat with the Troya bot, or ask Troya in the app. Every sale goes through the Gate; a coin with a thin curve can still be sold, you only get a warning.</p></details>
 <details class="lg-faq rv"><summary>How long does it take?</summary><p>Usually seconds: Troya sees the post as it is published, launches, makes your initial buy after the first 3 seconds, then replies.</p></details>
 <details class="lg-faq rv"><summary>Can I launch from another X account?</summary><p>No. Only posts from the X account linked to your wallet launch coins for it.</p></details>
-<details class="lg-faq rv"><summary>Do I need an image?</summary><p>No, but a coin launched without one has no image, for good. Square, PNG or JPEG.</p></details>
-<details class="lg-faq rv"><summary>Can I change the name, ticker, image or tax later?</summary><p>No. They are written into the coin when it is launched.</p></details>
+<details class="lg-faq rv"><summary>Do I need an image?</summary><p>Not on X or in Telegram (there, reply /skip), but a coin launched without one has no image, for good. On troya.codes an image is required. PNG or JPEG; any shape is cropped to its centre square.</p></details>
+<details class="lg-faq rv"><summary>Can I change the name, ticker, image, links or tax later?</summary><p>No. They are written into the coin when it is launched.</p></details>
 <details class="lg-faq rv"><summary>Is the Gate result a safety stamp?</summary><p>No. It is a live check of the coin at that moment, not a promise about what happens next.</p></details>
 <details class="lg-faq rv"><summary>I don't hold 1M $TROYA. Can I still launch?</summary><p>Yes: one launch from X a day and up to three a day in all, from X, Telegram or <a class="ulink" href="/agent#/launch/create">troya.codes</a> with your own wallet. You keep 0.6% of volume plus your whole creator tax, and Troya takes 0.1%. Hold 1M for no daily limit and the whole creator fee. You can also launch from Telegram: send /launch to the Troya bot.</p></details>
   </section>
@@ -170,17 +172,18 @@
   <section class="ip lg" id="telegram" aria-labelledby="telegram-h">
     <div class="eyebrow-line"><span>10 / In Telegram</span></div>
     <h2 id="telegram-h" class="h2 words" data-words>Launch from a private chat</h2>
-    <p class="lead rv">The same launch, rules and creator fees as on X, from a private chat with <a class="ulink" href="https://t.me/TrojanTroya_bot?start=launch" target="_blank" rel="noopener">@TrojanTroya_bot</a>. Your Agent Wallet pays the Pons launch fee and any initial buy; Troya pays the gas. Nothing is sent until you press Confirm.</p>
+    <p class="lead rv">The same launch, rules and creator fees as on X, from a private chat with <a class="ulink" href="https://t.me/TrojanTroya_bot?start=launch" target="_blank" rel="noopener">@TrojanTroya_bot</a>. Your Agent Wallet pays the Pons launch fee (<span data-launch-fee>0.0005</span> ETH today; it needs <span data-launch-need>0.0006</span> ETH for a launch without a buy) and any initial buy; Troya pays the gas. Nothing is sent until you press Confirm.</p>
     <ol class="lg-steps">
 <li class="lg-step rv"><span class="lg-n">1</span><div><b>Link the chat once</b><span>Open <a class="ulink" href="/agent#/start?for=launch-tg">troya.codes/agent → Get ready to launch in Telegram</a>: sign in, create your Agent Wallet with a little ETH, then press <b>Link Telegram</b> and tap Start in the chat it opens (later on it lives in Settings → Telegram alerts). Only a chat linked to your wallet can launch for it.</span></div></li>
 <li class="lg-step rv"><span class="lg-n">2</span><div><b>Send /launch</b><span>In the private chat with the bot, never in the group. It asks for the name (up to 48 characters), then the ticker (letters and numbers).</span></div></li>
-<li class="lg-step rv"><span class="lg-n">3</span><div><b>Send the image</b><span>As a photo, square works best; other shapes get cropped to the middle. Send /skip to launch without one: the coin then has none, for good.</span></div></li>
-<li class="lg-step rv"><span class="lg-n">4</span><div><b>Tap the creator tax and the initial buy</b><span>Creator tax from No tax to 4%, all yours. Initial buy from No buy to 0.05 ETH, made by your Agent Wallet after the first 3 seconds, through the Gate and within its caps.</span></div></li>
-<li class="lg-step rv"><span class="lg-n">5</span><div><b>Check the preview, then Confirm within 90 seconds</b><span>It shows the name, ticker, image, tax, buy, creator fee and what your Agent Wallet holds. Pressed later, while the setup is still open (30 minutes), Confirm does not launch: Troya re-checks prices and limits and sends a fresh preview with a new Confirm.</span></div></li>
-<li class="lg-step rv"><span class="lg-n">6</span><div><b>It's live</b><span>The bot replies with the address and the market cap, with buttons to trade it on Troya, share it on X and open your Creator desk. Send /launch again for the next one.</span></div></li>
+<li class="lg-step rv"><span class="lg-n">3</span><div><b>Send the image</b><span>As a photo; it is cropped to its centre square (up to 1024 px). No image? Reply /skip: the coin then has none, for good.</span></div></li>
+<li class="lg-step rv"><span class="lg-n">4</span><div><b>Website, Telegram group or a line about it</b><span>Optional. Send them in one message, in any order (for example <code class="in">woodenhorse.xyz t.me/woodenhorse The first horse inside the walls</code>), or /skip. They are written into the coin for good.</span></div></li>
+<li class="lg-step rv"><span class="lg-n">5</span><div><b>Tap the creator tax and the initial buy</b><span>Creator tax from No tax to 4%, all yours. Initial buy from No buy to 0.05 ETH, made by your Agent Wallet after the first 3 seconds, through the Gate and within its caps.</span></div></li>
+<li class="lg-step rv"><span class="lg-n">6</span><div><b>Check the preview, then Confirm within 90 seconds</b><span>It shows the name, ticker, image, links, tax, buy, creator fee and what your Agent Wallet holds. Pressed later, while the setup is still open (30 minutes), Confirm does not launch: Troya re-checks prices and limits and sends a fresh preview with a new Confirm.</span></div></li>
+<li class="lg-step rv"><span class="lg-n">7</span><div><b>It's live</b><span>The bot replies with the address and the market cap, with buttons to trade it on Troya, share it on X and open your Creator desk. Send /launch again for the next one.</span></div></li>
     </ol>
     <div class="lg-grid">
-      <div class="lg-card rv"><small>The quick way</small><code>/launch Wooden Horse $HORSE tax 2% buy 0.01</code><p>Send it as the caption of the coin's image and the bot goes straight to the preview. Leave out <code class="in">tax</code> and <code class="in">buy</code> for a clean launch; sent without an image, it asks for one (or <code class="in">/skip</code>).</p></div>
+      <div class="lg-card rv"><small>The quick way</small><code>/launch Wooden Horse $HORSE tax 2% buy 0.01</code><p>Send it as the caption of the coin's image and the bot goes straight to the preview. Leave out <code class="in">tax</code> and <code class="in">buy</code> for a clean launch, and add <code class="in">site:</code> and <code class="in">tg:</code> as on X for the links; sent without an image, it asks for one (No image? Reply <code class="in">/skip</code>).</p></div>
       <div class="lg-card rv"><small>Stop or skip</small><p><code class="in">/skip</code> launches without an image. <code class="in">/cancel</code> drops the launch being prepared, at any step. A setup with no answer for 30 minutes is dropped too, and nothing is spent until you press Confirm.</p></div>
     </div>
     <p class="lg-note rv">Same limits as every Troya launch: without 1M $TROYA, up to three launches a day across X, Telegram and troya.codes. Your initial buy sits in your Agent Wallet; <a class="ulink" href="#sell">sell it</a> from Launch from X → Your launches.</p>
@@ -201,5 +204,18 @@
 <script type="module" src="/home/pages.js"></script>
 <script src="/js/buybar.js" defer></script>
 <script src="/home/rain.js" defer></script>
+<script type="module">
+// the Pons launch fee, read live from /api/launch/menu into every [data-launch-fee], and what an Agent Wallet needs for one
+// launch (the fee + 0.0001, rounded up to a micro-ETH, as server/launch.mjs needEthFor) into [data-launch-need]: the
+// guide no longer says "0.0005 ETH today" from the day it was written. Without the menu the written figures stay.
+const eth = (x) => Number(x).toFixed(6).replace(/\.?0+$/, "");
+fetch("/api/launch/menu").then((r) => (r.ok ? r.json() : null)).then((m) => {
+  const fee = Number(m?.launchFeeEth);
+  if (!(fee > 0)) return;
+  const need = Math.ceil((fee + 0.0001) * 1e6 - 1e-6) / 1e6;
+  for (const el of document.querySelectorAll("[data-launch-fee]")) el.textContent = eth(fee);
+  for (const el of document.querySelectorAll("[data-launch-need]")) el.textContent = eth(need);
+}).catch(() => {});
+</script>
 </body>
 </html>

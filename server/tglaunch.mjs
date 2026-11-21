@@ -1,7 +1,8 @@
 // V6 F27 · Launch in Telegram: launch a coin from a private chat with the Troya bot, from the Agent Wallet.
-//   /launch                       step by step: name → ticker → image → creator tax → initial buy → preview → Confirm
-//   photo + caption "/launch Wooden Horse $HORSE tax 2% buy 0.01"   the quick way, straight to the preview
-//   /skip                         launch without an image (at the image step)
+//   /launch                       step by step: name → ticker → image → links → creator tax → initial buy → preview → Confirm
+//   photo + caption "/launch Wooden Horse $HORSE tax 2% buy 0.01 site: horse.xyz tg: t.me/horse"   the quick way, straight
+//                                 to the preview (the links are optional there too)
+//   /skip                         launch without an image (at the image step), or without links (at the links step)
 //   /cancel                       drop the launch being prepared
 //   Confirm lasts 90 seconds; a later Confirm re-checks the plan and the balance and sends a fresh preview (20 Nov)
 // Open to everyone (holders of 1M $TROYA keep the whole creator fee; others keep 0.6% of volume, Troya 0.1%), with the
@@ -14,7 +15,7 @@ const SESSION_TTL = 30 * 60_000, CONFIRM_TTL = 90_000;
 const LATE_WINDOW = 30 * 60_000;   // after a launch setup times out, the next answer is told so instead of going elsewhere
 const TAXES = [0, 100, 200, 300, 400];
 const BUYS = [0, 0.001, 0.005, 0.01, 0.05];
-const sessions = new Map();          // chat → { step, owner, name, symbol, logo, taxBps, buyEth, exp, card }
+const sessions = new Map();          // chat → { step, owner, name, symbol, logo, website, telegram, twitter, description, taxBps, buyEth, exp, card }
 /** a launch is being set up in this chat (its answers belong to the launch, not to the dev inbox) */
 export const inSession = (chat) => { const s = sessions.get(chat); return !!(s && s.exp + LATE_WINDOW > Date.now()); };
 const pend = new Map();              // id → { chat, act, ...; exp }
@@ -63,10 +64,13 @@ function imageOf(m) {
   if (m.document && /^image\/(png|jpeg|webp)$/.test(m.document.mime_type || "")) return m.document.file_size > 1_000_000 ? null : m.document.file_id;
   return null;
 }
+// the picture is centre-cropped to a square of at most 1024 px first (logosquare.mjs), as on the web form and on X: a
+// 2:1 photo was stored as it came, and every board then cut its own middle out of it
 async function saveImage(tg, fileId) {
-  const { saveLaunchLogo } = await import("./robinhood.mjs");
+  const [{ saveLaunchLogo }, { squareLogo }] = await Promise.all([import("./robinhood.mjs"), import("./logosquare.mjs")]);
   const { buf, type } = await fetchImage(tg, fileId);
-  return (await saveLaunchLogo(buf, type)).url;
+  const sq = await squareLogo(buf, type);
+  return (await saveLaunchLogo(sq.buf, sq.type)).url;
 }
 
 /* ---------- messages ---------- */
@@ -77,40 +81,54 @@ const LINK_FIRST = `<b>Link this chat to your wallet first.</b>
 3. Tap Start in the chat it opens
 
 Then send /launch again.`;
-const WALLET_FIRST = `<b>You need an Agent Wallet to launch here.</b>
+// the Pons launch fee is read from the factory (launchMenu), never written into a message: "0.0005 ETH today" was typed in
+// five places and would go stale the day Pons changes it
+const launchFee = async () => { const { launchMenu } = await import("./robinhood.mjs"); return launchMenu().then((m) => (Number(m.launchFeeEth) > 0 ? Number(m.launchFeeEth) : null)).catch(() => null); };
+const ethTxt = (x) => Number(x).toFixed(6).replace(/\.?0+$/, "");
+const feeTxt = (fee) => (fee != null ? `the Pons launch fee (${ethTxt(fee)} ETH today)` : "the Pons launch fee");
+const walletFirst = (fee) => `<b>You need an Agent Wallet to launch here.</b>
 
-Your Agent Wallet pays the Pons launch fee (0.0005 ETH today) and your initial buy; Troya pays the gas. Create it in the app (Agent → Wallet) and send it a little ETH on Robinhood Chain.
+Your Agent Wallet pays ${feeTxt(fee)} and your initial buy; Troya pays the gas. Create it in the app (Agent → Wallet) and send it a little ETH on Robinhood Chain.
 
 Then send /launch again.`;
+// the image is optional in Telegram (it is required only on the web form): said the same way at every image prompt
+const IMAGE_ASK = "Now send the coin's image as a photo (square works best; other shapes are cropped to the centre square). No image? Reply /skip.";
+const LINKS_ASK = "Website, Telegram group or one-line description? Send them in one message (for example: horse.xyz t.me/horsegroup The first horse inside the walls), or /skip. They are written into the coin for good.";
 const appBtn = (path) => ({ inline_keyboard: [[{ text: /#\/start/.test(path) ? "Finish setup" : "Open Troya", url: SITE + path }]] });
 // straight to the guide's Telegram section, not the top of a page about posting on X
 const guideBtn = () => ({ inline_keyboard: [[{ text: "Read the guide", url: `${SITE}/launch-on-x#telegram` }]] });
 
 async function agentBalance(address) {
   const { rpc, launchMenu } = await import("./robinhood.mjs");
-  const [bal, menu] = await Promise.all([rpc("robinhood", "eth_getBalance", [address, "latest"]), launchMenu(true).catch(() => ({ launchFeeEth: 0.0005 }))]);
-  return { eth: Number(BigInt(bal)) / 1e18, fee: Number(menu.launchFeeEth) || 0.0005 };
+  const [bal, menu] = await Promise.all([rpc("robinhood", "eth_getBalance", [address, "latest"]), launchMenu(true).catch(() => null)]);
+  const fee = Number(menu?.launchFeeEth);
+  return { eth: Number(BigInt(bal)) / 1e18, fee: fee > 0 ? fee : null };
 }
+const linkLines = (s) => [s.website ? `Website: ${esc(s.website)}` : null, s.telegram ? `Telegram: ${esc(s.telegram)}` : null, s.twitter ? `X: ${esc(s.twitter)}` : null,
+  s.description ? `Description: ${esc(s.description.length > 160 ? s.description.slice(0, 157) + "…" : s.description)}` : null].filter(Boolean);
 // recheck: the card that replaces a Confirm pressed after its 90 seconds, so it says the numbers are fresh
 async function preview(L, s, { recheck = false } = {}) {
   const p = await L.plan({ owner: s.owner, creatorTaxBps: s.taxBps, name: s.name, symbol: s.symbol, source: "tg" });
   const b = await agentBalance(s.wallet).catch(() => null);
-  const need = b ? b.fee + s.buyEth + 0.0002 : 0;
+  // the same figure as X, the setup page and the onboarding gaps: the fee + 0.0001, or the fee + the buy + 0.0002
+  // (the factory unread: the balance is still checked against the last known fee, never skipped)
+  const need = b ? L.needEthFor(b.fee ?? 0.0005, s.buyEth) : 0;
   if (b && b.eth < need) {
-    const e = new Error(`your Agent Wallet holds ${b.eth.toFixed(5)} ETH; the launch fee${s.buyEth ? ` plus the ${s.buyEth} ETH buy` : ""} needs about ${need.toFixed(5)} ETH. The Agent Wallet is separate from your own wallet: press Add ETH on its page (Agent → Wallet), then send /launch again`);
+    const e = new Error(`your Agent Wallet holds ${ethTxt(b.eth)} ETH; the launch fee${s.buyEth ? ` plus the ${s.buyEth} ETH buy` : ""} needs ${ethTxt(need)} ETH. The Agent Wallet is separate from your own wallet: press Add ETH on its page (Agent → Wallet), then send /launch again`);
     e.fund = true; throw e;
   }
   const fee = p.split ? `you keep 0.6% of volume${s.taxBps ? ` plus your ${s.taxBps / 100}% tax` : ""}, Troya takes 0.1%` : `100% yours, to ${short(p.owner)}`;
   const text = `<b>Launch preview</b>
 
 <b>${esc(s.name)}</b>  $${esc(s.symbol)}
-Image: ${s.logo ? "attached" : "none (the coin will have no image, for good)"}
+Image: ${s.logo ? "attached, cropped to a centre square" : "none (the coin will have no image, for good)"}
+${linkLines(s).length ? linkLines(s).join("\n") : "Links: none"}
 Creator tax: ${s.taxBps ? `${s.taxBps / 100}%, all yours` : "none"}
 Initial buy: ${s.buyEth ? `${s.buyEth} ETH from your Agent Wallet` : "none"}
 Creator fee: ${fee}
-Cost: the Pons launch fee (${b ? b.fee : 0.0005} ETH) from your Agent Wallet${b ? `, which holds ${b.eth.toFixed(5)} ETH` : ""}; Troya pays the gas
+Cost: ${feeTxt(b?.fee ?? null)} from your Agent Wallet${b ? `, which holds ${ethTxt(b.eth)} ETH` : ""}; Troya pays the gas
 
-Name, ticker, image and tax are final once launched. ${recheck ? "Prices and limits re-checked, confirm within 90 seconds." : "Confirm within 90 seconds."}`;
+Name, ticker, image, links and tax are final once launched. ${recheck ? "Prices and limits re-checked, confirm within 90 seconds." : "Confirm within 90 seconds."}`;
   // the Confirm is tied to this very setup (ses), so a card from an earlier /launch can never launch a newer one
   return { text, plan: p, markup: { inline_keyboard: [[{ text: "Confirm launch", callback_data: issue({ chat: s.chat, act: "confirm", ses: s }, CONFIRM_TTL) }, { text: "Cancel", callback_data: issue({ chat: s.chat, act: "cancel" }, SESSION_TTL) }]] } };
 }
@@ -157,20 +175,21 @@ export async function handleMessage(m, tg, st) {
     // every step still missing, at once, with the one page that does them all (18 Nov)
     {
       const ob = await import("./onboard.mjs"); ob.init(store);
-      const gaps = await ob.gapsFor(owner, "launch-tg", { needEth: 0.0006 }).catch(() => []);
+      const fee = await launchFee();
+      const gaps = await ob.gapsFor(owner, "launch-tg", { needEth: L.needEthFor(fee ?? 0.0005) }).catch(() => []);
       if (gaps.length) {
-        await say(`<b>Almost ready to launch here.</b> ${gaps.length} step${gaps.length > 1 ? "s" : ""} left, all on one page:\n\n${gaps.map((g, i) => `${i + 1}. ${esc(g.charAt(0).toUpperCase() + g.slice(1))}`).join("\n")}\n\nThe Agent Wallet pays the Pons launch fee (0.0005 ETH today) and any initial buy; Troya pays the gas. Then send /launch again.`, appBtn("/agent#/start?for=launch-tg"));
+        await say(`<b>Almost ready to launch here.</b> ${gaps.length} step${gaps.length > 1 ? "s" : ""} left, all on one page:\n\n${gaps.map((g, i) => `${i + 1}. ${esc(g.charAt(0).toUpperCase() + g.slice(1))}`).join("\n")}\n\nThe Agent Wallet pays ${feeTxt(fee)} and any initial buy; Troya pays the gas. Then send /launch again.`, appBtn("/agent#/start?for=launch-tg"));
         return true;
       }
     }
     const aw = await import("./agentwallet.mjs").then((x) => x.getAgentWallet(owner));
-    if (!aw?.exists) { await say(WALLET_FIRST, appBtn("/agent#/start?for=launch-tg")); return true; }
+    if (!aw?.exists) { await say(walletFirst(await launchFee()), appBtn("/agent#/start?for=launch-tg")); return true; }
     if (busy.has(chat)) { await say("A launch from this chat is still going through. Wait for its message, then send /launch again."); return true; }
     // the daily limit before any typing (the name check comes once there is a name)
     try { await L.plan({ owner, creatorTaxBps: 0, source: "tg" }); }
     catch (e) { await say(`<b>Not launched:</b> ${why(e)}.`); return true; }
     const args = text.replace(/^\/(?:launch(?:@\w+)?|start\s+launch)\s*/i, "").trim();
-    const fresh = { chat, owner, wallet: aw.address, step: "name", name: "", symbol: "", logo: "", taxBps: 0, buyEth: 0, exp: Date.now() + SESSION_TTL };
+    const fresh = { chat, owner, wallet: aw.address, step: "name", name: "", symbol: "", logo: "", website: "", telegram: "", twitter: "", description: "", taxBps: 0, buyEth: 0, exp: Date.now() + SESSION_TTL };
     if (args) {
       // the quick way: everything in one message (a photo caption or plain text)
       const ask = await L.readLaunch(`launch ${args}`);
@@ -178,7 +197,7 @@ export async function handleMessage(m, tg, st) {
         await say("Troya couldn't read the name and ticker for sure. Send it like this, as the caption of the coin's image:\n<code>/launch Wooden Horse $HORSE tax 2% buy 0.01</code>\n\nOr send /launch alone and answer step by step.", guideBtn());
         return true;
       }
-      Object.assign(fresh, { name: ask.name, symbol: ask.symbol, taxBps: ask.taxBps || 0, buyEth: ask.buyEth || 0, step: "preview", quick: true });
+      Object.assign(fresh, { name: ask.name, symbol: ask.symbol, taxBps: ask.taxBps || 0, buyEth: ask.buyEth || 0, website: ask.website || "", telegram: ask.telegram || "", step: "preview", quick: true });
       const np = L.nameProblem(fresh.name, fresh.symbol, { team: L.isAdminWallet(owner) });
       if (np) { await say(`<b>Not launched:</b> ${esc(np)}`); return true; }
       if (fresh.taxBps > L.MAX_TAX_BPS) { await say("<b>Not launched:</b> the creator tax can be 4% at most."); return true; }
@@ -186,7 +205,7 @@ export async function handleMessage(m, tg, st) {
       const fid = imageOf(m);
       if (fid) { try { fresh.logo = await saveImage(tg, fid); } catch { await say("Troya couldn't read that image. Send it as a photo (PNG or JPEG) rather than as a file."); return true; } }
       sessions.set(chat, fresh);
-      if (!fresh.logo) { fresh.step = "image"; await say(`<b>${esc(fresh.name)}</b> $${esc(fresh.symbol)}. Now send the coin's image (square works best), or /skip to launch without one.`); return true; }
+      if (!fresh.logo) { fresh.step = "image"; await say(`<b>${esc(fresh.name)}</b> $${esc(fresh.symbol)}. ${IMAGE_ASK}`); return true; }
       return showPreview(L, tg, fresh, say);
     }
     sessions.set(chat, fresh);
@@ -212,21 +231,35 @@ export async function handleMessage(m, tg, st) {
     const np = L.nameProblem(s.name, sym, { team: L.isAdminWallet(s.owner) });
     if (np) { await say(`${esc(np.replace(/\s*Pick another[^.]*\.?$/i, ""))}\n\nSend another ticker, or /cancel.`); return true; }
     s.symbol = sym; s.step = "image";
-    await say(`$${esc(sym)}. Now send the coin's image as a photo (square works best; other shapes get cropped to the middle), or /skip to launch without one.`);
+    await say(`$${esc(sym)}. ${IMAGE_ASK}`);
     return true;
   }
   if (s.step === "image") {
     if (/^\/skip\b/i.test(text)) {
       s.logo = "";
       if (s.quick) return showPreview(L, tg, s, say);
-      s.step = "tax"; await say("No image. Creator tax? It's yours on every buy and sell, fixed for good.", taxKb(chat)); return true;
+      s.step = "links"; await say(`No image. ${LINKS_ASK}`); return true;
     }
     const fid = imageOf(m);
-    if (!fid) { await say(m.document ? "Send the image as a photo rather than as a file, or /skip." : "Send the image as a photo, or /skip."); return true; }
-    try { s.logo = await saveImage(tg, fid); } catch { await say("Troya couldn't read that image. Send it as a photo (PNG or JPEG) rather than as a file, or /skip."); return true; }
+    if (!fid) { await say(m.document ? "Send the image as a photo rather than as a file. No image? Reply /skip." : "Send the image as a photo. No image? Reply /skip."); return true; }
+    try { s.logo = await saveImage(tg, fid); } catch { await say("Troya couldn't read that image. Send it as a photo (PNG or JPEG) rather than as a file. No image? Reply /skip."); return true; }
     if (s.quick) return showPreview(L, tg, s, say);
+    s.step = "links";
+    await say(`Image saved, cropped to a centre square. ${LINKS_ASK}`);
+    return true;
+  }
+  // optional: the coin's website, Telegram group and a line about it, written on chain with it (as on the web form)
+  if (s.step === "links") {
+    // "no" or "skip" typed without the slash is a skip too, never a one-word description written on chain
+    if (!/^\/skip\b/i.test(text) && !/^(?:no|none|nope|skip|nothing|n\/a|-)[.!]?$/i.test(text)) {
+      if (!text) { await say(`Send them as text. ${LINKS_ASK}`); return true; }
+      const got = L.linksAnswer(text);
+      Object.assign(s, got);
+      if (!got.website && !got.telegram && !got.twitter && !got.description) { await say(`Troya couldn't read that. ${LINKS_ASK}`); return true; }
+    }
     s.step = "tax";
-    await say("Image saved. Creator tax? It's yours on every buy and sell, fixed for good.", taxKb(chat));
+    const shown = linkLines(s);
+    await say(`${shown.length ? `${shown.join("\n")}\n\n` : "No links. "}Creator tax? It's yours on every buy and sell, fixed for good.`, taxKb(chat));
     return true;
   }
   // tax, buy and preview are answered with buttons
@@ -300,7 +333,8 @@ export async function handleCallback(cq, tg) {
     // the launch runs in the background so the bot keeps answering everyone else meanwhile
     (async () => {
       try {
-        const out = await L.launchWithAgentWallet({ owner: s.owner, name: s.name, symbol: s.symbol, logo: s.logo, creatorTaxBps: s.taxBps, source: "tg", ref: `tg:${chat}:${mid}`, buyEth: s.buyEth });
+        const out = await L.launchWithAgentWallet({ owner: s.owner, name: s.name, symbol: s.symbol, logo: s.logo, creatorTaxBps: s.taxBps, source: "tg", ref: `tg:${chat}:${mid}`, buyEth: s.buyEth,
+          description: s.description || "", website: s.website || "", telegram: s.telegram || "", twitter: s.twitter || "" });
         if (!out.ok) {
           if (out.why === "pending") {
             await edit(`<b>$${esc(s.symbol)} is still confirming on Robinhood Chain.</b> Once it lands it shows on Troya Launches and in your Creator desk.`, { inline_keyboard: [[{ text: "Troya Launches", url: `${SITE}/agent#/troya-launches` }]] });

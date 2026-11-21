@@ -190,10 +190,31 @@ export async function hlAsset(coin, { fresh = true } = {}) {
   if (!m) throw new HlError(404, `Hyperliquid has no perp market called ${coin}.`);
   return m;
 }
-export async function hlUserState(address) {
+// display reads only (the chart, the book, the Perps header): a bare ticker with no main perp of that name is the
+// trade.xyz market (ANT → xyz:ANT, NVDA → xyz:NVDA), as the Perps page resolves a link. Orders keep hlAsset's strict name.
+async function hlAssetAny(coin) {
+  try { return await hlAsset(coin, { fresh: false }); }
+  catch (e) {
+    if (e.status !== 404 || String(coin).includes(":")) throw e;
+    try { return await hlAsset(`${XYZ}:${coin}`, { fresh: false }); } catch (e2) { throw e2.status === 404 ? e : e2; }   // the 404 names what was asked for
+  }
+}
+// a perp's exact Hyperliquid name from the market lists already in memory, without waiting on a read: "BTC" → "BTC",
+// "KPEPE" → "kPEPE", "XYZ:ANT" or a bare "ANT" → "xyz:ANT". null when the lists are cold or hold no such perp.
+function peekCoin(coin) {
+  const want = String(coin || "").toUpperCase();
+  const uni = (dex) => cache.get(`ctxs:${dex}`)?.v?.meta?.universe || null;
+  const main = uni("main")?.find((u) => String(u.name).toUpperCase() === want);
+  if (main) return main.name;
+  const w = want.includes(":") ? want : `XYZ:${want}`;
+  return uni(XYZ)?.find((u) => String(u.name).toUpperCase() === w && !u.isDelisted)?.name || null;
+}
+// fresh: a read at most 1 s old (the Perps page right after a funding or a move, when the 2.5 s copy can still show the
+// old balance); otherwise any copy younger than 2.5 s answers
+export async function hlUserState(address, { fresh = false } = {}) {
   if (!isAddress(address)) throw new HlError(400, "That is not a valid address.");
   const user = getAddress(address).toLowerCase();
-  return cached(`user:${user}`, 2500, async () => {
+  return cached(`user:${user}`, fresh ? 1000 : 2500, async () => {
     const [ch, orders, fills, spot, chx, ordersx, mode] = await Promise.all([
       hlInfo({ type: "clearinghouseState", user }),
       hlInfo({ type: "frontendOpenOrders", user }).catch(() => []),
@@ -395,21 +416,30 @@ export async function register(r) {
   }
   // displayName on every market (Anthropic for xyz:ANT, S&P 500 for xyz:SP500, Bitcoin for BTC)
   r.get("/api/hl/meta", async ({ query }) => {
-    const main = await hlMeta();
-    if (query.all !== "1") return main;
-    const x = await hlXyzMeta().catch(() => ({ markets: [] }));
+    if (query.all !== "1") return hlMeta();
+    // both lists at once: one after the other added the trade.xyz read to every cold answer
+    const [main, x] = await Promise.all([hlMeta(), hlXyzMeta().catch(() => ({ markets: [] }))]);
     return { markets: [...main.markets, ...x.markets], time: main.time };
+  });
+
+  // one market's live numbers (about 1 KB), for the Perps header's 5 s refresh: it used to pull the whole list (about
+  // 150 KB) each time. A bare ticker resolves like the page's link (ANT → xyz:ANT when no main perp has that name).
+  r.get("/api/hl/ctx", async ({ query }) => {
+    const coin = String(query.coin || "BTC").trim().slice(0, 40);
+    const m = await hlAssetAny(coin);
+    return { market: m, time: Date.now() };
   });
 
   r.get("/api/hl/mids", async () => cached("mids", 2000, () => hlInfo({ type: "allMids" })));
 
   r.get("/api/hl/candles", async ({ query }) => {
-    const coin = String(query.coin || "BTC").toUpperCase();
+    const coin = String(query.coin || "BTC").trim().slice(0, 40);
     const interval = INTERVALS[query.interval] ? query.interval : "1h";
     const end = Date.now();
     const from = Number(query.from) > 0 ? Number(query.from) : end - INTERVALS[interval] * 400;
     const start = Math.max(from, end - INTERVALS[interval] * 2000);
-    const canon = (await hlAsset(coin, { fresh: false })).coin;     // a name lookup: an older market list is fine
+    // the name from the lists in memory first (no wait), a lookup only when they are cold; an older list is fine here
+    const canon = peekCoin(coin) || (await hlAssetAny(coin.toUpperCase())).coin;
     const bucket = Math.floor(end / Math.min(INTERVALS[interval], 60e3));
     const rows = await cached(`candles:${canon}:${interval}:${Math.floor(start / INTERVALS[interval])}:${bucket}`, 4000,
       () => hlInfo({ type: "candleSnapshot", req: { coin: canon, interval, startTime: start, endTime: end } }), { swr: 3 });
@@ -419,15 +449,25 @@ export async function register(r) {
   r.get("/api/hl/book", async ({ query }) => {
     const coin = String(query.coin || "BTC").toUpperCase();
     // spot books (F12) are "@<index>" or "PURR/USDC"; anything else must be a known perp
-    const canon = /^@\d{1,5}$|^[A-Z0-9]{1,12}\/USDC$/.test(coin) ? coin : (await hlAsset(coin, { fresh: false })).coin;
+    const canon = /^@\d{1,5}$|^[A-Z0-9]{1,12}\/USDC$/.test(coin) ? coin : peekCoin(coin) || (await hlAssetAny(coin)).coin;
     const b = await cached(`book:${canon}`, 1000, () => hlInfo({ type: "l2Book", coin: canon }));
     const side = (lv) => (lv || []).slice(0, 20).map((x) => ({ px: +x.px, sz: +x.sz, n: x.n }));
     return { coin: canon, time: b?.time || Date.now(), bids: side(b?.levels?.[0]), asks: side(b?.levels?.[1]) };
   });
 
-  r.get("/api/hl/user", async ({ query }) => {
+  // ?fresh=1: a read at most 1 s old, for the Perps page while it waits on a funding or a move. Each IP gets 40 fresh
+  // reads a minute; past that the ordinary 2.5 s copy answers (never an error), so a loop cannot drain Hyperliquid's limit.
+  const freshUse = new Map();   // ip → { t, n }
+  const freshOk = (ip) => {
+    const now = Date.now();
+    let b = freshUse.get(ip);
+    if (!b || now - b.t > 60_000) { b = { t: now, n: 0 }; freshUse.set(ip, b); }
+    if (freshUse.size > 5000) for (const [k, v] of freshUse) if (now - v.t > 60_000) freshUse.delete(k);
+    return ++b.n <= 40;
+  };
+  r.get("/api/hl/user", async ({ query, ip }) => {
     if (!query.address) throw new HlError(400, "Pass ?address=0x…");
-    return hlUserState(query.address);
+    return hlUserState(query.address, { fresh: query.fresh === "1" && freshOk(ip) });
   }, { weight: 2 });
 
   // Relay for payloads already signed in the browser (CSP keeps the page same-origin).

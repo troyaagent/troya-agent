@@ -1,7 +1,15 @@
 // Wallet layer: EIP-6963 discovery, connect, chain switching, read providers via our RPC relay, sign-in.
-import { BrowserProvider, JsonRpcProvider, getAddress } from "ethers";
-import { h, modal, toast, short, store, walletLogo } from "./ui.js";
+import { h, clear, modal, toast, short, store, walletLogo } from "./ui.js";
 import { api } from "./api.js";
+
+// ethers (about 160 KB over the wire) loads on first need: a connect, a chain read or a signer. Every page imports this
+// module, so a static import made a read-only visitor wait on it before the first page could even start loading.
+// A failed load (a 502 during a deploy) is forgotten, so the next attempt fetches it again.
+let E = null, eLoad = null;
+export function loadEthers() {
+  return (eLoad ||= import("ethers").then((m) => (E = m), (e) => { eLoad = null; throw e; }));
+}
+const checksum = async (a) => (await loadEthers()).getAddress(a);
 
 export const CHAINS = {
   robinhood: { key: "robinhood", id: 4663, hex: "0x1237", name: "Robinhood Chain", rpc: "https://rpc.mainnet.chain.robinhood.com", relay: "/api/rpc/robinhood", currency: "ETH", explorer: "https://robinhoodchain.blockscout.com" },
@@ -12,11 +20,22 @@ export const CHAINS = {
 export const chainById = (id) => Object.values(CHAINS).find((c) => c.id === Number(id));
 
 // read-only providers through the same-origin relay (CSP keeps connect-src at 'self')
-const readers = {};
-export function reader(chain = "robinhood") {
+const readers = {}, standIns = {};
+function realReader(chain) {
   const c = CHAINS[chain];
-  if (!readers[chain]) readers[chain] = new JsonRpcProvider(new URL(c.relay, location.origin).href, { chainId: c.id, name: c.key }, { staticNetwork: true, batchMaxCount: 10 });
+  if (!readers[chain]) readers[chain] = new E.JsonRpcProvider(new URL(c.relay, location.origin).href, { chainId: c.id, name: c.key }, { staticNetwork: true, batchMaxCount: 10 });
   return readers[chain];
+}
+// reader() stays synchronous for its callers. Once ethers is here it is the real JsonRpcProvider; before that it is a
+// stand-in with the same read methods (an ethers Contract accepts it as its runner, since it only needs call), and each
+// method loads ethers on first use and hands the call to the real provider. It has no `then`, so it is never awaited
+// by mistake, and it has no write methods: sending always goes through signerFor and the user's own wallet.
+const READS = ["call", "estimateGas", "getBalance", "getCode", "getStorage", "getTransactionCount", "getTransaction", "getTransactionReceipt",
+  "waitForTransaction", "getBlock", "getBlockNumber", "getFeeData", "getLogs", "getNetwork", "resolveName", "lookupAddress", "send"];
+export function reader(chain = "robinhood") {
+  if (!CHAINS[chain]) throw new Error("Unknown network.");
+  if (E) return realReader(chain);
+  return (standIns[chain] ||= Object.freeze(Object.fromEntries(READS.map((k) => [k, (...a) => loadEthers().then(() => realReader(chain)[k](...a))]))));
 }
 
 /* ---------- state ---------- */
@@ -37,28 +56,36 @@ export function available() {
 const last = store("troya.wallet.last", null);
 
 function bind(eip) {
-  eip.on?.("accountsChanged", (accs) => {
+  eip.on?.("accountsChanged", async (accs) => {
     if (!accs?.length) { disconnect(); return; }
-    wallet.address = getAddress(accs[0]);
+    // the old address and its session go at once, before the checksum (a short await) gives the new one
     wallet.session = null;
+    let a;
+    try { a = await checksum(accs[0]); } catch { disconnect(); return; }
+    if (wallet.eip !== eip) return;             // disconnected or switched wallets meanwhile
+    wallet.address = a;
     emit();
     refreshSession();
   });
   eip.on?.("chainChanged", (hex) => { wallet.chainId = Number(hex); emit(); });
 }
 
+// Resolves once the address is known and the session check has answered, so the connect sheet can tell whether this
+// browser is already signed in for the address (then no signature is asked for).
 export async function connectWith(detail) {
   const eip = detail.provider;
-  const accs = await eip.request({ method: "eth_requestAccounts" });
+  // ethers loads while the wallet shows its own prompt, so the checksum below does not add a wait
+  const [accs] = await Promise.all([eip.request({ method: "eth_requestAccounts" }), loadEthers()]);
+  if (!accs?.length) throw new Error("The wallet shared no account.");
   wallet.eip = eip;
   wallet.info = detail.info;
-  wallet.address = getAddress(accs[0]);
+  wallet.address = E.getAddress(accs[0]);
   wallet.chainId = Number(await eip.request({ method: "eth_chainId" }));
   wallet.status = "connected";
   last.set(detail.info.rdns || detail.info.name);
   bind(eip);
   emit();
-  refreshSession();
+  await refreshSession();
   return wallet;
 }
 
@@ -71,10 +98,12 @@ export async function restore() {
   if (!d) return;
   try {
     const accs = await d.provider.request({ method: "eth_accounts" });
-    if (!accs?.length) return;
+    if (!accs?.length) return;                  // not authorised any more: ethers is never fetched for this visit
+    const a = await checksum(accs[0]);
+    if (wallet.address) return;                 // the user connected by hand while this was loading
     wallet.eip = d.provider;
     wallet.info = d.info;
-    wallet.address = getAddress(accs[0]);
+    wallet.address = a;
     wallet.chainId = Number(await d.provider.request({ method: "eth_chainId" }));
     wallet.status = "connected";
     bind(d.provider);
@@ -133,8 +162,8 @@ export async function addChain(key) {
 // If the wallet moves to another network between the check and the prompt, it refuses the request instead of signing it
 // there. sendTransaction (and every Contract call) goes through sendUncheckedTransaction, so this one override covers all.
 export async function signerFor(key) {
-  await ensureChain(key);
-  const provider = new BrowserProvider(wallet.eip, "any");
+  await Promise.all([ensureChain(key), loadEthers()]);
+  const provider = new E.BrowserProvider(wallet.eip, "any");
   const signer = await provider.getSigner(wallet.address);
   const send = signer.sendUncheckedTransaction.bind(signer);
   signer.sendUncheckedTransaction = (tx) => send({ ...tx, chainId: CHAINS[key].id });
@@ -142,22 +171,44 @@ export async function signerFor(key) {
 }
 
 /* ---------- sign-in (session for chat, inbox, agent wallet, playbooks) ---------- */
+// The session the server confirmed last, and when. Many buttons run `await openConnect(); await signIn()`, and the sheet
+// has just signed in (or found a live session): a second wallet prompt moments later would only confuse. A session older
+// than this, or one a page dropped after a 401, is signed for again as before.
+let confirmed = null;
+const FRESH_MS = 15_000;
 async function refreshSession() {
   try { const me = await api.get("me"); wallet.session = me?.address && me.address.toLowerCase() === wallet.address?.toLowerCase() ? me : null; }
   catch { wallet.session = null; }
+  if (wallet.session) confirmed = { me: wallet.session, at: Date.now() };
   emit();
+}
+// One signature at a time: the connect sheet and a page's own Sign in button never open two wallet prompts at once.
+let signing = null;
+function signMessage() {
+  return (signing ||= (async () => {
+    const address = wallet.address;
+    const { message } = await api.post("auth/nonce", { address });
+    const signature = await wallet.eip.request({ method: "personal_sign", params: [toHex(message), address] });
+    const me = await api.post("auth/verify", { address, message, signature });
+    if (wallet.address !== address) throw new Error("The wallet switched accounts. Sign in again.");
+    wallet.session = me;
+    confirmed = { me, at: Date.now() };
+    emit();
+    toast("Signed in", "ok");
+    return me;
+  })().finally(() => { signing = null; }));
 }
 export async function signIn() {
-  if (!wallet.address) await openConnect();
-  if (!wallet.address) throw new Error("Connect a wallet to sign in.");
-  const { message } = await api.post("auth/nonce", { address: wallet.address });
-  const signature = await wallet.eip.request({ method: "personal_sign", params: [toHex(message), wallet.address] });
-  const me = await api.post("auth/verify", { address: wallet.address, message, signature });
-  wallet.session = me;
-  emit();
-  toast("Signed in", "ok");
-  return me;
+  if (!wallet.address) {
+    // the connect sheet asks for the sign-in signature itself, right after the wallet connects
+    await openConnect();
+    if (wallet.session) return wallet.session;
+    throw new Error(wallet.address ? "Sign in to continue." : "Connect a wallet to sign in.");
+  }
+  if (wallet.session && confirmed?.me === wallet.session && Date.now() - confirmed.at < FRESH_MS) return wallet.session;
+  return signMessage();
 }
+const rejected = (e) => e?.code === 4001 || e?.code === "ACTION_REJECTED" || /reject|denied|cancel/i.test(e?.message || "");
 const toHex = (s) => "0x" + [...new TextEncoder().encode(s)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
 /* ---------- connect dialog ---------- */
@@ -186,14 +237,20 @@ function dappUrl() {
   return u;
 }
 const onPhone = () => matchMedia("(pointer: coarse)").matches && !matchMedia("(hover: hover)").matches;
-export function openConnect() {
+// After a first connect the sheet stays open for the sign-in signature, so one flow ends signed in instead of every
+// feature asking "Sign in to continue" on its own. openConnect({ signIn: false }) stops at the connect.
+export function openConnect(opts = {}) {
   return new Promise((resolve) => {
     const list = available();
     const body = h("div", {},
       list.length
         ? h("div", { class: "wl" }, list.map((d) => h("button", { class: "wl-item", type: "button", onclick: async () => {
-            try { await connectWith(d); m.close(); toast(`Connected ${short(wallet.address)}`, "ok"); resolve(wallet); }
-            catch (e) { toast(e?.message?.includes("rejected") ? "Request cancelled in the wallet." : (e.message || "Could not connect"), "error"); }
+            try { await connectWith(d); }
+            catch (e) { toast(rejected(e) ? "Request cancelled in the wallet." : (e.message || "Could not connect"), "error"); return; }
+            // this browser already holds a session for the address: nothing more to sign
+            if (wallet.session || !wallet.address) { m.close(); toast(`Connected ${short(wallet.address)}`, "ok"); resolve(wallet); return; }
+            if (opts.signIn === false) { m.close(); resolve(wallet); return; }
+            proveIt();
           } }, walletLogo(d.info.name, d.info.icon), h("span", {}, d.info.name || "Browser wallet"), h("em", {}, "Detected"))))
         : onPhone()
           ? h("div", {}, h("div", { class: "wl" }, OPEN_IN.map((k) => h("a", { class: "wl-item", href: k.href(dappUrl()), rel: "noopener" }, walletLogo(k.name), h("span", {}, `Open in ${k.name}`), h("em", {}, "App")))),
@@ -201,6 +258,32 @@ export function openConnect() {
           : h("div", {}, h("div", { class: "wl" }, KNOWN.map((k) => h("a", { class: "wl-item", href: k.install, target: "_blank", rel: "noopener" }, walletLogo(k.name), h("span", {}, k.name), h("em", {}, "Install")))),
             h("p", { class: "note" }, "No browser wallet was found. Install one, reload this page, then connect.")),
       h("p", { class: "note" }, "Troya never holds your wallet's key. You approve every transaction in the wallet itself."));
-    const m = modal({ title: "Connect a wallet", body, onClose: () => resolve(wallet.address ? wallet : null) });
+    let closed = false;
+    const m = modal({ title: "Connect a wallet", body, onClose: () => { closed = true; resolve(wallet.address ? wallet : null); } });
+    // step two, in the same sheet: a free signature that proves the address is yours (no transaction, no gas)
+    function proveIt() {
+      const heading = m.box.querySelector(".modal-h h2");
+      if (heading) heading.textContent = "Sign in";
+      m.box.setAttribute("aria-label", "Sign in");
+      const status = h("p", { class: "note", role: "status", "aria-live": "polite" }, "Your wallet is asking for the signature now.");
+      const later = h("button", { class: "btn ghost", type: "button", onclick: () => m.close() }, "Not now");
+      const sign = h("button", { class: "btn primary", type: "button", onclick: () => ask() }, "Sign message");
+      clear(m.body,
+        h("p", { style: { margin: "0 0 6px", fontSize: "14px" } }, h("b", {}, `Connected ${short(wallet.address)}.`), " One more tap: sign a free message to prove it is you."),
+        h("p", { class: "note" }, "It is a message, not a transaction: it costs no gas and moves nothing. It signs you in for chat, the inbox, the Agent Wallet and playbooks in this browser."),
+        h("div", { class: "row", style: { justifyContent: "flex-end", flexWrap: "wrap" } }, later, sign),
+        status);
+      async function ask() {
+        sign.disabled = true;
+        status.textContent = "Confirm the message in your wallet.";
+        try { await signMessage(); if (!closed) m.close(); resolve(wallet); }
+        catch (e) {
+          if (closed) return;
+          sign.disabled = false;
+          status.textContent = rejected(e) ? "Signature cancelled in the wallet. Sign when you are ready, or skip it for now." : (e?.message || "Could not sign in. Try again.");
+        }
+      }
+      ask();
+    }
   });
 }

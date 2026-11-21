@@ -38,6 +38,24 @@ export function cleanRules(x = {}, base = DEF) {
   for (const k of ["maxOpen", "maxBuysPerDay", "maxHoldHours"]) o[k] = Math.round(o[k]);
   return o;
 }
+// A thesis is shown whole or cut cleanly: a reply over 200 characters ends at its last full sentence, or else at its last
+// whole word with "…", never mid-word ("…buy size, and "). A thesis under 25 characters is almost always a reply the
+// model's token limit cut short ("Expect near"), so it is dropped rather than shown. Applied when a thesis is written and
+// again when it is read, so theses stored before this fix (cut at exactly 200 characters) read cleanly too.
+export function tidyThesis(s, max = 200) {
+  const t = String(s ?? "").replace(/\s+/g, " ").trim();
+  if (t.length < 25) return null;
+  const ends = /[.!?…)"'”]$/.test(t);
+  if (t.length < max || (t.length === max && ends)) return ends ? t : `${t}…`;   // a reply that stops without a full stop was cut short
+  const head = t.slice(0, max);
+  let cut = -1;
+  for (const m of head.matchAll(/[.!?](?=\s|$)/g)) cut = m.index;
+  if (cut >= max / 2) return head.slice(0, cut + 1);
+  const room = t.slice(0, max - 1);                       // one character left for the "…"
+  const sp = t[max - 1] === " " ? room.length : room.lastIndexOf(" ");
+  const word = (sp >= 25 ? room.slice(0, sp) : room).replace(/[\s,;:–—-]+$/, "");
+  return word.length >= 25 ? `${word}…` : null;
+}
 export const rulesText = (r) => `buy ${r.buyEth} ETH when the curve raised ${r.minRaisedEth}–${r.maxRaisedEth} ETH${r.source !== "any" ? ` (${r.source} only)` : ""}${r.skipRingRed ? ", skip Ring Radar red" : ""}${r.skipRingAmber ? " and amber" : ""}; take profit at ${r.takeProfitX}x, stop at -${r.stopPct}%, out after ${r.maxHoldHours} h; at most ${r.maxOpen} open, ${r.maxBuysPerDay} buys a day`;
 
 const RULES_SPEC = `JSON keys (all optional): minRaisedEth (0-4.2, ETH the Pons curve raised before the buy), maxRaisedEth (0-4.2), buyEth (0.001-0.05), takeProfitX (1.05-20, e.g. 2 = sell at 2x), stopPct (5-95, sell after this % loss), maxHoldHours (1-168), maxOpen (1-10), maxBuysPerDay (1-30), skipRingRed (true/false: skip launches Ring Radar calls rigged), skipRingAmber (true/false), source ("any" | "pons" for coins still on their Pons curve | "pool" for coins in a Uniswap pool).`;
@@ -78,7 +96,7 @@ async function readStrategy(text, model) {
   let rules = null;
   try { rules = m ? cleanRules(JSON.parse(m[0])) : null; } catch {}
   if (!rules) { const { parseRules } = await import("./autopilot.mjs"); rules = cleanRules(parseRules(String(text)) || {}); }
-  const thesis = (out.match(/THESIS:\s*(.+)/i)?.[1] || "").slice(0, 200);
+  const thesis = tidyThesis(out.match(/THESIS:\s*(.+)/i)?.[1]);
   return { rules, thesis };
 }
 
@@ -103,7 +121,7 @@ async function aiDaily(d) {
     let rules = null;
     try { rules = m ? cleanRules(JSON.parse(m[0])) : null; } catch {}
     if (!rules) { console.warn("[arena]", a.name, "no rules in:", out.slice(0, 120).replace(/\s+/g, " ")); continue; }
-    ag.rules = rules; ag.thesis = (out.match(/THESIS:\s*(.+)/i)?.[1] || "").slice(0, 200); ag.day = today;
+    ag.rules = rules; ag.thesis = tidyThesis(out.match(/THESIS:\s*(.+)/i)?.[1]); ag.day = today;
     ag.history = [{ at: Date.now(), rules, thesis: ag.thesis }, ...(ag.history || [])].slice(0, 14);
     import("./seal.mjs").then((s) => s.seal("arena-strategy", a.id, { model: a.model, rules, thesis: ag.thesis }, rulesText(rules).slice(0, 150))).catch(() => {});
   }
@@ -340,7 +358,7 @@ function statsOf(d, id, mode = "paper") {
   return { closed: c.length, open: ps.length - c.length, pnlEth: +pnl.toFixed(5), openPnlEth: +openPnl.toFixed(5), winRate: c.length ? +(c.filter((p) => p.pnlEth > 0).length / c.length).toFixed(3) : null };
 }
 const pubAgent = (d, ag) => ({ id: ag.id, kind: ag.kind, name: ag.kind === "ai" ? ag.name : `${ag.owner.slice(0, 6)}…${ag.owner.slice(-4)}`, model: ag.model || null, status: ag.status,
-  rules: ag.rules, rulesText: rulesText(cleanRules(ag.rules)), thesis: ag.thesis || null, since: ag.createdAt, provingUntil: ag.provingUntil, verdict: ag.verdict || null, stats: statsOf(d, ag.id),
+  rules: ag.rules, rulesText: rulesText(cleanRules(ag.rules)), thesis: tidyThesis(ag.thesis), since: ag.createdAt, provingUntil: ag.provingUntil, verdict: ag.verdict || null, stats: statsOf(d, ag.id),
   live: ag.kind === "ai" && (d.positions || []).some((p) => p.agent === ag.id && p.mode === "live") ? { ...statsOf(d, ag.id, "live"), budgetEth: LIVE_BUDGET(), equityEth: +liveEquity(d, ag.id).toFixed(6) } : null,
   livePaused: ag.kind === "ai" && LIVE_PAUSED().includes(ag.id) });
 const pubPos = (p) => ({ agent: p.agent, mode: p.mode === "live" ? "live" : "paper", tx: p.txSell || p.txBuy || null, txBuy: p.txBuy || null, txSell: p.txSell || null, seal: p.sealClose || p.sealOpen || null, token: p.token, symbol: p.symbol, amountEth: p.amountEth, openedAt: p.openedAt, status: p.status, reason: p.reason || null, pnlEth: p.pnlEth ?? null, valueEth: p.lastValueEth ?? null, closedAt: p.closedAt || null });

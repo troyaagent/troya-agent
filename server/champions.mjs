@@ -7,6 +7,10 @@
 // Approve: an Inbox proposal, Auto: it trades) all apply (V8 F44 Scepter). No performance fee is taken.
 // A follow saved on a trader that stops qualifying stays stored but buys nothing until the trader qualifies again;
 // coins it already bought are still sold when the trader sells.
+// Each follow buy is a lot in the Agent Wallet's lot ledger (agentwallet.mjs, 21 Nov 2026): the follow's exit sells that
+// lot only, never the whole balance, so it cannot dump Sentry Autopilot's coins of the same launch or the owner's own. On
+// Approve, a buy approved later turns "bought" (lot hook) and is sold when the trader sells; a buy still waiting when the
+// trader sells expires.
 //   GET  /api/champions              who can be followed (champions), who cannot yet and why (others), latest buys
 //   GET  /api/champions/me           your follows and the trades they made (session)
 //   POST /api/champions/follow       { agentId, buyEth, on }                     (session)
@@ -67,40 +71,103 @@ export async function onArenaOpen(list) {
       const amountIn = String(Math.min(BUY.max, Math.max(BUY.min, Number(rule.buyEth) || BUY.def)));
       const rec = { id: randomBytes(6).toString("hex"), owner, agent: p.agent, from: p.id, token: p.token, symbol: p.symbol, amountEth: Number(amountIn), openedAt: Date.now(), status: "open" };
       try {
-        const r = await aw.executeForUser(owner, { kind: "swap", params: { tokenIn: "ETH", tokenOut: p.token, amountIn, slippagePct: 5 }, rationale: `Champions: following ${p.agent} into $${p.symbol}`, source: "champions" });
+        // the lot names this follow record: the Agent Wallet's lot ledger then knows these coins are this follow's, and its
+        // exit sells only them (audit 3-10, 21 Nov 2026). A buy held for approval keeps the lot on its proposal.
+        const r = await aw.executeForUser(owner, { kind: "swap", params: { tokenIn: "ETH", tokenOut: p.token, amountIn, slippagePct: 5 }, rationale: `Champions: following ${p.agent} into $${p.symbol}`, source: "champions",
+          lot: { source: "champions", positionId: rec.id, meta: { agent: p.agent, symbol: p.symbol, from: p.id } } });
         rec.result = r.executed ? "bought" : r.proposed ? "waiting for your approval" : `not sent: ${(r.reasons || []).join(" ").slice(0, 200)}`;
+        if (r.proposed) rec.proposalId = r.proposalId;
+        if (r.executed && r.lot) Object.assign(rec, { tokens: r.lot.tokens, txBuy: r.lot.txBuy });
         if (!r.executed && !r.proposed) rec.status = "skipped";
       } catch (e) { rec.result = `failed: ${e.message.slice(0, 160)}`; rec.status = "skipped"; }
       await store.update(FILE, {}, (x) => { x.pos = [rec, ...(x.pos || [])].slice(0, 2000); return x; });
     }
   }
 }
-/** Arena hook: these paper positions just closed. Followers who bought sell the coin they still hold. */
+const patch = (id, fields) => store.update(FILE, {}, (s) => { const r = (s.pos || []).find((y) => y.id === id); if (r) Object.assign(r, fields); return s; });
+const recOf = async (id) => ((await store.readJson(FILE, {})).pos || []).find((y) => y.id === id) || null;
+// what a closed lot says about the follow: the ETH that came back and the result on the part this follow itself sold
+const lotFields = (l) => ({ outEth: l?.outEth ?? null, pnlEth: l?.pnlEth ?? null, soldPct: l?.soldPct ?? null, txSell: l?.txSell || null });
+
+/**
+ * Sells one follow's own coins: its lot in the Agent Wallet ledger, never the wallet's whole balance. Until 21 Nov 2026
+ * this sold the balance × 0.999, so it also sold Sentry Autopilot's coins of the same launch (and the owner's own).
+ * A follow bought before the ledger existed has no lot: it may sell only what no other job's lot reserves.
+ */
+async function sellFollow(x, why) {
+  const aw = await import("./agentwallet.mjs");
+  let fields;
+  try {
+    const r = await aw.executeForUser(x.owner, { kind: "swap", params: { tokenIn: x.token, tokenOut: "ETH", slippagePct: 8 }, rationale: `Champions: ${why}`, source: "champions",
+      lot: { source: "champions", positionId: x.id, sell: true } });
+    if (r.executed) fields = { status: "closed", exit: r.lot?.how || "sold", ...(r.lot ? lotFields(r.lot) : { outEth: r.sale?.outEth ?? null, pnlEth: null }) };
+    else if (r.lotDone) fields = { status: "closed", exit: r.lot?.how || "sold elsewhere", ...lotFields(r.lot) };
+    else if (r.nothingToSell) fields = { status: "closed", exit: "nothing left to sell: sold elsewhere", outEth: null, pnlEth: null };
+    // held by the trust ladder: the follow stays "exiting" until the sell is approved (the lot hook closes it then)
+    else if (r.proposed) fields = { status: "exiting", exit: "sell waiting for your approval", sellProposalId: r.proposalId };
+    else fields = { status: "closed", exit: `sell not sent: ${(r.reasons || []).join(" ").slice(0, 200)}` };
+  } catch (e) { fields = { status: "closed", exit: `sell failed: ${e.message.slice(0, 160)}` }; }
+  await patch(x.id, { closedAt: Date.now(), ...fields });
+}
+
+/** Arena hook: these paper positions just closed. Followers who bought sell their own coins; buys still held expire. */
 export async function onArenaClose(list) {
   if (!store || !list?.length) return;
   const d = await store.readJson(FILE, {});
-  const aw = await import("./agentwallet.mjs");
+  const { getProposal, markProposal } = await import("./inbox.mjs");
   for (const p of list) {
-    const mine = (d.pos || []).filter((x) => x.from === p.id && x.status === "open" && x.result === "bought");
-    for (const x of mine) {
-      let out = "";
-      try {
-        const w = await aw.getAgentWallet(x.owner);
-        const b = w?.address ? await (await import("./tools.mjs")).getBalances(w.address, [x.token]) : null;
-        const have = Number((b?.robinhoodTokens || []).find((t) => lc(t.address) === lc(x.token))?.amount || 0);
-        if (have > 0) {
-          const amountIn = (have * 0.999).toPrecision(12).replace(/\.?0+$/, "");
-          const r = await aw.executeForUser(x.owner, { kind: "swap", params: { tokenIn: x.token, tokenOut: "ETH", amountIn, slippagePct: 8 }, rationale: `Champions: ${p.agent} sold $${x.symbol} (${p.reason})`, source: "champions" });
-          out = r.executed ? "sold" : r.proposed ? "sell waiting for your approval" : `sell not sent: ${(r.reasons || []).join(" ").slice(0, 200)}`;
-        } else out = "nothing left to sell";
-      } catch (e) { out = `sell failed: ${e.message.slice(0, 160)}`; }
-      await store.update(FILE, {}, (s) => { const r = (s.pos || []).find((y) => y.id === x.id); if (r) Object.assign(r, { status: "closed", closedAt: Date.now(), exit: out, reason: p.reason }); return s; });
+    for (const first of (d.pos || []).filter((x) => x.from === p.id && x.status === "open")) {
+      // read again: a held buy approved a moment ago has turned "bought" since the list above was read
+      const x = await recOf(first.id);
+      if (!x || x.status !== "open") continue;
+      if (x.result === "waiting for your approval") {
+        // the trader already sold: the held buy must not go through any more (the allowBuy hook refuses it as well)
+        if (x.proposalId) {
+          const pr = await getProposal(x.owner, x.proposalId).catch(() => null);
+          if (pr?.status === "pending") await markProposal(x.owner, x.proposalId, "expired", { note: `${p.agent} sold $${x.symbol} before the buy was approved` }).catch(() => {});
+        }
+        await patch(x.id, { status: "closed", closedAt: Date.now(), exit: `buy not made: ${p.agent} sold before it was approved`, reason: p.reason });
+        continue;
+      }
+      if (x.result !== "bought") continue;
+      await patch(x.id, { reason: p.reason });
+      await sellFollow(x, `${p.agent} sold $${x.symbol} (${p.reason})`);
     }
   }
 }
 
+// The Agent Wallet's lot ledger tells Champions about its follows: a held buy approved later (it becomes "bought", so the
+// trader's exit sells it), a held sell approved later, and coins Aegis sold on a red alert.
+function lotHooks(aw) {
+  aw.onLots?.("champions", {
+    // a held buy approved after the trader already sold (or after its ask expired) must not buy
+    allowBuy: async (owner, lot) => {
+      const x = await recOf(lot.positionId);
+      if (x && x.status !== "open") return `This follow already ended (${x.exit || x.status}).`;
+      if (x && x.result === "bought") return "This follow already bought.";
+      return null;
+    },
+    opened: async (owner, lot, ctx) => {
+      const x = await recOf(lot.positionId);
+      if (!x) return;                                      // a direct buy: onArenaOpen writes the record right after
+      await patch(x.id, { result: "bought", tokens: lot.tokens, txBuy: lot.txBuy, ...(ctx?.approved ? { approvedAt: Date.now() } : {}) });
+      // approved in the very moment the trader sold: sell it straight away, once this swap's ledger lock is released
+      if (x.status !== "open") {
+        await patch(x.id, { status: "open", exit: null });
+        setTimeout(() => recOf(x.id).then((y) => y && sellFollow(y, `${x.agent} had already sold $${x.symbol}`)).catch(() => {}), 0);
+      }
+    },
+    closed: async (owner, lot) => {
+      const x = await recOf(lot.positionId);
+      if (!x || (x.status === "closed" && x.outEth != null)) return;
+      await patch(x.id, { status: "closed", closedAt: Date.now(), exit: lot.how, ...lotFields(lot) });
+    },
+  });
+}
+
 export async function register(r, ctx) {
   store = ctx.store;
+  lotHooks(await import("./agentwallet.mjs"));
   r.get("/api/champions", async () => {
     const d = await store.readJson(FILE, {});
     const count = {};

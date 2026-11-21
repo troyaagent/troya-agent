@@ -1,5 +1,6 @@
 // V8 F42 Herald · share cards. A 1200×630 PNG drawn on a canvas in the browser for a Troya Gate verdict, a Watchfire alert
-// or a PnL, in Troya's chrome on dark, with the sharer's referral link and a QR code of it (qr.js, no network).
+// or a PnL, in Troya's chrome on dark, with the sharer's referral link and a QR code of it (qr.js, no network). A PnL card
+// is made only from numbers Troya reads (a wallet's trades on chain, Hyperliquid fills, the Arena Cup table), never typed ones.
 // The user downloads the card and posts it from their own account; "Post on X" only opens X's free post intent.
 import { h, clear, icon, toast, modal, seg, useCss, short } from "./ui.js";
 import { api } from "./api.js";
@@ -17,18 +18,28 @@ const FIRE = { clear: ["Calm", "up", "Nothing unusual in this coin's transfers."
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 
 /* ---------- the sharer's link ---------- */
+// Links in posts go through /t/<coin> and /r/<code> (server/share.mjs): those pages carry the coin's own preview (its Gate
+// verdict, price and Watchfire) for X, Telegram and Discord, then open the app. A link to /agent#/token/… could not: the part
+// after "#" never reaches the server, so every coin showed the site's one picture.
+const CODE = /^[a-z0-9]{4,12}$/;
+/** { code, link, linkShort } from a herald/me answer (or null): the short /r/ link, which keeps the code. */
+export function refOf(me) {
+  const code = CODE.test(String(me?.code || "")) ? me.code : null;
+  return code ? { code, link: `${SITE}/r/${code}`, linkShort: `troya.codes/r/${code}` } : null;
+}
 let refMemo = null;
 /** { code, link, linkShort } for the signed-in wallet, or null (cards then carry the plain site link). */
 export async function loadRef(force = false) {
   if (!wallet.session) return null;
   if (refMemo && !force && refMemo.addr === wallet.session.address) return refMemo.v;
-  try { const r = await api.get("herald/me"); refMemo = { addr: wallet.session.address, v: { code: r.code, link: r.link, linkShort: r.linkShort } }; return refMemo.v; }
+  try { const r = await api.get("herald/me"); refMemo = { addr: wallet.session.address, v: refOf(r) }; return refMemo.v; }
   catch { return null; }
 }
-/** The link that goes in a post: the coin page when there is a coin, with the referral code when there is one. */
+/** The link that goes in a post: the coin's /t/ page when there is a coin, with the referral code when there is one. */
 export function shareUrl(ref, address) {
-  const base = `${SITE}/agent${ref?.code ? `?ref=${ref.code}` : ""}`;
-  return address && ADDR.test(address) ? `${base}#/token/${address.toLowerCase()}` : base;
+  const code = CODE.test(String(ref?.code || "")) ? ref.code : null;
+  if (address && ADDR.test(address)) return `${SITE}/t/${address.toLowerCase()}${code ? `?ref=${code}` : ""}`;
+  return code ? `${SITE}/r/${code}` : `${SITE}/agent`;
 }
 // one cashtag per post: any $TICKER after the first loses its "$"
 const oneCashtag = (s) => { let seen = false; return String(s).replace(/\$([A-Za-z][A-Za-z0-9_]{0,15})\b/g, (m, t) => (seen ? t : ((seen = true), m))); };
@@ -53,16 +64,65 @@ export async function watchfireSpec(address) {
   return { kind: "watchfire", address, symbol: sym(r.symbol), word: f[0], tone: f[1], sub: f[2], why: (r.why || []).slice(0, 2), metrics: m, partial: r.fullHistory === false, at: Date.now(), loading: r.level === "loading",
     post: `Watchfire on $${sym(r.symbol) || "this coin"}: ${f[0]}. ${(r.why || [])[0] || f[2]}`.trim() };
 }
-/** pnlPct wins; else entry and exit prices give it. */
-export function pnlSpec({ symbol, entry, exit, pnlPct, label, title }) {
-  const e = Number(entry), x = Number(exit);
-  let p = pnlPct === "" || pnlPct == null ? NaN : Number(pnlPct);
-  if (!isFinite(p) && e > 0 && x > 0) p = (x / e - 1) * 100;
-  if (!isFinite(p)) throw new Error("Give a PnL %, or an entry and an exit price.");
+/* PnL cards are made only from numbers Troya reads itself, never from typed ones (21 Nov audit, 3-13: the old form took any
+   symbol and any %, so a "+10,000%" Troya card cost nothing to fake). Each spec carries `verified`: where the numbers come
+   from and the transaction that proves them, printed on the card. A pnl spec without it is drawn with a large
+   "Self-reported, not verified" mark. */
+const pctText = (p) => `${p > 0 ? "+" : p < 0 ? "−" : ""}${Math.abs(p) >= 1000 ? Math.round(Math.abs(p)).toLocaleString("en-US") : Math.abs(p).toFixed(Math.abs(p) >= 100 ? 0 : 1)}%`;
+const usdText = (v, sign = true) => `${sign ? (v > 0 ? "+" : v < 0 ? "−" : "") : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: Math.abs(v) >= 1000 ? 0 : 2, maximumFractionDigits: Math.abs(v) >= 1000 ? 0 : 2 })}`;
+const pxText = (v) => (v >= 1 ? v.toLocaleString("en-US", { maximumFractionDigits: v >= 1000 ? 1 : 4 }) : Number(v).toPrecision(4));
+const shortHash = (x) => (x ? `${x.slice(0, 8)}…${x.slice(-6)}` : "");
+
+/** A token's PnL for a wallet, read from the chain by /api/portfolio/pnl (the numbers each Portfolio row shows). */
+export async function chainPnlSpec({ wallet: who, token, symbol }) {
+  if (!ADDR.test(String(who || "")) || !ADDR.test(String(token || ""))) throw new Error("No wallet or coin to read.");
+  const p = await api.get(`/api/portfolio/pnl?address=${who}&token=${token}`);
+  if (p?.status !== "ok" || p.pnlEth == null) throw new Error(p?.reason || "No priced trades for this coin from this wallet yet.");
   const s = sym(symbol);
-  const pct = `${p > 0 ? "+" : p < 0 ? "−" : ""}${Math.abs(p) >= 1000 ? Math.round(Math.abs(p)).toLocaleString("en-US") : Math.abs(p).toFixed(Math.abs(p) >= 100 ? 0 : 1)}%`;
-  return { kind: "pnl", symbol: s, title: String(title || "").slice(0, 40), word: pct, tone: p >= 0 ? "up" : "down", entry: e > 0 ? e : null, exit: x > 0 ? x : null,
-    label: String(label || "").slice(0, 60), at: Date.now(), post: title ? `${pct} in ${String(title).slice(0, 40)}, shared from Troya Agent.` : `${pct} on ${s ? `$${s}` : "a trade"}, shared from Troya Agent.` };
+  const up = p.pnlEth >= 0, sign = up ? "+" : "−";
+  const word = p.pnlPct != null ? pctText(p.pnlPct) : `${sign}${Math.abs(p.pnlEth).toFixed(4)} ETH`;
+  return { kind: "pnl", kicker: "PNL", symbol: s, address: token.toLowerCase(), word, tone: up ? "up" : "down", at: Date.now(),
+    line: `${sign}${Math.abs(p.pnlEth).toFixed(4)} ETH${p.pnlUsd != null ? ` · ${usdText(p.pnlUsd)}` : ""}`,
+    label: `${p.buys} buy${p.buys === 1 ? "" : "s"}${p.sells ? ` · ${p.sells} sell${p.sells === 1 ? "" : "s"}` : ""} · wallet ${short(who)}${p.partial ? " · latest 40 trades" : ""}`,
+    verified: { by: "Read from chain", tx: p.lastTx?.hash || null, where: "Robinhood Chain" },
+    foot: "Read from this wallet's own trades on Robinhood Chain, at today's price. Gas not counted.",
+    post: `${word} on $${s || "this coin"}, read from the chain by Troya Agent.` };
+}
+
+/** A closed Hyperliquid trade: the closing fills of one order (same hash and market), from the wallet's public fills. */
+export function hlPnlSpec({ wallet: who, fills }) {
+  const fs = (fills || []).filter((f) => Number(f.closedPnl));
+  if (!fs.length) throw new Error("That fill closed nothing, so it has no PnL.");
+  const coin = String(fs[0].coin || "");
+  const size = fs.reduce((s, f) => s + Math.abs(Number(f.size) || 0), 0);
+  const pnl = fs.reduce((s, f) => s + Number(f.closedPnl), 0), fee = fs.reduce((s, f) => s + (Number(f.fee) || 0), 0);
+  const exit = size ? fs.reduce((s, f) => s + Number(f.px) * Math.abs(Number(f.size) || 0), 0) / size : null;
+  const dir = String(fs[0].dir || "");
+  // the side that closed: "Close Short", or "Short > Long" (a flip closes the short first)
+  const wasShort = /short/i.test(dir.split(">")[0]);
+  // closedPnl = (exit − entry) × size for a long, (entry − exit) × size for a short
+  const entry = exit && size ? (wasShort ? exit + pnl / size : exit - pnl / size) : null;
+  const move = entry > 0 && size ? (pnl / (entry * size)) * 100 : null;
+  const name = coin.startsWith("@") ? `spot ${coin}` : `${coin.replace(/^[a-z0-9]+:/, "")}-PERP`;
+  return { kind: "pnl", kicker: "PERPS PNL", title: name, symbol: sym(coin.replace(/^[a-z0-9]+:/, "")), word: usdText(pnl), tone: pnl >= 0 ? "up" : "down", at: Number(fs[0].time) || Date.now(),
+    line: `${dir || "Closed"} · ${Number(size.toPrecision(6))} ${coin.replace(/^[a-z0-9]+:/, "")}${entry > 0 ? ` · ${pxText(entry)} → ${pxText(exit)}` : ""}`,
+    label: `${move != null ? `${pctText(move)} on the price · ` : ""}fees ${usdText(fee, false)} · wallet ${short(who)}`,
+    verified: { by: "Read from Hyperliquid", tx: fs[0].hash || null, where: "Hyperliquid" },
+    foot: "Read from this wallet's public fills on Hyperliquid. Closed PnL before fees.",
+    post: `${usdText(pnl)} on ${name}, read from Hyperliquid by Troya Agent.` };
+}
+
+/** Your Arena Cup week: paper trades, numbers from the server's own Cup table (herald/cup → mine), marked as paper. */
+export function cupPnlSpec(cup) {
+  const m = cup?.mine;
+  if (!m) throw new Error("No Arena Cup week to share yet.");
+  const p = Number(m.pnlPct) || 0;
+  return { kind: "pnl", kicker: "PAPER PNL", title: `Arena Cup ${String(cup.season || "").slice(0, 20)}`, word: pctText(p), tone: p >= 0 ? "up" : "down", at: Date.now(),
+    line: `${m.closed} closed paper trade${m.closed === 1 ? "" : "s"}${m.rank ? ` · #${m.rank} this week` : ""}`,
+    label: m.name ? String(m.name).slice(0, 60) : "",
+    verified: { by: "Paper · Arena Cup", tx: null, where: "Troya Arena", paper: true },
+    foot: "Paper trades in Troya's Arena, ranked by PnL %. No real money moved.",
+    post: `${pctText(p)} in the Troya Arena Cup ${String(cup.season || "").slice(0, 20)}, on paper.` };
 }
 
 /* ---------- drawing ---------- */
@@ -157,7 +217,7 @@ export async function drawCard(spec, ref, canvas = document.createElement("canva
   font(c, 17, 500, MONO); c.fillStyle = C.muted; c.textAlign = "right"; c.fillText(stamp(spec.at), W - 64, 88); c.textAlign = "left";
 
   // kicker
-  const kick = spec.kind === "gate" ? "TROYA GATE" : spec.kind === "watchfire" ? "WATCHFIRE" : spec.title ? "RESULT" : "PNL";
+  const kick = spec.kind === "gate" ? "TROYA GATE" : spec.kind === "watchfire" ? "WATCHFIRE" : spec.kicker || "PNL";
   font(c, 15, 500, MONO);
   const kw = c.measureText(kick.split("").join(" ")).width + 32;
   rrect(c, 64, 140, kw, 34, 17); c.fillStyle = `${toneCol}14`; c.fill(); c.lineWidth = 1.2; c.strokeStyle = `${toneCol}66`; c.stroke();
@@ -198,18 +258,31 @@ export async function drawCard(spec, ref, canvas = document.createElement("canva
       });
     }
   } else {
-    bigWord(c, spec.word, L, 384, maxW, 156, spec.tone);
-    let y = 440;
-    if (spec.entry && spec.exit) {
-      const px = (v) => (v >= 1 ? v.toLocaleString("en-US", { maximumFractionDigits: 4 }) : v.toPrecision(4));
-      font(c, 25, 500, MONO); c.fillStyle = C.fg2; c.fillText(`Entry ${px(spec.entry)}  →  Exit ${px(spec.exit)}`, L, y);
-      y += 40;
+    bigWord(c, spec.word, L, 364, maxW, 140, spec.tone);
+    let y = 414;
+    if (spec.line) { font(c, 26, 500); c.fillStyle = C.fg2; c.fillText(wrap(c, spec.line, maxW, 1)[0] || "", L, y); y += 38; }
+    if (spec.label) { font(c, 21, 500); c.fillStyle = C.muted; c.fillText(wrap(c, spec.label, maxW, 1)[0] || "", L, y); }
+    const v = spec.verified;
+    if (v) {
+      // the proof: where the numbers were read, and the transaction anyone can look up
+      const word = v.by.toUpperCase().split("").join(" ");
+      font(c, 14, 500, MONO);
+      const pw = c.measureText(word).width + 58, col = v.paper ? C.warn : C.up;
+      rrect(c, L, 498, pw, 36, 18); c.fillStyle = `${col}14`; c.fill(); c.lineWidth = 1.2; c.strokeStyle = `${col}77`; c.stroke();
+      mark(c, L + 20, 516, v.paper ? "warn" : "pass");
+      c.fillStyle = col; c.fillText(word, L + 42, 521);
+      if (v.tx) { font(c, 16, 500, MONO); c.fillStyle = C.muted; c.fillText(`${v.where} tx ${shortHash(v.tx)}`, L + pw + 16, 521); }
+    } else {
+      // never drawn by the app (every pnl spec above carries its proof); kept so a card built any other way says what it is
+      c.save(); c.translate(W / 2 - 150, H / 2 + 20); c.rotate(-0.2);
+      font(c, 64, 700); c.textAlign = "center"; c.fillStyle = "rgba(255,125,125,.42)"; c.fillText("Self-reported, not verified", 0, 0);
+      c.restore(); c.textAlign = "left";
     }
-    if (spec.label) { font(c, 22, 500); c.fillStyle = C.muted; c.fillText(wrap(c, spec.label, maxW, 1)[0] || "", L, y); }
   }
 
   // the link and its QR code, on a light tile so every phone camera reads it
   const T = 300, tx = 852, ty = 146;
+  ref = refOf(ref);                                // the short /r/ link whatever the caller passed
   const link = ref?.link || `${SITE}/agent`;
   c.save(); c.shadowColor = "rgba(95,211,239,.35)"; c.shadowBlur = 44;
   rrect(c, tx, ty, T, T, 26); c.fillStyle = C.tile; c.fill(); c.restore();
@@ -227,7 +300,7 @@ export async function drawCard(spec, ref, canvas = document.createElement("canva
   // footer
   const foot = spec.kind === "gate" ? "A simulated buy and a test sell from a fresh address. A snapshot from the chain, not a promise."
     : spec.kind === "watchfire" ? "Watchfire reads every transfer of the coin. Patterns, not proof."
-      : "Shared from Troya Agent.";
+      : spec.verified ? spec.foot || "Shared from Troya Agent." : "Typed in by the sharer. Troya did not read these numbers.";
   font(c, 17, 400); c.fillStyle = C.faint; c.fillText(foot, L, 598);
   return canvas;
 }
@@ -261,6 +334,7 @@ function xMark() {
 }
 /** "Sign in to put your link on the card", or the link itself. onRef(ref) runs after a sign-in. */
 export function refNote(ref, onRef) {
+  ref = ref?.code ? refOf(ref) : ref;
   if (ref) return h("p", { class: "fine muted hr-refnote" }, "Your referral link is on the card and in the post: ", h("span", { class: "mono" }, ref.linkShort));
   return h("p", { class: "fine muted hr-refnote" }, "Sign in to put your own referral link on the card. ",
     h("button", { class: "link", type: "button", onclick: async () => {
@@ -295,5 +369,29 @@ export async function openShare({ address, symbol, stock = false }) {
   modal({ title: `Share $${sym(symbol) || short(address)}`, wide: true, body: h("div", { class: "hr-share" },
     pick ? h("div", { class: "hr-share-top" }, pick) : null,
     h("div", { class: "hr-frame" }, canvas), msg, actions(() => cur), note) });
+  paint();
+}
+
+/* ---------- Share PnL from Portfolio: a token's PnL read from the chain, or a closed Hyperliquid trade ---------- */
+/** make() returns a pnl spec (chainPnlSpec / hlPnlSpec); nothing on this card is typed by the user. */
+export async function openPnlShare({ title, make }) {
+  useCss("herald");
+  let ref = await loadRef(), cur = null, spec = null;
+  const canvas = h("canvas", { class: "hr-canvas", width: W, height: H, "aria-label": "PnL card preview" });
+  const msg = h("p", { class: "fine muted hr-msg" }, "Reading your trades…");
+  const note = h("div");
+  const paintNote = () => clear(note, refNote(ref, (r) => { ref = r; paintNote(); paint(); }));
+  async function paint() {
+    canvas.classList.add("busy");
+    try {
+      spec ||= await make();
+      await drawCard(spec, ref, canvas);
+      cur = { canvas, spec, url: shareUrl(ref, spec.address) };
+      msg.textContent = `Download the card, then attach it to your post. It shows your wallet's short address and the ${spec.verified?.where || ""} transaction it was read from, so anyone can check it.`;
+    } catch (e) { msg.textContent = `Could not make the card: ${e.message}`; }
+    finally { canvas.classList.remove("busy"); }
+  }
+  paintNote();
+  modal({ title: title || "Share PnL", wide: true, body: h("div", { class: "hr-share" }, h("div", { class: "hr-frame" }, canvas), msg, actions(() => cur), note) });
   paint();
 }

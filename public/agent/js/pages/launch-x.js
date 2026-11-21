@@ -18,7 +18,9 @@ const EXAMPLE = "@Troyaagent launch Wooden Horse $HORSE";
 const X_LINK = "/api/x/login?for=link&back=launch";
 const MAX_BUY_ETH = 1;   // launch.mjs MAX_INITIAL_BUY_ETH
 // What the Agent Wallet must hold, as launch.mjs needEthFor counts it: the Pons fee and 0.0001 ETH, or with an initial buy
-// the fee, the buy and 0.0002. Whole micro-ETH, rounded up, so float noise never asks for "0 ETH more".
+// the fee, the buy and 0.0002. Whole micro-ETH, rounded up, so float noise never asks for "0 ETH more". Step 4 takes the
+// plain launch's figure from the server (/api/launch/prefs needEth), so this page, the X and Telegram replies and the
+// onboarding gaps all mark the same balance ready or not (0.00055 ETH with a 0.0005 fee is "not ready" on every one).
 const micro = (x) => Math.ceil(Number(x) * 1e6 - 1e-6);
 const needEth = (fee, buy = 0) => micro(Number(fee) + (buy > 0 ? buy + 0.0002 : 0.0001)) / 1e6;
 const topUp = (need, have) => Math.max(0, micro(need - (have || 0))) / 1e6;
@@ -189,7 +191,7 @@ export async function mount(view, ctx) {
     const signed = !!wallet.session;
     const xIn = signed && !!p?.xAccount;
     const awOn = !!(st.aw?.exists && st.aw.enabled !== false);
-    const need = fee != null ? needEth(fee) : null;
+    const need = fee != null ? (Number(p?.needEth) > 0 ? Number(p.needEth) : needEth(fee)) : null;
     const funded = !!st.aw?.exists && need != null && eth != null && topUp(need, eth) === 0;
     const fund = signed && st.aw?.exists && fee != null ? fundParts(fee, eth) : null;
     const holderMin = p?.holderMin || r?.holderMin || 1_000_000;
@@ -235,14 +237,15 @@ export async function mount(view, ctx) {
           h("div", { class: "lx-tweet" }, h("span", { class: "mono" }, EXAMPLE), h("button", { class: "btn sm", type: "button", onclick: () => copyText(EXAMPLE, "Copied") }, icon("copy"), "Copy")),
           h("p", { class: "muted" }, "Attach the coin's image to the post. That alone is a clean launch: 0% tax and no initial buy. Add \"tax 2%\" for a creator tax and \"buy 0.01\" for an initial buy, only if you want them."),
           h("ul", { class: "lx-rules" },
-            h("li", {}, "Attach the image: square (1:1) works best, since every site shows coin logos in a square or circle and crops other shapes to the middle. PNG or JPEG; GIFs turn into video on X and don't work. Without an image, the coin launches with none, for good."),
+            h("li", {}, "Attach the image: PNG or JPEG, cropped to its centre square (up to 1024 px), since every site shows coin logos in a square or circle. GIFs turn into video on X and don't work. No image? Post without one and the coin has none, for good."),
+            h("li", {}, "Website and Telegram group (optional, written into the coin for good): add \"site: yourcoin.xyz\" and \"tg: t.me/yourgroup\" to the post."),
             h("li", {}, "Creator tax from 0% to 4%, all of it yours."),
             h("li", {}, "Initial buy: your Agent Wallet buys right after the 3-second Pons snipe tax, through Troya Gate and within its caps. If it cannot pay the launch fee plus the buy, nothing is launched."),
             h("li", {}, "Creator fee: holders of 1M $TROYA keep all of it (0.7% of trading volume plus the tax). Everyone else keeps 0.6% plus the whole tax, and Troya takes 0.1%."),
             h("li", {}, `Holders: no daily limit. Without 1M $TROYA: ${p?.limits?.perDayX ?? r?.limits?.perDayX ?? 1} launch from X a day (${p?.limits?.perDay ?? r?.limits?.perDay ?? 3} a day across X, Telegram and troya.codes).`),
             h("li", {}, "Troya sees your post within seconds and replies with the coin's address and market cap, or with what to fix if it could not launch."),
             h("li", {}, "Your own words work too, in English: \"please create a token called Moon Cat, ticker MCAT, 2% tax, buy 0.01 ETH\". If Troya is unsure, it shows you the format instead of guessing."),
-            h("li", {}, "Any name and ticker you like: the ticker is letters and numbers (16 at most), the name up to 48 characters.")))),
+            h("li", {}, "Any name and ticker you like: the name up to 48 characters, the ticker letters and numbers (16 at most), saved exactly as you write it ($horse stays horse, as on troya.codes and in Telegram).")))),
       mineCard(),
       tradeCard(),
       p?.admin ? adminCard() : null);

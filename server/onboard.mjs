@@ -68,9 +68,12 @@ export async function gapsFor(address, purpose, { needEth = 0.0006 } = {}) {
     else if (k === "agentWalletOn" && st.agentWallet.done && !st.agentWalletOn.done) out.push("switch your Agent Wallet on");
     else if (k === "funded") {
       const eth = st.funded.eth ?? 0;
-      const fmt = (x) => x.toFixed(4).replace(/\.?0+$/, "");
+      // micro-ETH, and what is missing rounded up: at 4 decimals a wallet holding 0.00055 of 0.0006 read "add 0.0001 ETH
+      // more (it holds 0.0006, needs 0.0006)", and a float gap of 0.0000499… could read "add 0 ETH more"
+      const fmt = (x) => x.toFixed(6).replace(/\.?0+$/, "");
+      const gap = Math.ceil((needEth - eth) * 1e6 - 1e-6) / 1e6;
       if (!st.agentWallet.done) out.push(`add ${fmt(needEth)} ETH to it on Robinhood Chain`);
-      else if (eth < needEth) out.push(eth > 0.00001 ? `add ${fmt(needEth - eth)} ETH more to your Agent Wallet ${short(st.agentWallet.address)} (it holds ${fmt(eth)}, needs ${fmt(needEth)})` : `add ${fmt(needEth)} ETH to your Agent Wallet ${short(st.agentWallet.address)} on Robinhood Chain`);
+      else if (eth < needEth) out.push(eth > 0.00001 ? `add ${fmt(gap)} ETH more to your Agent Wallet ${short(st.agentWallet.address)} (it holds ${fmt(Math.floor(eth * 1e6) / 1e6)}, needs ${fmt(needEth)})` : `add ${fmt(needEth)} ETH to your Agent Wallet ${short(st.agentWallet.address)} on Robinhood Chain`);
     }
     else if (k === "launchX" && !st.launchX.done) out.push("switch Launch from X on");
     else if (k === "tradeX" && !st.tradeX.done) out.push("switch Trade from X on");

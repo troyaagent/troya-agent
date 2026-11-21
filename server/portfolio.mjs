@@ -123,15 +123,16 @@ export async function tokenPnl(address, token) {
     }
     const rows = [...byTx.values()].slice(0, 40);
     let costEth = 0, proceedsEth = 0, bought = 0, sold = 0, transfersIn = 0, transfersOut = 0, buys = 0, sells = 0;
+    let last = null;                     // the newest buy or sell (Blockscout lists newest first): the share card prints its tx
     for (const r of rows) {
       const f = await txFlows(r.hash, a).catch(() => null);
       if (!f || f.failed) continue;
       const net = r.in - r.out;
       const paidEth = f.ethOut - f.ethIn + (f.wethOut - f.wethIn) + (ethUsd ? (f.usdgOut - f.usdgIn) / ethUsd : 0);
       if (net > 0) {
-        if (paidEth > 1e-12) { costEth += paidEth; bought += net; buys++; } else transfersIn += net;
+        if (paidEth > 1e-12) { costEth += paidEth; bought += net; buys++; last ||= r; } else transfersIn += net;
       } else if (net < 0) {
-        if (-paidEth > 1e-12) { proceedsEth += -paidEth; sold += -net; sells++; } else transfersOut += -net;
+        if (-paidEth > 1e-12) { proceedsEth += -paidEth; sold += -net; sells++; last ||= r; } else transfersOut += -net;
       }
     }
     const priceUsd = held?.priceUsd ?? indexRow(t)?.priceUsd ?? null;
@@ -147,7 +148,7 @@ export async function tokenPnl(address, token) {
       status: "ok", token: getAddress(t), amount, buys, sells, bought, sold, transfersIn, transfersOut,
       costEth, proceedsEth, valueEth, pnlEth, pnlPct: pnlEth != null && costEth > 0 ? (pnlEth / costEth) * 100 : null,
       pnlUsd: pnlEth != null && ethUsd ? pnlEth * ethUsd : null, avgEntryEth, avgEntryUsd: avgEntryEth != null && ethUsd ? avgEntryEth * ethUsd : null,
-      priceUsd, ethUsd, partial: (tr?.next_page_params != null) || byTx.size > 40,
+      priceUsd, ethUsd, partial: (tr?.next_page_params != null) || byTx.size > 40, lastTx: last ? { hash: last.hash, at: last.at } : null,
       note: "In ETH terms at today's ETH price; gas not counted. Tokens received by plain transfer are not counted as bought.",
     };
   });

@@ -16,11 +16,11 @@
 // Launch log: PonsFactory event, topics = [sig, token, curve, deployer]. Token names come from the internet: they are
 // stripped of links and handles and HTML-escaped before they reach Telegram. Wording stays factual: check results,
 // never "scam" or "safe".
-import { ADDR, CHAINS, rpc, gateCheck, ponsState, ponsPublic, ponsProfile } from "./robinhood.mjs";
+import { ADDR, CHAINS, rpc, gateCheck, ponsState, ponsPublic, ponsProfile, tokenMeta } from "./robinhood.mjs";
 import { readFileSync } from "node:fs";
 import { AbiCoder, getAddress } from "ethers";
 import { addV4Key } from "./robinhood.mjs";
-import { newLaunchPools, LAUNCHPADS } from "./market.mjs";
+import { newLaunchPools, LAUNCHPADS, indexRow, dsTokenPairs, getEthUsd } from "./market.mjs";
 
 const LAUNCH_TOPIC = "0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607";
 const MODE = process.env.SENTRY || "";
@@ -132,6 +132,63 @@ export function holdReason(r, { minEth = MIN_POST, minBuyers = MIN_BUYERS, copy 
   return null;
 }
 export const worthPosting = (r, minEth = MIN_POST, minBuyers = MIN_BUYERS) => !holdReason(r, { minEth, minBuyers });
+// The channel's bar alone (at least MIN_POST ETH in and MIN_BUYERS independent buyers), shown on the Desk as a green pill.
+// Audit, 21 Nov 2026: the Desk showed a green "Passed" on $WOLFPACK with 0 buyers and $0.52 of volume, because "passed"
+// only means no check failed. A pass without real buying is a neutral "Checks passed · no real buying yet" there.
+export const meetsBar = (r, minEth = MIN_POST, minBuyers = MIN_BUYERS) => r?.v === "passed" && moneyIn(r, minEth) && (r.buyers?.organic ?? 0) >= minBuyers;
+// the same, for a stored /api/sentry/recent item (its pons block is gone): graduated reads as 100% progress, and a pool
+// result was only recorded once it had MIN_POST ETH of depth
+// A copy (a ticker posted earlier that day) or a look-alike name is held for good: never green, however much buying it has
+// (a fake $USDG pool counted 25,870 buyers, 21 Nov 2026).
+const COPY_HOLD = /^Same ticker|look-alike/i;
+export function itemMeetsBar(x, minEth = MIN_POST, minBuyers = MIN_BUYERS) {
+  if (!x || x.verdict !== "passed" || x.stock) return false;
+  if (typeof x.eligible === "boolean") return x.eligible;
+  if (x.posted) return true;
+  if (COPY_HOLD.test(x.reason || "")) return false;
+  const money = x.source ? true : (x.progressPct != null && x.progressPct >= 100) || (x.raised != null && x.raised >= minEth);
+  return money && (x.buyers ?? 0) >= minBuyers;
+}
+
+/* ---------- liquidity next to volume ---------- */
+// A pool minted at a made-up price reports millions of "liquidity" on a few dollars of trading ($WOLFPACK: $123.8M on $0.52
+// of volume, 21 Nov 2026). Very deep next to almost no volume, with little of it in ETH or USDG, is a caution, never a pass.
+const PAPER_MIN_USD = 250_000, PAPER_RATIO = 1000, PAPER_REAL_SHARE = 0.1;
+const usd0 = (v) => (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}K` : `$${Number(v || 0).toFixed(2)}`);
+export function paperLiquidity({ liquidityUsd, volume24hUsd, realLiquidityUsd } = {}) {
+  const L = Number(liquidityUsd), V = Math.max(0, Number(volume24hUsd) || 0);
+  if (!(L >= PAPER_MIN_USD) || L < Math.max(V, 1) * PAPER_RATIO) return null;
+  // a pool that really holds money on its ETH or USDG side is a deep new pool, not a made-up price
+  if (realLiquidityUsd != null && Number(realLiquidityUsd) >= L * PAPER_REAL_SHARE) return null;
+  return { label: "Liquidity vs volume", detail: `${usd0(L)} of pool liquidity on ${usd0(V)} traded in 24 hours${realLiquidityUsd != null ? ` (${usd0(Number(realLiquidityUsd))} of it in ETH or USDG)` : ""}: the pool's price may be set, not traded` };
+}
+// a coin not on the Market's board yet: its DexScreener pairs, summed, with the ETH or USDG side as the money in them
+export function pairsLiquidity(pairs, token, ethUsd) {
+  const a = String(token).toLowerCase();
+  const money = { [ADDR.weth.toLowerCase()]: "eth", [NULL_ADDR]: "eth", [ADDR.usdg.toLowerCase()]: "usd" };
+  let L = 0, V = 0, real = 0, n = 0;
+  for (const p of pairs || []) {
+    const b = String(p.baseToken?.address || "").toLowerCase(), q = String(p.quoteToken?.address || "").toLowerCase();
+    if (b !== a && q !== a) continue;
+    const l = Number(p.liquidity?.usd);
+    if (l > 0) { L += l; n++; }
+    V += Number(p.volume?.h24) || 0;
+    const other = b === a ? q : b, amt = Number(b === a ? p.liquidity?.quote : p.liquidity?.base) || 0;
+    if (money[other] === "usd") real += amt;
+    else if (money[other] === "eth" && ethUsd) real += amt * ethUsd;
+  }
+  return n ? { liquidityUsd: L, volume24hUsd: V, realLiquidityUsd: ethUsd ? real : null } : null;
+}
+// the coin's pools as the Market sees them (its board row), else DexScreener (read-only, cached a minute by market.mjs)
+async function paperCheck(token) {
+  try {
+    const row = indexRow(token);
+    if (row?.liquidityUsd != null) return paperLiquidity(row);
+    const [pairs, ethUsd] = await Promise.all([dsTokenPairs(token), getEthUsd().catch(() => null)]);
+    const l = pairsLiquidity(pairs, token, ethUsd);
+    return l ? paperLiquidity(l) : null;
+  } catch { return null; }
+}
 const permanent = (r, copy) => lookAlike(r) || !!copy;   // held for good: no point looking again
 
 /* ---------- buyers ---------- */
@@ -344,13 +401,28 @@ function bump(s, k) { s.events.push([Date.now(), k]); const cut = Date.now() - 3
 export function countSince(events, since) { const d = blank(); for (const [t, k] of events) if (t >= since && k in d) d[k]++; return d; }
 
 /* ---------- one launch ---------- */
+// ERC-20 name() and symbol(), or blanks when the contract answers neither (tokenMeta's "?" is not a ticker)
+async function nameOf(token) {
+  const m = await tokenMeta(token).catch(() => null);
+  return { symbol: m && m.symbol !== "?" ? m.symbol : "", name: m?.name || "" };
+}
+// results stored before names were read for failed checks: filled in once, gently, after a start
+async function fillNames() {
+  for (const x of recent.filter((it) => !it.symbol && !it.name).slice(0, 120)) {
+    const t = await nameOf(x.token);
+    if (t.symbol || t.name) { x.symbol = cleanSymbol(t.symbol); x.name = cleanName(t.name); }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
 export async function checkLaunch(token) {
   const g = await gateCheck({ tokenIn: "ETH", tokenOut: token, amountIn: TEST_ETH, slippageBps: 100 });
   const ps = await ponsState(token).catch(() => null);
   const pons = ponsPublic(ps);
   let vd = verdict(g);
   if (vd.v !== "failed" && pons && !pons.graduated && pons.pair?.address === "native" && (pons.raised ?? 0) < MIN_RAISED) vd = { v: "nobuys" };
-  const t = g.quote?.tokenOut || {};
+  let t = g.quote?.tokenOut || {};
+  // a failed route has no quote, so no name: read the coin's own name() and symbol() (failed rows read "0xe623…c82c · Pons")
+  if (!t.symbol) t = await nameOf(token);
   return { token, symbol: cleanSymbol(t.symbol), name: cleanName(t.name), checks: g.checks, pons, snipe: !!(ps && ps.snipeBps > 0n), ...vd, at: Date.now() };
 }
 
@@ -450,7 +522,7 @@ export function copyOf(s, r) {
 }
 const postUrl = (j) => (j?.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${j.result.message_id}` : null);
 function record(s, r, posted, reason, j) {
-  recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, posted, ...(r.source ? { source: r.source } : {}), reason, raised: r.pons?.raised ?? null, progressPct: r.pons?.progressPct ?? null, buyers: r.buyers ? r.buyers.organic : null, at: r.at, post: postUrl(j) });
+  recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, posted, ...(r.source ? { source: r.source } : {}), reason, raised: r.pons?.raised ?? null, progressPct: r.pons?.progressPct ?? null, buyers: r.buyers ? r.buyers.organic : null, eligible: !!posted || (meetsBar(r) && !COPY_HOLD.test(reason || "")), at: r.at, post: postUrl(j) });
   recent.length = Math.min(recent.length, 200);
   s.recent = recent.slice(0, 200);                                   // survives restarts
 }
@@ -484,6 +556,8 @@ async function work(s) {
         s.queue = s.queue.filter((x) => x !== q); continue;                               // never reached real depth: dropped quietly
       }
       r.source = q.source;
+      const paper = await paperCheck(r.token);
+      if (paper) { r.v = "caution"; r.why = paper; }
       await measureBuyers(r, q);
       const copy = copyOf(s, r), why = holdReason(r, { copy });
       if (why && !permanent(r, copy) && q.tries < POOL_RETRY_S.length) { q.due = now + POOL_RETRY_S[q.tries] * 1000; q.tries++; continue; }
@@ -504,6 +578,8 @@ async function work(s) {
       s.queue = s.queue.filter((x) => x !== q); bump(s, "nobuys"); continue;
     }
     r.ageMs = r.at - (q.seenAt || s.seen[q.token] || r.at);
+    // before Sentry Autopilot and the Arena see it: a made-up pool price is a caution, so nothing buys it on a "pass"
+    if (r.v === "passed") { const paper = await paperCheck(r.token); if (paper) { r.v = "caution"; r.why = paper; } }
     // Phase 7: Sentry Autopilot sees every passing check (it keeps its own rules and never buys the same coin twice)
     if (MODE !== "dry" && r.v === "passed") import("./autopilot.mjs").then((a) => a.onLaunch(r)).catch((e) => console.warn("[sentry] autopilot:", e.message));
     // V7 F34: the Arena's paper traders (AI models and proving strategies) see the same passing checks
@@ -575,7 +651,18 @@ export async function register(r, ctx) {
   for (const [k, v] of Object.entries(wf.coins || {})) if (v.t > Date.now() - 86400e3) remember(k, v.w, v.t);
   walletsDirty = false;
   // the record keeps every result, a stock posted before the stock rule included; it is marked so nobody reads it as a launch
-  r.get("/api/sentry/recent", ({ query }) => ({ items: recent.slice(0, Math.min(100, Number(query.limit) || 30)).map((x) => (isStock(x.token) ? { ...x, stock: true, note: STOCK_NOTE } : x)), channel: `https://t.me/${CHANNEL.replace(/^@/, "")}`, live: !!MODE }));
+  // eligible = met the channel's bar (the Desk's green pill). A pass whose pool now shows paper liquidity (see paperLiquidity,
+  // from the Market's board row: no network call here) reads as a caution.
+  const present = (x) => {
+    if (isStock(x.token)) return { ...x, stock: true, note: STOCK_NOTE, eligible: false };
+    if (x.verdict === "passed") {
+      const paper = paperLiquidity(indexRow(x.token) || {});
+      if (paper) return { ...x, verdict: "caution", reason: `${paper.label}: ${paper.detail}`, eligible: false };
+    }
+    return { ...x, eligible: itemMeetsBar(x) };
+  };
+  r.get("/api/sentry/recent", ({ query }) => ({ items: recent.slice(0, Math.min(100, Number(query.limit) || 30)).map(present), bar: { minEth: MIN_POST, minBuyers: MIN_BUYERS }, channel: `https://t.me/${CHANNEL.replace(/^@/, "")}`, live: !!MODE }));
+  setTimeout(() => fillNames().catch(() => {}), 40_000).unref?.();
   setTimeout(() => refreshStocks().catch(() => {}), 25_000).unref?.();   // after the market's own first read of the desk
   if (!MODE || (MODE !== "dry" && !TG)) return;
   console.log(`[sentry] watching Pons launches${POOLS ? ", new pools and the other launchpads" : ""} → ${MODE === "dry" ? "data/sentry-preview.jsonl (dry)" : CHANNEL}`);

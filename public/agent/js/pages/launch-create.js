@@ -161,8 +161,9 @@ export async function mount(view, ctx = {}) {
   const inp = (key, attrs = {}) => {
     const el = h(attrs.textarea ? "textarea" : "input", { class: "input", value: st[key], rows: attrs.textarea ? 3 : null, ...attrs, textarea: null });
     if (attrs.textarea) el.value = st[key];
-    // the ticker is letters and numbers only: a typed "$" or "!" would be written into the coin on chain for good
-    el.addEventListener("input", () => { st[key] = el.value; if (key === "symbol") { el.value = el.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); st.symbol = el.value; } if (key === "logoUrl") { st.logo = null; } paintSide(); paintBtn(); });
+    // the ticker is letters and numbers only: a typed "$" or "!" would be written into the coin on chain for good. Its case
+    // is kept as typed, the same as on X and in Telegram ("horse" stays horse on all three; 21 Nov audit)
+    el.addEventListener("input", () => { st[key] = el.value; if (key === "symbol") { el.value = el.value.replace(/[^A-Za-z0-9]/g, ""); st.symbol = el.value; } if (key === "logoUrl") { st.logo = null; } paintSide(); paintBtn(); });
     return el;
   };
   const fileIn = h("input", { type: "file", accept: "image/png,image/jpeg,image/gif,image/webp", class: "sr", id: "lc-file" });
@@ -171,34 +172,49 @@ export async function mount(view, ctx = {}) {
   drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
   drop.addEventListener("dragleave", () => drop.classList.remove("over"));
   drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); setFile(e.dataTransfer.files?.[0]); });
-  // the logo store keeps images up to 1 MB: a bigger one is scaled down here (to 1024 px, then smaller if needed), so
-  // nobody has to think about file sizes. An animated GIF can't be scaled without losing the animation, so it says so.
+  // Every site shows a coin's logo in a square or a circle, so the image is centre-cropped to a square here (side = its
+  // shorter edge, at most 1024 px) and the preview shows exactly that crop: what is previewed is what goes on chain. A
+  // 2400 × 1200 PNG used to be shrunk to 1024 × 512 and left for each board to cut. The server crops X and Telegram images
+  // the same way (server/logosquare.mjs). A square image within 1024 px and 1 MB (the logo store's limit) is kept byte for
+  // byte; anything else is drawn again, at 1024 px and smaller until it fits. An animated GIF can't be cropped and keep its
+  // animation: a square one that fits is kept, any other becomes a still of its first frame, and the toast says so.
+  const MAX_SIDE = 1024, MAX_BYTES = 1024 * 1024;
   async function shrink(f) {
-    if (f.size <= 1024 * 1024) return f;
-    if (f.type === "image/gif") throw new Error("That GIF is too large to use. Use a PNG or JPEG instead.");
-    const bmp = await createImageBitmap(f);
-    for (const side of [1024, 768, 512]) {
-      const k = Math.min(1, side / Math.max(bmp.width, bmp.height));
-      const c = document.createElement("canvas");
-      c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-      c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
-      const type = f.type === "image/png" ? "image/png" : "image/jpeg";
-      let b = await new Promise((res) => c.toBlob(res, type, 0.9));
-      if (b && b.size > 1024 * 1024 && type === "image/png") b = await new Promise((res) => c.toBlob(res, "image/webp", 0.92));
-      if (b && b.size <= 1024 * 1024) return new File([b], f.name.replace(/\.\w+$/, "") + (b.type === "image/png" ? ".png" : b.type === "image/webp" ? ".webp" : ".jpg"), { type: b.type });
-    }
+    let bmp;
+    try { bmp = await createImageBitmap(f); } catch { throw new Error("Troya couldn't read that image. Try a PNG or JPEG."); }
+    const side = Math.min(bmp.width, bmp.height);
+    if (bmp.width === bmp.height && side <= MAX_SIDE && f.size <= MAX_BYTES) { bmp.close?.(); return { file: f }; }
+    const sx = Math.floor((bmp.width - side) / 2), sy = Math.floor((bmp.height - side) / 2);
+    const type = f.type === "image/jpeg" ? "image/jpeg" : "image/png";   // PNG keeps the transparency of PNG, WebP and GIF
+    const toBlob = (c, t, q) => new Promise((res) => c.toBlob(res, t, q));
+    try {
+      for (const n of [...new Set([MAX_SIDE, 768, 512, 384].map((t) => Math.min(side, t)))]) {
+        const c = document.createElement("canvas");
+        c.width = c.height = n;
+        const g = c.getContext("2d");
+        g.imageSmoothingQuality = "high";
+        g.drawImage(bmp, sx, sy, side, side, 0, 0, n, n);
+        let b = await toBlob(c, type, 0.9);
+        if (b && b.size > MAX_BYTES && type === "image/png") b = await toBlob(c, "image/webp", 0.92);   // Safari answers PNG again: the next size down
+        if (b && b.size <= MAX_BYTES) {
+          const ext = b.type === "image/png" ? ".png" : b.type === "image/webp" ? ".webp" : ".jpg";
+          return { file: new File([b], f.name.replace(/\.\w+$/, "") + ext, { type: b.type }),
+            note: f.type === "image/gif" ? "An animated GIF can't keep its animation once cropped to a square, so its first frame is used." : null };
+        }
+      }
+    } finally { bmp.close?.(); }
     throw new Error("Troya couldn't make that image small enough. Try another one.");
   }
   async function setFile(f) {
     if (!f) return;
     if (!/^image\/(png|jpeg|gif|webp)$/.test(f.type)) { toast("Use a PNG, JPEG, GIF or WebP image.", "error"); return; }
-    try { f = await shrink(f); } catch (e) { toast(e.message, "error"); return; }
+    try { const r = await shrink(f); f = r.file; if (r.note) toast(r.note, "warn", 7000); } catch (e) { toast(e.message, "error"); return; }
     if (st.preview) URL.revokeObjectURL(st.preview);
     st.file = f; st.preview = URL.createObjectURL(f); st.logo = null;
     paintDrop(); paintSide(); paintBtn();
   }
   function paintDrop() {
-    clear(drop, st.preview ? h("img", { src: st.preview, alt: "Coin image preview" }) : h("span", { class: "lc-drop-empty" }, icon("plus"), h("b", {}, "Add an image"), h("small", {}, "PNG, JPEG, GIF or WebP"), h("small", {}, "Square works best")));
+    clear(drop, st.preview ? h("img", { src: st.preview, alt: "Coin image preview" }) : h("span", { class: "lc-drop-empty" }, icon("plus"), h("b", {}, "Add an image"), h("small", {}, "PNG, JPEG, GIF or WebP"), h("small", {}, "Cropped to a centre square")));
   }
 
   const taxBox = h("div", { class: "chips", role: "group", "aria-label": "Creator tax" });
@@ -311,8 +327,8 @@ export async function mount(view, ctx = {}) {
       h("div", { class: "lc-id" }, h("div", { class: "lc-drop-w" }, drop, h("span", { class: "fine" }, "Your image is hosted by Troya")), fileIn,
         h("div", { class: "lc-id-f" },
           h("label", { class: "field" }, h("span", {}, "Name"), inp("name", { maxlength: 48, placeholder: "Wooden Horse" })),
-          h("label", { class: "field" }, h("span", {}, "Symbol"), inp("symbol", { maxlength: 16, placeholder: "HORSE" })))),
-      h("label", { class: "field" }, h("span", {}, "Logo link ", h("span", { class: "muted" }, "(optional, instead of uploading: ipfs:// or https://)")), inp("logoUrl", { maxlength: 512, placeholder: "ipfs://…" })),
+          h("label", { class: "field" }, h("span", {}, "Symbol ", h("span", { class: "muted" }, "(saved exactly as typed)")), inp("symbol", { maxlength: 16, placeholder: "HORSE" })))),
+      h("label", { class: "field" }, h("span", {}, "Logo link ", h("span", { class: "muted" }, "(optional, instead of uploading: ipfs:// or https://, used as it is, so make it square)")), inp("logoUrl", { maxlength: 512, placeholder: "ipfs://…" })),
       h("label", { class: "field" }, h("span", {}, "Description"), inp("description", { textarea: true, maxlength: 2048, placeholder: "What is this coin about?" })),
       linksD),
     h("section", { class: "lc-sec" },
@@ -481,6 +497,8 @@ export async function mount(view, ctx = {}) {
       // 1. logo: an uploaded image is hosted here (cached so a retry does not re-upload); otherwise the given link
       if (!st.logo) {
         if (st.file) {
+          // the logo upload now needs a signed-in session (server/api launch/logo answers 401 without one)
+          if (!wallet.session) { st.busy = "Sign in to upload the image…"; paintBtn(); await signIn(); }
           st.busy = "Uploading the image…"; paintBtn();
           const r = await api.post("launch/logo", st.file, { type: st.file.type });
           if (r.note) toast(r.note, "warn", 7000);

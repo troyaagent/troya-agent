@@ -409,7 +409,9 @@ ok("a non-holder's launch that skips the splitter (made elsewhere) is not added 
   await T.handleMessage(msg("$TGH"), tg, store);
   assert.match(last().text, /send the coin's image/);
   await T.handleMessage({ ...msg(""), photo: [{ file_id: "small", width: 90 }, { file_id: "big", width: 800 }] }, tg, store);
-  assert.match(last().text, /Image saved/);
+  assert.match(last().text, /Image saved/); assert.match(last().text, /Website, Telegram group or one-line description/);
+  await T.handleMessage(msg("tgh.xyz t.me/tghorse"), tg, store);
+  assert.match(last().text, /Website: https:\/\/tgh\.xyz\//); assert.match(last().text, /Creator tax\?/);
   await press(btn(/^1%$/));
   await press(btn(/^0\.005 ETH$/));
   const pv = last().text;

@@ -19,8 +19,11 @@ export async function addInbox(address, { kind = "note", title, body = "", data 
 }
 
 // kind: swap | perp | bridge | watch | send ; params depend on kind; summary is human text.
-export async function createProposal(address, { kind, params, summary, rationale = "", gate = null, source = "assistant" }) {
+// lot: an automated job's lot-ledger tag (agentwallet.mjs), kept on the proposal so a trade approved later still knows which
+// job position it belongs to (a Champions or Autopilot buy approved late gets its exit; an exit sells only its own coins)
+export async function createProposal(address, { kind, params, summary, rationale = "", gate = null, source = "assistant", lot = null }) {
   const p = { id: id(), kind, params, summary: clip(summary, 300), rationale: clip(rationale, 600), gate, source, status: "pending", createdAt: Date.now(), expiresAt: Date.now() + PROPOSAL_TTL };
+  if (lot && typeof lot === "object") p.lot = lot;
   await store.update(file(address), { items: [] }, (box) => {
     box.proposals = (box.proposals || []).filter((x) => x.status === "pending" ? x.expiresAt > Date.now() - 86400_000 : x.createdAt > Date.now() - 7 * 86400_000).slice(0, 200);
     box.proposals.unshift(p);

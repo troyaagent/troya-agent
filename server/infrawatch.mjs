@@ -6,6 +6,8 @@
 //   · Blockscout PRO: alert when the client is paused (out of credits or rate limited)
 //   · OpenRouter: alert when the credits left fall under $20
 //   · the server: free memory under 200 MB, swap over 1.5 GB, disk over 85%
+//   · RPC rate limits: a module whose reads drew more than RPC_429_ALERT_PER_HOUR (default 30) answers of 429 from an
+//     upstream in the last hour (counted per calling module at the RPC layer, robinhood.mjs rpcThrottles); red at 4x
 //   GET /api/infra   admins only: the numbers behind the alerts
 import { readFile, statfs } from "node:fs/promises";
 import { requireSession } from "./auth.mjs";
@@ -13,6 +15,7 @@ import { HttpError } from "./api.mjs";
 
 const FILE = "infra.json", TICK = 5 * 60_000, COOL = 6 * 3600_000, COOL_RED = 3600_000;
 const CS_MONTH = Number(process.env.CHAINSTACK_MONTHLY_REQUESTS || 20_000_000);
+const RL_HOUR = Math.max(1, Number(process.env.RPC_429_ALERT_PER_HOUR) || 30);
 let store = null, csFails = 0;
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
@@ -57,6 +60,9 @@ async function readings() {
     csFails = ok ? 0 : csFails + 1;
     out.chainstackUp = ok;
   }
+  // 429s per calling module (the official RPC broker's retries included), and its queue right now
+  out.rpc429 = R.rpcThrottles ? R.rpcThrottles() : {};
+  if (R.rpcBroker) out.rpcBroker = R.rpcBroker();
   // Blockscout
   const M = await import("./market.mjs");
   out.blockscout = { key: !!process.env.BLOCKSCOUT_API_KEY, live: M.hasBlockscout() };
@@ -88,6 +94,10 @@ async function tick() {
     if (csFails >= 2) add("csDown", true, "🔴 Node Chainstack tidak menjawab (2 cek berturut-turut). Troya otomatis pakai RPC cadangan (resmi, dRPC, publicnode), jadi tetap jalan tapi lebih lambat. Cek status.chainstack.com.");
     if (r.blockscout.key && !r.blockscout.live) add("bsDown", true, "🔴 Blockscout terjeda (kredit habis atau kena limit). Jumlah holder pindah ke GeckoTerminal, Owl berhenti, Aegis baca saldo dari chain. Cek dev.blockscout.com: kalau kredit Builder habis, naikkan ke Pro ($199).");
     if (r.openrouter && r.openrouter.left < 20) add("orLow", r.openrouter.left < 5, `${r.openrouter.left < 5 ? "🔴" : "🟠"} Saldo OpenRouter tinggal $${r.openrouter.left}. Council, Arena, dan AI bot TG/X memakainya: isi ulang di openrouter.ai/credits.`);
+    // a module the RPC keeps turning away: name it, with how many reads were lost after the retry
+    for (const [mod, t] of Object.entries(r.rpc429 || {})) {
+      if (t.lastHour > RL_HOUR) add(`rl:${mod}`, t.lastHour > RL_HOUR * 4, `${t.lastHour > RL_HOUR * 4 ? "🔴" : "🟠"} Modul ${mod} kena limit RPC (429) ${t.lastHour}x dalam 1 jam terakhir (batas ${RL_HOUR}); ${t.gaveUp} bacaan gagal setelah dicoba ulang sejak server jalan. Kurangi frekuensi modul itu atau arahkan bacaannya ke node Chainstack.`);
+    }
     const s = r.server;
     if (s.memFreeMb < 200) add("mem", true, `🔴 RAM server tinggal ${s.memFreeMb} MB. Server bisa melambat atau proses mati: naikkan Hetzner ke 4 GB.`);
     if (s.swapUsedMb > 1500) add("swap", false, `🟠 Server memakai swap ${s.swapUsedMb} MB (RAM kurang). Pertimbangkan naik ke Hetzner 4 GB.`);

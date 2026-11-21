@@ -950,6 +950,15 @@ const unbacked = (t) => {
   return (t.createdAt && Date.now() - t.createdAt < 7 * 86400_000) || (holders != null && holders < 1000);
 };
 
+// when each coin was born (its creation block, tokenage.mjs), as the coin page shows its age: the board's createdAt is the
+// main pool's date, so a coin that graduated to Uniswap read 3 days old in a list and 5 on its page ($TROYA, 20 Nov).
+// Answered from the cache; unknown births are looked up in the background (a later read has them).
+let ageMod = null;
+async function bornOf(addrs) {
+  const m = await (ageMod ||= import("./tokenage.mjs").catch(() => null));
+  if (!m?.bornAt) return addrs.map(() => null);
+  return Promise.all(addrs.map((a) => m.bornAt(a, { waitMs: 0 }).catch(() => null)));
+}
 // getRobinhoodTokens({q, launchpad, sort, dir, offset, limit, tradable}) → {tokens,total,counts,updatedAt,stale,ethUsd,source,...}
 export async function getRobinhoodTokens(opts = {}) {
   const o = cleanOpts(opts);
@@ -998,9 +1007,11 @@ export async function getRobinhoodTokens(opts = {}) {
     if (y == null) return -1;
     return (x - y) * sgn;
   });
+  const page = rows.slice(o.offset, o.offset + o.limit);
+  const births = await bornOf(page.map((t) => t.address));
   return {
     catCounts, cat: o.cat,
-    tokens: rows.slice(o.offset, o.offset + o.limit).map((t) => ({ ...clean(t), pick: t._pick || undefined, spark: sparkOf(t), socials: socialOf(t.address), holders: holdersOf(t.address)?.count ?? null, top10Pct: holdersOf(t.address)?.top10 ?? null })), total: rows.length, counts, hiddenTotal: hidden,
+    tokens: page.map((t, i) => ({ ...clean(t), bornAt: births[i] ?? null, pick: t._pick || undefined, spark: sparkOf(t), socials: socialOf(t.address), holders: holdersOf(t.address)?.count ?? null, top10Pct: holdersOf(t.address)?.top10 ?? null })), total: rows.length, counts, hiddenTotal: hidden,
     volume24hUsd: board.volumeUsd, volume24hEth: ethUsd ? board.volumeUsd / ethUsd : null,
     offset: o.offset, limit: o.limit, sort: o.sort, dir: o.dir, launchpad: o.launchpad,
     updatedAt: board.updatedAt, fresh10, freshOf: base.length, now, stale: !!board.error, notice: board.error ? `Last refresh failed (${board.error}); showing the previous board.` : null,
@@ -1089,6 +1100,7 @@ export async function getRobinhoodToken(address) {
       await Promise.race([readChain([a], { statics: 1 }).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]);
     }
     token = honest(token, ethUsd);
+    token.bornAt = (await bornOf([a]))[0] ?? null;
     if (token.realLiquidityUsd == null && curveLive && ethUsd) { token.realLiquidityUsd = pons.raised * ethUsd; token.realLiquidityEth = pons.raised; }
     if (!token.symbol || !token.name) {
       try { const rh = await import("./robinhood.mjs"); const m = await rh.tokenMeta(a); token.symbol ||= m.symbol; token.name ||= m.name; } catch {}
@@ -1247,28 +1259,289 @@ async function chainTrades(a) {
   await c.busy;
   return c;
 }
+// One 5-minute bucket per key, in the pool's quote unit (ETH or USD): every chart interval (5m … 1d) is a whole number
+// of them, so the bars of any interval are built from the same buckets. k orders trades (block * 1e5 + log index), so
+// a back-filled older read merges into a bucket without swapping its open and close.
+const B5 = 300;
+function addB5(m, t, k, px, vq) {
+  const b = Math.floor(t / B5) * B5;
+  const x = m.get(b);
+  if (!x) { m.set(b, { t: b, o: px, h: px, l: px, c: px, v: vq, n: 1, ok: k, ck: k }); return; }
+  if (k < x.ok) { x.o = px; x.ok = k; }
+  if (k >= x.ck) { x.c = px; x.ck = k; }
+  if (px > x.h) x.h = px;
+  if (px < x.l) x.l = px;
+  x.v += vq; x.n++;
+}
+// ETH's own price at each bar (Hyperliquid candles of the same interval): an ETH-quoted coin's past bars were all
+// multiplied by today's ETH price, so its USD history moved with ETH's later moves (ETH fell 13% in the week to 20 Nov)
+const ETH_HOURS = (iv) => Math.ceil((300 * IV_S[iv]) / 3600) + Math.ceil(IV_S[iv] / 3600);
+async function ethCloses(iv) {
+  const d = await getHlCandles("ETH", iv, ETH_HOURS(iv)).catch(() => null);
+  return (d?.candles || []).filter((x) => x.close > 0).map((x) => [x.time, x.close]);
+}
+// the ETH close of the bar that holds t (the closest earlier one when Hyperliquid has a gap)
+function ethAt(list, t, step) {
+  let lo = 0, hi = list.length - 1, hit = null;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (list[mid][0] <= t) { hit = list[mid]; lo = mid + 1; } else hi = mid - 1; }
+  return hit && t - hit[0] < Math.max(step, 3600) * 3 ? hit[1] : null;
+}
+// candles in USD from 5-minute quote buckets: quiet stretches carry the last price forward to the current bar, so the
+// chart runs to now (300 bars at most). With them: how many trades the window holds, when the last trade was and at what
+// USD price, and the trade count of each interval's window (the page opens on the smallest one that has trades).
+async function buildCandles(b5, iv, { quote, lastTrade, covered = null }) {
+  if (!b5.size) return null;
+  const step = IV_S[iv], now = Math.floor(Date.now() / 1000), endB = Math.floor(now / step) * step;
+  const ethNow = quote === "eth" ? await getEthUsd().catch(() => null) : 1;
+  if (!ethNow) return null;
+  const by = new Map();
+  for (const k of [...b5.values()].sort((x, y) => x.t - y.t)) {
+    const b = Math.floor(k.t / step) * step, x = by.get(b);
+    if (!x) by.set(b, { time: b, open: k.o, high: k.h, low: k.l, close: k.c, vq: k.v, n: k.n });
+    else { x.high = Math.max(x.high, k.h); x.low = Math.min(x.low, k.l); x.close = k.c; x.vq += k.v; x.n += k.n; }
+  }
+  const keys = [...by.keys()].sort((x, y) => x - y);
+  const startB = Math.max(keys[0], endB - 299 * step);
+  let prev = null;
+  for (const k of keys) { if (k < startB) prev = by.get(k).close; else break; }
+  const q = [];
+  for (let b = startB; b <= endB; b += step) {
+    const k = by.get(b);
+    if (k) { if (prev != null) { k.open = prev; k.high = Math.max(k.high, prev); k.low = Math.min(k.low, prev); } q.push(k); prev = k.close; }
+    else if (prev != null) q.push({ time: b, open: prev, high: prev, low: prev, close: prev, vq: 0, n: 0 });
+  }
+  const eth = quote === "eth" ? await ethCloses(iv) : [];
+  const perBar = quote !== "eth" || eth.length > 0;
+  const usdAt = (t, last) => (quote !== "eth" ? 1 : last ? ethNow : ethAt(eth, t, step) ?? ethNow);
+  const candles = q.map((x, i) => {
+    const e = usdAt(x.time, i === q.length - 1);
+    return { time: x.time, open: x.open * e, high: x.high * e, low: x.low * e, close: x.close * e, volume: x.vq * e };
+  });
+  let lastTradeUsd = null;
+  if (lastTrade) {
+    let e = 1;
+    if (quote === "eth") {
+      e = ethAt(eth, lastTrade.t, step);
+      // older than this interval's window: the daily ETH candles (90 days), else today's price
+      if (e == null) { const d = await ethCloses("1d"); e = ethAt(d, lastTrade.t, 86400) ?? ethNow; }
+    }
+    lastTradeUsd = lastTrade.px * e;
+  }
+  const windows = {};
+  for (const [k, s] of Object.entries(IV_S)) {
+    const from = Math.floor(now / s) * s - 299 * s;
+    let n = 0;
+    for (const x of b5.values()) if (x.t >= from) n += x.n;
+    windows[k] = n;
+  }
+  return {
+    candles, interval: iv, unit: "USD", ethPriced: quote === "eth" ? (perBar ? "per bar" : "today") : null,
+    tradesInWindow: q.reduce((s, x) => s + x.n, 0), windowHours: +(((endB + step - startB) / 3600).toFixed(2)),
+    lastTradeAt: lastTrade ? lastTrade.t * 1000 : null, lastTradeUsd, windows, windowsFrom: covered, updatedAt: Date.now(),
+  };
+}
+
+/* Uniswap v3 and v4 pools on chain (stock tokens and every coin whose main pool is one): the pool's Swap events, read
+   through our node in pieces it takes (rpc() splits a range of up to 300,000 blocks into Chainstack's 9,000), folded into
+   the same 5-minute buckets. GeckoTerminal kept stock charts waiting 16-31 s cold (SPCX, NVDA, 20 Nov 2026) and stays the
+   fallback. A first read covers the last 26 hours (the 5m chart's window) and runs in the background, one read at a
+   time for the whole server, while that visit's chart comes from GeckoTerminal; older history is filled backwards in the
+   background up to 7 days. The 20 most traded stocks are read at start and kept current every 2 minutes.
+     v3 Swap (the pool) topics: sender, recipient; data: amount0, amount1, sqrtPriceX96, liquidity, tick
+     v4 Swap (PoolManager) topics: id, sender; data: amount0, amount1, sqrtPriceX96, liquidity, tick, fee
+   The quote side (WETH or native ETH, or USDG) is read from DexScreener's pair; which side of the pool the coin is on is
+   settled by the price itself (the two readings differ by many orders of magnitude) against DexScreener's price. */
+const T_V3SWAP = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67";
+const POOLC = new Map();             // token -> pool reader (below)
+const POOL_INIT_S = 26 * 3600;
+const POOL_BACK_MAX_S = 7 * 86400;
+const POOL_SPAN = 250_000;           // blocks per read (about 7 hours at 10 blocks a second)
+const QUOTES = { [lc(RH.weth)]: ["eth", 18], "0x0000000000000000000000000000000000000000": ["eth", 18], [lc(RH.usdg)]: ["usd", 6] };
+let BPS = null;
+async function blocksPerSec() {
+  if (BPS && Date.now() - BPS.at < 3600_000) return BPS.v;
+  const head = Number(BigInt(await rhRpc("robinhood", "eth_blockNumber", [])));
+  const ts = await blockTimes([head - 200_000, head]);
+  const t0 = ts.get(head - 200_000), t1 = ts.get(head);
+  BPS = { v: t0 && t1 > t0 ? 200_000 / (t1 - t0) : 10, at: Date.now() };
+  return BPS.v;
+}
+async function mainPoolOf(a) {
+  const row = board.rows.get(a) || (await getRobinhoodToken(a).catch(() => null))?.token || null;
+  const pool = lc(row?.pool || "");
+  const v4 = /^0x[0-9a-f]{64}$/.test(pool);
+  if (!v4 && !/^0x[0-9a-f]{40}$/.test(pool)) return null;
+  if (/^pons/.test(row.poolDex || "")) return null;               // a Pons curve is read by chainTrades above, not as a pool
+  if (v4 && !/^uniswap/.test(row.poolDex || "")) return null;   // only Uniswap's PoolManager emits these Swap events
+  const p = (await dsTokenPairs(a).catch(() => [])).find((x) => lc(x.pairAddress) === pool && lc(x.baseToken?.address) === a) || null;
+  const qaddr = p ? lc(p.quoteToken?.address) : null;
+  const q = qaddr ? QUOTES[qaddr] : /^W?ETH$/i.test(row.quoteSymbol || "") ? ["eth", 18] : /^USDG$/i.test(row.quoteSymbol || "") ? ["usd", 6] : null;
+  if (!q) return null;
+  const ref = fnum(p?.priceNative) ?? (q[0] === "eth" ? fnum(row.priceEth) : fnum(row.priceUsd));
+  return { pool, v4, quote: q[0], qdec: q[1], qaddr, ref: ref > 0 ? ref : null, createdAt: fnum(p?.pairCreatedAt) ?? null };
+}
+async function poolReader(a) {
+  let c = POOLC.get(a);
+  if (c && Date.now() - c.metaAt < 30 * 60_000) return c.bad ? null : c;
+  const m = await mainPoolOf(a);
+  if (!m) { POOLC.set(a, { bad: true, metaAt: Date.now() }); return null; }
+  if (c && !c.bad && c.pool === m.pool) { Object.assign(c, { ref: m.ref, createdAt: m.createdAt, metaAt: Date.now() }); return c; }
+  const decHex = await rhRpc("robinhood", "eth_call", [{ to: a, data: "0x313ce567" }, "latest"]).catch(() => null);
+  c = { a, ...m, dec: decHex && decHex !== "0x" ? Number(BigInt(decHex)) : 18, flip: null, lo: null, hi: null, loTs: null, b5: new Map(), n: 0,
+    lastT: null, backTo: POOL_INIT_S, born: false, bad: false, metaAt: Date.now(), fwdP: null, queued: {} };
+  POOLC.set(a, c);
+  while (POOLC.size > 300) POOLC.delete(POOLC.keys().next().value);
+  return c;
+}
+async function poolLogs(c, from, to) {
+  const out = [];
+  const q = c.v4 ? { address: RH.poolManager, topics: [T_V4SWAP, c.pool] } : { address: c.pool, topics: [T_V3SWAP] };
+  for (let s = from; s <= to; s += POOL_SPAN) {
+    const e = Math.min(to, s + POOL_SPAN - 1);
+    const logs = await rhRpc("robinhood", "eth_getLogs", [{ ...q, fromBlock: rhHex(s), toBlock: rhHex(e) }], { only: RH_CHAINS.robinhood.wide, timeoutMs: 25_000 });
+    if (!Array.isArray(logs)) throw new Error("no logs answer");
+    out.push(...logs);
+  }
+  return out;
+}
+// one Swap log -> [price of the coin in the quote unit, quote amount], for a given side of the pool
+function swapOf(c, l, flip) {
+  const w = (l.data.slice(2).match(/.{64}/g) || []).map((x) => BigInt("0x" + x));
+  if (w.length < 3 || w[2] === 0n) return null;
+  const sq = Number(w[2]) / 2 ** 96, r = sq * sq, f = 10 ** (c.dec - c.qdec);
+  const px = (flip ? 1 / r : r) * f;
+  const vq = Math.abs(Number(s256(flip ? w[0] : w[1]))) / 10 ** c.qdec;
+  return isFinite(px) && px > 0 ? [px, vq] : null;
+}
+async function foldPoolLogs(c, logs) {
+  if (!logs.length) return;
+  const num = (v) => Number(BigInt(v));
+  logs.sort((x, y) => num(x.blockNumber) - num(y.blockNumber) || num(x.logIndex) - num(y.logIndex));
+  if (c.flip == null) {
+    // which side the coin is on: the latest swap read both ways, the one near DexScreener's price wins; without a price,
+    // the address order (token0 is the lower address; native ETH is always currency0 in v4)
+    const l = logs[logs.length - 1], a0 = swapOf(c, l, false), a1 = swapOf(c, l, true);
+    const off = (x) => (x && c.ref ? Math.abs(Math.log10(x[0] / c.ref)) : Infinity);
+    if (c.ref) c.flip = off(a1) < off(a0);
+    else if (c.qaddr) c.flip = BigInt(c.qaddr) < BigInt(c.a);
+    else { c.bad = true; return; }
+    // neither reading near the pool's own price: not a pool these events describe; GeckoTerminal keeps the chart
+    if (c.ref && Math.min(off(a0), off(a1)) > Math.log10(20)) { c.bad = true; return; }
+  }
+  const ts = await blockTimes(logs.filter((l) => !(Number(l.blockTimestamp) > 0)).map((l) => num(l.blockNumber)));
+  for (const l of logs) {
+    const t = Number(l.blockTimestamp) > 0 ? num(l.blockTimestamp) : ts.get(num(l.blockNumber));
+    const s = t ? swapOf(c, l, c.flip) : null;
+    if (!s) continue;
+    addB5(c.b5, t, num(l.blockNumber) * 1e5 + num(l.logIndex), s[0], s[1]);
+    c.n++;
+    if (!c.lastT || t >= c.lastT.t) c.lastT = { t, px: s[0] };
+  }
+}
+function poolForward(c) {
+  if (c.fwdP) return c.fwdP;
+  c.fwdP = (async () => {
+    const head = Number(BigInt(await rhRpc("robinhood", "eth_blockNumber", []))) - 100;   // the RPCs trail our node a little
+    if (c.hi == null) {
+      const from = Math.max(0, head - Math.ceil(POOL_INIT_S * (await blocksPerSec())));
+      await foldPoolLogs(c, await poolLogs(c, from, head));
+      const ts = await blockTimes([from]);
+      c.lo = from; c.loTs = ts.get(from) || Math.floor(Date.now() / 1000) - POOL_INIT_S; c.hi = head;
+      if (c.createdAt && c.loTs * 1000 <= c.createdAt) c.born = true;   // a pool younger than 26 h: all of it is read
+    } else if (head > c.hi) {
+      await foldPoolLogs(c, await poolLogs(c, c.hi + 1, head));
+      c.hi = head;
+    }
+    c.at = Date.now();
+  })().finally(() => { c.fwdP = null; });
+  return c.fwdP;
+}
+async function poolBack(c) {
+  if (c.hi == null || c.bad || c.born || c.lo <= 0) return false;
+  const want = Math.floor(Date.now() / 1000) - Math.min(c.backTo, POOL_BACK_MAX_S);
+  if (c.loTs <= want) return false;
+  const from = Math.max(0, c.lo - POOL_SPAN);
+  await foldPoolLogs(c, await poolLogs(c, from, c.lo - 1));
+  const ts = await blockTimes([from]);
+  c.lo = from; c.loTs = ts.get(from) || c.loTs - Math.round(POOL_SPAN / (await blocksPerSec()));
+  if (from === 0 || (c.createdAt && c.loTs * 1000 <= c.createdAt)) c.born = true;
+  return !c.born && c.loTs > want;
+}
+// one pool read at a time for the whole server, first reads ahead of back-fills
+const PQ = { fwd: [], back: [], busy: false };
+function poolJob(c, kind) {
+  if (!c || c.bad || c.queued[kind]) return;
+  c.queued[kind] = true; PQ[kind].push(c);
+  pumpPools();
+}
+async function pumpPools() {
+  if (PQ.busy) return;
+  PQ.busy = true;
+  try {
+    for (;;) {
+      const kind = PQ.fwd.length ? "fwd" : PQ.back.length ? "back" : null;
+      if (!kind) break;
+      const c = PQ[kind].shift();
+      c.queued[kind] = false;
+      try {
+        if (kind === "fwd") await poolForward(c);
+        else if (await poolBack(c)) poolJob(c, "back");
+        c.err = null;
+      } catch (e) { c.err = String(e?.message || e).slice(0, 120); c.errAt = Date.now(); }
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  } finally { PQ.busy = false; }
+}
+async function poolCandles(a, iv) {
+  const c = await poolReader(a);
+  if (!c) return null;
+  if (c.hi == null) { poolJob(c, "fwd"); return null; }   // its first read runs in the background; GeckoTerminal answers now
+  // a reader kept current answers at once; one that fell behind catches up for at most 1.5 s, then answers as it is
+  await Promise.race([poolForward(c).catch(() => {}), new Promise((r) => setTimeout(r, 1500).unref?.())]);
+  if (c.bad || !c.n) return null;
+  const step = IV_S[iv], now = Math.floor(Date.now() / 1000);
+  const age = c.createdAt ? Math.max(step, now - Math.floor(c.createdAt / 1000)) : Infinity;
+  const need = Math.min(300 * step, age), covered = now - c.loTs;
+  if (covered < need - step && !c.born) { c.backTo = Math.max(c.backTo, need); poolJob(c, "back"); }
+  const full = c.born || covered >= need - step;
+  // older bars from GeckoTerminal's last copy of the same pool (kept on disk), when the chain read does not reach back
+  const lastC = full ? null : LAST.get(`c:${a}:${iv}`);
+  const older = lastC && lc(lastC.pool || "") === c.pool ? (lastC.candles || []).filter((x) => x.time < c.loTs - step) : [];
+  if (!full && !older.length && covered < 36 * step) return null;
+  const out = await buildCandles(c.b5, iv, { quote: c.quote, lastTrade: c.lastT, covered: c.loTs * 1000 });
+  if (!out) return null;
+  const venue = c.v4 ? "Uniswap v4 pool" : "Uniswap v3 pool";
+  const first = out.candles[0]?.time ?? Infinity;
+  if (older.length) out.candles = [...older.filter((x) => x.time < first), ...out.candles].slice(-300);
+  out.source = `On-chain: ${venue}${older.length ? " (older bars from GeckoTerminal)" : ""}${out.ethPriced === "today" ? ", USD at today's ETH price" : ""}`;
+  out.pool = c.pool; out.trades = c.n;
+  return out;
+}
+// keep the 20 most traded stock tokens read, so their charts answer from memory like $TROYA's
+async function warmStockCharts() {
+  const s = await getStocks().catch(() => null);
+  const top = (s?.stocks || []).filter((x) => x.volume24hUsd > 0).sort((x, y) => y.volume24hUsd - x.volume24hUsd).slice(0, 20);
+  for (const x of top) {
+    const c = await poolReader(x.address).catch(() => null);
+    if (!c) continue;
+    c.backTo = POOL_BACK_MAX_S;
+    poolJob(c, "fwd"); poolJob(c, "back");
+  }
+}
+
 async function chainCandles(a, iv) {
   const c = await chainTrades(a);
-  if (!c || !c.trades.length) return null;
-  const step = IV_S[iv], ethUsd = await getEthUsd().catch(() => null);
-  if (!ethUsd) return null;
-  const now = Math.floor(Date.now() / 1000), by = new Map();
-  for (const [t, px, eth] of c.trades) {
-    const b = Math.floor(t / step) * step, p = px * ethUsd, v = eth * ethUsd, k = by.get(b);
-    if (!k) by.set(b, { time: b, open: p, high: p, low: p, close: p, volume: v });
-    else { k.high = Math.max(k.high, p); k.low = Math.min(k.low, p); k.close = p; k.volume += v; }
-  }
-  // quiet stretches carry the last price forward, up to the current bar, so the chart runs to now (300 bars at most)
-  const first = Math.min(...by.keys()), endB = Math.floor(now / step) * step, out = [];
-  let prev = null;
-  for (let b = Math.max(first, endB - 299 * step); b <= endB; b += step) {
-    const k = by.get(b);
-    if (k) { if (prev != null) { k.open = prev; k.high = Math.max(k.high, prev); k.low = Math.min(k.low, prev); } out.push(k); prev = k.close; }
-    else if (prev != null) out.push({ time: b, open: prev, high: prev, low: prev, close: prev, volume: 0 });
-    else { const before = c.trades.filter(([t]) => t < b).pop(); if (before) { prev = before[1] * ethUsd; out.push({ time: b, open: prev, high: prev, low: prev, close: prev, volume: 0 }); } }
-  }
+  if (!c) return poolCandles(a, iv);   // not a Pons coin: its Uniswap pool, when that is its main pool
+  if (!c.trades.length) return null;
+  const b5 = new Map();
+  c.trades.forEach(([t, px, eth], i) => addB5(b5, t, i, px, eth));
+  const last = c.trades.reduce((m, x) => (!m || x[0] >= m[0] ? x : m), null);
+  const out = await buildCandles(b5, iv, { quote: "eth", lastTrade: last ? { t: last[0], px: last[1] } : null });
+  if (!out) return null;
   const src = c.poolId ? (c.curve ? "On-chain: Pons curve + Uniswap v4 pool" : "On-chain: Uniswap v4 pool") : "On-chain: Pons curve";
-  return { candles: out, interval: iv, source: `${src}, USD at today's ETH price`, unit: "USD", trades: c.trades.length, updatedAt: Date.now() };
+  out.source = `${src}${out.ethPriced === "today" ? ", USD at today's ETH price" : ""}`;
+  out.trades = c.trades.length;
+  return out;
 }
 
 // bg: a background job (the Record back-fill, smart DCA sizing) waits behind people loading a chart or a range
@@ -1295,6 +1568,29 @@ export async function getRobinhoodCandles(address, interval = "1h", { bg = false
 }
 
 /* ---------------- tokenized stocks ---------------- */
+// One source per number: the batch endpoint (tokens/v1) gives each stock ONE pair, so the list read NVDA at $7.1M of
+// volume while its page added up its pools ($19.8M, 20 Nov 2026). The list now takes the volume, liquidity and trade
+// counts from what the coin page shows: the board's row (every pool of the coin, the page's own source) when the board
+// has the stock, else DexScreener's full pair list summed as the page sums it (token-pairs, read in the background: the
+// 20 most traded every pass, 10 more in turn, about 15 calls a minute against DexScreener's 300). Price and 24h change
+// stay the batch's deepest pair, read every 2 minutes.
+const STOCK_PAIRS = new Map();   // address -> { pairs, at }
+let stockPairsBusy = false, stockCursor = 0;
+async function refreshStockPairs(list) {
+  if (stockPairsBusy) return;
+  stockPairsBusy = true;
+  try {
+    const top = [...list].sort((x, y) => (y.volume24hUsd || 0) - (x.volume24hUsd || 0)).slice(0, 20).map((x) => x.address);
+    const rest = list.map((x) => x.address).filter((a) => !top.includes(a));
+    const turn = rest.length ? Array.from({ length: Math.min(10, rest.length) }, (_, k) => rest[(stockCursor + k) % rest.length]) : [];
+    stockCursor = rest.length ? (stockCursor + turn.length) % rest.length : 0;
+    for (const a of [...top, ...turn]) {
+      const ps = await dsTokenPairs(a).catch(() => null);
+      if (ps?.length) STOCK_PAIRS.set(a, { pairs: ps, at: Date.now() });
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  } finally { stockPairsBusy = false; }
+}
 export async function getStocks() {
   return memo("rh:stocks", 2 * 60_000, async () => {
     const ethUsd = await getEthUsd().catch(() => null);
@@ -1302,11 +1598,18 @@ export async function getStocks() {
     const stocks = STOCKS.map((x) => {
       const a = lc(x.address), r = rows.get(a);
       if (r?.image) IMAGES.set(a, r.image);
+      const live = board.rows.get(a);
+      const sp = STOCK_PAIRS.get(a);
+      const all = !live && sp && Date.now() - sp.at < 30 * 60_000 ? dsRows(sp.pairs, ethUsd).get(a) : null;
+      const sum = live && live.volume24hUsd != null ? live : all;
       return { address: a, symbol: x.symbol, name: x.name, decimals: x.decimals, priceUsd: r?.priceUsd ?? null, priceEth: r?.priceEth ?? null, change24h: r?.change24h ?? null,
-        volume24hUsd: r?.volume24hUsd ?? null, liquidityUsd: r?.liquidityUsd ?? null, mcapUsd: r?.mcapUsd ?? null, image: r?.image || null, pool: r?.pool || null, poolDex: r?.poolDex || null, tradable: !!r?.tradable };
+        volume24hUsd: sum?.volume24hUsd ?? r?.volume24hUsd ?? null, liquidityUsd: sum?.liquidityUsd ?? r?.liquidityUsd ?? null, mcapUsd: r?.mcapUsd ?? null,
+        txns24h: sum?.txns24h ?? r?.txns24h ?? null, pools: live ? live.pools?.length ?? null : all ? sp.pairs.filter((p) => lc(p.baseToken?.address) === a).length : null, volumeSource: live ? "index" : all ? "all pairs" : r ? "one pair" : null,
+        image: r?.image || null, pool: r?.pool || null, poolDex: r?.poolDex || null, tradable: !!r?.tradable };
     });
     if (!stocks.some((x) => x.priceUsd != null)) throw new Error("DexScreener returned no stock prices");
-    return { stocks, updatedAt: Date.now(), source: "DexScreener (on-chain pools)", ethUsd };
+    refreshStockPairs(stocks).catch(() => {});
+    return { stocks, updatedAt: Date.now(), source: "DexScreener (on-chain pools) + Troya index", ethUsd };
   });
 }
 
@@ -1706,5 +2009,8 @@ export async function register(r) {
     // stock tokens (seven DexScreener calls). Each tick refreshes only an entry past its ttl.
     const warm = (fn, ms) => { setTimeout(() => fn().catch(() => {}), 5000).unref?.(); setInterval(() => fn().catch(() => {}), ms).unref?.(); };
     warm(getEthUsd, 15_000); warm(getHlMarkets, 20_000); warm(getHlSpot, 60_000); warm(getStocks, 2 * 60_000);
+    // the 20 most traded stock tokens' pools, read from the chain at start and kept current, like $TROYA's curve above
+    setTimeout(() => warmStockCharts().catch(() => {}), 45_000).unref?.();
+    setInterval(() => warmStockCharts().catch(() => {}), 2 * 60_000).unref?.();
   }
 }

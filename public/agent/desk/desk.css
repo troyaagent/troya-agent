@@ -143,6 +143,10 @@ body.drawer-open .d-fab, body.on-chat .d-fab { opacity: 0; pointer-events: none;
 .dk-agent-b { margin-left: 8px !important; margin-right: 8px !important; }
 .dk-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .d-right .chain-chip, .d-right .wallet-btn { white-space: nowrap; }
+/* connected, not signed in yet: a quiet tag on the wallet button (a dot on small phones, where the bar is tight) */
+.wallet-btn .wb-sign { margin-left: 2px; padding: 2px 7px; border-radius: 999px; border: 1px solid rgba(142, 223, 245, .3); background: var(--up-bg); color: var(--blue); font-size: 10.5px; font-weight: 600; line-height: 1.3; letter-spacing: .01em; }
+html[data-theme="light"] .wallet-btn .wb-sign { border-color: rgba(10, 126, 163, .28); background: rgba(10, 126, 163, .08); color: #0a6f91; }
+@media (max-width: 560px) { .wallet-btn .wb-sign { width: 7px; height: 7px; padding: 0; border: 0; font-size: 0; background: var(--blue); } html[data-theme="light"] .wallet-btn .wb-sign { background: #0a7ea3; } }
 /* the chain chip is a button: a card about the network, or (wallet on another chain) a warm tint and a switch on click */
 .d-right .chain-chip { cursor: pointer; transition: border-color .3s, color .3s, background .3s; }
 .d-right .chain-chip:hover, .d-right .chain-chip[aria-expanded="true"] { border-color: var(--line-3); color: var(--fg); }

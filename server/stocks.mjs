@@ -1,8 +1,9 @@
 // F17 · Stock desk: Robinhood stock tokens on Robinhood Chain.
 //   GET /api/stocks/desk           → every stock token (price, the ERC-8056 multiplier that dividends and splits move,
 //                                    pending changes) and the corporate actions calendar (cash dividends, splits)
-//   GET /api/stocks/loans?address= → Morpho Blue markets that lend USDG against stock tokens, and the user's loans with
-//                                    health factor and the collateral price where liquidation starts
+//   GET /api/stocks/loans?address= → Morpho Blue markets that lend USDG against stock tokens (with the borrow and supply APY
+//                                    their interest rate model charges right now), and the user's loans with health factor,
+//                                    the collateral price where liquidation starts and the interest a year at today's rate
 // Sources: Robinhood's stock token API (api.robinhood.com/rhj), DexScreener for pool prices, Morpho Blue on chain.
 import { Interface } from "ethers";
 import { rpc, ADDR } from "./robinhood.mjs";
@@ -94,6 +95,25 @@ const morpho = new Interface([
   "function position(bytes32, address) view returns (uint256 supplyShares, uint128 borrowShares, uint128 collateral)",
 ]);
 const oracleI = new Interface(["function price() view returns (uint256)"]);
+// Morpho's interest rate model (AdaptiveCurve on these markets). borrowRateView is the per-second rate (1e18 scale) the market
+// accrues from its last update to now, the same number Morpho itself charges, so it is read on chain instead of guessed.
+const irmI = new Interface([
+  "function borrowRateView((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee) market) view returns (uint256)",
+]);
+const YEAR_S = 31_536_000;
+/** Per-second borrow rate (1e18) → borrow APY in percent. Morpho compounds every second, so APY = e^(rate·year) − 1. */
+export function borrowApyPct(ratePerSec) {
+  if (ratePerSec == null) return null;
+  const v = Math.expm1((Number(ratePerSec) / 1e18) * YEAR_S) * 100;
+  return isFinite(v) ? v : null;
+}
+/** What lenders earn: the borrow rate on the lent share of the pool, less Morpho's fee (1e18 scale), compounded every second
+ *  like the borrow side (as Morpho's app shows it; borrow APY × utilization would read a little high). */
+export function supplyApyPct(ratePerSec, utilization, fee) {
+  if (ratePerSec == null) return null;
+  const v = Math.expm1((Number(ratePerSec) / 1e18) * YEAR_S * (utilization || 0) * (1 - Number(fee || 0) / 1e18)) * 100;
+  return isFinite(v) ? v : null;
+}
 const mc = new Interface(["function aggregate3(tuple(address target,bool allowFailure,bytes callData)[] calls) payable returns (tuple(bool success,bytes returnData)[] returnData)"]);
 async function multicall(calls) {
   const raw = await rpc("robinhood", "eth_call", [{ to: ADDR.multicall3, data: mc.encodeFunctionData("aggregate3", [calls.map((c) => ({ target: c.to, allowFailure: true, callData: c.data }))]) }, "latest"], { timeoutMs: 15000 });
@@ -109,12 +129,23 @@ async function marketsState() {
       });
     });
     const r = await multicall(params.flatMap((p) => [{ to: MORPHO, data: morpho.encodeFunctionData("market", [p.id]) }, { to: p.oracle, data: oracleI.encodeFunctionData("price") }]));
+    const mk = params.map((p, i) => morpho.decodeFunctionResult("market", r[2 * i].returnData));
+    // the rate needs the market state just read, so it is a second round; a model that fails to answer leaves the APY empty
+    // ("–" on the desk), never a made-up number
+    const rr = await multicall(params.map((p, i) => ({ to: p.irm, data: irmI.encodeFunctionData("borrowRateView", [
+      [p.loanToken, p.collateralToken, p.oracle, p.irm, p.lltv],
+      [mk[i].totalSupplyAssets, mk[i].totalSupplyShares, mk[i].totalBorrowAssets, mk[i].totalBorrowShares, mk[i].lastUpdate, mk[i].fee]]) }))).catch(() => []);
     return params.map((p, i) => {
-      const m = morpho.decodeFunctionResult("market", r[2 * i].returnData);
+      const m = mk[i];
       const price = r[2 * i + 1].success ? BigInt(oracleI.decodeFunctionResult("price", r[2 * i + 1].returnData)[0]) : null;
-      const supply = Number(m.totalSupplyAssets) / 1e6, borrow = Number(m.totalBorrowAssets) / 1e6;
-      return { ...p, lltvPct: Number(BigInt(p.lltv) / 10n ** 14n) / 100, supplyUsdg: supply, borrowUsdg: borrow, utilization: supply ? borrow / supply : 0, liquidityUsdg: supply - borrow,
+      const supply = Number(m.totalSupplyAssets) / 1e6, borrow = Number(m.totalBorrowAssets) / 1e6, utilization = supply ? borrow / supply : 0;
+      let rate = null;
+      try { if (rr[i]?.success) rate = irmI.decodeFunctionResult("borrowRateView", rr[i].returnData)[0]; } catch { rate = null; }
+      const bApy = borrowApyPct(rate);
+      return { ...p, lltvPct: Number(BigInt(p.lltv) / 10n ** 14n) / 100, supplyUsdg: supply, borrowUsdg: borrow, utilization, liquidityUsdg: supply - borrow,
         priceUsd: price != null ? Number(price) / 1e24 : null,   // oracle: USDG (6 dec) per stock token (18 dec) at 1e36 scale
+        // variable: AdaptiveCurve moves the rate with utilization, and keeps pushing it up while a market sits above 90% lent
+        borrowApyPct: bApy, supplyApyPct: supplyApyPct(rate, utilization, m.fee), feePct: Number(m.fee) / 1e16,
         _m: { tba: m.totalBorrowAssets.toString(), tbs: m.totalBorrowShares.toString() }, _price: price?.toString() ?? null };
     });
   });
@@ -122,7 +153,7 @@ async function marketsState() {
 export async function stockLoans(address) {
   const ms = await marketsState();
   const out = { markets: ms.map(({ _m, _price, ...x }) => x), loans: [], updatedAt: Date.now(),
-    note: "Morpho Blue lends USDG against stock tokens. A loan can be liquidated when its health factor falls to 1, that is when the collateral is worth less than the loan divided by the LLTV." };
+    note: "Morpho Blue lends USDG against stock tokens. A loan can be liquidated when its health factor falls to 1, that is when the collateral is worth less than the loan divided by the LLTV. The borrow rate is variable: it rises as more of a market is lent out, and the interest is added to the loan, which lowers its health over time." };
   if (!address) return out;
   if (!/^0x[0-9a-fA-F]{40}$/.test(address)) throw new HttpError(400, "That is not a valid address.");
   const r = await multicall(ms.map((m) => ({ to: MORPHO, data: morpho.encodeFunctionData("position", [m.id, address]) })));
@@ -140,6 +171,7 @@ export async function stockLoans(address) {
       marketId: m.id, symbol: m.symbol, collateral: collTokens, collateralRaw: coll.toString(), borrowShares: bs.toString(), borrowRaw: borrowRaw.toString(), collateralUsd: m.priceUsd ? collTokens * m.priceUsd : null, borrowUsdg: borrow,
       maxBorrowUsdg: Number(maxBorrowRaw) / 1e6, health: borrowRaw > 0n ? Number(maxBorrowRaw) / Number(borrowRaw) : null,
       liquidationPriceUsd: borrow > 0 && collTokens > 0 ? borrow / (collTokens * (m.lltvPct / 100)) : null, lltvPct: m.lltvPct, priceUsd: m.priceUsd,
+      borrowApyPct: m.borrowApyPct, interestPerYearUsdg: m.borrowApyPct != null ? borrow * m.borrowApyPct / 100 : null,   // at today's rate
     });
   });
   return out;

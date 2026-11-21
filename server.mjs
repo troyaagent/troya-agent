@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { initApi, handleApi } from "./server/api.mjs";
+import { handleShare } from "./server/share.mjs";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = join(HERE, "public");
@@ -191,6 +192,9 @@ async function serve(req, res) {
     if (req.method === "OPTIONS") { res.writeHead(204).end(); return; }
   }
   if (url.pathname === "/skill.md" || url.pathname === "/llms.txt") res.setHeader("access-control-allow-origin", "*");
+  // share links with their own link preview: /t/<coin> (and its .png), /r/<referral code> (server/share.mjs). A link to
+  // /agent#/token/… cannot have one: the part after "#" never reaches the server, so every coin showed the same og.png
+  if (url.pathname.startsWith("/t/") || url.pathname.startsWith("/r/")) { if (await handleShare(req, res, url)) return; }
   if (await handleApi(req, res, url)) return;
   let path;
   try { path = decodeURIComponent(url.pathname); } catch { res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }).end("Bad request"); return; }

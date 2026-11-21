@@ -1,7 +1,8 @@
 // /badge: make a live Troya Gate badge for a Robinhood Chain coin, show the result it is based on, and the embed code.
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const WORD = { passed: "Passed", caution: "Caution", failed: "Failed", untested: "Not tested yet", error: "Unavailable" };
+// the shared Gate words (public/agent/js/verdict.js LABEL), as the badge image and Swap read them
+const WORD = { passed: "Passed", caution: "Passed with notes", failed: "Blocked", untested: "Not testable yet", error: "Unavailable" };
 const form = $("[data-badge-form]"), input = $("[data-badge-ca]"), out = $("[data-badge-out]");
 async function copyText(t, b) { try { await navigator.clipboard.writeText(t); b.textContent = "COPIED"; setTimeout(() => (b.textContent = "COPY"), 1400); } catch { b.textContent = "SELECT"; } }
 async function show(ca) {

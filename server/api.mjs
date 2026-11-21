@@ -2,6 +2,11 @@
 // Routes are served under /api/* and mirrored under /agent/api/* (the public REST base).
 import { initStore } from "./store.mjs";
 import { interactive } from "./kyber.mjs";
+import { AsyncLocalStorage } from "node:async_hooks";
+
+// Set while an API call is being served: robinhood.mjs reads it to put a person's RPC reads ahead of background scans on
+// the rate-limited official Robinhood Chain RPC (its broker's user lane).
+export const requestLane = new AsyncLocalStorage();
 
 const MODULES = [
   "./market.mjs",      // Robinhood Chain board (GeckoTerminal + Pons), tokenized stocks, Hyperliquid markets, brief, signals
@@ -180,7 +185,7 @@ export async function handleApi(req, res, url) {
   try {
     const body = method === "POST" || method === "DELETE" ? await readBody(req, hit.opts.maxBody) : {};
     const run = () => hit.fn({ req, res, url, params, query: Object.fromEntries(url.searchParams), body, ip, ctx });
-    const out = await (INTERACTIVE.has(`${hit.method} ${hit.path}`) ? interactive(run) : run());
+    const out = await requestLane.run({ at: Date.now() }, () => (INTERACTIVE.has(`${hit.method} ${hit.path}`) ? interactive(run) : run()));
     if (out === undefined) { if (!res.writableEnded) send(res, 204, {}); }
     else if (!res.headersSent) send(res, 200, out);
   } catch (e) {

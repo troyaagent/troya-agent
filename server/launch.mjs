@@ -92,11 +92,68 @@ export function coinNameProblem(name) {
   if (n.length > 48) return "The name is limited to 48 characters.";
   return null;
 }
+// The ticker is kept exactly as it was typed, on every path (21 Nov audit: the web form used to write "horse" as HORSE while
+// X and Telegram kept "horse"): letters and numbers, 16 at most, upper or lower case as the creator chose.
 export function nameProblem(name, symbol) {
   const n = String(name || "").trim(), s = String(symbol || "").trim().replace(/^\$/, "");
   if (!n || !s) return "The coin needs a name and a $TICKER.";
   if (!/^[A-Za-z0-9]{1,16}$/.test(s)) return "The ticker can only use letters and numbers, 16 at most.";
   return coinNameProblem(n);
+}
+
+/* ---------- the coin's links: website and Telegram group, written on chain with it for good ---------- */
+// X posts and Telegram captions carry them as "site: example.com" and "tg: t.me/group"; Telegram's links step also takes
+// plain links and a line of text. Only an http(s) address with a real dotted host passes, and never a t.co link (X's
+// shortener): that would be written into the coin instead of the site itself. A link that can't be read is left out.
+const LINK_MAX = 256;                          // what Pons keeps of a social link (robinhood.mjs buildLaunchTx)
+const tail = (s) => String(s || "").trim().replace(/[)\].,;:!?'"]+$/, "");
+const HOST = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,24}|xn--[a-z0-9-]{2,59})$/i;
+/** "example.com", "https://example.com/x" → a full https? link, or null */
+export function siteLink(v) {
+  const s = tail(v);
+  if (!s || s.length > LINK_MAX) return null;
+  try {
+    const u = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`);
+    if (!/^https?:$/.test(u.protocol) || u.username || u.password || !HOST.test(u.hostname) || /^t\.co$/i.test(u.hostname)) return null;
+    return u.href.length <= LINK_MAX ? u.href : null;
+  } catch { return null; }
+}
+/** "t.me/group", "https://t.me/+invite", "@group", "group" → https://t.me/…, or null */
+export function tgLink(v) {
+  const s = tail(v).replace(/^@/, "");
+  if (/^[A-Za-z0-9_]{4,32}$/.test(s)) return `https://t.me/${s}`;
+  const m = s.match(/^(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)\/(\+[\w-]{6,64}|joinchat\/[\w-]{6,64}|[A-Za-z0-9_]{4,32})\/?$/i);
+  return m ? `https://t.me/${m[1]}` : null;
+}
+const LINK_TOKEN = /(^|\s)(site|website|web|tg|telegram)\s*[:=]\s*(\S+)/gi;
+/** "… site: example.com tg: t.me/x" → { website, telegram, rest } (rest: the text without those tokens) */
+export function linksIn(text) {
+  let website = null, telegram = null;
+  const rest = String(text || "").replace(LINK_TOKEN, (all, lead, k, v) => {
+    if (/^t/i.test(k)) telegram ||= tgLink(v); else website ||= siteLink(v);
+    return lead || " ";
+  });
+  return { website, telegram, rest };
+}
+// a bare domain in free text counts only with a lower-case ending ("mooncat.xyz", not "Mr.Smith")
+const FREE_URL = /(^|\s)((?:https?:\/\/\S+)|(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,24}(?:\/\S*)?|@[A-Za-z0-9_]{4,32})(?=\s|$)/g;
+/**
+ * Telegram's answer to "Website, Telegram group or one-line description?": tokens, links and text in any order.
+ * → { website, telegram, twitter, description } (each "" when not given). The first t.me link (or @group) is the
+ * group, the first x.com link the X account, the first other link the website; what is left is the description.
+ */
+export function linksAnswer(text) {
+  const t = linksIn(String(text || "").replace(/\s+/g, " ").trim());
+  let website = t.website, telegram = t.telegram, twitter = null;
+  const rest = t.rest.replace(FREE_URL, (all, lead, u) => {
+    if (u.startsWith("@") || /^(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)\//i.test(u)) { const g = tgLink(u); if (g && !telegram) { telegram = g; return lead; } return all; }
+    const link = siteLink(u);
+    if (!link) return all;
+    if (/^https?:\/\/(?:www\.)?(?:x|twitter)\.com\//i.test(link)) { if (!twitter) { twitter = link; return lead; } return all; }
+    if (!website) { website = link; return lead; }
+    return all;
+  });
+  return { website: website || "", telegram: telegram || "", twitter: twitter || "", description: rest.replace(/\s+/g, " ").trim().slice(0, 2048) };
 }
 
 /* ---------- limits and the record ---------- */
@@ -287,7 +344,7 @@ function settleLater(hash, r, tries = 8) {
 }
 // LAUNCH_DEBUG=1 logs how long each step of an Agent Wallet launch took (send, receipt, initial buy)
 const lap = (t0, step) => { if (process.env.LAUNCH_DEBUG) console.log(`[launch] ${step} at ${((Date.now() - t0) / 1000).toFixed(1)} s`); };
-async function launchPlanned(p, { owner, name, symbol, logo, creatorTaxBps = 0, description = "", twitter = "", source, ref = null, buyEth = 0 }) {
+async function launchPlanned(p, { owner, name, symbol, logo, creatorTaxBps = 0, description = "", twitter = "", website = "", telegram = "", source, ref = null, buyEth = 0 }) {
   const t0 = Date.now();
   const aw = await import("./agentwallet.mjs");
   const w = await aw.getAgentWallet(owner);
@@ -308,7 +365,9 @@ async function launchPlanned(p, { owner, name, symbol, logo, creatorTaxBps = 0, 
   const out = await aw.executeForUser(owner, {
     kind: "launch", source,
     rationale: `Launch requested on ${source}${ref ? ` (${ref})` : ""}`,
-    params: { name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim(), logo, description, twitter, creatorTaxBps: p.creatorTaxBps, feeRecipient: p.recipient, initialBuyEth: buyEth },
+    // description, website and Telegram are written into the coin on chain, as on the web form (they used to be dropped here)
+    params: { name: String(name).trim(), symbol: String(symbol).replace(/^\$/, "").trim(), logo, description: String(description || "").trim(), twitter, website: siteLink(website) || "", telegram: tgLink(telegram) || "",
+      creatorTaxBps: p.creatorTaxBps, feeRecipient: p.recipient, initialBuyEth: buyEth },
   });
   if (!out.executed) return { ok: false, why: out.blocked ? "blocked" : "not-sent", reasons: out.reasons || [], result: out.result || null, plan: p };
   const hash = out.result?.hash || null;
@@ -352,9 +411,14 @@ async function initialBuy({ owner, token, buyEth, source, launchedAt }) {
 }
 
 /* ---------- F26 · Launch on X ---------- */
-/** "@Troyaagent launch Wooden Horse $HORSE tax 2%" → { name, symbol, taxBps } or null when the post is not a launch. */
+/**
+ * "@Troyaagent launch Wooden Horse $HORSE tax 2% site: horse.xyz tg: t.me/horse" → { name, symbol, taxBps, buyEth } plus
+ * website and telegram when they were written, or null when the post is not a launch.
+ */
 export function parseLaunch(text) {
-  const t = String(text || "").replace(/(^|\s)@\w+/g, " ").replace(/https?:\/\/\S+/g, " ").replace(/\s+/g, " ").trim();
+  // the link tokens first: the mention and link clean-up below would eat "tg: @group" and "site: https://…"
+  const links = linksIn(text);
+  const t = links.rest.replace(/(^|\s)@\w+/g, " ").replace(/https?:\/\/\S+/g, " ").replace(/\s+/g, " ").trim();
   // a short greeting may come first: "hey launch …", "gm, please launch …"
   const m = t.match(/^(?:(?:hey|hi|hello|gm|yo|ok|okay|ser|sir)[\s,!.:-]+)?(?:please\s+|pls\s+)?launch\b\s*(.*)$/i);
   if (!m) return null;
@@ -379,7 +443,7 @@ export function parseLaunch(text) {
   name = name.replace(/^(?:(?:a|an|my|new|the)\s+(?:new\s+)?(?:meme\s*)?(?:coin|token|memecoin)\b\s*(?:(?:called|named)\s+)?|(?:(?:meme\s*)?(?:coin|token|memecoin)\s+)?(?:called|named)\s+)/i, "")
     .replace(/^(?:a|an)\s+(?=\S)/i, "")
     .replace(/(?:\s+(?:with|and|plus|\+)(?:\s+(?:a|an))?)+\s*$/i, "").trim();   // "… with a" left over from "with a 0.01 ETH buy"
-  return { name, symbol, taxBps, buyEth };
+  return { name, symbol, taxBps, buyEth, ...(links.website ? { website: links.website } : {}), ...(links.telegram ? { telegram: links.telegram } : {}) };
 }
 
 /* ---------- reading a launch request written in any words (English) ---------- */
@@ -422,17 +486,20 @@ export async function readLaunch(text) {
   const rule = parseLaunch(text);
   if (rule && rule.symbol && rule.name && !MESSY_NAME.test(rule.name)) return { ...rule, via: "rule" };
   if (!rule && !looksLikeLaunch(text)) return null;
-  const ai = await readIntent(text).catch(() => null);
+  // the link tokens never reach the model nor the literal checks below: "site: v2moon.xyz" must not make "xyz" a ticker
+  // written in the post, nor a "0.01" inside a link a buy; the links themselves come from the tokens only, never the model
+  const links = linksIn(text), body = links.rest;
+  const ai = await readIntent(body).catch(() => null);
   if (!ai) {
     // the model is off or over its cap: nothing written loosely is launched as read; a question is left to the assistant,
     // a request gets the fixed format back
-    const plain = plainOf(text);
+    const plain = plainOf(body);
     if (QUESTION.test(plain)) return null;
     return rule || STRONG_ASK.test(plain) ? { unclear: true } : null;
   }
   // the model read it as a question or as talk about a coin: the assistant answers, nothing is launched
   if (ai.intent !== "launch") return null;
-  const plain = plainOf(text).toLowerCase();
+  const plain = plainOf(body).toLowerCase();
   const symbol = String(ai.symbol || "").replace(/^\$/, "").trim();
   const name = String(ai.name || "").replace(/\s+/g, " ").trim();
   if (!(Number(ai.confidence) >= 0.75) || !symbol || !name || !plain.includes(name.toLowerCase())) return { unclear: true };
@@ -444,7 +511,7 @@ export async function readLaunch(text) {
   const tax = Number(ai.taxPct), buy = Number(ai.buyEth);
   if (ai.taxPct != null && tax > 0) { if (!/\btax\b/.test(plain) || !written(plain, tax)) return { unclear: true }; taxBps = Math.round(tax * 100); }
   if (ai.buyEth != null && buy > 0) { if (!/\bbuy\b/.test(plain) || !written(plain, buy)) return { unclear: true }; buyEth = buy; }
-  return { name: name.slice(0, 48), symbol, taxBps, buyEth, via: "ai" };
+  return { name: name.slice(0, 48), symbol, taxBps, buyEth, ...(links.website ? { website: links.website } : {}), ...(links.telegram ? { telegram: links.telegram } : {}), via: "ai" };
 }
 
 async function linkedOwner(authorId) {
@@ -455,16 +522,32 @@ async function linkedOwner(authorId) {
 let fetchLogo = fetchXImage;
 /** tests only: replace how an X image is fetched (no network in a fork test) */
 export const _setLogoFetcher = (fn) => { fetchLogo = fn; };
+// The posted picture becomes a centre square of at most 1024 px (logosquare.mjs), as on the web form and in Telegram.
+// X's "medium" size (up to 1200 px) is read so a 2:1 picture still gives a 600 px square; if it can't be squared here and is
+// too big for the 1 MB logo store, the "small" size (up to 680 px) is saved as it is, as before.
 async function fetchXImage(url) {
-  const { saveLaunchLogo } = await import("./robinhood.mjs");
+  const [{ saveLaunchLogo }, { squareLogo }] = await Promise.all([import("./robinhood.mjs"), import("./logosquare.mjs")]);
   const u = new URL(url);
   if (u.hostname !== "pbs.twimg.com") throw new Error("not an X image");
-  u.searchParams.set("name", "small");
-  const r = await fetch(u, { signal: AbortSignal.timeout(15000) });
-  if (!r.ok) throw new Error(`image ${r.status}`);
-  const type = String(r.headers.get("content-type") || "").split(";")[0];
-  const buf = Buffer.from(await r.arrayBuffer());
-  return (await saveLaunchLogo(buf, type === "image/jpg" ? "image/jpeg" : type)).url;
+  const get = async (size) => {
+    u.searchParams.set("name", size);
+    const r = await fetch(u, { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`image ${r.status}`);
+    const type = String(r.headers.get("content-type") || "").split(";")[0];
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > 8 * 1024 * 1024) throw new Error("image too large");
+    return squareLogo(buf, type === "image/jpg" ? "image/jpeg" : type);
+  };
+  let img = await get("medium");
+  if (!img.square && img.buf.length > 1024 * 1024) img = await get("small");
+  return (await saveLaunchLogo(img.buf, img.type)).url;
+}
+/** X writes every link in a post as a t.co link; its entities say where each one really goes. The attached photo's own
+ *  link (an entity with a media_key) stays t.co, so a "site:" at the end of a post can never pick up the photo's page. */
+export function expandLinks(text, urls = []) {
+  let s = String(text || "");
+  for (const x of urls || []) if (x?.url && x.expanded_url && !x.media_key && /^https:\/\/t\.co\//.test(x.url)) s = s.split(x.url).join(x.expanded_url);
+  return s;
 }
 const xLaunchMode = async () => { const v = (await store.readJson("x-state.json", {})).launch || process.env.X_LAUNCH || "off"; return ["off", "test", "live"].includes(v) ? v : "off"; };
 /** Launch in Telegram (F27): "off", "test" (admin wallets only, for the real-money test) or "live" (everyone). */
@@ -480,8 +563,9 @@ const DESK = () => `${SITE().replace(/^https?:\/\//, "")}/agent#/launch/x`;
  * { launch }. Nothing is launched unless Launch on X is live, the author linked a wallet, switched Launch from X on,
  * is within the day's launches (one from X without 1M $TROYA) and the Agent Wallet can pay the Pons fee.
  */
-export async function fromX({ tweetId, authorId, text, mediaUrl, mediaKinds = [] }) {
-  const ask = await readLaunch(text);
+export async function fromX({ tweetId, authorId, text, mediaUrl, mediaKinds = [], urls = [] }) {
+  // "site: example.com" reaches us as "site: https://t.co/…": the real address comes from the post's entities
+  const ask = await readLaunch(expandLinks(text, urls));
   if (!ask) return null;
   const done = (await store.readJson("launches.json", [])).find((x) => x.ref === `x:${tweetId}`);
   if (done) return { reply: null, launch: done };
@@ -523,7 +607,8 @@ export async function fromX({ tweetId, authorId, text, mediaUrl, mediaKinds = []
   if (mediaUrl) { try { logo = await fetchLogo(mediaUrl); } catch { return { reply: "Not launched: Troya couldn't read the attached image. To fix: attach a PNG or JPEG (not a GIF) and post again. Nothing was spent." }; } }
   let out;
   try {
-    out = await launchWithAgentWallet({ owner, name: ask.name, symbol: ask.symbol, logo, creatorTaxBps: ask.taxBps, twitter: `https://x.com/i/status/${tweetId}`, source: "x", ref: `x:${tweetId}`, buyEth: ask.buyEth });
+    out = await launchWithAgentWallet({ owner, name: ask.name, symbol: ask.symbol, logo, creatorTaxBps: ask.taxBps, twitter: `https://x.com/i/status/${tweetId}`,
+      website: ask.website || "", telegram: ask.telegram || "", source: "x", ref: `x:${tweetId}`, buyEth: ask.buyEth });
   } catch (e) { return { reply: guide(String(e.message || "the launch failed")) }; }
   if (!out.ok) {
     if (out.why === "no-agent-wallet") return { reply: `Not launched: your wallet has no Agent Wallet yet. To fix: create one and add a little ETH on Robinhood Chain, then post again: ${DESK()}` };
@@ -618,7 +703,7 @@ export function guide(why) {
   if (/couldn't read your \$TROYA balance/i.test(w)) return "Not launched: Troya couldn't read your $TROYA balance just now, so it can't tell which creator fee applies. To fix: post again in a minute. Nothing was spent.";
   // not enough ETH: say how much, where to send it and how to get ETH onto Robinhood Chain (owner, 18 Nov: guide everyone)
   if (/needs at least|not enough|insufficient|balance|top up|for the pons fee/i.test(w))
-    return `Not launched: ${w.replace(/^The Agent Wallet/i, "your Agent Wallet").replace(/ on Robinhood Chain for the Pons fee and gas/i, " for the Pons fee")} (it is separate from your own wallet). To fix: press Add ETH at ${SITE().replace(/^https?:\/\//, "")}/agent#/agent/wallet, about 0.002 ETH, then post again. Nothing was spent.`.slice(0, 275);
+    return `Not launched: ${w.replace(/^The Agent Wallet/i, "your Agent Wallet").replace(/ on Robinhood Chain for the Pons fee and gas/i, " for the Pons fee")} (it is separate from your own wallet). To fix: press Add ETH at ${SITE().replace(/^https?:\/\//, "")}/agent#/agent/wallet, then post again. Nothing was spent.`.slice(0, 275);
   // the daily limit: said once, short, with what a holder gets (the full sentence was cut mid-bracket and repeated itself)
   if (/launches through Troya today|launch from X a day|try again tomorrow/i.test(w)) {
     const fromX = /from X a day/i.test(w);
@@ -834,13 +919,16 @@ export async function register(r, ctx) {
   setTimeout(() => bornToRecord().catch((e) => console.warn("[launch] born → record:", e.message)), 45_000).unref?.();
   r.get("/api/launch/rules", async () => {
     const factory = await splitterFactory();
+    // what one launch from the Agent Wallet needs (X and Telegram), from the live Pons fee: the same figure every reply uses
+    const fee = await launchMenu().then((m) => m.launchFeeEth).catch(() => null);
     return { holderMin: HOLDER_MIN, limits: LIMITS, maxCreatorTaxBps: MAX_TAX_BPS, troyaVolumePct: TROYA_VOLUME_BPS / 100, creatorFeePct: CREATOR_FEE_BPS / 100,
       holderTroyaPct: 0, splitter: factory ? { factory, live: true } : { live: false }, xLaunch: (await xLaunchMode()) === "live", tgLaunch: (await tgLaunchMode()) === "live",
       // the modes themselves (off | test | live, and holders for trading): the Launch from X page reads them from here, so a
       // signed-out visitor sees the real status instead of "opens after its real-money test" for a feature that is open
       xLaunchMode: await xLaunchMode(), xTradeMode: await import("./xtrade.mjs").then((m) => m.tradeMode()).catch(() => "off"),
-      tgBot: process.env.TG_BOT_USERNAME || "TrojanTroya_bot",
-      text: `Free to launch. Troya takes 0.1% of trading volume out of the creator's 0.7% share of the Pons fee; holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA keep all of it. ${(await tgLaunchMode()) === "live" ? "X, Telegram and troya.codes are open to everyone" : "X and troya.codes are open to everyone; Telegram opens after its real-money test"}. Creator tax 0–4%. Without 1M $TROYA: up to ${LIMITS.perDay} launches a day, at most ${LIMITS.perDayX} of them from X; holders have no daily limit.` };
+      tgBot: process.env.TG_BOT_USERNAME || "TrojanTroya_bot", launchFeeEth: fee, needEth: fee != null ? needEthFor(fee) : null,
+      // the launch rules, said once for every path (web, X, Telegram)
+      text: `Free to launch. Troya takes 0.1% of trading volume out of the creator's 0.7% share of the Pons fee; holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA keep all of it. ${(await tgLaunchMode()) === "live" ? "X, Telegram and troya.codes are open to everyone" : "X and troya.codes are open to everyone; Telegram opens after its real-money test"}. Creator tax 0–4%. Without 1M $TROYA: up to ${LIMITS.perDay} launches a day, at most ${LIMITS.perDayX} of them from X; holders have no daily limit. Any name up to 48 characters; the ticker is letters and numbers, up to 16, saved exactly as typed. The image is cropped to a centre square of up to 1024 px; it is required on troya.codes and optional on X and Telegram, where a coin launched without one has none for good. A website and a Telegram group can be added on every path (on X: "site: example.com" and "tg: t.me/group"). From X or Telegram the Agent Wallet needs the Pons launch fee plus 0.0001 ETH${fee != null ? ` (${ethText(needEthFor(fee))} ETH today)` : ""}, plus the buy and 0.0002 ETH for an initial buy; Troya pays the gas.` };
   });
   r.post("/api/launch/plan", ({ body }) => plan({ owner: body?.creator, creatorTaxBps: body?.creatorTaxBps, name: body?.name, symbol: body?.symbol, source: "web" }), { perMin: 30 });
   r.post("/api/launch/record", async ({ req, body }) => recordWeb({ hash: body?.hash, owner: getSession(req)?.address || body?.creator || null, salt: body?.salt, troyaBps: body?.troyaBps }), { perMin: 20 });
@@ -856,7 +944,7 @@ export async function register(r, ctx) {
     const a = requireSession(req).address;
     const x = await import("./xsocial.mjs").then((m) => m.handleOf(a)).catch(() => null);
     const fee = await launchMenu().then((m) => m.launchFeeEth).catch(() => null);
-    return { ...(await prefsOf(a)), xAccount: x, holder: await holderInfo(a).catch(() => null), holderMin: HOLDER_MIN, xLaunch: await xLaunchOn(), xLaunchMode: await xLaunchMode(), tgLaunchMode: await tgLaunchMode(), xTradeMode: await import("./xtrade.mjs").then((m) => m.tradeMode()).catch(() => "off"), launchFeeEth: fee,
+    return { ...(await prefsOf(a)), xAccount: x, holder: await holderInfo(a).catch(() => null), holderMin: HOLDER_MIN, xLaunch: await xLaunchOn(), xLaunchMode: await xLaunchMode(), tgLaunchMode: await tgLaunchMode(), xTradeMode: await import("./xtrade.mjs").then((m) => m.tradeMode()).catch(() => "off"), launchFeeEth: fee, needEth: fee != null ? needEthFor(fee) : null,
       limits: LIMITS, admin: isAdmin(req), factory: await splitterFactory() };
   });
   r.post("/api/launch/prefs", async ({ req, body }) => {

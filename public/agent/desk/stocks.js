@@ -26,6 +26,9 @@ const BASKETS = [
 ];
 const SAFE_HEALTH = 1.5, MIN_HEALTH = 1.25;
 const MIN_FREE = 100;   // Morpho markets with less USDG than this to lend sit behind "More markets"
+const HIGH_APY = 20;   // a borrow APY from here on turns the Loan Gate's interest row amber (shown, never blocked)
+// the borrow APY Morpho's rate model charges now (from /api/stocks/loans): 0.07%, 4.04%, 31.2%; "–" when the model did not answer
+const apy = (v) => (v == null || !isFinite(v) ? "–" : `${v < 10 ? v.toFixed(2) : v.toFixed(1)}%`);
 // dates as people read them: "Nov 13, 2026" (the API gives a calendar date, so it is read in UTC)
 const DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const fmtDate = (d) => { const t = d ? Date.parse(`${d}T00:00:00Z`) : NaN; return isFinite(t) ? DATE.format(t) : "–"; };
@@ -226,9 +229,13 @@ export async function mount(view, ctx) {
       const max = coll * (m.priceUsd || 0) * m.lltvPct / 100, hf = debt > 0 ? max / debt : null;
       const items = [["Health after", hf == null ? "–" : hf.toFixed(2), hf == null ? "wait" : hf < MIN_HEALTH ? "fail" : hf < SAFE_HEALTH ? "warn" : "pass"],
         ["Liquidation price", debt > 0 && coll > 0 ? `$${price(debt / (coll * m.lltvPct / 100))} per ${m.symbol} (now $${price(m.priceUsd)})` : "–", "pass"],
-        ["Market liquidity", `${usd(m.liquidityUsdg, { compact: true })} USDG left`, (Number(st.borrow) || 0) <= m.liquidityUsdg ? "pass" : "fail"]];
+        ["Market liquidity", `${usd(m.liquidityUsdg, { compact: true })} USDG left`, (Number(st.borrow) || 0) <= m.liquidityUsdg ? "pass" : "fail"],
+        // the cost of the loan, on the whole debt after this step, at today's variable rate (borrowing more raises utilization,
+        // and with it the rate, so this is a floor rather than a quote)
+        ["Interest", m.borrowApyPct == null ? "rate unavailable" : debt > 0 ? `≈ ${money(debt * m.borrowApyPct / 100)} / year on this loan (${apy(m.borrowApyPct)} APY)` : `${apy(m.borrowApyPct)} APY, variable`,
+          m.borrowApyPct == null ? "wait" : m.borrowApyPct >= HIGH_APY ? "warn" : "pass"]];
       clear(gateBox, h("div", { class: "gh" }, "Loan Gate"), h("ul", {}, items.map(([k, v, s]) => h("li", { class: s }, h("span", {}, k), h("b", {}, v)))),
-        h("p", { class: "fine", style: { margin: "6px 0 0" } }, `Troya keeps the health factor at ${MIN_HEALTH} or more and asks for ${SAFE_HEALTH}+: at 1.0 Morpho can liquidate.`));
+        h("p", { class: "fine", style: { margin: "6px 0 0" } }, `Troya keeps the health factor at ${MIN_HEALTH} or more and asks for ${SAFE_HEALTH}+: at 1.0 Morpho can liquidate. Interest is added to the loan every second, so health slowly falls unless you repay.`));
       gateBox.dataset.state = items.some((i) => i[2] === "fail") ? "fail" : "ok";
     };
     check();
@@ -237,7 +244,7 @@ export async function mount(view, ctx) {
         !wallet.address ? h("div", { class: "sd-empty" }, h("span", { class: "sd-empty-ico" }, icon("wallet")),
           h("p", {}, "Connect the wallet that holds your stock tokens to see its Morpho loans, health and liquidation price."),
           h("button", { class: "btn primary", type: "button", onclick: openConnect }, "Connect wallet"))
-          : mine.length ? mine.map((x) => h("div", { class: "sd-row" }, h("b", {}, x.symbol), h("span", {}, `${tiny(x.collateral)} posted`), h("span", {}, `${tiny(x.borrowUsdg)} USDG owed`),
+          : mine.length ? mine.map((x) => h("div", { class: "sd-row" }, h("b", {}, x.symbol), h("span", {}, `${tiny(x.collateral)} posted`), h("span", {}, `${tiny(x.borrowUsdg)} USDG owed`), h("span", { class: "muted" }, x.borrowApyPct != null ? `${apy(x.borrowApyPct)} APY` : ""),
             h("span", { class: x.health < SAFE_HEALTH ? "down" : "up" }, `health ${x.health ? x.health.toFixed(2) : "–"}`), h("span", { class: "muted" }, x.liquidationPriceUsd ? `liq $${price(x.liquidationPriceUsd)}` : ""),
             st.alerts?.has(x.marketId) ? h("button", { class: "btn sm", type: "button", disabled: true }, icon("check"), "Alert on")
               // the alert writes to your inbox, so it needs a session: sign in right here, the button turns into Alert me
@@ -246,9 +253,9 @@ export async function mount(view, ctx) {
           : h("p", { class: "muted" }, "No Morpho loans on stock tokens from this wallet.")),
       h("div", { class: "panel sd-panel" },
         h("div", { class: "sd-mk-h" }, h("h3", {}, "Borrow USDG"), h("span", { class: "fine" }, `${shown.length} of ${ms.length} Morpho markets`)),
-        seg(shown.map((x) => ({ value: x.id, label: h("span", { class: "sd-mk-o" }, stockIcon({ symbol: x.symbol, address: x.collateralToken }, "xs"), h("b", {}, x.symbol), ` ${x.lltvPct}% LLTV · ${money(x.liquidityUsdg)} free`, twin(x) ? h("small", {}, ` · ${x.id.slice(0, 6)}…`) : null) })), m.id, (v) => { st.mkId = v; st.coll = st.borrow = ""; paint(); }, "sd-mk"),
+        seg(shown.map((x) => ({ value: x.id, label: h("span", { class: "sd-mk-o" }, stockIcon({ symbol: x.symbol, address: x.collateralToken }, "xs"), h("b", {}, x.symbol), ` ${x.lltvPct}% LLTV · Borrow APY ${apy(x.borrowApyPct)} · ${money(x.liquidityUsdg)} free`, twin(x) ? h("small", {}, ` · ${x.id.slice(0, 6)}…`) : null) })), m.id, (v) => { st.mkId = v; st.coll = st.borrow = ""; paint(); }, "sd-mk"),
         ms.length > shown.length || st.allMk ? h("button", { class: "link fine sd-more", type: "button", onclick: () => { st.allMk = !st.allMk; paint(); } }, st.allMk ? `Hide markets under ${money(MIN_FREE)} free` : `More markets (${ms.length - shown.length} with under ${money(MIN_FREE)} free)`) : null,
-        h("p", { class: "fine" }, `Morpho market ${short(m.id)} · LLTV ${m.lltvPct}% · ${money(m.borrowUsdg)} borrowed of ${money(m.supplyUsdg)} · oracle $${price(m.priceUsd)}`),
+        h("p", { class: "fine" }, `Morpho market ${short(m.id)} · LLTV ${m.lltvPct}% · ${money(m.borrowUsdg)} borrowed of ${money(m.supplyUsdg)} (${Math.round((m.utilization || 0) * 100)}% lent) · borrow APY ${apy(m.borrowApyPct)}, supply APY ${apy(m.supplyApyPct)} · oracle $${price(m.priceUsd)}`),
         h("div", { class: "lt-row" }, collIn, borIn, h("button", { class: "btn primary", type: "button", disabled: !!st.busy, onclick: () => doBorrow(m, params) }, st.busy || "Post and borrow")),
         gateBox,
         loan ? h("div", { class: "lt-row" }, repIn, h("button", { class: "btn", type: "button", disabled: !!st.busy || !owes(loan), onclick: () => doRepay(m, params, loan) }, "Repay"),
@@ -275,7 +282,7 @@ export async function mount(view, ctx) {
         if (coll > (bal?.amount ?? 0)) throw new Error(`You have ${tiny(bal?.amount ?? 0)} ${m.symbol}.`);
       }
       const ok = await review({ title: `Morpho loan on ${m.symbol}`, summary: `${coll ? `Post ${tiny(coll)} ${m.symbol}` : ""}${coll && bor ? " and " : ""}${bor ? `borrow ${tiny(bor)} USDG` : ""}`,
-        rows: [["Market", `${m.symbol}/USDG · LLTV ${m.lltvPct}%`], ["Contract", `Morpho Blue ${short(MORPHO)}`], ["Receiver", `${short(wallet.address)} (you)`]], confirmLabel: "Continue in wallet" });
+        rows: [["Market", `${m.symbol}/USDG · LLTV ${m.lltvPct}%`], ...(bor > 0 ? [["Borrow APY", `${apy(m.borrowApyPct)} now, variable`]] : []), ["Contract", `Morpho Blue ${short(MORPHO)}`], ["Receiver", `${short(wallet.address)} (you)`]], confirmLabel: "Continue in wallet" });
       if (!ok) return;
       if (coll > 0) {
         const amt = parseUnits(String(coll), 18);

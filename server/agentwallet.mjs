@@ -110,7 +110,205 @@ async function send(owner, w, tx, label) {
     const fee = (receipt.gasUsed || 0n) * (receipt.gasPrice || receipt.effectiveGasPrice || 0n);
     import("./gas.mjs").then((g) => g.refundGas(owner, w.address, fee)).catch(() => {});
   }
-  return { broadcast: true, hash: sent.hash, status: receipt ? (receipt.status === 1 ? "confirmed" : "reverted") : "pending", label };
+  // the gas paid is returned too: the lot ledger adds it back when it measures the ETH a sell brought in
+  const feeWei = receipt ? String((receipt.gasUsed || 0n) * (receipt.gasPrice || receipt.effectiveGasPrice || 0n)) : "0";
+  return { broadcast: true, hash: sent.hash, status: receipt ? (receipt.status === 1 ? "confirmed" : "reverted") : "pending", label, feeWei };
+}
+
+/* ---------- lot ledger: each automated job sells only its own coins (audit 3-10, 21 Nov 2026) ----------
+ * Sentry Autopilot, Champions and Aegis buy the same Gate-passed coins in one Agent Wallet. Until 21 Nov every exit sold
+ * the wallet's whole balance of the coin, so the first job to exit dumped the other jobs' coins (and the owner's own), and
+ * the next job found "nothing left to sell" and booked a made-up -100% on the board and in Telegram.
+ * Now every executed job buy that names its position (lot: { source, positionId }) writes a lot: who bought, for which
+ * position, how many coins arrived and what they cost. A job's exit (lot: { …, sell: true }) sells its own lot, never more
+ * than the wallet holds. When the wallet holds less than its open lots (the owner or another app sold some), each lot gets
+ * its share of what is left and the rest is closed as "sold elsewhere", with no invented profit or loss. Aegis
+ * (lot: { closeAll: true }) still sells everything on a red alert, then closes every open lot of that coin with its share of
+ * the real ETH that came back. A buy held by the trust ladder carries its lot on the proposal, so a buy approved later
+ * still gets its lot, and the job hears about it (onLots hooks) and can give it an exit.
+ */
+const LOTS = "agentlots.json";
+const ERC20 = new Interface(["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)"]);
+const isNative = (t) => !t || t === "native" || /^eth$/i.test(String(t));
+const sleep = (ms) => new Promise((x) => setTimeout(x, ms));
+const ratio = (a, b) => (b > 0n ? Number((a * 1_000_000_000n) / b) / 1e9 : 0);
+// at most 15 significant digits, cut and never rounded up: tools.quoteSwap reads the amount as a Number, and a Number of a
+// longer string can round above what the wallet holds (the same rule as Sentry Autopilot's exits)
+function trunc(s, sig = 15) {
+  const [i, f = ""] = String(s).split(".");
+  const intD = i.replace(/^0+/, "").length;
+  if (intD >= sig) return i;
+  const keep = intD ? sig - intD : sig + (f.match(/^0*/)[0].length);
+  return f ? `${i}.${f.slice(0, keep)}`.replace(/\.?0+$/, "") || "0" : i;
+}
+// a decimal amount (string or Number) in raw units, cut at the coin's decimals; null when it is not a positive amount
+export function toRaw(v, dec) {
+  if (v == null || v === "") return null;
+  let s = typeof v === "number" || /e/i.test(String(v)) ? Number(v).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 20 }) : String(v).trim();
+  if (!/^\d*\.?\d*$/.test(s) || !/\d/.test(s)) return null;
+  const [i = "0", f = ""] = s.split(".");
+  const raw = BigInt((i || "0") + f.slice(0, dec).padEnd(dec, "0"));
+  return raw > 0n ? raw : null;
+}
+
+/** What each open lot of one coin may still sell, given what the wallet holds now (all in raw units). */
+export function lotShares(openLots, balanceRaw) {
+  const reserved = openLots.reduce((a, l) => a + BigInt(l.raw), 0n);
+  const share = (l) => (balanceRaw >= reserved ? BigInt(l.raw) : reserved > 0n ? (BigInt(l.raw) * balanceRaw) / reserved : 0n);
+  return { reserved, free: balanceRaw > reserved ? balanceRaw - reserved : 0n, share };
+}
+/**
+ * The sell a job may make now. lots: every lot of this owner; want: the sell's lot option; balanceRaw: what the wallet
+ * holds of the coin; askedRaw: the amount the caller asked for (only used for a position opened before the ledger).
+ *   { done }                          the position's lot is already closed (sold by Aegis, or sold elsewhere)
+ *   { lotId, amountRaw }              its own lot: its share of what the wallet holds
+ *   { closeAll, amountRaw, shares }   Aegis: everything the wallet holds, and each open lot's share of it
+ *   { legacy, amountRaw }             no lot (a position from before 21 Nov 2026): at most what no open lot reserves
+ */
+export function planSell(lots, want, token, balanceRaw, askedRaw = null) {
+  const t = lcs(token);
+  const open = lots.filter((l) => l.status === "open" && l.token === t);
+  const S = lotShares(open, balanceRaw);
+  if (want.closeAll) return { closeAll: true, amountRaw: balanceRaw, shares: open.map((l) => ({ id: l.id, share: S.share(l) })) };
+  const mine = open.find((l) => l.source === want.source && l.positionId === want.positionId);
+  if (mine) return { lotId: mine.id, amountRaw: S.share(mine) };
+  const done = lots.find((l) => l.source === want.source && l.positionId === want.positionId && l.token === t);
+  if (done) return { done };
+  return { legacy: true, amountRaw: askedRaw != null && askedRaw < S.free ? askedRaw : S.free };
+}
+/**
+ * Closes the lots a confirmed sell (or an empty wallet) settled. soldRaw: coins actually sold; outEth: ETH that came back
+ * (null when nothing was sold). Returns the closed lots; mutates the lots it closes.
+ */
+export function settleSell(lots, plan, { soldRaw = 0n, outEth = null, by = null, tx = null, at = Date.now() } = {}) {
+  const closeOne = (l, share, eth, how) => {
+    const raw = BigInt(l.raw);
+    const sold = share > raw ? raw : share;
+    const part = ratio(sold, raw);
+    Object.assign(l, { status: "closed", closedAt: at, soldRaw: sold.toString(), elsewhereRaw: (raw - sold).toString(), outEth: sold > 0n ? eth : null,
+      pnlEth: sold > 0n && eth != null ? eth - l.costEth * part : null, soldPct: Math.round(part * 1000) / 10, how, txSell: sold > 0n ? tx : null, closedBy: by });
+    return l;
+  };
+  if (plan.closeAll) {
+    const total = plan.shares.reduce((a, s) => a + s.share, 0n);
+    const base = soldRaw > total ? soldRaw : total;        // the owner's own coins were sold too: they take the rest of the ETH
+    return plan.shares.map((s) => {
+      const l = lots.find((x) => x.id === s.id && x.status === "open");
+      if (!l) return null;
+      const eth = outEth != null && base > 0n ? outEth * ratio(s.share, base) : null;
+      return closeOne(l, soldRaw > 0n ? s.share : 0n, eth, soldRaw > 0n ? (by === "aegis" ? "sold by Aegis" : `sold by ${by || "another job"}`) : "sold elsewhere");
+    }).filter(Boolean);
+  }
+  if (plan.lotId) {
+    const l = lots.find((x) => x.id === plan.lotId && x.status === "open");
+    if (!l) return [];
+    // the coins this lot could not sell were sold before it (by the owner or another app): that part has no result here
+    const short = BigInt(l.raw) - plan.amountRaw;
+    const how = soldRaw > 0n ? (short > 0n ? "sold, part sold elsewhere" : "sold") : "sold elsewhere";
+    // what trunc() cut off (dust) stays in the wallet and is not "sold elsewhere": the lot is charged for its share only
+    return [closeOne(l, soldRaw > 0n ? plan.amountRaw : 0n, outEth, how)];
+  }
+  return [];
+}
+
+const LOT_HOOKS = {};
+/** A job asks to hear about its lots: { allowBuy(owner, lot) → reason|null, opened(owner, lot, ctx), closed(owner, lot, ctx) }. */
+export function onLots(source, hooks) { LOT_HOOKS[source] = hooks; }
+async function lotHook(source, name, ...args) {
+  try { return await LOT_HOOKS[source]?.[name]?.(...args); } catch (e) { console.warn(`[agent-wallet] lot hook ${source}.${name}:`, e.message); return null; }
+}
+function cleanLot(x) {
+  if (!x || typeof x !== "object" || !AUTO_JOBS.includes(x.source)) return null;
+  const positionId = x.positionId == null ? null : String(x.positionId).slice(0, 48);
+  let meta = null;
+  try { meta = x.meta && JSON.stringify(x.meta).length <= 2000 ? JSON.parse(JSON.stringify(x.meta)) : null; } catch {}
+  return { source: x.source, positionId, sell: !!x.sell, closeAll: !!x.closeAll, meta };
+}
+async function lotsOf(owner) { return (await store.readJson(LOTS, {}))[k(owner)] || []; }
+/** The lot of one job position (open or closed), or null. */
+export async function findLot(owner, source, positionId) {
+  return (await lotsOf(owner)).find((l) => l.source === source && l.positionId === String(positionId)) || null;
+}
+async function saveLots(owner, fn) {
+  let out;
+  await store.update(LOTS, {}, (all) => {
+    const list = (all[k(owner)] ||= []);
+    out = fn(list);
+    // bounded: every open lot and the newest 2000 closed ones
+    all[k(owner)] = [...list.filter((l) => l.status === "open"), ...list.filter((l) => l.status !== "open").sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0)).slice(0, 2000)];
+  });
+  return out;
+}
+const DECIMALS = new Map();
+async function tokenDecimals(token) {
+  const t = lcs(token);
+  if (!DECIMALS.has(t)) DECIMALS.set(t, Number(ERC20.decodeFunctionResult("decimals", await provider("robinhood").call({ to: getAddress(t), data: ERC20.encodeFunctionData("decimals", []) }))[0]));
+  return DECIMALS.get(t);
+}
+async function tokenRaw(wallet, token) {
+  const out = await provider("robinhood").call({ to: getAddress(token), data: ERC20.encodeFunctionData("balanceOf", [wallet]) });
+  return BigInt(ERC20.decodeFunctionResult("balanceOf", out)[0]);
+}
+// one lot-aware swap at a time per owner: two jobs exiting the same coin at once would both read the balance before either
+// sold, and the second would count the first one's sale as coins "sold elsewhere"
+const LOT_LOCKS = new Map();
+function withLotLock(owner, fn) {
+  const key = k(owner);
+  const run = (LOT_LOCKS.get(key) || Promise.resolve()).then(() => fn());
+  const tail = run.catch(() => {});
+  LOT_LOCKS.set(key, tail);
+  tail.then(() => { if (LOT_LOCKS.get(key) === tail) LOT_LOCKS.delete(key); });
+  return run;
+}
+// the plan of a job's sell, read from the chain: a public RPC can be a block behind right after a buy, so a balance below
+// the open lots is read again before any coins are called sold elsewhere
+async function planLotSell(owner, wallet, lot, token, askedAmount) {
+  const dec = await tokenDecimals(token);
+  const lots = await lotsOf(owner);
+  const reserved = lots.filter((l) => l.status === "open" && l.token === lcs(token)).reduce((a, l) => a + BigInt(l.raw), 0n);
+  let bal = await tokenRaw(wallet, token);
+  for (let i = 0; i < 2 && bal < reserved; i++) { await sleep(3000); bal = await tokenRaw(wallet, token); }
+  return { ...planSell(lots, lot, token, bal, toRaw(askedAmount, dec)), dec, balanceRaw: bal };
+}
+// a confirmed job buy: the coins that arrived (the balance before and after; the quote only when the chain cannot tell)
+async function recordBuy(owner, wallet, lot, q, amountIn, preRaw, sends, approved) {
+  const token = lcs(q.tokenOut.address);
+  const dec = await tokenDecimals(token);
+  let got = 0n;
+  for (let i = 0; i < 4 && preRaw != null; i++) {
+    const now = await tokenRaw(wallet, token).catch(() => null);
+    if (now != null && now > preRaw) { got = now - preRaw; break; }
+    await sleep(2500);
+  }
+  const estimated = got === 0n;
+  if (estimated) got = toRaw(q.amountOut, dec) || 0n;
+  const l = { id: randomBytes(6).toString("hex"), source: lot.source, positionId: lot.positionId, token, symbol: q.tokenOut.symbol || null, decimals: dec,
+    raw: got.toString(), tokens: Number(formatUnits(got, dec)), costEth: Number(amountIn), estimated, openedAt: Date.now(), txBuy: sends.at(-1)?.hash || null, status: "open", meta: lot.meta };
+  await saveLots(owner, (list) => { list.push(l); });
+  await lotHook(lot.source, "opened", owner, l, { approved });
+  return l;
+}
+// a confirmed job sell: the ETH that came back (balance after − before, plus the gas this sell paid), then the lots it closes
+async function recordSell(owner, wallet, lot, plan, q, preWei, sends, soldRaw, approved) {
+  const fee = sends.reduce((a, s) => a + BigInt(s?.feeWei || 0), 0n);
+  let outEth = null;
+  for (let i = 0; i < 4 && preWei != null; i++) {
+    const now = await provider("robinhood").getBalance(wallet).catch(() => null);
+    if (now != null && now + fee > preWei) { outEth = Number(formatUnits(now + fee - preWei, 18)); break; }
+    await sleep(2500);
+  }
+  const estimated = outEth == null;
+  if (estimated) outEth = Number(q.amountOut) || 0;
+  const closed = await saveLots(owner, (list) => settleSell(list, plan, { soldRaw, outEth, by: lot.source, tx: sends.at(-1)?.hash || null }).map((l) => ({ ...l })));
+  for (const l of closed) await lotHook(l.source, "closed", owner, l, { approved, by: lot.source });
+  const own = plan.lotId ? closed.find((l) => l.id === plan.lotId) || null : null;
+  return { lot: own, lots: closed, sale: { outEth, soldTokens: Number(formatUnits(soldRaw, plan.dec)), estimated } };
+}
+// nothing of the position is left in the wallet: its lot (or, for Aegis, every open lot of the coin) closes as sold elsewhere
+async function settleEmpty(owner, lot, plan) {
+  const closed = await saveLots(owner, (list) => settleSell(list, plan, { soldRaw: 0n, by: lot.source }).map((l) => ({ ...l })));
+  for (const l of closed) await lotHook(l.source, "closed", owner, l, { approved: false, by: lot.source });
+  return closed;
 }
 
 // the creator's first buy of a coin it is launching (owner, 18 Nov: on GMGN the dev showed after the snipers): the launch and
@@ -152,10 +350,42 @@ async function sendLaunchAndBuy(owner, w, launchTx, buyTx, labels) {
  * Execute an action with the owner's Agent Wallet.
  * kind: "swap" {tokenIn, tokenOut, amountIn, slippagePct} | "perp" {coin, side, sizeUsd, leverage, tpPx, slPx, reduceOnly}
  *     | "withdraw" {chain, amount} (always to the owner) | "close" {coin, sizePct}
+ * lot (swaps of automated jobs, see the lot ledger above): { source, positionId, meta } on a buy, { source, positionId,
+ *     sell: true } on that position's exit, { source: "aegis", closeAll: true } for Aegis. A proposal keeps its lot, so
+ *     executing a proposal (proposalId) takes the lot from it when none is passed.
  */
-export async function executeForUser(owner, { kind, params = {}, rationale = "", source = "app", proposalId = null }) {
+export async function executeForUser(owner, opts) {
+  const lot = cleanLot(opts.lot === undefined && opts.proposalId ? (await getProposal(owner, opts.proposalId).catch(() => null))?.lot : opts.lot);
+  if (opts.kind === "swap" && lot) return withLotLock(owner, () => execute(owner, { ...opts, lot }));
+  return execute(owner, { ...opts, lot: null });
+}
+async function execute(owner, { kind, params = {}, rationale = "", source = "app", proposalId = null, lot = null }) {
   const r = await rec(owner);
   if (!r) throw new HttpError(400, "No Agent Wallet yet. Create one in Agent → Wallet.");
+  // the lot ledger, before the trust ladder: a proposal must show the amount this position may really sell, and a position
+  // whose coins are gone (or one already bought) must not become a proposal at all. Executing the proposal later runs this
+  // again, so the amount is read fresh at the moment it sends.
+  const lotSell = kind === "swap" && lot && (lot.sell || lot.closeAll) && isNative(params.tokenOut) && !isNative(params.tokenIn) ? lot : null;
+  const lotBuy = kind === "swap" && lot && lot.positionId && !lot.sell && !lot.closeAll && isNative(params.tokenIn) && !isNative(params.tokenOut) ? lot : null;
+  let plan = null;
+  if (lotSell) {
+    try { plan = await planLotSell(owner, r.address, lotSell, params.tokenIn, params.amountIn); }
+    catch (e) { throw new HttpError(502, `Could not read the Agent Wallet's coin balance: ${String(e.shortMessage || e.message).slice(0, 160)}`); }
+    const what = `Sell for ${lotSell.source}${lotSell.positionId ? ` (position ${lotSell.positionId})` : ""}`;
+    if (plan.done) return { ...(await blocked(owner, kind, what, [`This position was already closed: ${plan.done.how}.`], null, source, proposalId)), lotDone: true, lot: plan.done };
+    if (!(plan.amountRaw > 0n)) {
+      const closed = plan.lotId || plan.closeAll ? await settleEmpty(owner, lotSell, plan) : [];
+      const own = closed.find((l) => l.id === plan.lotId) || null;
+      const out = await blocked(owner, kind, what, ["Nothing of this position is left in the Agent Wallet: it was sold elsewhere."], null, source, proposalId);
+      return own ? { ...out, lotDone: true, lot: own, lots: closed } : { ...out, nothingToSell: true, lots: closed };
+    }
+    params = { ...params, amountIn: trunc(formatUnits(plan.amountRaw, plan.dec)) };
+  }
+  if (lotBuy) {
+    const prior = await findLot(owner, lotBuy.source, lotBuy.positionId);
+    const why = prior ? "This position was already bought." : await lotHook(lotBuy.source, "allowBuy", owner, lotBuy);
+    if (why) return blocked(owner, kind, `Buy for ${lotBuy.source}`, [String(why)], null, source, proposalId);
+  }
   // V8 F44 Scepter, the trust ladder: on "watch" an automated job only alerts; on "approve" it asks first (an Inbox
   // proposal); on "auto" it acts inside the caps. A trade the user taps or confirms is never held back by the ladder.
   if (AUTO_JOBS.includes(source)) {
@@ -166,14 +396,14 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
     else if (trust === "watch") return blocked(owner, kind, rationale || `${source}: ${kind}`, ["Your trust ladder is on Watch: automated jobs alert you and never trade. Change it in Agent → Scepter."], null, source, null);
     else if (trust === "approve") {
       const { createProposal, addInbox } = await import("./inbox.mjs");
-      const p = await createProposal(owner, { kind, params, summary: rationale || `${source}: ${kind}`, rationale, source });
+      const p = await createProposal(owner, { kind, params, summary: rationale || `${source}: ${kind}`, rationale, source, lot });
       await addInbox(owner, { kind: "proposal", title: `${source} asks to ${kind}`, body: `${rationale || ""} Approve it in Agent → Scepter or Portfolio → Inbox.`.trim(), data: { proposalId: p.id } });
       await logAction({ address: owner, kind: `agent-wallet.${kind}`, summary: rationale || kind, data: { params, proposalId: p.id }, status: "proposed", source });
       return { executed: false, proposed: true, proposalId: p.id, summary: `Waiting for your approval: ${rationale || kind}` };
     }
   }
   const ep = (await ethUsd()) || 0;
-  let usd = 0, gate = null, summary = "", result = null;
+  let usd = 0, gate = null, summary = "", result = null, lotOut = null;
   try {
     if (kind === "swap") {
       const q = await quoteSwap({ tokenIn: params.tokenIn === "native" ? "ETH" : params.tokenIn || "ETH", tokenOut: params.tokenOut === "native" ? "ETH" : params.tokenOut, amountIn: params.amountIn, slippagePct: params.slippagePct });
@@ -199,6 +429,9 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
       // approvals first (ERC-20, then Permit2 for Uniswap v4), then the swap itself; only to/data/value go to the signer
       const pick = (t) => ({ to: t.to, data: t.data, value: t.value != null ? BigInt(t.value) : 0n });
       const txs = [...(tx.approvals || []).filter((a) => a.needed && a.tx).map((a) => pick(a.tx)), pick(tx)];
+      // the lot ledger measures what arrived: the coin balance before a job buy, the ETH balance before a job sell
+      const preRaw = lotBuy && !NO_BROADCAST ? await tokenRaw(w.address, q.tokenOut.address).catch(() => null) : null;
+      const preWei = lotSell && !NO_BROADCAST ? await w.provider.getBalance(w.address).catch(() => null) : null;
       const sends = [];
       // a public RPC can still be a block behind right after an approval: a swap that reverts just after one is retried
       for (let i = 0; i < txs.length; i++) {
@@ -212,6 +445,13 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
         }
       }
       result = { steps: sends };
+      // the swap is on chain: a ledger problem from here on must never turn it into a "failed" trade, so it only warns
+      if ((lotBuy || lotSell) && sends.at(-1)?.broadcast && sends.at(-1)?.status === "confirmed") {
+        try {
+          if (lotBuy) lotOut = { lot: await recordBuy(owner, w.address, lotBuy, q, params.amountIn, preRaw, sends, !!proposalId) };
+          else lotOut = await recordSell(owner, w.address, lotSell, plan, q, preWei, sends, toRaw(params.amountIn, plan.dec) || 0n, !!proposalId);
+        } catch (e) { console.warn("[agent-wallet] lot ledger:", e.message); }
+      }
     } else if (kind === "perp" || kind === "close") {
       const hl = await mod("hl");
       if (typeof hl.hlPlaceOrder !== "function") throw new HttpError(501, "Perp execution is not available on this server yet.");
@@ -359,7 +599,7 @@ export async function executeForUser(owner, { kind, params = {}, rationale = "",
   const status = broadcast ? "executed" : "built";
   await logAction({ address: owner, kind: `agent-wallet.${kind}`, summary, rationale, data: { params, gate, result }, status, source });
   if (proposalId) await markProposal(owner, proposalId, broadcast ? "done" : "built", result);
-  return { executed: broadcast, summary, gate, result };
+  return { executed: broadcast, summary, gate, result, ...(lotOut || {}) };
 }
 async function blocked(owner, kind, summary, reasons, gate, source, proposalId) {
   await logAction({ address: owner, kind: `agent-wallet.${kind}`, summary, rationale: reasons.join(" "), data: { gate }, status: "blocked", source });
@@ -479,7 +719,7 @@ export async function register(r, ctx) {
         await markProposal(s.address, p.id, "done", { watchId: wch.id });
         return { executed: true, summary: `Playbook created: ${wch.title}`, watch: wch };
       }
-      return executeForUser(s.address, { kind: p.kind, params: p.params, rationale: p.rationale || "Approved proposal", source, proposalId: p.id });
+      return executeForUser(s.address, { kind: p.kind, params: p.params, rationale: p.rationale || "Approved proposal", source, proposalId: p.id, lot: p.lot || null });
     }
     const kind = String(body.kind || "");
     if (!["swap", "perp", "perp_funded", "close", "withdraw", "hl_fund"].includes(kind)) throw new HttpError(400, "Unknown action.");
@@ -489,6 +729,13 @@ export async function register(r, ctx) {
   r.post("/api/agent-wallet/withdraw", async ({ req, body }) => {
     const s = requireSession(req);
     return executeForUser(s.address, { kind: "withdraw", params: { chain: body.chain, amount: body.amount }, rationale: "Owner withdrawal", source: "app" });
+  });
+
+  // the lot ledger: which job holds which coins in this Agent Wallet, and how each lot closed
+  r.get("/api/agent-wallet/lots", async ({ req, query }) => {
+    const s = requireSession(req);
+    const list = await lotsOf(s.address);
+    return { items: (query?.open === "1" ? list.filter((l) => l.status === "open") : list).slice(0, 200) };
   });
 
   r.get("/api/agent-wallet/activity", async ({ req }) => {

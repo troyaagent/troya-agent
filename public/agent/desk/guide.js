@@ -116,7 +116,7 @@ const G = {
       [".ag-signin", "Sign in", "Scepter belongs to the wallet you sign in with. Signing costs nothing."]],
     ask: ["What is the difference between Watch, Approve and Auto?", "What does Stop every agent stop?", "Why is a trade waiting for my approval?"],
     next: [["Agent Wallet", "#/agent/wallet"], ["Sentry Autopilot", "#/agent/sentry"], ["Playbooks", "#/agent/playbooks"]] },
-  "agent/autopilot": { t: "Autopilot", what: "A switch for this browser tab: while it stays open, Autopilot runs due playbook tickets (and chat tickets, if you tick it) with your Agent Wallet instead of waiting for your tap. Your limits and the Pause switch live here too.",
+  "agent/autopilot": { t: "Autopilot", what: "A switch for this browser tab: while it stays open, Autopilot runs due playbook tickets (and chat tickets, if you tick it) with your Agent Wallet instead of waiting for your tap. Its caps and the switch that stops every agent live in the Budget on Agent → Scepter.",
     tour: [[".ag-intro", "How it works", "Rules first; every order still passes the Gate, your limits and the trust ladder in Scepter."]],
     ask: ["What will Autopilot do on its own?", "What is the difference between Autopilot, Sentry Autopilot and Playbooks?"], next: [["Sentry Autopilot", "#/agent/sentry"], ["Scepter", "#/agent/scepter"]] },
   "agent/arena": { t: "Arena", what: "A strategy in plain words becomes rules, is replayed on The Record, then runs 7 days on paper; five AI models trade their own strategies side by side.", tour: [[".ag-intro", "The Arena", "Write a strategy, read the replay, then prove it on paper."]],

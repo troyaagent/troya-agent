@@ -93,7 +93,8 @@ export async function mount(view, { parts, ask }) {
   // token age (community request, 20 Nov 2026): the birth from the coin's creation block; the board's createdAt is the main
   // pool's date, which for a coin that graduated to Uniswap is its graduation
   let born = null;
-  const ageVal = () => (born ? ageText(born) : launch?.at ? ageText(launch.at) : t.createdAt ? ageText(t.createdAt) : null);
+  // (the server sends the same birth as t.bornAt, so the Market list and this page agree before the age call answers)
+  const ageVal = () => { const at = born || t.bornAt || launch?.at || t.createdAt; return at ? ageText(at) : null; };
 
   // the six numbers people check first, right under the name
   const strip = h("div", { class: "tk2-strip", style: { display: "flex", flexWrap: "wrap", gap: "6px 18px", marginTop: "10px", fontSize: "13px" } });
@@ -141,8 +142,8 @@ export async function mount(view, { parts, ask }) {
 
   /* ---------- chart ---------- */
   const chartBox = h("div", { class: "tk-chart" });
-  let interval = "1h";
-  const ivSeg = seg(["5m", "15m", "1h", "4h", "1d"], interval, (v) => { interval = v; loadChart(); });
+  let interval = "1h", autoIv = true;   // first load only: a quiet coin opens on the smallest interval that holds trades
+  const ivSeg = seg(["5m", "15m", "1h", "4h", "1d"], interval, (v) => { interval = v; autoIv = false; loadChart(); });
   const IV_SECS = { "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400 };
   // a launchpad coin opens in market cap (each bar's USD price × today's supply, read on chain after burns for Pons
   // coins): it is how people talk about these coins ("it went from 3K to 40K"). Price shows the raw USD price. Stock and
@@ -151,13 +152,27 @@ export async function mount(view, { parts, ask }) {
   let unit = !stockish && supplyK() ? "mcap" : "price";
   let chartK = 1;   // what the drawn bars are multiplied by: 1 for price, the supply for market cap
   const unitSeg = unit === "mcap" ? seg([{ value: "mcap", label: "MCap" }, { value: "price", label: "Price" }], unit, (v) => { unit = v; redraw(); }) : null;
-  let candleSeries = null, volSeries = null, rows = [], rowAt = new Map(), candleTimes = [], chartEmpty = false, chartSrcName = "", chartIv = interval;
+  // candleSeries is the price series: candles, or a line on a quiet coin (every bar the same price carried forward)
+  let candleSeries = null, volSeries = null, rows = [], rowAt = new Map(), candleTimes = [], chartEmpty = false, chartSrcName = "", chartIv = interval, lineMode = false;
   // a launchpad coin's board starts as "loading" (its tabs say "Reading…"); stock and core tokens have none
   let board = stockish ? null : { level: "loading" }, calls = null, placeCalls = null;
   const applyMarks = () => { try { candleSeries?.setMarkers(chartMarks(board, candleTimes, IV_SECS[interval] || 3600)); } catch { /* chart gone */ } };
   const chartSrc = h("span", { class: "fine" });
   const paintSrc = () => { chartSrc.textContent = chartSrcName ? `${chartSrcName} · ${chartIv} candles · ${unit === "mcap" ? "market cap in USD" : "priced in USD"}` : ""; };
-  const chartPanel = h("section", { class: "panel" }, h("div", { class: "tk-chart-bar", style: { flexWrap: "wrap" } }, h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px" } }, unitSeg, ivSeg), chartSrc), chartBox);
+  // a coin with no trades in the chart's window says so, with its last trade, instead of a flat row of identical bars
+  const quietLine = h("p", { class: "fine muted tk-chart-quiet", hidden: true, style: { margin: "8px 0 0" } });
+  const chartPanel = h("section", { class: "panel" }, h("div", { class: "tk-chart-bar", style: { flexWrap: "wrap" } }, h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px" } }, unitSeg, ivSeg), chartSrc), chartBox, quietLine);
+  const spanText = (hrs) => (hrs >= 48 ? `${Math.round(hrs / 24)} days` : `${Math.round(hrs)} h`);
+  // tradesInWindow comes with on-chain candles; GeckoTerminal's are quiet when no bar carries volume
+  const isQuiet = (c, list) => (c.tradesInWindow != null ? c.tradesInWindow === 0 : list.length > 1 && list.every((x) => !(x.volume > 0)));
+  let lastC = null;
+  const paintQuiet = (c, quiet) => {
+    quietLine.hidden = !quiet;
+    if (!quiet) { quietLine.textContent = ""; return; }
+    const span = c.windowHours > 0 ? c.windowHours : ((rows.length ? rows[rows.length - 1].time - rows[0].time : 0) + (IV_SECS[chartIv] || 3600)) / 3600;
+    const px = c.lastTradeUsd > 0 ? `$${tiny(c.lastTradeUsd)}${unit === "mcap" && supplyK() ? ` (MC $${compact(c.lastTradeUsd * supplyK(), 2)})` : ""}` : null;
+    quietLine.textContent = `No trades in the last ${spanText(span)}${c.lastTradeAt ? ` · last trade ${ago(c.lastTradeAt)} ago${px ? ` at ${px}` : ""}` : ""}`;
+  };
   // the chart's colours follow the theme, as on the Desk: light keeps a darker blue and red and drops the scale borders
   const isLight = () => document.documentElement.dataset.theme === "light";
   const chartLook = (l) => ({
@@ -166,22 +181,32 @@ export async function mount(view, { parts, ask }) {
     rightPriceScale: { borderVisible: !l, borderColor: "#142026" }, timeScale: { borderVisible: !l, borderColor: "#142026" },
   });
   const candleLook = (l) => { const up = l ? "#0a7ea3" : "#5fd3ef", dn = l ? "#c8303f" : "#ff6b7d"; return { upColor: up, downColor: dn, wickUpColor: up, wickDownColor: dn }; };
+  const lineLook = (l) => ({ color: l ? "#0a7ea3" : "#5fd3ef" });
+  // a near-constant series (under 1% from low to high) gets 3% of room on each side of its middle: the scale otherwise
+  // printed eight identical labels ("0.0₅2957") over a flat line
+  const padScale = (orig) => {
+    const r = orig();
+    const lo = r?.priceRange?.minValue, hi = r?.priceRange?.maxValue, mid = (lo + hi) / 2;
+    if (!(mid > 0) || (hi - lo) / mid >= 0.01) return r;
+    return { ...r, priceRange: { minValue: mid * 0.97, maxValue: mid * 1.03 } };
+  };
   const volBar = (x, l) => ({ time: x.time, value: x.volume || 0, color: x.close >= x.open ? (l ? "rgba(10,126,163,.22)" : "rgba(95,211,239,.28)") : (l ? "rgba(200,48,63,.2)" : "rgba(255,107,125,.28)") });
   const fmtV = (p) => (p < 0 ? "" : unit === "mcap" ? `$${compact(p, 2)}` : p < 1e-15 ? "0" : tiny(p, 4));
   const fmtOpts = () => ({ priceFormat: { type: "custom", formatter: fmtV, minMove: unit === "mcap" ? 0.01 : 1e-12 } });
   const bar = (x) => ({ time: x.time, open: x.open * chartK, high: x.high * chartK, low: x.low * chartK, close: x.close * chartK });
+  const pt = (x) => (lineMode ? { time: x.time, value: x.close * chartK } : bar(x));
   const cleanRows = (list) => { const seen = new Set(); return (list || []).filter((x) => x && x.close > 0 && !seen.has(x.time) && seen.add(x.time)).sort((a, b) => a.time - b.time); };
   const themeObs = new MutationObserver(() => {
     if (!chart) return;
     const l = isLight();
-    try { chart.applyOptions(chartLook(l)); candleSeries?.applyOptions(candleLook(l)); volSeries?.setData(rows.map((x) => volBar(x, l))); } catch { /* chart gone */ }
+    try { chart.applyOptions(chartLook(l)); candleSeries?.applyOptions(lineMode ? lineLook(l) : candleLook(l)); volSeries?.setData(rows.map((x) => volBar(x, l))); } catch { /* chart gone */ }
   });
   themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   function redraw() {
     paintSrc();
     if (!candleSeries) return;
     chartK = unit === "mcap" ? supplyK() || 1 : 1;
-    try { candleSeries.applyOptions(fmtOpts()); candleSeries.setData(rows.map(bar)); applyMarks(); placeCalls?.(); } catch { /* chart gone */ }
+    try { candleSeries.applyOptions(fmtOpts()); candleSeries.setData(rows.map(pt)); applyMarks(); placeCalls?.(); if (lastC) paintQuiet(lastC, lineMode); } catch { /* chart gone */ }
   }
 
   /* ---------- the Gate card ---------- */
@@ -437,7 +462,7 @@ export async function mount(view, { parts, ask }) {
   const callsOnChart = () => (calls?.callouts || []).filter((c) => c.at / 1000 >= (candleTimes[0] || 0) - (IV_SECS[interval] || 3600));
   async function loadChart() {
     const my = ++chartSeq, ac = new AbortController();
-    placeCalls?.stop?.(); placeCalls = null; candleSeries = null; volSeries = null; chartEmpty = false;
+    placeCalls?.stop?.(); placeCalls = null; candleSeries = null; volSeries = null; chartEmpty = false; lineMode = false; lastC = null; paintQuiet({}, false);
     try { chart?.remove(); } catch {}
     chart = null;
     const wait = h("span", { class: "tk-chart-wait fine muted" });
@@ -451,6 +476,14 @@ export async function mount(view, { parts, ask }) {
       const c = await api.get(`market/robinhood/candles?address=${address}&interval=${interval}`, { signal: ac.signal });
       clearTimeout(slowT); clearTimeout(stopT);
       if (chartStop || my !== chartSeq) return;
+      // first load: when the default window holds no trades, the smallest longer interval that does (the server counts
+      // each interval's window from the same trades, so this costs no extra read)
+      if (autoIv) {
+        autoIv = false;
+        const w = c.windows, cur = c.interval || interval;
+        const pick = w && w[cur] === 0 ? ["5m", "15m", "1h", "4h", "1d"].find((v) => IV_SECS[v] > IV_SECS[cur] && w[v] > 0) : null;
+        if (pick) { interval = pick; ivSeg.set(pick); loadChart(); return; }
+      }
       chartSrcName = c.source || ""; chartIv = c.interval || interval; paintSrc();
       const fresh = cleanRows(c.candles);
       if (fresh.length < 2) {
@@ -472,9 +505,13 @@ export async function mount(view, { parts, ask }) {
         localization: { priceFormatter: fmtV },
       });
       chartK = unit === "mcap" ? supplyK() || 1 : 1;
-      const candles = chart.addCandlestickSeries({ ...candleLook(l), borderVisible: false, ...fmtOpts() });
+      lineMode = isQuiet(c, fresh); lastC = c;
+      const candles = lineMode
+        ? chart.addLineSeries({ ...lineLook(l), lineWidth: 2, priceLineVisible: false, autoscaleInfoProvider: padScale, ...fmtOpts() })
+        : chart.addCandlestickSeries({ ...candleLook(l), borderVisible: false, autoscaleInfoProvider: padScale, ...fmtOpts() });
       rows = fresh; rowAt = new Map(rows.map((x) => [x.time, x]));
-      candles.setData(rows.map(bar));
+      candles.setData(rows.map(pt));
+      paintQuiet(c, lineMode);
       candleSeries = candles; candleTimes = rows.map((x) => x.time); applyMarks();
       // the callers' avatars sit on the bar of their call (same snapping as the marks) and follow scroll, zoom and resize
       placeCalls = calloutLayer(chartBox, chart, candles, callsOnChart, { ivSecs: IV_SECS[interval] || 3600, times: () => candleTimes, scale: () => chartK });
@@ -503,6 +540,10 @@ export async function mount(view, { parts, ask }) {
       if (chartStop || my !== chartSeq) return;
       const fresh = cleanRows(c.candles);
       if (!candleSeries) { if (fresh.length >= 2) loadChart(); return; }
+      // a quiet coin that traded again is drawn as candles; otherwise its "last trade" line stays current
+      if (lineMode && !isQuiet(c, fresh)) { loadChart(); return; }
+      lastC = c;
+      if (lineMode) paintQuiet(c, true);
       const lastT = rows.length ? rows[rows.length - 1].time : 0, l = isLight();
       let added = false;
       for (const x of fresh) {
@@ -510,7 +551,7 @@ export async function mount(view, { parts, ask }) {
         if (x.time === lastT) rows[rows.length - 1] = x;
         else { rows.push(x); candleTimes.push(x.time); added = true; }
         rowAt.set(x.time, x);
-        candleSeries.update(bar(x));
+        candleSeries.update(pt(x));
         volSeries?.update(volBar(x, l));
       }
       if (added) applyMarks();

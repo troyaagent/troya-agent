@@ -142,7 +142,8 @@ function tidy(t) {
 }
 let polling = false, lastPollAt = 0;
 const handled = new Set();           // post ids answered by this process: the stream and the poll never answer one twice
-const FIELDS = { "tweet.fields": "author_id,conversation_id,created_at,referenced_tweets,lang,attachments", expansions: "author_id,attachments.media_keys", "user.fields": "username,name", "media.fields": "url,type" };
+// entities: X writes every link as t.co; a launch post's "site: example.com" is read from its expanded_url (launch.mjs)
+const FIELDS = { "tweet.fields": "author_id,conversation_id,created_at,referenced_tweets,lang,attachments,entities", expansions: "author_id,attachments.media_keys", "user.fields": "username,name", "media.fields": "url,type" };
 
 /** One mention of @Troyaagent, from the stream or the poll → the log entry (or null when it is not ours to answer). */
 const HELP_Q = /\b(launch|wallet|agent|token|coin|ticker|tax|buy|sell|fee|claim|bridge|eth|how|where|why|what|help|error|fail)\b|ローンチ|ウォレット|トークン|エージェント|購入|売却|どこ|どう|なぜ|cara|bagaimana|dimana|kenapa|gagal|dompet/i;
@@ -165,7 +166,7 @@ async function handleMention(t, { users, media, bot, m, L }) {
   const att = (t.attachments?.media_keys || []).map((k) => media.get(k)).filter(Boolean);
   const photo = att.find((x) => x.type === "photo" && x.url);
   // a GIF or a video comes with no image url: said so in the reply, never launched as "no image attached"
-  const lx = L ? await L.fromX({ tweetId: t.id, authorId: t.author_id, text: t.text, mediaUrl: photo?.url || null, mediaKinds: att.map((x) => x.type) }).catch((e) => ({ reply: null, error: e.message })) : null;
+  const lx = L ? await L.fromX({ tweetId: t.id, authorId: t.author_id, text: t.text, mediaUrl: photo?.url || null, mediaKinds: att.map((x) => x.type), urls: t.entities?.urls || [] }).catch((e) => ({ reply: null, error: e.message })) : null;
   if (lx) {
     entry.kind = "launch"; entry.token = lx.launch?.token || null; entry.why = lx.error || null;
     if (lx.reply) {

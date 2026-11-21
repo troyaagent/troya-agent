@@ -221,3 +221,23 @@
 @media (max-width: 860px) { .ag-ar-sum { grid-template-columns: repeat(2, 1fr); } .ag-ar-sum .stat:nth-child(3) { border-left: 0; } .ag-ar-sum .stat:nth-child(n+3) { border-top: 1px solid var(--line); } }
 @media (max-width: 700px) { .ag-ar-grid { grid-template-columns: 1fr; } }
 @media (max-width: 420px) { .ag-ar-books { grid-template-columns: 1fr; } .ag-ar-tr { flex-wrap: wrap; } .ag-ar-pnl { margin-left: 30px; } }
+
+/* guest previews (Scepter, Agent Wallet, Autopilot, Sentry Autopilot): the real layout with content marked Example, inert,
+   inside a dashed frame, and a Sign in bar pinned to the bottom of the screen while the preview scrolls by */
+.ag-ex { display: grid; gap: 14px; padding: 12px 14px 14px; border: 1px dashed var(--line-3); border-radius: 22px; }
+.ag-ex-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ag-ex-tag { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); color: var(--warn); font: 600 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+.ag-ex-body { display: grid; gap: 14px; opacity: .86; user-select: none; }
+.ag-ex-body .sc-step { cursor: default; }
+.ag-pin { position: sticky; bottom: 16px; z-index: 5; box-shadow: 0 14px 40px rgba(0, 0, 0, .35); }
+
+/* Scepter Budget: the switch, the numbers that apply, and the one place to change any cap */
+.sc-bud.stopped { border-color: color-mix(in srgb, var(--down) 45%, transparent); }
+.sc-bud > .panel-h { padding-top: 4px; }
+.sc-stats { margin: 6px 16px 10px; }
+.sc-stats .v { font-size: 22px; }
+.sc-edit { margin: 0 16px 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+.sc-edit summary { cursor: pointer; font-size: 13px; color: var(--fg-2); }
+.sc-edit[open] summary { margin-bottom: 12px; }
+.sc-edit-g { display: grid; gap: 8px; margin-bottom: 14px; }
+.sc-edit-g p { margin: 0; }

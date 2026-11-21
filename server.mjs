@@ -47,12 +47,21 @@ const ROUTES = {
   "/launch-on-x": "/launch-on-x.html",
   "/badge": "/badge.html",
   "/stats": "/stats.html",
+  "/swap": "/swap.html",
   "/safety": "/safety.html",
   "/agent": "/agent/index.html",
 };
 
 // F16: Lighter on Robinhood Chain is called from the browser (its API answers CORS; keys never touch this server)
 const EXTRA_CONNECT = ["https://api.rh.lighter.xyz", "wss://api.rh.lighter.xyz", ...(process.env.CSP_CONNECT || "").split(/[\s,]+/)].filter(Boolean).join(" ");
+// WalletConnect for phone wallets (public/agent/js/walletconnect.js, provider self-hosted under /vendor/walletconnect). The
+// projectId (dashboard.reown.com) is public by design: every visitor's browser sends it to the relay. Without one the
+// connect sheet leaves the option out and the policy below stays as it was. With one: the relay socket (connect-src) and
+// WalletConnect Verify, a hidden frame that vouches for this domain to the wallet (frame-src). Telemetry is off in the app.
+const WC_PROJECT_ID = /^[0-9a-f]{32}$/i.test(process.env.WALLETCONNECT_PROJECT_ID || "") ? process.env.WALLETCONNECT_PROJECT_ID : null;
+if (process.env.WALLETCONNECT_PROJECT_ID && !WC_PROJECT_ID) console.warn("[walletconnect] WALLETCONNECT_PROJECT_ID is not a 32-character hex project ID: the phone wallet option stays off");
+const WC_CONNECT = WC_PROJECT_ID ? " wss://relay.walletconnect.org wss://relay.walletconnect.com" : "";
+const WC_FRAME = WC_PROJECT_ID ? ["frame-src 'self' https://verify.walletconnect.org https://verify.walletconnect.com"] : [];
 // Wallets talk to chains through our own /api/rpc proxy, so connect-src can stay 'self'.
 function csp(path, data) {
   if (!path.endsWith(".html") || path.split("/").some((seg) => seg.startsWith("_"))) return "frame-ancestors 'none'";
@@ -60,8 +69,8 @@ function csp(path, data) {
     .map((m) => `'sha256-${createHash("sha256").update(m[1]).digest("base64")}'`);
   return [
     "default-src 'self'", `script-src 'self' 'wasm-unsafe-eval' ${hashes.join(" ")}`.trim(), "worker-src 'self' blob:",
-    `connect-src 'self' ${EXTRA_CONNECT}`.trim(), "img-src 'self' data: blob: https:", "style-src 'self' 'unsafe-inline'", "font-src 'self'",
-    "object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'",
+    `connect-src 'self' ${EXTRA_CONNECT}${WC_CONNECT}`.trim(), "img-src 'self' data: blob: https:", "style-src 'self' 'unsafe-inline'", "font-src 'self'",
+    ...WC_FRAME, "object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'",
   ].join("; ");
 }
 
@@ -192,6 +201,13 @@ async function serve(req, res) {
     if (req.method === "OPTIONS") { res.writeHead(204).end(); return; }
   }
   if (url.pathname === "/skill.md" || url.pathname === "/llms.txt") res.setHeader("access-control-allow-origin", "*");
+  // the WalletConnect projectId for the connect sheet (null: the phone wallet option stays hidden). Read when the sheet opens.
+  if ((url.pathname === "/api/walletconnect" || url.pathname === "/agent/api/walletconnect") && (req.method === "GET" || req.method === "HEAD")) {
+    const body = JSON.stringify({ projectId: WC_PROJECT_ID });
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=300", "x-content-type-options": "nosniff", "content-length": Buffer.byteLength(body) });
+    res.end(req.method === "HEAD" ? undefined : body);
+    return;
+  }
   // share links with their own link preview: /t/<coin> (and its .png), /r/<referral code> (server/share.mjs). A link to
   // /agent#/token/… cannot have one: the part after "#" never reaches the server, so every coin showed the same og.png
   if (url.pathname.startsWith("/t/") || url.pathname.startsWith("/r/")) { if (await handleShare(req, res, url)) return; }

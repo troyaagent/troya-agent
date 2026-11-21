@@ -11,12 +11,18 @@ export function loadEthers() {
 }
 const checksum = async (a) => (await loadEthers()).getAddress(a);
 
+// rpcs: the RPCs a wallet is given when it adds the network (wallet_addEthereumChain). MetaMask keeps only the first, so the
+// first must answer everywhere: the official Robinhood RPC is blocked by some ISPs (in Indonesia its name resolves to a block
+// page), so a public node goes first, then the official RPC, then Troya's relay (the same /api/rpc/robinhood the app reads
+// through: standard JSON-RPC with a read and send allowlist, and failover across several upstreams). Each was checked to
+// answer eth_chainId 0x1237. rpc (the first) is the one shown to copy on the Bridge page. The app itself reads through relay.
 export const CHAINS = {
-  robinhood: { key: "robinhood", id: 4663, hex: "0x1237", name: "Robinhood Chain", rpc: "https://rpc.mainnet.chain.robinhood.com", relay: "/api/rpc/robinhood", currency: "ETH", explorer: "https://robinhoodchain.blockscout.com" },
-  arbitrum: { key: "arbitrum", id: 42161, hex: "0xa4b1", name: "Arbitrum One", rpc: "https://arb1.arbitrum.io/rpc", relay: "/api/rpc/arbitrum", currency: "ETH", explorer: "https://arbiscan.io" },
-  base: { key: "base", id: 8453, hex: "0x2105", name: "Base", rpc: "https://mainnet.base.org", relay: "/api/rpc/base", currency: "ETH", explorer: "https://basescan.org" },
-  ethereum: { key: "ethereum", id: 1, hex: "0x1", name: "Ethereum", rpc: "https://ethereum-rpc.publicnode.com", relay: "/api/rpc/ethereum", currency: "ETH", explorer: "https://etherscan.io" },
+  robinhood: { key: "robinhood", id: 4663, hex: "0x1237", name: "Robinhood Chain", rpcs: ["https://robinhood-rpc.publicnode.com", "https://rpc.mainnet.chain.robinhood.com", "https://troya.codes/api/rpc/robinhood"], relay: "/api/rpc/robinhood", currency: "ETH", explorer: "https://robinhoodchain.blockscout.com" },
+  arbitrum: { key: "arbitrum", id: 42161, hex: "0xa4b1", name: "Arbitrum One", rpcs: ["https://arb1.arbitrum.io/rpc", "https://arbitrum-one-rpc.publicnode.com"], relay: "/api/rpc/arbitrum", currency: "ETH", explorer: "https://arbiscan.io" },
+  base: { key: "base", id: 8453, hex: "0x2105", name: "Base", rpcs: ["https://mainnet.base.org", "https://base-rpc.publicnode.com"], relay: "/api/rpc/base", currency: "ETH", explorer: "https://basescan.org" },
+  ethereum: { key: "ethereum", id: 1, hex: "0x1", name: "Ethereum", rpcs: ["https://ethereum-rpc.publicnode.com", "https://eth.drpc.org"], relay: "/api/rpc/ethereum", currency: "ETH", explorer: "https://etherscan.io" },
 };
+for (const c of Object.values(CHAINS)) c.rpc = c.rpcs[0];
 export const chainById = (id) => Object.values(CHAINS).find((c) => c.id === Number(id));
 
 // read-only providers through the same-origin relay (CSP keeps connect-src at 'self')
@@ -55,9 +61,30 @@ export function available() {
 
 const last = store("troya.wallet.last", null);
 
+/* ---------- WalletConnect (phone wallets) ---------- */
+// The option appears only when the server has a WalletConnect projectId (WALLETCONNECT_PROJECT_ID, served at
+// /api/walletconnect). walletconnect.js and the provider bundle load only when the visitor picks it, or on a reload after a
+// WalletConnect session, so a visitor with a browser wallet never downloads them. A failed config read is forgotten.
+const WC = "walletconnect";
+export const WC_ICON = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="4" fill="#3396FF"/><path fill="#fff" d="M4.49 5.77a5 5 0 0 1 7.02 0l.23.22a.24.24 0 0 1 0 .35l-.8.78a.13.13 0 0 1-.17 0l-.32-.31a3.47 3.47 0 0 0-4.9 0l-.34.33a.13.13 0 0 1-.17 0l-.8-.78a.24.24 0 0 1 0-.34zm8.67 1.61.71.7a.24.24 0 0 1 0 .34l-3.2 3.14a.25.25 0 0 1-.35 0L8.04 9.33a.06.06 0 0 0-.08 0l-2.27 2.23a.25.25 0 0 1-.35 0L2.13 8.42a.24.24 0 0 1 0-.34l.71-.7a.25.25 0 0 1 .35 0l2.27 2.23a.06.06 0 0 0 .09 0l2.27-2.23a.25.25 0 0 1 .35 0l2.27 2.23a.06.06 0 0 0 .09 0l2.27-2.23a.25.25 0 0 1 .35 0z"/></svg>');
+let wcCfg = null, wcMod = null;
+function wcConfig() {
+  return (wcCfg ||= api.get("walletconnect").then((c) => (/^[0-9a-f]{32}$/i.test(c?.projectId || "") ? c : null), () => { wcCfg = null; return null; }));
+}
+const loadWc = () => (wcMod ||= import("./walletconnect.js").catch((e) => { wcMod = null; throw e; }));
+const isWc = (eip) => !!eip?.isWalletConnect;
+
+const bound = new WeakSet();
 function bind(eip) {
+  if (bound.has(eip)) return;                   // the WalletConnect provider lives for the page: one set of listeners
+  bound.add(eip);
   eip.on?.("accountsChanged", async (accs) => {
-    if (!accs?.length) { disconnect(); return; }
+    if (wallet.eip !== eip) return;             // an event from a wallet that is no longer the connected one
+    // WalletConnect reports no account while its default chain is one the phone wallet did not approve; the end of its
+    // session comes as "disconnect" below, so only an injected wallet's empty list means it disconnected
+    if (!accs?.length) { if (!isWc(eip)) disconnect(); return; }
+    // the same account announced again (WalletConnect does on chain switches): nothing changes, the session stays
+    if (String(accs[0]).toLowerCase() === wallet.address?.toLowerCase()) return;
     // the old address and its session go at once, before the checksum (a short await) gives the new one
     wallet.session = null;
     let a;
@@ -67,7 +94,10 @@ function bind(eip) {
     emit();
     refreshSession();
   });
-  eip.on?.("chainChanged", (hex) => { wallet.chainId = Number(hex); emit(); });
+  eip.on?.("chainChanged", (hex) => { if (wallet.eip !== eip) return; wallet.chainId = Number(hex); emit(); });
+  // the phone wallet ended the session (or WalletConnect expired it): this browser lets go too. An injected wallet's
+  // "disconnect" only means it lost its own RPC, so it is not listened to.
+  if (isWc(eip)) eip.on?.("disconnect", () => { if (wallet.eip === eip) disconnect(); });
 }
 
 // Resolves once the address is known and the session check has answered, so the connect sheet can tell whether this
@@ -77,6 +107,7 @@ export async function connectWith(detail) {
   // ethers loads while the wallet shows its own prompt, so the checksum below does not add a wait
   const [accs] = await Promise.all([eip.request({ method: "eth_requestAccounts" }), loadEthers()]);
   if (!accs?.length) throw new Error("The wallet shared no account.");
+  const before = wallet.eip;
   wallet.eip = eip;
   wallet.info = detail.info;
   wallet.address = E.getAddress(accs[0]);
@@ -84,6 +115,8 @@ export async function connectWith(detail) {
   wallet.status = "connected";
   last.set(detail.info.rdns || detail.info.name);
   bind(eip);
+  // moving from a phone wallet to a browser wallet ends the WalletConnect session, so it does not linger in the phone app
+  if (before !== eip && isWc(before) && before.session) before.disconnect().catch(() => {});
   emit();
   await refreshSession();
   return wallet;
@@ -93,6 +126,7 @@ export async function connectWith(detail) {
 export async function restore() {
   const want = last.get();
   if (!want) return;
+  if (want === WC) return restoreWc();
   await new Promise((r) => setTimeout(r, 120));
   const d = available().find((x) => (x.info.rdns || x.info.name) === want) || available()[0];
   if (!d) return;
@@ -111,13 +145,37 @@ export async function restore() {
     refreshSession();
   } catch {}
 }
+// a WalletConnect session lives in this browser's storage (WalletConnect keeps it for up to 7 days): picked up without a
+// prompt. No session any more (ended on the phone, expired): the reminder is cleared and nothing loads on the next visit.
+async function restoreWc() {
+  try {
+    const cfg = await wcConfig();
+    if (!cfg) return;                           // not offered right now (or the config did not load): kept for the next visit
+    const wc = await loadWc();
+    const p = await wc.restoreSession(cfg, CHAINS);
+    if (!p) { if (last.get() === WC) last.set(null); return; }
+    const a = await checksum(p.accounts[0]);
+    if (wallet.address) return;                 // the user connected by hand while this was loading
+    wallet.eip = p;
+    wallet.info = wc.infoOf(p);
+    wallet.address = a;
+    wallet.chainId = Number(await p.request({ method: "eth_chainId" }));
+    wallet.status = "connected";
+    bind(p);
+    emit();
+    refreshSession();
+  } catch {}
+}
 
 export function disconnect() {
+  const eip = wallet.eip;
   wallet.status = "disconnected";
   wallet.address = null;
   wallet.eip = null;
   wallet.session = null;
   last.set(null);
+  // a WalletConnect session is ended on the phone too, so it does not stay in the wallet's list of connected sites
+  if (isWc(eip)) { if (eip.session) eip.disconnect().catch(() => {}); wcMod?.then((wc) => wc.forgetDeepLink(), () => {}); }
   api.post("auth/logout").catch(() => {});
   emit();
 }
@@ -133,6 +191,19 @@ export async function ensureChain(key) {
   const c = CHAINS[key];
   if (!c) throw new Error("Unknown network.");
   if (!wallet.eip) throw new Error("Connect a wallet first.");
+  // A WalletConnect session signs only on the chains the phone wallet approved when it connected. For another chain the
+  // wallet is asked to add the network (name, RPCs, explorer); a wallet that then adds it to the session carries on. A
+  // switch to a chain outside the session would leave the provider with no account, and WalletConnect would refuse the
+  // request anyway, with a message nobody could act on.
+  if (isWc(wallet.eip)) {
+    const wc = await loadWc();
+    if (!wc.approved(wallet.eip, c.id)) {
+      await addChain(key);
+      for (let i = 0; i < 8 && !wc.approved(wallet.eip, c.id); i++) await new Promise((r) => setTimeout(r, 250));
+      if (!wc.approved(wallet.eip, c.id))
+        throw new Error(`Your phone wallet did not approve ${c.name} for this connection. Add ${c.name} in the wallet app, then disconnect and connect again.`);
+    }
+  }
   if ((await chainNow()) === c.id) return;
   try {
     await switchTo(c);
@@ -154,7 +225,7 @@ export async function addChain(key) {
   const eip = wallet.eip || available()[0]?.provider;
   if (!eip) throw new Error("No browser wallet found.");
   await eip.request({ method: "wallet_addEthereumChain", params: [{
-    chainId: c.hex, chainName: c.name, nativeCurrency: { name: c.currency, symbol: c.currency, decimals: 18 }, rpcUrls: [c.rpc], ...(c.explorer ? { blockExplorerUrls: [c.explorer] } : {}),
+    chainId: c.hex, chainName: c.name, nativeCurrency: { name: c.currency, symbol: c.currency, decimals: 18 }, rpcUrls: c.rpcs, ...(c.explorer ? { blockExplorerUrls: [c.explorer] } : {}),
   }] });
 }
 
@@ -241,31 +312,71 @@ const onPhone = () => matchMedia("(pointer: coarse)").matches && !matchMedia("(h
 // feature asking "Sign in to continue" on its own. openConnect({ signIn: false }) stops at the connect.
 export function openConnect(opts = {}) {
   return new Promise((resolve) => {
-    const list = available();
-    const body = h("div", {},
-      list.length
-        ? h("div", { class: "wl" }, list.map((d) => h("button", { class: "wl-item", type: "button", onclick: async () => {
-            try { await connectWith(d); }
-            catch (e) { toast(rejected(e) ? "Request cancelled in the wallet." : (e.message || "Could not connect"), "error"); return; }
-            // this browser already holds a session for the address: nothing more to sign
-            if (wallet.session || !wallet.address) { m.close(); toast(`Connected ${short(wallet.address)}`, "ok"); resolve(wallet); return; }
-            if (opts.signIn === false) { m.close(); resolve(wallet); return; }
-            proveIt();
-          } }, walletLogo(d.info.name, d.info.icon), h("span", {}, d.info.name || "Browser wallet"), h("em", {}, "Detected"))))
-        : onPhone()
-          ? h("div", {}, h("div", { class: "wl" }, OPEN_IN.map((k) => h("a", { class: "wl-item", href: k.href(dappUrl()), rel: "noopener" }, walletLogo(k.name), h("span", {}, `Open in ${k.name}`), h("em", {}, "App")))),
-              h("p", { class: "note" }, "This browser has no wallet inside it. Each link opens this page in the wallet app's own browser, where Connect works. No wallet app yet? Install one from your app store first."))
-          : h("div", {}, h("div", { class: "wl" }, KNOWN.map((k) => h("a", { class: "wl-item", href: k.install, target: "_blank", rel: "noopener" }, walletLogo(k.name), h("span", {}, k.name), h("em", {}, "Install")))),
-            h("p", { class: "note" }, "No browser wallet was found. Install one, reload this page, then connect.")),
-      h("p", { class: "note" }, "Troya never holds your wallet's key. You approve every transaction in the wallet itself."));
+    const list = available(), phone = onPhone();
+    const ac = new AbortController();          // closing the sheet stops a WalletConnect pairing in progress
+    let wcRow = null, host = null, note = null;
+    // the wallets this browser has, or (none) links into wallet apps on a phone and install links on a computer. The
+    // WalletConnect row joins once the server confirms a projectId: under the detected wallets and the app links, and on a
+    // computer without a wallet above the install links, since it is the one way in that needs no install.
+    function view() {
+      host = list.length
+        ? h("div", { class: "wl" }, list.map((d) => h("button", { class: "wl-item", type: "button", onclick: () => use(d) }, walletLogo(d.info.name, d.info.icon), h("span", {}, d.info.name || "Browser wallet"), h("em", {}, "Detected"))))
+        : phone
+          ? h("div", { class: "wl" }, OPEN_IN.map((k) => h("a", { class: "wl-item", href: k.href(dappUrl()), rel: "noopener" }, walletLogo(k.name), h("span", {}, `Open in ${k.name}`), h("em", {}, "App"))))
+          : h("div", { class: "wl" }, KNOWN.map((k) => h("a", { class: "wl-item", href: k.install, target: "_blank", rel: "noopener" }, walletLogo(k.name), h("span", {}, k.name), h("em", {}, "Install"))));
+      note = list.length ? null : h("p", { class: "note" });
+      place();
+      return h("div", {}, host, note, h("p", { class: "note" }, "Troya never holds your wallet's key. You approve every transaction in the wallet itself."));
+    }
+    function place() {
+      if (wcRow) { if (list.length || phone) host.append(wcRow); else host.prepend(wcRow); }
+      if (note) note.textContent = phone
+        ? (wcRow ? "This browser has no wallet inside it. \"Open in\" opens this page in the wallet app's own browser, where Connect works; WalletConnect links the wallet app to this browser instead. No wallet app yet? Install one from your app store first."
+          : "This browser has no wallet inside it. Each link opens this page in the wallet app's own browser, where Connect works. No wallet app yet? Install one from your app store first.")
+        : (wcRow ? "No browser wallet was found. Scan a code with a wallet app on your phone, or install a browser wallet, reload this page, then connect."
+          : "No browser wallet was found. Install one, reload this page, then connect.");
+    }
     let closed = false;
-    const m = modal({ title: "Connect a wallet", body, onClose: () => { closed = true; resolve(wallet.address ? wallet : null); } });
+    const m = modal({ title: "Connect a wallet", body: view(), onClose: () => { closed = true; ac.abort(); resolve(wallet.address ? wallet : null); } });
+    wcConfig().then((cfg) => {
+      // inside a wallet app's own browser (a phone with a detected wallet) the wallet is already here
+      if (!cfg || closed || (phone && list.length)) return;
+      wcRow = h("button", { class: "wl-item", type: "button", onclick: () => pickWc(cfg) }, walletLogo("WalletConnect", WC_ICON),
+        h("span", {}, phone ? "Wallet app (WalletConnect)" : "Phone wallet (QR code)"), h("em", {}, phone ? "Link" : "Scan"));
+      place();
+    });
+    async function pickWc(cfg) {
+      let wc;
+      try { wc = await loadWc(); } catch { if (!closed) toast("WalletConnect could not load. Check your connection and try again.", "error"); return; }
+      if (closed) return;
+      const d = await wc.pair(cfg, CHAINS, { m, phone, signal: ac.signal, inUse: (p) => wallet.eip === p, icon: WC_ICON });
+      if (closed) return;
+      if (!d) { clear(m.body, view()); return; }   // Back: the wallet list again
+      use(d);
+    }
+    async function use(d) {
+      try { await connectWith(d); }
+      catch (e) {
+        if (closed) return;
+        toast(rejected(e) ? "Request cancelled in the wallet." : (e.message || "Could not connect"), "error");
+        if (d.info.rdns === WC) clear(m.body, view());
+        return;
+      }
+      if (closed) return;
+      // this browser already holds a session for the address: nothing more to sign
+      if (wallet.session || !wallet.address) { m.close(); toast(`Connected ${short(wallet.address)}`, "ok"); resolve(wallet); return; }
+      if (opts.signIn === false) { m.close(); resolve(wallet); return; }
+      proveIt();
+    }
     // step two, in the same sheet: a free signature that proves the address is yours (no transaction, no gas)
     function proveIt() {
       const heading = m.box.querySelector(".modal-h h2");
       if (heading) heading.textContent = "Sign in";
       m.box.setAttribute("aria-label", "Sign in");
-      const status = h("p", { class: "note", role: "status", "aria-live": "polite" }, "Your wallet is asking for the signature now.");
+      // with WalletConnect the prompt is on the phone: a phone wallet's app opens for it (sign-client follows the app the
+      // visitor picked), a computer shows nothing, so say where to look
+      const where = isWc(wallet.eip) ? (phone ? " Your wallet app opens for it; if it does not, open the app yourself, sign, then come back here." : " Approve it in the wallet app on your phone.") : "";
+      const status = h("p", { class: "note", role: "status", "aria-live": "polite" }, "Your wallet is asking for the signature now." + where);
       const later = h("button", { class: "btn ghost", type: "button", onclick: () => m.close() }, "Not now");
       const sign = h("button", { class: "btn primary", type: "button", onclick: () => ask() }, "Sign message");
       clear(m.body,
@@ -275,7 +386,7 @@ export function openConnect(opts = {}) {
         status);
       async function ask() {
         sign.disabled = true;
-        status.textContent = "Confirm the message in your wallet.";
+        status.textContent = "Confirm the message in your wallet." + where;
         try { await signMessage(); if (!closed) m.close(); resolve(wallet); }
         catch (e) {
           if (closed) return;

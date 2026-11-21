@@ -13,6 +13,7 @@ import { getStarted } from "/agent/js/pages/start.js";
 import { tokenCell, priceCell, perpPrice, fmtApr, perpName, cleanPerpText } from "/agent/js/marketlib.js";
 import { gatePanel } from "./gate.js";
 import { chromeIcon } from "./chrome-icons.js";
+import { mountPassStrip, mountGraduated } from "./pulse.js";   // community requests 21 Nov: Passed strip + Just graduated lane
 
 const hideSteps = store("troya.home.hideSteps", false);
 const autoPref = store("troya.autopilot", { on: false, playbooks: true, chat: false });
@@ -393,6 +394,8 @@ export async function mount(view, { go, ask: askDrawer }) {
   // whatever leads is left out of the columns below.
   const LEAD = { check: gate.el, perps: hlTable, launch: quick };
   const live = h("div", { class: "dk-live" }, coins, sentry);
+  const passStrip = h("div"); stops.push(mountPassStrip(passStrip));
+  const gradLane = h("div"); stops.push(mountGraduated(gradLane));
   const root = h("div", { class: "dk" });
   let wasHero = null;
   function layout() {
@@ -401,7 +404,7 @@ export async function mount(view, { go, ask: askDrawer }) {
     const parts = showHero ? [intentBar, hero] : [strip];
     if (wallet.address) parts.push(you);
     if (lead) parts.push(lead);
-    if (intent === "launch") parts.push(live); else parts.push(live, quick);
+    if (intent === "launch") parts.push(passStrip, live, gradLane); else parts.push(passStrip, live, gradLane, quick);
     parts.push(setup.el,
       h("div", { class: "dk-cols" },
         h("div", { class: "dk-col" }, chart, lead === gate.el ? null : gate.el, brief, lead === hlTable ? null : hlTable),

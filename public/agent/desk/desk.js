@@ -7,6 +7,7 @@ import { wallet, onWallet, openConnect, restore, disconnect, signIn, ensureChain
 import { api } from "/agent/js/api.js";
 import { chromeIcon } from "./chrome-icons.js";
 import { mountGuide } from "./guide.js";
+import { mountChat } from "./chat.js";   // community chat in the app (21 Nov)
 import "/agent/js/herald-ref.js";      // V8 F42 Herald: keeps a ?ref= code from the link, sends it once after sign-in
 
 const SITE = window.SITE || {};
@@ -613,6 +614,7 @@ for (const b of document.querySelectorAll("[data-ask]")) b.addEventListener("cli
 for (const b of document.querySelectorAll(".d-ask-ico")) b.append(si("search"));   // the sidebar button is Search now; the spark stays with Ask Troya
 // Troya Guide on every page: what it is for, a walk-through, questions for the agent (answered in the drawer)
 mountGuide({ askFn: (q) => openDrawer(q) });
+mountChat(document.body);
 addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openAsk(); }
   else if (e.key === "Escape" && pop) { const a = pop.anchor; closePop(); a?.focus(); }

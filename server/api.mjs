@@ -77,6 +77,8 @@ const MODULES = [
   "./community.mjs",   // community inbox: bug reports, ideas and suspicious-activity flags (web + Telegram), admins only
   "./icons.mjs",       // token + coin logos, fetched once and cached on disk
   "./tokenage.mjs",    // token age: when a coin was born (its creation block), cached for good (community request, 20 Nov)
+  "./pulse.mjs",       // Desk pulse (community request, 21 Nov): coins that passed Sentry, coins that just graduated (read from the chain)
+  "./chat.mjs",        // community chat in the app (community request, 21 Nov): public to read, wallet sign-in to post, same guard as the TG group
 ];
 
 const routes = [];

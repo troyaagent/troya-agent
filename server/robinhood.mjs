@@ -945,6 +945,27 @@ function withPermit(data, v, sig) {
   return iface.ur.encodeFunctionData("execute", ["0x0a" + String(cmds).slice(2), [p, ...inputs], deadline]);
 }
 
+// Swaps built here, for POST /api/swap/sent (stake 2x for traders, 22 Nov 2026): a Swap page trade counts for a staker's 2x
+// only when the wallet sent exactly the calldata Troya built for it. Kept in memory for 2 hours, at most 5,000 builds, with
+// the value of the quote it was built from (the ETH or USDG side; 0 for a wrap or a coin-to-coin swap without one).
+const BUILT = new Map();
+function noteBuilt(who, to, data, q) {
+  try {
+    const isEth = (t) => t?.address === "native" || lower(t?.address) === lower(ADDR.weth), isUsd = (t) => lower(t?.address) === lower(ADDR.usdg);
+    const e = Number(q?.ethUsd) || 0;
+    const usd = q?.venue === "wrap" ? 0 : isEth(q?.tokenIn) ? Number(q.amountIn) * e : isEth(q?.tokenOut) ? Number(q.amountOut) * e : isUsd(q?.tokenIn) ? Number(q.amountIn) : isUsd(q?.tokenOut) ? Number(q.amountOut) : 0;
+    BUILT.set(`${lower(who)}|${lower(to)}|${keccak256(data)}`, { at: Date.now(), usd: Number.isFinite(usd) ? usd : 0, venue: q?.venue || null });
+    if (BUILT.size > 5000) BUILT.delete(BUILT.keys().next().value);
+  } catch { /* never in the way of a build */ }
+}
+/** The swap Troya built for `from` (to, calldata) in the last 2 hours: { at, usd, venue } or null. */
+export function builtSwap(from, to, data) {
+  try {
+    const b = BUILT.get(`${lower(from)}|${lower(to)}|${keccak256(data || "0x")}`);
+    return b && Date.now() - b.at < 2 * 3600_000 ? b : null;
+  } catch { return null; }
+}
+
 export async function buildSwapTx({ from, tokenIn, tokenOut, amountIn, amountInRaw, minOutRaw, slippageBps, deadlineSec = 1200, _quote, _sim = false, _gate = false, _reuse = false, permit2 = false, permit, permitSig }) {
   const who = addr(from, "wallet address");
   if (given(minOutRaw)) rawUnits(minOutRaw, "minOutRaw"); // a malformed minimum is refused before any quote is made
@@ -1004,6 +1025,7 @@ export async function buildSwapTx({ from, tokenIn, tokenOut, amountIn, amountInR
   }
   const approvals = await approvalTxs(who, built.approvals);
   const first = approvals.find((a) => a.needed);
+  if (!_sim && !permitSign) noteBuilt(who, built.to, built.data, q);
   return {
     chainId: CHAIN_ID, from: who, to: built.to, data: built.data, value: built.value.toString(), deadline, quote: q,
     approvals, approval: first || { needed: false },
@@ -1726,6 +1748,9 @@ export async function register(r, ctx) {
   // same request can reuse it
   r.get("/api/swap/quote", ({ query }) => isSol(query.chain) ? sol().then((m) => m.solQuote({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query) })) : isEvm(query.chain) ? evm().then((m) => m.evmQuote({ chain: query.chain, tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query) })) : sharedQuote({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, slippageBps: slipOf(query), from: query.from }, { fresh: true }), { perMin: 240 });
   r.post("/api/swap/build", ({ body }) => { const b = body || {}; if (isSol(b.chain)) return sol().then((m) => m.solBuild({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, slippageBps: b.slippageBps })); if (isEvm(b.chain)) return evm().then((m) => m.evmBuild({ chain: b.chain, from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps })); return buildSwapTx({ from: b.from, tokenIn: b.tokenIn, tokenOut: b.tokenOut, amountIn: b.amountIn, amountInRaw: b.amountInRaw, minOutRaw: b.minOutRaw, slippageBps: b.slippageBps, _reuse: true, permit2: b.permit2 === true, permit: b.permit, permitSig: b.permitSig }); }, { perMin: 120 });
+  // a Swap page trade on Robinhood Chain, reported by the page once it confirmed: booked for the stake 2x when the sender sent
+  // exactly what Troya built for it (stakebonus.mjs checks the chain). Signing in is not needed: only the sender is booked.
+  r.post("/api/swap/sent", async ({ req, body }) => (await import("./stakebonus.mjs")).recordWebSwap({ hash: body?.hash, session: getSession(req)?.address || null, built: builtSwap }), { perMin: 30 });
   r.get("/api/swap/gate", ({ query }) => isSol(query.chain) ? sol().then((m) => m.solGate({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) })) : isEvm(query.chain) ? evm().then((m) => m.evmGate({ chain: query.chain, tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) })) : gateCheck({ tokenIn: query.tokenIn || query.in, tokenOut: query.tokenOut || query.out, amountIn: query.amountIn ?? query.amount, amountInRaw: query.amountInRaw, from: query.from, slippageBps: slipOf(query) }), { perMin: 90 });
 
   r.get("/api/token/health", ({ query }) => tokenHealth(query.address), { perMin: 120 });

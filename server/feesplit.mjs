@@ -31,12 +31,18 @@
 //   · the admins' Telegram gets one digest a week (Monday) and a message when a run fails, never a message a day; and
 //     nothing at all while no stake contract is configured and STAKE_REWARDS is not live.
 // Herald payouts (referral rewards and Cup prizes) are untouched: paid from the owner's part, weekly, as before.
+// 2x for stakers who trade through Troya (owner, 22 Nov 2026; server/stakebonus.mjs has the rule): a paying run takes the
+// stakes at one block, weighs each active staker's coins 2 and the others 1, sends notifyReward(X = P × S / W) and books the
+// active stakers' extra part as a bonus that the same run (and the next ones) sends straight to their wallets once it
+// reaches STAKE_MIN_SEND_ETH. Bonuses booked and not sent yet are owed: they are kept out of the room for the next shares and
+// the burn. Nobody active: X = P, the run is exactly the pro-rata run it was.
 //   GET  /api/feesplit                 public: the rule, this hour's tier and market cap, today so far, the staker pot, past days
 //   POST /api/feesplit/run {day, dry}  admin: run one day now (default: yesterday, dry)
 import { Interface } from "ethers";
 import { rpc, CHAINS } from "./robinhood.mjs";
 import { TROYA, CREATOR, ESCROW } from "./flywheel.mjs";
 import { HttpError } from "./api.mjs";
+import * as bonus from "./stakebonus.mjs";
 
 const START_FILE = "fee-split-start.json", CREDITS_FILE = "fee-credits.json", MC_FILE = "mc-hourly.json", LEDGER = "fee-split.json";
 // the owner's start (21 Nov 2026), used when data/fee-split-start.json is missing
@@ -140,8 +146,11 @@ export function nextRunAt(ms) {
  * sent is "return" (stays with the owner), except the stakers' part before their first paying run, which is "hold" (the pot;
  * settle false).
  */
-export function decideRun({ end, stakerWei, burnWei, contractLive, deployedAt, totalStakedRaw, supplyRaw, targetPct: pct = targetPct(), balanceWei, reserveWei, minSendWei = weiOfEth(minSendEth()) }) {
-  let room = BigInt(balanceWei) > BigInt(reserveWei) ? BigInt(balanceWei) - BigInt(reserveWei) : 0n;
+export function decideRun({ end, stakerWei, burnWei, contractLive, deployedAt, totalStakedRaw, supplyRaw, targetPct: pct = targetPct(), balanceWei, reserveWei, minSendWei = weiOfEth(minSendEth()), owedWei = 0n }) {
+  // the 2x bonuses booked and not sent yet (stakebonus.mjs) are owed to stakers: they are not room for anything else
+  const keep = BigInt(reserveWei) + BigInt(owedWei || 0);
+  let room = BigInt(balanceWei) > keep ? BigInt(balanceWei) - keep : 0n;
+  const noRoom = `the creator wallet could not cover it above its gas reserve${BigInt(owedWei || 0) > 0n ? " and the 2x bonuses it still owes" : ""}`;
   const S = BigInt(stakerWei), B = BigInt(burnWei), MIN = BigInt(minSendWei);
   let stakers;
   if (!contractLive) stakers = { action: "hold", settle: false, reason: "The stake contract is not live yet: kept for the first daily run 7 days after it goes live." };
@@ -157,10 +166,10 @@ export function decideRun({ end, stakerWei, burnWei, contractLive, deployedAt, t
     const rate = fractionPpm < 1_000_000 ? `Paid at ${(fractionPpm / 10_000).toFixed(2)}%: ${(Number(staked) / 1e18).toLocaleString("en-US", { maximumFractionDigits: 0 })} of the ${(Number(target) / 1e18).toLocaleString("en-US", { maximumFractionDigits: 0 })} $TROYA target (${pct}% of supply) is staked; the rest stays with the team.` : null;
     const send = due < room ? due : room;
     if (due < MIN) stakers = { action: "return", settle: true, returnedWei: S, fractionPpm, dueWei: due, tooSmall: true, reason: `Returned to the owner: too small to send (${r6(ethOf(due))} ETH, under ${r6(ethOf(MIN))} ETH)${rate ? `. ${rate.replace(/; the rest stays with the team\.$/, "")}` : ""}.` };
-    else if (send < MIN) stakers = { action: "return", settle: true, returnedWei: S, fractionPpm, dueWei: due, reason: "Returned to the owner: the creator wallet could not cover it above its gas reserve." };
+    else if (send < MIN) stakers = { action: "return", settle: true, returnedWei: S, fractionPpm, dueWei: due, reason: `Returned to the owner: ${noRoom}.` };
     else {
       stakers = { action: "send", settle: true, sendWei: send, returnedWei: S - send, fractionPpm, dueWei: due,
-        ...(send < due ? { reason: `${rate ? `${rate.replace(/ the rest stays with the team\.$/, "")} ` : ""}Partly returned to the owner: the creator wallet keeps its gas reserve.` } : rate ? { reason: rate } : {}) };
+        ...(send < due ? { reason: `${rate ? `${rate.replace(/ the rest stays with the team\.$/, "")} ` : ""}Partly returned to the owner: the creator wallet keeps its gas reserve${BigInt(owedWei || 0) > 0n ? " and the 2x bonuses it still owes" : ""}.` } : rate ? { reason: rate } : {}) };
       room -= send;
     }
   }
@@ -168,7 +177,7 @@ export function decideRun({ end, stakerWei, burnWei, contractLive, deployedAt, t
   if (B === 0n) burn = { action: "none", settle: true };
   else {
     const send = B < room ? B : room;
-    if (send < MIN_BURN_WEI) burn = { action: "return", settle: true, returnedWei: B, reason: B < MIN_BURN_WEI ? "Returned to the owner: below the 0.0005 ETH smallest buyback." : "Returned to the owner: the creator wallet could not cover it above its gas reserve." };
+    if (send < MIN_BURN_WEI) burn = { action: "return", settle: true, returnedWei: B, reason: B < MIN_BURN_WEI ? "Returned to the owner: below the 0.0005 ETH smallest buyback." : `Returned to the owner: ${noRoom}.` };
     else burn = { action: "send", settle: true, sendWei: send, returnedWei: B - send, ...(B > send ? { reason: "Partly returned to the owner: the creator wallet keeps its gas reserve." } : {}) };
   }
   return { stakers, burn };
@@ -342,13 +351,29 @@ export async function dailyRun({ day, start, end, reason = "schedule", dry = fal
     if (live && !w) throw new Error("The creator wallet key is not stored on the server, so nothing can be paid automatically.");
     const balanceWei = w ? await w.provider.getBalance(w.address) : BigInt(await rpc("robinhood", "eth_getBalance", [CREATOR, "latest"]));
     const reserveWei = weiOfEth(reserveEth());
-    const dec = decideRun({ end, stakerWei: S.stakerWei, burnWei: B.burnWei, contractLive: c.live, deployedAt: c.deployedAt || 0, totalStakedRaw: totalStakedRaw || 0n, supplyRaw, targetPct: targetPct(), balanceWei, reserveWei });
+    const owedWei = await bonus.owedWei();                   // 2x bonuses booked and not sent yet: owed, so not room
+    const decide = (staked) => decideRun({ end, stakerWei: S.stakerWei, burnWei: B.burnWei, contractLive: c.live, deployedAt: c.deployedAt || 0, totalStakedRaw: staked || 0n, supplyRaw, targetPct: targetPct(), balanceWei, reserveWei, owedWei });
+    let dec = decide(totalStakedRaw);
+    // 2x for stakers who trade through Troya: the stakes at one block (the paid share follows that block's total), who is
+    // active in the window that ends at this run's 01:00 UTC, then X for notifyReward and a bonus per active staker
+    let split = null, snap = null, act = null;
+    const asOf = end + RUN_HOUR_UTC * HOUR;
+    if (dec.stakers.action === "send") {
+      snap = await (deps.snapshot || bonus.stakeSnapshot)();
+      if (snap.totalRaw !== BigInt(totalStakedRaw || 0)) dec = decide(snap.totalRaw);
+      if (dec.stakers.action === "send") {
+        act = await bonus.activeFor(snap.stakes.map((x) => x.address), { asOf });
+        split = bonus.splitShare(dec.stakers.sendWei, snap.stakes.map((x) => ({ ...x, active: act.get(x.address)?.active === true })));
+      }
+    }
     const part = (d, acc, from) => ({ fromMs: from || null, accruedEth: r6(ethOf(acc)), action: d.action, sendEth: r6(ethOf(d.sendWei || 0n)), returnedEth: r6(ethOf(d.returnedWei || 0n)), reason: d.reason || null, payOn: d.payOn || null,
       ...(d.fractionPpm != null ? { paidPct: d.fractionPpm / 10_000 } : {}), ...(d.tooSmall ? { tooSmall: true } : {}),
       status: d.action === "send" ? (live ? "sending" : "dry") : d.action === "hold" ? "held" : d.action === "return" ? "returned" : "none" });
     const entry = { day, start, end, at: Date.now(), reason, mode: live ? "live" : "dry", balanceEth: r6(ethOf(balanceWei)), reserveEth: reserveEth(), minSendEth: minSendEth(),
       contract: c.contract || null, contractLive: c.live, totalStaked: c.live ? String(totalStakedRaw) : null, supply: String(supplyRaw), targetPct: targetPct(), stats: sumView(D1),
-      stakers: part(dec.stakers, S.stakerWei, stakerFrom), burn: part(dec.burn, B.burnWei, burnFrom) };
+      stakers: part(dec.stakers, S.stakerWei, stakerFrom), burn: part(dec.burn, B.burnWei, burnFrom), owedBonusEth: r6(ethOf(owedWei)) };
+    if (split) entry.stakers.split = bonus.splitRecord(split, { snapshot: snap, asOf, active: act });
+    if (snap && !split) entry.stakers.snapshot = { block: snap.block, from: snap.from, totalStaked: String(snap.totalRaw) };
     const save = (cursors = {}) => store.update(LEDGER, LDEF, (x) => {
       x.days ||= {};
       if (x.days[day]?.mode !== "live" || x.days[day]?.at === entry.at) x.days[day] = entry;   // a live day is written once, by its own run
@@ -357,11 +382,30 @@ export async function dailyRun({ day, start, end, reason = "schedule", dry = fal
       x.days = Object.fromEntries(keep.map((k) => [k, x.days[k]]));
       return x;
     });
-    if (!live) { await save(); return { mode: entry.mode, day: entry }; }
-    // live: each part is marked "sending" and its cursor moved BEFORE anything is broadcast, so a crash can never pay twice
+    const runDay = dayKey(deps.now || Date.now());
+    if (!live) {
+      // dry: what the bonus payments of a live run would be (nothing is booked in dry, so only bonuses from live runs show)
+      entry.bonusPay = bonusPayView(await bonus.payDue({ dry: true, runDay, reserveWei, minSendWei: weiOfEth(minSendEth()) }).catch(() => null));
+      await save(); return { mode: entry.mode, day: entry };
+    }
+    // live: each part is marked "sending" and its cursor moved BEFORE anything is broadcast, so a crash can never pay twice;
+    // the day's 2x bonuses are written down as planned before notifyReward and booked on the wallets once it went through
     const cursors = { ...(dec.stakers.settle ? { stakerFrom: end } : {}), ...(dec.burn.settle ? { burnFrom: end } : {}) };
     await save(cursors);
-    if (dec.stakers.action === "send") await sendStakers(w, c.contract, dec.stakers.sendWei, entry.stakers);
+    if (dec.stakers.action === "send") {
+      if (split?.bonusWei > 0n) await bonus.planBonus(day, split, entry.at);
+      await sendStakers(w, c.contract, split ? split.notifyWei : dec.stakers.sendWei, entry.stakers);
+      if (split?.bonusWei > 0n) {
+        const ok = entry.stakers.status === "sent" || entry.stakers.status === "unknown";
+        await bonus.settleBonus(day, ok);
+        entry.stakers.split.bonusStatus = ok ? "accrued" : "returned";
+        if (ok) entry.stakers.bonusEth = entry.stakers.split.bonusEth;
+      }
+      await save();
+    }
+    // the 2x bonuses due (accrued ≥ STAKE_MIN_SEND_ETH, this run's or older ones): before the burn, inside the reserve
+    entry.bonusPay = bonusPayView(await bonus.payDue({ signer: w, runDay, reserveWei, minSendWei: weiOfEth(minSendEth()) })
+      .catch((e) => ({ at: Date.now(), error: String(e.shortMessage || e.message).slice(0, 200), sent: [], skipped: [] })));
     if (dec.burn.action === "send") await sendBurn(dec.burn.sendWei, entry.burn, day, deps.buybackAndBurn);
     await save();
     return { mode: entry.mode, day: entry };
@@ -369,6 +413,7 @@ export async function dailyRun({ day, start, end, reason = "schedule", dry = fal
 }
 async function sendStakers(w, contract, value, rec) {
   const data = new Interface(["function notifyReward() payable"]).encodeFunctionData("notifyReward");
+  rec.notifyEth = r6(ethOf(value));
   let last = null;
   for (let a = 1; a <= 3; a++) {
     rec.attempts = a;
@@ -381,7 +426,7 @@ async function sendStakers(w, contract, value, rec) {
     try {
       const rc = await tx.wait(1, 180_000);
       if (rc?.status === 1) {
-        rec.status = "sent"; rec.sentEth = rec.sendEth;
+        rec.status = "sent"; rec.sentEth = r6(ethOf(value));           // X: with 2x bonuses booked, less than the share sendEth
         import("./seal.mjs").then((m) => m.seal("stake-share", contract, { eth: rec.sentEth, hash: tx.hash }, `Stakers' share: ${rec.sentEth} ETH sent to TroyaStake.notifyReward()`)).catch(() => {});
         return;
       }
@@ -431,6 +476,7 @@ export function digestText(days, monday) {
   const dry = list.some((d) => d.mode === "dry");
   return `<b>$TROYA fee split, week to ${dayKey(monday - DAY)}</b>${dry ? " (dry run: nothing sent)" : ""}\n${list.length} daily run${list.length === 1 ? "" : "s"}. Creator fees credited: ${sum((d) => d.stats?.creditedEth)} ETH${tiers ? ` (${tiers})` : ""}.\n` +
     `Stakers: ${sum((d) => d.stakers?.sentEth)} ETH sent, ${sum((d) => d.stakers?.returnedEth)} ETH to the owner${list.some((d) => d.stakers?.status === "held") ? `, pot held: ${list.filter((d) => d.stakers?.status === "held").at(-1)?.stakers?.accruedEth} ETH` : ""}${dry ? `, would send ${sum((d) => d.stakers?.status === "dry" ? d.stakers.sendEth : 0)} ETH` : ""}.\n` +
+    (sum((d) => d.stakers?.bonusEth) || sum((d) => d.bonusPay?.sentEth) || sum((d) => d.stakers?.split?.bonusEth) ? `2x for active traders: ${sum((d) => d.stakers?.bonusEth)} ETH booked as bonuses, ${sum((d) => d.bonusPay?.sentEth)} ETH of bonuses sent${dry ? `, would book ${sum((d) => (d.mode === "dry" ? d.stakers?.split?.bonusEth : 0))} ETH` : ""}.\n` : "") +
     `Burn: ${sum((d) => d.burn?.sentEth)} ETH bought back and burned, ${sum((d) => d.burn?.returnedEth)} ETH to the owner.` +
     (list.some((d) => d.stakers?.failed || d.burn?.failed) ? `\nProblems: ${list.filter((d) => d.stakers?.failed || d.burn?.failed).map((d) => d.day).join(", ")}.` : "");
 }
@@ -457,6 +503,8 @@ async function dailyTick() {
       if (out?.waiting && now > today + 12 * HOUR) await failNote(day, out.note);
       const d = out?.day;
       if (d && (d.stakers?.failed || d.burn?.failed)) await failNote(day, [d.stakers?.failed ? partLine("Stakers", d.stakers) : "", d.burn?.failed ? partLine("Burn", d.burn) : ""].filter(Boolean).join("\n"));
+      const odd = (d?.bonusPay?.skipped || []).filter((x) => x.unknown || x.why === "reverted");
+      if (d?.bonusPay?.error || odd.length) await failNote(`${day}-bonus`, `2x bonus payments: ${d.bonusPay.error || odd.map((x) => `${x.address} ${x.eth} ETH ${x.why}${x.hash ? ` robinhoodchain.blockscout.com/tx/${x.hash}` : ""}`).join("; ")}`);
     }
     if (new Date(now).getUTCDay() === 1) await weeklyDigest(today);
   } catch (e) { console.warn("[feesplit] tick:", e.message); }
@@ -481,10 +529,11 @@ export async function feeSplitView() {
   const fw = await store.readJson("flywheel.json", {});
   const days = Object.values(led.days || {}).sort((a, b) => b.start - a.start).slice(0, 14).map((d) => ({
     day: d.day, start: d.start, end: d.end, mode: d.mode, credits: d.stats?.credits, creditedEth: d.stats?.creditedEth, byTier: d.stats?.byTier,
-    stakers: pick(d.stakers), burn: pick(d.burn) }));
+    stakers: pick(d.stakers), burn: pick(d.burn), bonusPay: d.bonusPay || null }));
   const firstPay = c.live && c.deployedAt ? firstPayAt(c.deployedAt) + RUN_HOUR_UTC * HOUR : null;
   const v = {
     name: "$TROYA fee split", mode: modeOf(), wording: WORDING, paid: PAID_DAILY, noStakers: NO_STAKERS, rule: RULE,
+    active: { line: bonus.ACTIVE_LINE(), how: bonus.ACTIVE_HOW(), days: bonus.activeDays(), minUsd: bonus.activeMinUsd(), totals: await bonus.bonusTotals().catch(() => null) },
     tiers: TIERS.map((t) => ({ key: t.key, name: t.name, minMcUsd: t.minMc, stakersPctOfVolume: t.stakerBps / 100, burnPctOfVolume: t.burnBps / 100, stakersShareOfCreatorFees: t.stakerBps / CREATOR_BPS, burnShareOfCreatorFees: t.burnBps / CREATOR_BPS })),
     start: { block: st.startBlock, from: st.from },
     schedule: { every: "day", hourUtc: RUN_HOUR_UTC, nextRunAt: nextRunAt(now), firstPayAt: firstPay, minSendEth: minSendEth(), firstPayDays: FIRST_PAY_DAYS },
@@ -502,10 +551,18 @@ export async function feeSplitView() {
   return v;
 }
 const compactNum = (n) => (n >= 1e9 ? `${+(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${+(n / 1e3).toFixed(1)}K` : String(Math.round(n)));
-const pick = (p) => (p ? { accruedEth: p.accruedEth, status: p.status, sentEth: p.sentEth || 0, sendEth: p.sendEth || 0, returnedEth: p.returnedEth || 0, reason: p.reason || null, paidPct: p.paidPct ?? null, tooSmall: !!p.tooSmall, hash: p.hash || null, buyHash: p.buyHash || null, burnHash: p.burnHash || null, troyaBurned: p.troyaBurned || null, payOn: p.payOn || null } : null);
+const pick = (p) => (p ? { accruedEth: p.accruedEth, status: p.status, sentEth: p.sentEth || 0, sendEth: p.sendEth || 0, returnedEth: p.returnedEth || 0, reason: p.reason || null, paidPct: p.paidPct ?? null, tooSmall: !!p.tooSmall, hash: p.hash || null, buyHash: p.buyHash || null, burnHash: p.burnHash || null, troyaBurned: p.troyaBurned || null, payOn: p.payOn || null,
+  ...(p.notifyEth != null ? { notifyEth: p.notifyEth } : {}), ...(p.split ? { split: bonus.splitPublic(p.split) } : {}) } : null);
+// a run's 2x bonus payments, as recorded on its day (short addresses only)
+function bonusPayView(b) {
+  if (!b) return null;
+  return { at: b.at, dry: !!b.dry, runDay: b.runDay || null, due: b.due ?? null, sentEth: b.sentEth || 0, error: b.error || null, recovered: b.recovered || 0,
+    sent: (b.sent || []).slice(0, 100), skipped: (b.skipped || []).slice(0, 100) };
+}
 
 export async function register(r, ctx) {
   store = ctx.store;
+  bonus.init(ctx.store);
   setTimeout(() => { sampleMc().catch(() => {}); scanCredits().catch(() => {}); }, 75_000).unref?.();
   setInterval(() => sampleMc().catch(() => {}), 10 * 60_000).unref?.();
   setInterval(() => scanCredits().catch(() => {}), 5 * 60_000).unref?.();
@@ -522,4 +579,4 @@ export async function register(r, ctx) {
   });
 }
 
-export const _test = { setStore: (st) => { store = st; view = null; }, dailyTick };
+export const _test = { setStore: (st) => { store = st; view = null; bonus.init(st); }, dailyTick };

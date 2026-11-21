@@ -1380,6 +1380,8 @@ export async function mount(view, ctx) {
         clear(txBox, h("div", { class: "alert ok" }, icon("check"), ` Swap confirmed · `, h("a", { class: "mono link", href: `${CHAINS[chain].explorer}/tx/${hash}`, target: "_blank", rel: "noopener", title: `View it on the ${cname} explorer` }, short(hash, 6))),
           doneChips(chain, paid, got, fq.amountOutRaw));
         journal({ kind: "swap", chain, hash, status: "confirmed", venue: fq.venue, tokenIn: fq.tokenIn.address, tokenOut: fq.tokenOut.address, amountIn: fq.amountIn, amountOut: fq.amountOut, rationale: "Manual swap from the Swap page" });
+        // the stake 2x for traders: the server checks this hash on chain against the swap it built (Robinhood Chain only)
+        if (chain === "robinhood") api.post("swap/sent", { hash }).catch(() => {});
         st.amount = ""; sellInput.value = "";
         reset();
       } else if (rc) {

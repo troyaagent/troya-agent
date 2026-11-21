@@ -4,6 +4,8 @@
 // totals come from /api/stake. Every write is signed in your own wallet. The contract has no owner and takes no fee.
 // The daily creator-fee share (server/feesplit.mjs, owner 21 Nov 2026) is shown from /api/feesplit: a share of $TROYA creator
 // fees that grows with market cap (0.1% to 0.5% at $35k to 1% at $100k of trading volume), varies with volume, not a promised yield.
+// 2x for traders (server/stakebonus.mjs, owner 22 Nov 2026): a staker who traded through Troya in the day before a daily share
+// counts double in it; your status, the bonus to receive and the bonuses paid come from /api/stake/:address.
 import { Interface } from "ethers";
 import { h, clear, useCss, icon, toast, short, compact, pageHead, seg, review } from "../ui.js";
 import { api } from "../api.js";
@@ -27,6 +29,13 @@ const days = (ms) => ms / DAY;
 const dateOf = (ms) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 const timeOf = (ms) => new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 const pad = (n) => String(n).padStart(2, "0");
+function ago(ms) {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (s < 90) return "just now";
+  const m = Math.round(s / 60), hh = Math.round(s / 3600), d = Math.round(s / 86400);
+  return m < 60 ? `${m} minutes ago` : hh < 36 ? `${hh} hour${hh === 1 ? "" : "s"} ago` : `${d} days ago`;
+}
+const eth6 = (x) => `${(+x || 0).toFixed(6)} ETH`;
 function countdown(ms) {
   if (ms <= 0) return "ready";
   const s = Math.floor(ms / 1000), d = Math.floor(s / 86400), hh = Math.floor((s % 86400) / 3600), mm = Math.floor((s % 3600) / 60);
@@ -73,7 +82,8 @@ export async function mount(view) {
   useCss("stake");
   document.title = "Stake · Troya Agent";
   let alive = true, seq = 0, seen, tick = null;
-  const st = { terms: null, stats: null, split: null, me: null, err: null, mode: "stake", amount: "", busy: null };
+  const st = { terms: null, stats: null, split: null, me: null, mine: null, err: null, mode: "stake", amount: "", busy: null };
+  const twoX = h("div", { class: "stk-reward stk-2x", style: { flexDirection: "column", alignItems: "stretch", gap: "8px" } });
   const tiles = h("div", { class: "stk-tiles" });
   const act = h("section", { class: "panel stk-act" });
   const prog = h("section", { class: "panel stk-prog" });
@@ -99,7 +109,9 @@ export async function mount(view) {
     try {
       const [terms, stats, split] = await Promise.all([api.get("stake"), api.get("stake/stats").catch(() => null), api.get("feesplit").catch(() => null)]);
       st.terms = terms; st.stats = stats; st.split = split; st.err = null;
-      st.me = terms.deployed && wallet.address ? await readMine(wallet.address).catch((e) => { st.err = `Couldn't read your stake: ${errText(e)}`; return null; }) : null;
+      [st.me, st.mine] = await Promise.all([
+        terms.deployed && wallet.address ? readMine(wallet.address).catch((e) => { st.err = `Couldn't read your stake: ${errText(e)}`; return null; }) : null,
+        wallet.address ? api.get(`stake/${wallet.address}`).catch(() => null) : null]);
     } catch (e) { st.err = e.message || String(e); }
     if (alive && my === seq) paint();
   }
@@ -108,7 +120,7 @@ export async function mount(view) {
     if (!wallet.address || !st.terms?.deployed) return;
     try { st.me = await readMine(wallet.address); } catch {}
     api.get("stake/stats").then((s) => { st.stats = s; if (alive) paintTiles(); }).catch(() => {});
-    setTimeout(() => api.get(`stake/${wallet.address}?fresh=1`).catch(() => {}), 5_500);
+    setTimeout(() => api.get(`stake/${wallet.address}?fresh=1`).then((m) => { st.mine = m; if (alive) paintTwoX(); }).catch(() => {}), 5_500);
     if (alive) paint();
   }
 
@@ -155,6 +167,7 @@ export async function mount(view) {
       ld ? h("div", { class: "stk-share-l muted" }, `Yesterday (${ld.day}): stakers ${ldText(ld.stakers)}; burn ${ldText(ld.burn)}.`,
         ld.stakers?.hash ? [" ", h("a", { class: "ulink", href: `${EXPLORER}/tx/${ld.stakers.hash}`, target: "_blank", rel: "noopener" }, "Transaction")] : null) : null,
       h("div", { class: "stk-share-l" }, wording, " ", h("b", {}, paid), " ", h("b", {}, nos)),
+      f.active || t.active ? h("div", { class: "stk-share-l" }, h("b", {}, (f.active || t.active).line), " ", (f.active || t.active).how) : null,
       h("details", { class: "stk-share-how" }, h("summary", {}, "How the share works"), h("p", {}, f.rule), h("ul", {}, tierLines),
         h("p", { class: "muted" }, "The market cap of each hour is the median of several reads that hour (Troya's market index, DexScreener and the pool price on chain), so a short pump does not move the tier.")));
   }
@@ -180,7 +193,7 @@ export async function mount(view) {
   function paintAct() {
     const t = st.terms, me = st.me;
     if (tick) { clearInterval(tick); tick = null; }
-    if (!t.deployed) return clear(act, h("h3", {}, "Stake"), h("p", { class: "muted" }, "Staking opens when the contract is live on Robinhood Chain. There is nothing to sign yet. The tiers, perks, the daily creator-fee share and the risks below are the plan."));
+    if (!t.deployed) return clear(act, h("h3", {}, "Stake"), h("p", { class: "muted" }, "Staking opens when the contract is live on Robinhood Chain. There is nothing to sign yet. The tiers, perks, the daily creator-fee share and the risks below are the plan."), t.active ? h("p", { class: "fine" }, h("b", {}, t.active.line), " ", t.active.how) : null);
     if (!wallet.address) return clear(act, h("h3", {}, "Stake"), h("p", { class: "muted" }, "Connect the wallet that holds your $TROYA. Staking is signed in your own wallet; Troya never holds your coins."),
       h("button", { class: "btn primary", type: "button", onclick: () => openConnect() }, icon("wallet"), "Connect wallet"));
     if (!me) return clear(act, h("h3", {}, "Stake"), h("div", { class: "alert error" }, st.err || "Couldn't read your stake right now."), h("button", { class: "btn", type: "button", onclick: load }, icon("refresh"), "Try again"));
@@ -241,8 +254,38 @@ export async function mount(view) {
       h("div", { class: "stk-row" }, input, h("button", { class: "btn sm", type: "button", disabled: !!st.busy || max === 0n, onclick: () => { st.amount = rawInput(max, 18, 6); input.value = st.amount; paintGo(); } }, "Max")),
       hint, go,
       st.mode === "stake" && me.bal === 0n ? h("a", { class: "ulink", href: `#/swap?out=${t.token}` }, "Buy $TROYA first") : null,
-      pendingBox, rewardBox,
+      pendingBox, rewardBox, twoX,
       st.busy ? h("p", { class: "fine stk-busy" }, st.busy) : null);
+    paintTwoX();
+  }
+
+  // 2x for traders: your status for the next daily share, the bonus to receive and the bonuses paid (with their transactions)
+  function paintTwoX() {
+    const m = st.mine, rule = m?.activeRule || st.terms?.active?.line || "Trade through Troya at least once a day to earn 2x.";
+    if (!m || !wallet.address) return clear(twoX, h("div", {}, h("small", { class: "muted" }, "2x for traders"), h("b", {}, rule)));
+    const next = m.nextShareAt, from = Math.max(Date.now(), m.startsCountingAt || 0);
+    const status = m.excluded ? "Team and test wallets keep 1x"
+      : m.active ? `Active: last trade ${ago(m.lastTradeAt)} — 2x` : "Not active today — 1x";
+    const minUsd = m.activeMinUsd ?? 5;
+    const detail = m.excluded ? "The 2x is for the community: team, admin and test wallets are never counted."
+      : m.active ? `Counts double in the next daily share (${timeOf(next)}).${m.lastTrade?.launch ? " Your last one was a launch through Troya." : ""}`
+      : `${m.lastTradeAt ? `Last trade through Troya ${ago(m.lastTradeAt)}. ` : ""}Trade $${minUsd} or more through Troya ${from > Date.now() + 60_000 ? `between ${timeOf(from)} and ${timeOf(next)}` : `before ${timeOf(next)}`} to count double in the next daily share.`;
+    const pays = (m.bonusPayments || []).filter((p) => p.hash).slice(0, 5);
+    const ls = m.lastShare;
+    clear(twoX,
+      h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" } },
+        h("div", {}, h("small", { class: "muted" }, "2x for traders"), h("b", {}, status)),
+        h("span", { class: `stk-pill ${m.active ? "on" : ""}` }, `${m.weight || 1}x`)),
+      h("p", { class: "fine", style: { margin: 0 } }, rule, " ", detail),
+      h("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px 18px" } },
+        h("div", {}, h("small", { class: "muted" }, "2x bonus to receive"), h("b", {}, eth6(m.bonusAccrued)),
+          h("small", { class: "muted" }, `sent to your wallet once it reaches ${m.bonusMinSendEth ?? 0.00002} ETH`)),
+        h("div", {}, h("small", { class: "muted" }, "2x bonus paid"), h("b", {}, eth6(m.bonusPaid)))),
+      ls ? h("p", { class: "fine muted", style: { margin: 0 } }, `Your last daily share (${ls.day}${ls.mode === "dry" ? ", worked out, not sent yet" : ""}): ${eth6(ls.totalEth)} at ${ls.weight}x = ${eth6(ls.contractEth)} through the contract${ls.bonusEth ? ` + ${eth6(ls.bonusEth)} 2x bonus` : ""}.`) : null,
+      pays.length ? h("ul", { class: "fine", style: { margin: 0, paddingLeft: "18px" } }, pays.map((p) => h("li", {}, `${dateOf(p.at)}: ${eth6(p.eth)}${p.status === "sent" ? "" : ` (${p.status})`} · `,
+        h("a", { class: "ulink", href: `${EXPLORER}/tx/${p.hash}`, target: "_blank", rel: "noopener" }, "Transaction")))) : null,
+      m.bonusNote ? h("p", { class: "fine", style: { margin: 0 } }, m.bonusNote) : null,
+      m.active || m.excluded ? null : h("a", { class: "ulink", href: "#/swap" }, "Trade on the Swap page"));
   }
 
   function paintProg() {
@@ -298,6 +341,7 @@ export async function mount(view) {
       ["The wait restarts", "Asking to unstake more while coins already wait adds them and restarts the 3-day wait for all of them."],
       ["Nobody can undo a mistake", "There is no owner, admin, pause or upgrade. $TROYA sent straight to the contract address, instead of through Stake, is lost for good."],
       ["Not a yield", "The daily ETH is a share of $TROYA creator fees: it moves with trading volume and with the market cap tier, can be zero on a quiet day, and is not promised. It goes to the coins staked at the moment it arrives (every day at 01:00 UTC, for the day before); coins waiting out the cooldown get none. If nobody is staked then, or it is under 0.00002 ETH, it stays with the team."],
+      ["The 2x part is sent by the team", "The contract pays every staked coin the same 1x part. The extra part for stakers who traded through Troya is sent from the $TROYA creator wallet once it adds up to the smallest payment; it waits (and keeps adding up) while that wallet is short of its gas reserve. Only trades the server can check count: the Swap page on Robinhood Chain, the Agent Wallet, Telegram and X trades, and launches through Troya."],
       ["Tiers can move", "Tier sizes are a share of the total supply, and the team can change sizes and perks. A tier you reach today can need more later."],
       t.holdersCountStaked ? ["Holder tiers", "Treasury holder tiers count your staked and waiting coins too."]
         : ["Holder tiers", "For now Treasury holder tiers read your wallet balance only: coins you stake leave your wallet and stop counting there."],
@@ -385,11 +429,12 @@ export async function mount(view) {
   async function soft() {
     if (document.hidden || st.busy || !st.terms) return;
     const before = key(st.me);
-    const [stats, me, split] = await Promise.all([api.get("stake/stats").catch(() => st.stats), st.terms.deployed && wallet.address ? readMine(wallet.address).catch(() => st.me) : null, api.get("feesplit").catch(() => st.split)]);
+    const [stats, me, split, mine] = await Promise.all([api.get("stake/stats").catch(() => st.stats), st.terms.deployed && wallet.address ? readMine(wallet.address).catch(() => st.me) : null, api.get("feesplit").catch(() => st.split),
+      wallet.address ? api.get(`stake/${wallet.address}`).catch(() => st.mine) : null]);
     if (!alive) return;
-    st.stats = stats; st.split = split;
+    st.stats = stats; st.split = split; st.mine = mine;
     if (me) st.me = me;
-    if (key(st.me) !== before && !act.contains(document.activeElement)) paint(); else { paintTiles(); paintProg(); }
+    if (key(st.me) !== before && !act.contains(document.activeElement)) paint(); else { paintTiles(); paintProg(); paintTwoX(); }
   }
   // onWallet calls back at once: that first call is the load; after that only an address change reloads
   const off = onWallet(() => { const k = String(wallet.address || "").toLowerCase(); if (k !== seen) { seen = k; st.me = null; load(); } });

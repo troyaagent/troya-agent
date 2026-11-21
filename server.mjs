@@ -48,6 +48,7 @@ const ROUTES = {
   "/badge": "/badge.html",
   "/stats": "/stats.html",
   "/swap": "/swap.html",
+  "/stake": "/stake.html",
   "/safety": "/safety.html",
   "/agent": "/agent/index.html",
 };

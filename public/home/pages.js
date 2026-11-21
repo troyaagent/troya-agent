@@ -16,7 +16,7 @@ export const NAV = [
   ["Product", [["Desk", "/agent"], ["Swap", "/agent#/swap"], ["Perps", "/agent#/perps"], ["Stocks", "/agent#/stocks"], ["Launch", "/agent#/launch"], ["Bridge", "/agent#/bridge"], ["Launch on X", PAGE("launch-on-x")]]],
   ["Proof", [["Verify", PAGE("verify")], ["The Record", PAGE("record")], ["Seal", PAGE("seal")], ["Arena", PAGE("arena")], ["Oath", PAGE("oath")], ["Flywheel", PAGE("flywheel")]]],
   ["Build", [["API and MCP", PAGE("api-and-mcp")], ["Gate badge", PAGE("badge")], ["Gate in MetaMask", PAGE("snap")], ["llms.txt", "/llms.txt"], ["Docs", "/agent#/docs"]]],
-  ["Company", [["Roadmap", PAGE("roadmap")], ["Community", PAGE("community")], ["Plans", PAGE("plans")], ["Capabilities", PAGE("capabilities")], ["Philosophy", PAGE("philosophy")], ["Market analysis", PAGE("market-analysis")], ["Insights", PAGE("insights")], ["Risk controls", PAGE("risk-controls")], ["Safety", PAGE("safety")], ["Privacy Policy", PAGE("privacy")], ["Terms of Use", PAGE("terms")]]],
+  ["Company", [["Roadmap", PAGE("roadmap")], ["Community", PAGE("community")], ["Stake $TROYA", "/stake"], ["Plans", PAGE("plans")], ["Capabilities", PAGE("capabilities")], ["Philosophy", PAGE("philosophy")], ["Market analysis", PAGE("market-analysis")], ["Insights", PAGE("insights")], ["Risk controls", PAGE("risk-controls")], ["Safety", PAGE("safety")], ["Privacy Policy", PAGE("privacy")], ["Terms of Use", PAGE("terms")]]],
 ];
 // The same groups as HTML: one <div> per group with a small label, used by both menus and both footers.
 // Styling comes from the caller's class (pn-groups on inner pages, menu-groups / foot-groups on the homepage).
@@ -60,7 +60,7 @@ if (foot) {
   foot.innerHTML = `
   <nav class="pn-pages" aria-label="Pages" style="display:block">${renderGroups("pn-groups")}</nav>
   <div class="pn-row">
-    <div class="pn-l"><a href="${PAGE("community")}">Community</a>${ext(TG, "Telegram")}${ext(X, "X")}${ext(GH, "GitHub")}</div>
+    <div class="pn-l"><a href="${PAGE("community")}">Community</a><a href="/stake">Stake</a>${ext(TG, "Telegram")}${ext(X, "X")}${ext(GH, "GitHub")}</div>
     <button class="pn-ca" type="button" data-pn-ca><b>CA</b><span data-pn-ca-full></span></button>
     <div class="pn-rr"><a href="${PAGE("privacy")}">Privacy Policy</a><a href="${PAGE("terms")}">Terms of Use</a></div>
   </div>

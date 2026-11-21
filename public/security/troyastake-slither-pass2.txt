@@ -1,0 +1,103 @@
+# Slither 0.11.6 on TroyaStake.sol, pass 2: line 203 split into two statements (same maths, scan copy only)
+# started: 2026-11-21T19:19:58Z (UTC)
+# command, run in contracts/: slither . --foundry-compile-all --include-paths "src/TroyaStake.sol" --json troyastake-slither-pass2.json
+# exit code: 255 (Slither exits 255 when it reports results)
+# solc 0.8.24+commit.e11b9ed9.Darwin.appleclang (via solc-select 1.2.0), forge 1.7.1, crytic-compile 0.4.2, Python 3.12.13
+# run in a scratch copy of contracts/ (src, lib, test); local paths shortened to contracts/, nothing else changed
+# the one-line change is in troyastake-slither-pass2.diff
+# ---- raw output below ----
+
+Detector: incorrect-equality
+TroyaStake.stake(uint256) (src/TroyaStake.sol#82-93) uses a dangerous strict equality:
+	- got == 0 (src/TroyaStake.sol#89)
+TroyaStake.stakedFor(address) (src/TroyaStake.sol#187-190) uses a dangerous strict equality:
+	- s == 0 (src/TroyaStake.sol#189)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#dangerous-strict-equalities
+
+Detector: timestamp
+TroyaStake.withdraw() (src/TroyaStake.sol#126-136) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp < a.unlockAt (src/TroyaStake.sol#130)
+TroyaStake.stakedFor(address) (src/TroyaStake.sol#187-190) uses timestamp for comparisons
+	Dangerous comparisons:
+	- s == 0 (src/TroyaStake.sol#189)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+
+Detector: pragma
+4 different versions of Solidity are used:
+	- Version constraint >=0.8.13<0.9.0 is used by:
+		->=0.8.13<0.9.0 (lib/forge-std/src/Base.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdAssertions.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdChains.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdCheats.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdConstants.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdError.sol#3)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdInvariant.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdJson.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdMath.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdStorage.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdStyle.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdToml.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdUtils.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/Test.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/Vm.sol#4)
+		->=0.8.13<0.9.0 (lib/forge-std/src/console.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/console2.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/interfaces/IMulticall3.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/safeconsole.sol#2)
+	- Version constraint ^0.8.20 is used by:
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/access/Ownable.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/access/Ownable2Step.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/interfaces/IERC1363.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/interfaces/IERC165.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/interfaces/draft-IERC6093.sol#3)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/proxy/Clones.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/IERC721.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/IERC721Receiver.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/extensions/IERC721Metadata.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Utils.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Address.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Base64.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Context.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Errors.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Panic.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Strings.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/introspection/ERC165.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/introspection/IERC165.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/math/Math.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/math/SafeCast.sol#5)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/math/SignedMath.sol#4)
+	- Version constraint 0.8.24 is used by:
+		-0.8.24 (src/TroyaFeeSplitter.sol#2)
+	- Version constraint ^0.8.24 is used by:
+		-^0.8.24 (src/TroyaOathVault.sol#2)
+		-^0.8.24 (src/TroyaPass.sol#2)
+		-^0.8.24 (src/TroyaStake.sol#2)
+		-^0.8.24 (test/TroyaFeeSplitter.t.sol#2)
+		-^0.8.24 (test/TroyaFeeSplitterFork.t.sol#2)
+		-^0.8.24 (test/TroyaOathVault.t.sol#2)
+		-^0.8.24 (test/TroyaPass.t.sol#2)
+		-^0.8.24 (test/TroyaPassFork.t.sol#2)
+		-^0.8.24 (test/TroyaStake.t.sol#2)
+		-^0.8.24 (test/TroyaStakeFork.t.sol#2)
+		-^0.8.24 (test/TroyaStakeInvariant.t.sol#2)
+		-^0.8.24 (test/halmos/TroyaFeeSplitter.halmos.t.sol#2)
+		-^0.8.24 (test/halmos/TroyaOathVault.halmos.t.sol#2)
+		-^0.8.24 (test/halmos/TroyaPass.halmos.t.sol#2)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#different-pragma-directives-are-used
+
+Detector: low-level-calls
+Low level call in TroyaStake.claim() (src/TroyaStake.sol#159-169):
+	- (ok,None) = address(msg.sender).call{value: r}() (src/TroyaStake.sol#167)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#low-level-calls
+. analyzed (95 contracts with 102 detectors), 6 result(s) found
+'forge clean' running (wd: contracts)
+'forge config --json' running
+'forge build --build-info --deny never' running (wd: contracts)

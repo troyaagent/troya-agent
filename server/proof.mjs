@@ -366,6 +366,17 @@ export async function claimsView() {
   ], { facts: sk?.facts || [] });
   const rewards = String(process.env.STAKE_REWARDS || "dry");
   add("staking-rewards", rewards === "live" ? "A daily share of $TROYA creator fees is paid into TroyaStake (notifyReward) for stakers to claim." : `A daily share of $TROYA creator fees paid to stakers: worked out every day but not sent yet (mode "${rewards}"). It is paid once switched on, the first time 7 days after the contract went live.`, st(rewards === "live"), [ev.api("/api/feesplit", "the split, its mode and schedule")]);
+  // the automated scan of TroyaStake (public/security/, 22 Nov 2026): read from its summary file, so the numbers here are the published ones
+  let scan = null;
+  try { scan = JSON.parse(await readFile(join(root, "public", "security", "troyastake-scan.json"), "utf8")); } catch { /* not published */ }
+  if (scan && scan.contract?.address?.toLowerCase() === STAKE.toLowerCase()) {
+    const ran = scan.tools.filter((x) => x.status !== "not run"), a = scan.counts.afterTriage;
+    add("staking-scan", `TroyaStake was scanned on ${scan.date} with ${ran.map((x) => `${x.tool} ${x.version}`).join(" and ")} (free static analyzers) on the exact verified source: ${scan.counts.beforeTriage.total} results before triage, ${a.real} real issues after it (${a.informational} informational, ${a.falsePositive} false positives), each explained. ${scan.label}.`, "live", [
+      ev.page(`${SITE}/security/troyastake-scan.json`, "the summary: tools, versions, commands, every result with its verdict"),
+      ...ran.flatMap((x) => x.runs.map((r) => ev.page(`${SITE}${r.raw.text}`, `${x.tool} ${x.version} raw output${x.runs.length > 1 ? `, ${r.pass}` : ""}`))),
+      ev.page(`${SITE}/agent#/stake`, "the Stake page, How it works on-chain"),
+    ], { checkedAt: Date.parse(scan.scannedAt?.["slither pass 1"] || scan.date) || now });
+  }
   const pass = cOf("Troya Holder Pass (soulbound)"), fac = cOf("TroyaFeeSplitter factory"), vault = cOf("TroyaOathVault");
   if (pass) add("holder-pass", `Troya Holder Pass ${PASS}: a soulbound NFT for wallets holding 1,000,000 $TROYA, used for signed pass votes. ${pass.facts[0]}.`, "live", [ev.contract(PASS), ev.call(pass.checks[0].body, "owner()"), { type: "source", url: pass.source }, ev.api("/api/pass")]);
   if (fac) add("fee-splitter", `Coins launched through Troya by wallets without 1,000,000 $TROYA send their creator fees to a TroyaFeeSplitter clone from the factory ${SPLIT_FACTORY}: Troya's share is fixed per coin (capped at 20%) and the creator's share cannot be redirected. ${fac.facts[0]}; it can only change where Troya's share goes.`, "live", [ev.contract(SPLIT_FACTORY), ev.tx(SPLIT_DEPLOY_TX, "factory deployment"), ev.call(fac.checks[0].body, "owner()"), { type: "source", url: fac.source }, ev.api("/api/launch/splitter")]);

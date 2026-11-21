@@ -1,0 +1,14 @@
+# Wake 4.22.2 on TroyaStake.sol: all 26 detectors, every impact and confidence level
+# started: 2026-11-21T19:22:41Z (UTC)
+# command, run in contracts/: wake detect --export json all --min-impact info --min-confidence low
+# exit code: 0
+# solc 0.8.24+commit.e11b9ed9 (downloaded by Wake itself), Python 3.12.13
+# run in a scratch copy of contracts/ (src, lib, test); nothing in the output changed
+# config: troyastake-wake.toml (written by `wake init config` from foundry.toml, then edited so the tests compile and findings cover only src/TroyaStake.sol)
+# ---- raw output below ----
+[19:22:42] Found 15 *.sol files in 0.03 s                                                                  detect.py:731
+           Failed to load previous build artifacts                                                       compiler.py:908
+[19:22:54] Compiled 62 files using 11 solc runs in 11.55 s                                              compiler.py:1305
+[19:23:17] Processed compilation results in 23.71 s                                                     compiler.py:1558
+[19:23:20] Wrote build artifacts in 2.23 s                                                              compiler.py:1686
+No detections found

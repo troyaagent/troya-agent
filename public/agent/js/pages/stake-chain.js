@@ -4,7 +4,10 @@
 //   · what the contract cannot do, each point linked to its line in the published source (pinned to the commit Sourcify and
 //     Blockscout verified as an exact match) or to the test that proves it;
 //   · how to leave through Blockscout with no troya.codes at all, with your own staked amount in wei, ready to paste;
-//   · the contract's totals read live from Robinhood Chain through Troya's RPC relay, with the time and block of the read.
+//   · the contract's totals read live from Robinhood Chain through Troya's RPC relay, with the time and block of the read;
+//   · the automated security scan (Slither and Wake on the verified source, owner 22 Nov 2026): tools, counts before and after
+//     triage, every result with its verdict, links to the raw reports in /security/. All of it comes from
+//     /security/troyastake-scan.json; if that file is missing or names another address, the block stays hidden.
 // Checked on 22 Nov 2026 against contracts/src/TroyaStake.sol and the chain: deployed in block 120,022,765 (21 Nov 2026,
 // 16:55:33 UTC) by the creator wallet, token() = $TROYA, COOLDOWN() = 259,200, owner() and paused() revert, 17 functions in
 // the ABI (6 writes, 11 reads), no receive(). The facts are tied to that one address: a different contract in /api/stake hides
@@ -28,6 +31,7 @@ const REPO = "https://github.com/troyaagent/troya-agent";
 const SRC = `${REPO}/blob/${DEPLOYED.commit}/contracts/src/TroyaStake.sol`;
 const TESTS = `${REPO}/blob/${DEPLOYED.commit}/contracts/test/TroyaStake.t.sol`;
 const TEST_DIR = `${REPO}/tree/${DEPLOYED.commit}/contracts/test`;
+const SCAN = "/security/troyastake-scan.json";
 const L = (a, b) => `${SRC}#L${a}${b ? `-L${b}` : ""}`;
 const T = (a, b) => `${TESTS}#L${a}${b ? `-L${b}` : ""}`;
 const RPC = CHAINS.robinhood.rpcs.find((u) => !u.includes("troya.codes")) || CHAINS.robinhood.rpcs[0];
@@ -119,6 +123,63 @@ function flow() {
   return h("div", { class: "stk-flow" }, h("figure", {}, coins), h("figure", {}, rewards));
 }
 
+/* ---------------- the automated scan ---------------- */
+
+const SEV = [["high", "High"], ["medium", "Medium"], ["low", "Low"], ["informational", "Informational"], ["optimization", "Optimization"]];
+const VERDICT = { real: "Real issue", informational: "Informational", "false-positive": "False positive" };
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const sevText = (c) => SEV.filter(([k]) => c[k]).map(([k, label]) => `${c[k]} ${label}`).join(", ");
+const chip = (cls, n, label) => h("span", { class: `stk-sev ${cls}${n ? "" : " zero"}` }, h("b", {}, String(n)), label);
+
+/** The scan block: hidden until troyastake-scan.json has loaded and is about this contract. `onReady(scan)` runs once shown. */
+function scanBlock(onReady) {
+  const el = h("div", { class: "stk-scan", id: "stk-scan", hidden: true, role: "region", "aria-labelledby": "stk-scan-t" });
+  fetch(SCAN, { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).then((s) => {
+    if (!s || lc(s.contract?.address) !== lc(DEPLOYED.contract) || !Array.isArray(s.findings) || !Array.isArray(s.tools)) return;
+    paintScan(el, s);
+    el.hidden = false;
+    onReady?.(s);
+  }).catch(() => {});
+  return el;
+}
+
+function paintScan(el, s) {
+  const day = new Date(`${s.date}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  const before = s.counts.beforeTriage, after = s.counts.afterTriage;
+  const ran = s.tools.filter((t) => t.status !== "not run");
+  const slither = s.tools.find((t) => t.tool === "Slither");
+  const [p1, p2] = slither?.runs || [];
+  const total = (c) => Object.values(c || {}).reduce((a, b) => a + b, 0);
+  const tools = s.tools.map((t) => {
+    const runs = t.runs || [], last = runs[runs.length - 1];
+    const n = total(last?.counts);
+    const what = t.status === "not run" ? `Not run. ${t.reason}` : n ? `${plural(n, "result")}: ${sevText(last.counts)}.` : "No detections at any level.";
+    const raws = runs.flatMap((r) => Object.entries(r.raw || {}).map(([k, u]) => ev(`${runs.length > 1 ? `${r.pass} ` : ""}${k}`, u)));
+    return h("li", { class: t.status === "not run" ? "off" : null },
+      h("div", { class: "stk-scan-tool" }, h("b", {}, t.version ? `${t.tool} ${t.version}` : t.tool), h("small", {}, `${t.by}${t.detectors ? ` · ${t.detectors} detectors` : ""}`)),
+      h("span", {}, what), raws.length ? h("span", { class: "stk-evs" }, raws) : ext(t.url, "Why"));
+  });
+  const rows = s.findings.map((f) => h("li", {},
+    h("div", { class: "stk-scan-r1" }, h("span", { class: `stk-verdict v-${f.verdict}` }, VERDICT[f.verdict] || f.verdict),
+      h("b", { class: "mono" }, f.detector), h("small", {}, `${f.tool} said ${f.toolSeverity} · ${f.function}`), ev(`L${f.line}`, f.source)),
+    h("code", { class: "stk-scan-code" }, f.code),
+    h("span", {}, f.reason)));
+  clear(el,
+    h("div", { class: "stk-scan-h" }, h("h3", { id: "stk-scan-t" }, icon("search"), "Automated security scan"), h("span", { class: "stk-scan-tag" }, s.label)),
+    h("p", { class: "stk-scan-lead" }, `${ran.map((t) => t.tool).join(" and ")}, free code scanners, read the exact source verified at this address on ${day} (UTC), file for file. Findings cover TroyaStake.sol only. The contract can't be changed, so nothing here can be patched: it is published so you can judge for yourself.`),
+    h("ul", { class: "stk-scan-tools" }, tools),
+    h("div", { class: "stk-scan-counts" },
+      h("div", { class: "stk-scan-count" }, h("span", {}, `Before triage · ${plural(before.total, "result")}`),
+        h("div", { class: "stk-scan-chips" }, SEV.slice(0, 4).map(([k, label]) => chip(`s-${k}`, before.bySeverity[k] || 0, label)))),
+      h("div", { class: "stk-scan-count" }, h("span", {}, "After triage · each checked against the code"),
+        h("div", { class: "stk-scan-chips" }, chip(after.real ? "s-high" : "s-ok", after.real, after.real === 1 ? "Real issue" : "Real issues"),
+          chip("s-informational", after.informational, "Informational"), chip("s-fp", after.falsePositive, after.falsePositive === 1 ? "False positive" : "False positives")))),
+    h("details", { class: "stk-ch-d stk-scan-d" }, h("summary", {}, h("span", {}, h("b", {}, "Every result, triaged"), h("small", {}, `${plural(s.findings.length, "result")}, each with the line it points at and why`)), chev()),
+      h("ul", { class: "stk-scan-list" }, rows)),
+    p1 && p2 ? h("p", { class: "fine stk-scan-note" }, `About the two Slither passes: on the unchanged source, Slither ${slither.version} hit an internal error on line 203 (_settle) and then skipped its data-flow analysis, so pass 1 found ${total(p1.counts)}. Pass 2 split that one line in two in a scan-only copy, same maths, and found ${total(p2.counts)}, the ${total(p1.counts)} from pass 1 among them. Nothing on chain was changed. `,
+      ext(p2.raw.diff, "The one-line change"), " · ", ext(SCAN, "Summary as JSON")) : null);
+}
+
 /* ---------------- the section ---------------- */
 
 /** The on-chain section. `get()` returns { terms, stats, me, address } from stake.js; `connect()` opens the wallet picker.
@@ -140,13 +201,16 @@ export function chainPanel({ get, connect }) {
   function build(t) {
     built = true;
     const open = !narrow();
+    // the scan loads on its own; once it is in, the Audit line points down to it
+    const auditScan = h("span", { class: "stk-audit-scan" });
+    const scan = scanBlock(() => clear(auditScan, " · ", h("button", { class: "stk-again", type: "button", onclick: () => scan.scrollIntoView({ behavior: "smooth", block: "start" }) }, "Automated scan below")));
     const facts = [
       ["Contract", [h("span", { class: "mono" }, short(C, 6)), " ", h("button", { class: "stk-copy", type: "button", "aria-label": "Copy the contract address", onclick: () => copyText(C, "Contract address copied") }, icon("copy")), " ", ext(`${EXPLORER}/address/${C}`, "Blockscout")]],
       ["Network", "Robinhood Chain (chain ID 4663)"],
       ["Coin", ["$TROYA ", ext(`${EXPLORER}/token/${t.token}`, h("span", { class: "mono" }, short(t.token, 4)))]],
       ["Deployed", [`${new Date(DEPLOYED.at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}, block ${DEPLOYED.block.toLocaleString("en-US")} · `, ext(`${EXPLORER}/tx/${DEPLOYED.tx}`, "transaction")]],
       ["Source", ["Verified, exact match: ", ext(bsCode, "Blockscout"), " · ", ext(sourcify, "Sourcify"), " · ", ext(SRC, "GitHub")]],
-      ["Audit", [h("b", { class: "stk-warn" }, "Not audited by an outside firm yet."), " Public tests: ", ext(TEST_DIR, "40 unit and fuzz, 4 invariants, 1 fork test")]],
+      ["Audit", [h("b", { class: "stk-warn" }, "Not audited by an outside firm yet."), " Public tests: ", ext(TEST_DIR, "40 unit and fuzz, 4 invariants, 1 fork test"), auditScan]],
     ];
     const cant = [
       ["Only 6 functions can change anything", "stake, requestUnstake, cancelUnstake, withdraw and claim act only on the calling wallet's own account; notifyReward only adds ETH. The other 11 functions only read. Blockscout lists all 17.",
@@ -194,7 +258,8 @@ export function chainPanel({ get, connect }) {
         // always shown, also with the two lists folded on a phone
         h("div", { class: "stk-honest" }, h("b", {}, "What it does not promise"),
           h("ul", {}, h("li", {}, "It has not been audited by an outside firm yet. Its tests are public: run them yourself from the repository."),
-            h("li", {}, "The daily ETH is sent by the team. The contract keeps whatever has reached it for you, but it cannot make new rewards arrive."))))));
+            h("li", {}, "The daily ETH is sent by the team. The contract keeps whatever has reached it for you, but it cannot make new rewards arrive."))))),
+      scan);
   }
 
   function paintLive() {

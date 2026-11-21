@@ -1,10 +1,37 @@
-// A compact QR code encoder (ISO/IEC 18004): byte mode, error correction level M, versions 1 to 10 (up to 213 bytes),
-// all eight masks scored and the best one kept. Written for Troya's share cards; no dependencies, no network.
-//   qrMatrix("https://troya.codes/agent?ref=abc123") → { size, dark(x, y) }
+// A compact QR code encoder (ISO/IEC 18004): byte mode, error correction level L, M, Q or H (M unless asked), versions
+// 1 to 40, all eight masks scored and the best one kept. Written for Troya's share cards; no dependencies, no network.
+//   qrMatrix("https://troya.codes/agent?ref=abc123") → { size, version, ecl, mask, align, dark(x, y) }
+//   qrMatrix(link, { ecl: "H" }) → the same at level H (about 30% of the symbol may be lost), room for a logo in the middle
+// At level M a text up to 213 bytes gets the same symbol as before (versions 1 to 10); longer text now takes a bigger version.
 
-// version → [total codewords, EC codewords per block, blocks] at level M
-const M = [null, [26, 10, 1], [44, 16, 1], [70, 26, 1], [100, 18, 2], [134, 24, 2], [172, 16, 4], [196, 18, 4], [242, 22, 4], [292, 22, 5], [346, 26, 5]];
-const ALIGN = [null, [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50]];
+// level → [format bits, EC codewords per block by version, blocks by version] (ISO/IEC 18004 table 9; index 0 unused)
+const LEVELS = {
+  L: [1, [0, 7, 10, 15, 20, 26, 18, 20, 24, 30, 18, 20, 24, 26, 30, 22, 24, 28, 30, 28, 28, 28, 28, 30, 30, 26, 28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+    [0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 4, 4, 4, 4, 4, 6, 6, 6, 6, 7, 8, 8, 9, 9, 10, 12, 12, 12, 13, 14, 15, 16, 17, 18, 19, 19, 20, 21, 22, 24, 25]],
+  M: [0, [0, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28],
+    [0, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49]],
+  Q: [3, [0, 13, 22, 18, 26, 18, 24, 18, 22, 20, 24, 28, 26, 24, 20, 30, 24, 28, 28, 26, 30, 28, 30, 30, 30, 30, 28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+    [0, 1, 1, 2, 2, 4, 4, 6, 6, 8, 8, 8, 10, 12, 16, 12, 17, 16, 18, 21, 20, 23, 23, 25, 27, 29, 34, 34, 35, 38, 40, 43, 45, 48, 51, 53, 56, 59, 62, 65, 68]],
+  H: [2, [0, 17, 28, 22, 16, 22, 28, 26, 26, 24, 28, 24, 28, 22, 24, 24, 30, 28, 28, 26, 28, 30, 24, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+    [0, 1, 1, 2, 4, 4, 4, 5, 6, 8, 8, 11, 11, 16, 16, 18, 16, 19, 21, 25, 25, 25, 34, 30, 32, 35, 37, 40, 42, 45, 48, 51, 54, 57, 60, 63, 66, 70, 74, 77, 81]],
+};
+// alignment pattern centres (row and column) of a version
+function alignOf(ver) {
+  if (ver === 1) return [];
+  const n = Math.floor(ver / 7) + 2, step = Math.floor((ver * 8 + n * 3 + 5) / (n * 4 - 4)) * 2, out = [6];
+  for (let pos = ver * 4 + 10; out.length < n; pos -= step) out.splice(1, 0, pos);
+  return out;
+}
+// all codewords a version holds (data and EC): the modules left once the function patterns are drawn, in bytes
+function totalOf(ver) {
+  let bits = (16 * ver + 128) * ver + 64;
+  if (ver >= 2) { const n = Math.floor(ver / 7) + 2; bits -= (25 * n - 10) * n - 55; if (ver >= 7) bits -= 36; }
+  return bits >>> 3;
+}
+// [total codewords, EC codewords per block, blocks] of a version at a level
+const shape = (ver, lv) => [totalOf(ver), LEVELS[lv][1][ver], LEVELS[lv][2][ver]];
+// how many bytes fit: mode (4 bits) and length (8 bits up to version 9, 16 after) come first
+const capacity = (ver, lv) => { const [total, ec, blocks] = shape(ver, lv); return (total - ec * blocks) - (ver < 10 ? 2 : 3); };
 
 /* ---------- GF(256) and Reed–Solomon ---------- */
 function gmul(x, y) {
@@ -33,8 +60,8 @@ function rsRemainder(data, div) {
 }
 
 /* ---------- data codewords ---------- */
-function codewords(bytes, ver) {
-  const [total, ecLen, blocks] = M[ver];
+function codewords(bytes, ver, lv) {
+  const [total, ecLen, blocks] = shape(ver, lv);
   const capBits = (total - ecLen * blocks) * 8;
   const bits = [];
   const put = (v, n) => { for (let i = n - 1; i >= 0; i--) bits.push((v >>> i) & 1); };
@@ -62,11 +89,13 @@ function codewords(bytes, ver) {
 }
 
 /* ---------- the symbol ---------- */
-export function qrMatrix(text) {
+export function qrMatrix(text, { ecl = "M" } = {}) {
+  const lv = String(ecl).toUpperCase();
+  if (!LEVELS[lv]) throw new Error("Unknown QR error correction level.");
   const bytes = [...new TextEncoder().encode(String(text))];
   let ver = 1;
-  while (ver <= 10 && (M[ver][0] - M[ver][1] * M[ver][2]) - (ver < 10 ? 2 : 3) < bytes.length) ver++;
-  if (ver > 10) throw new Error("Text too long for a QR code here.");
+  while (ver <= 40 && capacity(ver, lv) < bytes.length) ver++;
+  if (ver > 40) throw new Error("Text too long for a QR code here.");
   const size = ver * 4 + 17;
   const mod = Array.from({ length: size }, () => new Array(size).fill(false));
   const fn = Array.from({ length: size }, () => new Array(size).fill(false));
@@ -79,13 +108,13 @@ export function qrMatrix(text) {
       if (x >= 0 && x < size && y >= 0 && y < size) set(x, y, d !== 2 && d !== 4);
     }
   }
-  const al = ALIGN[ver], last = al.length - 1;
+  const al = alignOf(ver), last = al.length - 1;
   for (let i = 0; i < al.length; i++) for (let j = 0; j < al.length; j++) {
     if ((i === 0 && j === 0) || (i === 0 && j === last) || (i === last && j === 0)) continue;
     for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) set(al[i] + dx, al[j] + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
   }
-  const format = (mask) => {                       // level M = 00
-    const data = (0 << 3) | mask;
+  const format = (mask) => {                       // L = 01, M = 00, Q = 11, H = 10, then the mask
+    const data = (LEVELS[lv][0] << 3) | mask;
     let rem = data;
     for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
     const bits = ((data << 10) | rem) ^ 0x5412;
@@ -109,7 +138,7 @@ export function qrMatrix(text) {
   }
 
   // codewords in the zigzag, two columns at a time, skipping the vertical timing column
-  const cw = codewords(bytes, ver);
+  const cw = codewords(bytes, ver, lv);
   let bit = 0;
   for (let right = size - 1; right >= 1; right -= 2) {
     if (right === 6) right = 5;
@@ -158,5 +187,5 @@ export function qrMatrix(text) {
     flip(m);
   }
   flip(best); format(best);
-  return { size, version: ver, mask: best, dark: (x, y) => x >= 0 && y >= 0 && x < size && y < size && mod[y][x] };
+  return { size, version: ver, ecl: lv, mask: best, align: al, dark: (x, y) => x >= 0 && y >= 0 && x < size && y < size && mod[y][x] };
 }

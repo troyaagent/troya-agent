@@ -6,6 +6,8 @@
 // fees that grows with market cap (0.1% to 0.5% at $35k to 1% at $100k of trading volume), varies with volume, not a promised yield.
 // 2x for traders (server/stakebonus.mjs, owner 22 Nov 2026): a staker who traded through Troya in the day before a daily share
 // counts double in it; your status, the bonus to receive and the bonuses paid come from /api/stake/:address.
+// How it works on-chain (stake-chain.js, owner 22 Nov 2026): below the stake card, the contract's flow, what it can't do (each
+// point linked to its verified source line), how to leave through Blockscout without this site, and its live totals.
 import { Interface } from "ethers";
 import { h, clear, useCss, icon, toast, short, compact, pageHead, seg, review } from "../ui.js";
 import { api } from "../api.js";
@@ -92,9 +94,18 @@ export async function mount(view) {
   const foot = h("p", { class: "fine stk-foot" });
   const shareBox = h("p", { class: "fine stk-share" });
   const headBadge = h("span", { class: "stk-state" });
+  const chainSlot = h("div", { class: "stk-ch-slot" });
+  let chain = null;
   clear(view, h("div", { class: "dk stk" },
     pageHead("Stake $TROYA", "Stake $TROYA to earn a tier: Bronze, Silver or Gold, from how much you stake and for how long. Each tier unlocks perks inside Troya. Unstaking takes 3 days. Stakers also share part of the $TROYA creator fees in ETH, paid into the staking contract every day (claim any time): a share that grows with market cap, varies with volume, not a promised yield.", { act: headBadge }),
-    tiles, shareBox, h("div", { class: "stk-grid" }, act, prog), tiersBox, risks, foot));
+    tiles, shareBox, h("div", { class: "stk-grid" }, act, prog), chainSlot, tiersBox, risks, foot));
+  // the on-chain section loads on its own, so it never holds up the stake form
+  import("./stake-chain.js").then((m) => {
+    if (!alive) return;
+    chain = m.chainPanel({ get: () => ({ terms: st.terms, stats: st.stats, me: st.me, address: wallet.address }), connect: () => openConnect() });
+    clear(chainSlot, chain.el);
+    if (st.terms) chain.paint();
+  }).catch((e) => console.warn("[stake] on-chain section:", e?.message || e));
 
   /* ---------------- data ---------------- */
   async function readMine(addr) {
@@ -132,7 +143,7 @@ export async function mount(view) {
       return;
     }
     clear(headBadge, h("span", { class: `stk-pill ${st.terms.deployed ? "on" : ""}` }, st.terms.deployed ? "Live on Robinhood Chain" : "Opening soon"));
-    paintTiles(); paintAct(); paintProg(); paintTiers(); paintRisks();
+    paintTiles(); paintAct(); paintProg(); paintTiers(); paintRisks(); chain?.paint();
     const S = st.terms.contract;
     clear(foot, S && st.terms.deployed
       ? [h("span", {}, "Contract "), h("a", { class: "ulink mono", href: `${EXPLORER}/address/${S}`, target: "_blank", rel: "noopener" }, short(S, 6)),
@@ -434,7 +445,7 @@ export async function mount(view) {
     if (!alive) return;
     st.stats = stats; st.split = split; st.mine = mine;
     if (me) st.me = me;
-    if (key(st.me) !== before && !act.contains(document.activeElement)) paint(); else { paintTiles(); paintProg(); paintTwoX(); }
+    if (key(st.me) !== before && !act.contains(document.activeElement)) paint(); else { paintTiles(); paintProg(); paintTwoX(); chain?.paint(); }
   }
   // onWallet calls back at once: that first call is the load; after that only an address change reloads
   const off = onWallet(() => { const k = String(wallet.address || "").toLowerCase(); if (k !== seen) { seen = k; st.me = null; load(); } });

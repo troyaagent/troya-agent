@@ -369,7 +369,7 @@ async function sponsorStatus() {
 }
 async function gasCost() {
   const [{ rpc }, { getEthUsd }] = await Promise.all([import("./tools.mjs"), import("./market.mjs")]);
-  const [gp, ethUsd, sp] = await Promise.all([rpc("robinhood", "eth_gasPrice", []), getEthUsd().catch(() => null), sponsorStatus()]);
+  const [gp, ethUsd, sp, fsp] = await Promise.all([rpc("robinhood", "eth_gasPrice", []), getEthUsd().catch(() => null), sponsorStatus(), localJson("/api/feesplit")]);
   const wei = Number(BigInt(gp));
   const both = (eth) => `${fEth(eth)}${ethUsd ? ` (${fUsdTiny(eth * ethUsd)})` : ""}`;
   const actions = GAS_ACTIONS.map(([key, gas, label]) => {
@@ -377,8 +377,10 @@ async function gasCost() {
     return { key, label, gas, eth, usd, text: both(eth) };
   });
   const plain = (eth) => `${Number(eth)} ETH${ethUsd ? ` (${fUsdTiny(eth * ethUsd)})` : ""}`;
+  // where free gas comes from (server/feesplit.mjs, owner 22 Nov 2026): the server's own sentence, true to GAS_TOPUP
+  const fundedBy = typeof fsp?.gasTopup?.line === "string" ? fsp.gasTopup.line.slice(0, 400) : null;
   const troyaPaysGas = sp?.enabled ? {
-    on: true, drip: plain(sp.dripEth), refundPerDay: sp.refund ? plain(sp.refundPerDayEth) : null,
+    on: true, fundedBy, drip: plain(sp.dripEth), refundPerDay: sp.refund ? plain(sp.refundPerDayEth) : null,
     holderDrip: `${plain(sp.dripEth)} every ${sp.everyDays} days for wallets holding 1,000,000 $TROYA (with their Agent Wallet), claimed in the app: troya.codes/agent → Portfolio → Free gas; plain ETH, so any wallet works`,
     dripSwaps: actions[0].eth ? Math.floor(sp.dripEth / actions[0].eth) : null,
     agentWalletRefund: sp.refund ? `gas of Agent Wallet trades refunded after they confirm, up to ${plain(sp.refundPerDayEth)} a day per wallet` : null,
@@ -396,7 +398,7 @@ async function gasCost() {
 async function gasText() {
   const g = await gasCost();
   const p = g.troyaPaysGas;
-  const paid = p.on ? `\n\n<b>Troya pays gas</b>\n• Hold 1M $TROYA: claim ${p.drip} every week${p.dripSwaps ? `, about ${num(p.dripSwaps, 0)} swaps` : ""} (app → Portfolio → Free gas)${p.refundPerDay ? `\n• Agent Wallet trades: gas refunded, up to ${p.refundPerDay} a day` : ""}` : "";
+  const paid = p.on ? `\n\n<b>Troya pays gas</b>${p.fundedBy ? `\n${esc(p.fundedBy)}` : ""}\n• Hold 1M $TROYA: claim ${p.drip} every week${p.dripSwaps ? `, about ${num(p.dripSwaps, 0)} swaps` : ""} (app → Portfolio → Free gas)${p.refundPerDay ? `\n• Agent Wallet trades: gas refunded, up to ${p.refundPerDay} a day` : ""}` : "";
   return `<b>Gas on Robinhood Chain</b> · ${g.gasPriceGwei} gwei now\n${g.actions.map((a) => `• ${esc(a.label)}: ${a.text}`).join("\n")}\n${g.swapsPerDollar ? `$1 of ETH covers about ${num(g.swapsPerDollar, 0)} swaps. ` : ""}The Troya Gate check costs no gas.${paid}\n<i>Live gas price × the gas Troya's own transactions used (receipts on troya.codes/verify).</i>`;
 }
 

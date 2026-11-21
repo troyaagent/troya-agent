@@ -327,6 +327,8 @@ export async function mount(view, ctx) {
   /* ---------- free gas: the weekly drip for holders, and the sponsor for admins ---------- */
   async function paintGas(box) {
     let g; try { g = await api.get("gas/status"); } catch { box.remove(); return; }
+    // where free gas comes from (server/feesplit.mjs, owner 22 Nov 2026): the server's own sentence, true to GAS_TOPUP
+    const fund = await api.get("feesplit").then((x) => x?.gasTopup || null).catch(() => null);
     const you = g.you;
     const claim = async (btn) => {
       btn.disabled = true; btn.textContent = "Sending…";
@@ -338,6 +340,7 @@ export async function mount(view, ctx) {
     if (!wallet.session) { btn.disabled = false; btn.onclick = async () => { try { if (!wallet.address) await openConnect(); if (wallet.address) await signIn(); paintGas(box); } catch (e) { toast(e.message, "error"); } }; }
     clear(box,
       h("div", { class: "pf2-gas-h" }, h("h2", {}, "Troya pays your gas"), h("span", { class: `dk-v ${g.enabled ? "v-passed" : ""}` }, g.enabled ? "On" : "Off")),
+      fund?.line ? h("p", { class: "fine", style: { margin: 0 } }, fund.line) : null,
       h("p", { class: "fine", style: { margin: 0 } }, `Holders of 1,000,000 $TROYA or more claim ${g.dripEth} ETH on Robinhood Chain once every ${g.everyDays} days, enough for dozens of trades.${g.refund ? ` Agent Wallet trades also get their gas back, up to ${g.refundPerDayEth} ETH a day.` : ""}`),
       h("p", { class: "fine muted", style: { margin: 0 } }, g.wallets),
       you ? h("p", { class: `fine ${you.can ? "" : "muted"}`, style: { margin: 0 } }, you.can ? `You can claim now · you hold ${Math.round(you.balance || 0).toLocaleString("en-US")} $TROYA` : you.why) : null,
@@ -353,6 +356,7 @@ export async function mount(view, ctx) {
       h("b", {}, "Sponsor wallet (admin)"),
       h("div", { class: "fw-row" }, h("span", { class: "mono", style: { wordBreak: "break-all" } }, a.address), h("button", { class: "btn sm", type: "button", onclick: () => { navigator.clipboard?.writeText(a.address); toast("Address copied", "ok"); } }, "Copy")),
       h("p", { class: "fine", style: { margin: 0 } }, `Balance ${a.balanceEth.toFixed(5)} ETH · spent today ${a.todaySpentEth.toFixed(5)} of ${s.dailyBudgetEth} ETH · send ETH on Robinhood Chain to this address to fund it.`),
+      fund ? h("p", { class: "fine", style: { margin: 0 } }, `Refilled from creator fees: every day at 01:00 UTC the fee split sends ${fund.pctOfVolume}% of the day's $TROYA volume (its creator-fee credits × ${fund.volumeBps}/260) from the creator wallet to this wallet, whatever it holds · ${fund.mode === "live" ? "live" : fund.mode === "dry" ? "dry run (GAS_TOPUP=dry): worked out each day, nothing sent" : "off (GAS_TOPUP=off)"}${fund.last ? ` · ${fund.last.day}: ${fund.last.status}${fund.last.sentEth ? ` ${fund.last.sentEth} ETH` : fund.last.sendEth ? ` ${fund.last.sendEth} ETH` : ""}` : ""}${fund.sentEth ? ` · ${fund.sentEth} ETH sent so far` : ""}. Under ${fund.minSendEth} ETH, or with no room above the creator wallet's gas reserve, that day's amount stays with the creator wallet. "Withdraw to creator wallet" below pulls this wallet's balance back any time (POST /api/gas/admin/withdraw sends only to the creator wallet).`) : null,
       form,
       h("div", { class: "fw-row" }, h("button", { class: "btn", type: "button", onclick: () => save() }, "Save limits"), h("button", { class: "btn", type: "button", onclick: () => save({ enabled: !s.enabled }) }, s.enabled ? "Switch off" : "Switch on"), h("button", { class: "btn", type: "button", onclick: () => save({ refund: !s.refund }) }, s.refund ? "Stop Agent refunds" : "Start Agent refunds"),
         h("button", { class: "btn danger", type: "button", onclick: async () => { if (!confirm("Send the rest of the sponsor wallet back to the creator wallet?")) return; try { const r = await api.post("gas/admin/withdraw", {}); toast(`${r.eth.toFixed(5)} ETH sent to the creator wallet.`, "ok", 7000); paintGas(box); } catch (e) { toast(e.message, "error"); } } }, "Withdraw to creator wallet")),

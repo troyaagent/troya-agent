@@ -45,6 +45,14 @@ async function sponsor() {
     return w.connect(provider);
   }
 }
+/** The sponsor wallet's public address, or null while there is none (server/feesplit.mjs sends the daily top-up from
+ *  creator fees here, owner 22 Nov 2026). Taken from the address saved beside the encrypted key; the key is decrypted
+ *  only inside sponsor(), and only for an older file saved without its address. Never makes a new sponsor. */
+export async function sponsorAddress() {
+  if (!dir) return null;
+  let j; try { j = JSON.parse(await readFile(join(dir, "gas-sponsor.json"), "utf8")); } catch { return null; }
+  try { return getAddress(j.address || (j.ct ? (await sponsor()).address : "")); } catch { return null; }
+}
 const settings = async () => ({ ...DEFAULTS, ...(await store.readJson(FILE, {})).settings });
 const ledger = async () => { const d = await store.readJson(FILE, {}); const t = today(); return d.day === t ? d : { ...d, day: t, spentEth: 0, refunds: {} }; };
 

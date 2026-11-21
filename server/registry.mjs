@@ -119,6 +119,7 @@ export async function createAgent(owner, body) {
     d.agents[slug] = out = { slug, name, bio, url, owner, createdAt: Date.now() };
     return d;
   });
+  import("./activity.mjs").then((m) => m.emit("registry.agent", { slug, name, owner, at: out.createdAt })).catch(() => {});   // the activity feed
   return pubAgent(out, []);
 }
 export async function fileCall(owner, body) {

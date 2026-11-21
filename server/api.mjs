@@ -82,6 +82,7 @@ const MODULES = [
   "./profile.mjs",     // profiles (community request, 21 Nov): username, bio, avatar, banner per wallet; shown on Portfolio, #/u/<name> and in the chat
   "./stake.mjs",       // $TROYA staking (21 Nov): tiers from TroyaStake on chain and the perks behind them; read-only, off until a contract is set
   "./feesplit.mjs",    // $TROYA fee split (21 Nov): creator fees split by the hourly market cap (stakers, burn, owner); sent weekly by payouts.mjs (STAKE_REWARDS)
+  "./activity.mjs",    // activity feed (22 Nov): real launches, stakers, agents, Gate use, graduations, payouts → the Telegram group + an X digest (ACTIVITY_FEED / ACTIVITY_X, dry by default)
 ];
 
 const routes = [];

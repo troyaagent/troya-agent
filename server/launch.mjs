@@ -231,6 +231,8 @@ async function addRecord(r) {
   });
   // V6 F30: the coin takes its place on The Record from its first block (team tests stay off it)
   if (!dup && r.token && !r.teamTest) import("./record.mjs").then((m) => m.noteBorn({ token: r.token, symbol: r.symbol, at: r.at || Date.now(), source: r.source })).catch(() => {});
+  // the activity feed (Telegram group, X digest): one event per coin born through Troya, from every path (web, X, Telegram)
+  if (!dup && r.token) import("./activity.mjs").then((m) => m.emit("launch", r)).catch(() => {});
   return !dup;
 }
 /* ---------- V6 F30 · Born at the gate: a live Troya Gate verdict for every coin born through Troya ---------- */

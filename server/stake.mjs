@@ -313,6 +313,8 @@ async function scan() {
       try { ev = IFACE.parseLog(l); } catch { continue; }
       const k = lc(ev.args.account);
       const a = (idx.accounts[k] ||= { staked: "0", since: 0, pending: "0", unlockAt: 0 });
+      // the activity feed: a wallet staking from nothing is a new staker (activity.mjs posts it once, by tx and log index)
+      if (ev.name === "Staked") import("./activity.mjs").then((m) => m.emit("stake", { account: k, amount: ev.args.amount, staked: ev.args.staked, since: Number(ev.args.since), first: BigInt(a.staked || 0) === 0n && BigInt(a.pending || 0) === 0n, tx: l.transactionHash, logIndex: Number(l.logIndex) })).catch(() => {});
       if (ev.name === "Staked" || ev.name === "UnstakeCancelled") {
         a.staked = ev.args.staked.toString(); a.since = Number(ev.args.since);
         if (ev.name === "UnstakeCancelled") { a.pending = "0"; a.unlockAt = 0; }
@@ -367,6 +369,7 @@ export async function stakeStats() {
 export async function stakeTerms() {
   const cfg = await stakeConfig();
   const fs = await import("./feesplit.mjs").catch(() => null);
+  const act = await import("./stakebonus.mjs").catch(() => null);
   const deployed = await checked(cfg).catch(() => false);
   const sup = cfg.token ? await supply(cfg).catch(() => null) : null;
   return {
@@ -376,7 +379,9 @@ export async function stakeTerms() {
     noTier: perksOf(cfg, null),
     perksLive: cfg.perksLive, holdersCountStaked: cfg.holdersCountStaked,
     rule: "A tier needs both: at least its share of the $TROYA total supply staked, and staked for at least its days. A top-up moves the start time forward in proportion to the coins added. Coins waiting out the 3-day cooldown count for nothing.",
-    rewards: `${fs?.WORDING || ""} ${fs?.PAID_DAILY || ""} ${fs?.NO_STAKERS || ""}`.trim(),
+    rewards: `${fs?.WORDING || ""} ${fs?.PAID_DAILY || ""} ${act?.ACTIVE_LINE?.() || ""} ${fs?.NO_STAKERS || ""}`.trim(),
+    // 2x for stakers who trade through Troya (owner, 22 Nov 2026): the rule, from server/stakebonus.mjs
+    active: act ? { line: act.ACTIVE_LINE(), how: act.ACTIVE_HOW(), days: act.activeDays(), minUsd: act.activeMinUsd() } : null,
     share: fs ? { mode: fs.modeOf(), wording: fs.WORDING, paid: fs.PAID_DAILY, noStakers: fs.NO_STAKERS, rule: fs.RULE, rate: fs.RATE_RULE(), tiers: fs.TIERS.map((t) => ({ key: t.key, name: t.name, minMcUsd: t.minMc, stakersPctOfVolume: t.stakerBps / 100, burnPctOfVolume: t.burnBps / 100 })) } : null,
   };
 }
@@ -394,7 +399,9 @@ export async function register(r, ctx) {
     if (!isAddress(params.address)) throw new HttpError(400, "That is not a wallet address.");
     const t = await tierOf(params.address, { fresh: query.fresh === "1" });
     if (!t.known) throw new HttpError(503, "Couldn't read the stake from Robinhood Chain right now. Try again in a minute.");
-    return t;
+    // 2x for traders (stakebonus.mjs): active, lastTradeAt, weight, bonusAccrued, bonusPaid and the bonus payments
+    const b = await import("./stakebonus.mjs").then((m) => m.walletView(params.address)).catch(() => null);
+    return b ? { ...t, ...b } : t;
   }, { weight: 1, perMin: 120 });
 }
 

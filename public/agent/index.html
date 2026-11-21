@@ -53,7 +53,7 @@
     perps: [P + "perps.js", J + "hl.js", "perps"].concat(CH),
     bridge: [P + "bridge.js", "bridge"].concat(CH),
     agent: [P + "agent.js", P + "scepter.js", J + "coinsearch.js", "agent"].concat(CH),
-    portfolio: [P + "portfolio.js", P + "start.js", "portfolio", "start"],
+    portfolio: [P + "portfolio.js", P + "start.js", J + "profile.js", "portfolio", "start", "profile"],
     docs: [P + "docs.js", "docs"], start: [P + "start.js", "start"], leaderboard: [P + "leaderboard.js", "start"],
     herald: [P + "herald.js", J + "sharecard.js", J + "qr.js", "herald"], treasury: [P + "treasury.js", "home", "agent"],
     stake: [P + "stake.js", "stake"].concat(CH),
@@ -63,7 +63,7 @@
     registry: [D + "registry.js", J + "coinsearch.js", "perps"], rail: [D + "rail.js", "perps"],
     "troya-launches": [D + "hippodrome.js", "perps"], create: [D + "create.js", "perps"], creator: [D + "creator.js", "perps"].concat(CH)
   };
-  R.assistant = R.agent; R.hippodrome = R["troya-launches"];
+  R.assistant = R.agent; R.hippodrome = R["troya-launches"]; R.u = R.portfolio;
   var seg = location.hash.replace(/^#\/?/, "").split("?")[0].split("/");
   var list = R[seg[0] || ""];
   if (!list) return;

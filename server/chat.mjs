@@ -7,6 +7,7 @@
 // at most 280 characters. A refused message is a strike; 3 strikes in 24 hours mute the wallet for 24 hours, and a plain
 // scam (score 6+) mutes it for 7 days. Admins (X_ADMINS, else TROYA_ADMINS, plus CHAT_ADMINS) remove messages and ban wallets.
 //   GET    /api/chat?since=<seq>    public: new messages and removals since seq (no seq: the latest 60), and who you are
+//                                     (each message: name = profile username, else @X handle, else short address; avatar = profile picture or null)
 //   POST   /api/chat                { text }                       signed in
 //   DELETE /api/chat/:id                                           admin: remove one message
 //   POST   /api/chat/ban            { address, hours?, reason?, purge? }  admin: no hours = until unbanned; purge removes their messages
@@ -130,17 +131,26 @@ function mute(a, ms, why) {
   S.bans[a] = { until: Date.now() + ms, by: "auto", at: Date.now(), why, auto: true };
   logMod({ action: "mute", by: "auto", target: a, until: S.bans[a].until, why });
 }
-const view = (m) => ({ id: m.id, at: m.at, from: m.from, name: m.x ? `@${m.x}` : short(m.from), x: m.x || null, holder: !!m.holder, team: isAdminAddr(m.from), text: m.text });
+// The name shown: the wallet's profile username (server/profile.mjs), else its linked X handle, else the short address; the
+// profile picture rides along. Both are read when the message is served, not when it was posted, so a rename or an admin
+// reset of a profile reaches every message already in the chat.
+let prof = null;   // profile.mjs, loaded in register (not imported at the top: profile.mjs imports this file for its text rules)
+const view = (m) => {
+  const c = prof?.cardOf?.(m.from) || null;
+  return { id: m.id, at: m.at, from: m.from, name: c?.username || (m.x ? `@${m.x}` : short(m.from)), user: c?.username || null, avatar: c?.avatar || null,
+    x: m.x || null, holder: !!m.holder, ...(m.stake ? { stake: m.stake } : {}), team: isAdminAddr(m.from), text: m.text };
+};
 function meOf(req) {
   const s = getSession(req);
   if (!s) return null;
   const b = banOf(s.address);
-  return { address: s.address, admin: isAdminAddr(s.address), muted: b ? { until: b.until || null, why: b.auto ? b.why : "Banned by an admin" } : null };
+  return { address: s.address, admin: isAdminAddr(s.address), profile: prof?.cardOf?.(s.address) || null, muted: b ? { until: b.until || null, why: b.auto ? b.why : "Banned by an admin" } : null };
 }
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms).unref?.())]);
 
 export async function register(r, ctx) {
   store = ctx.store;
+  prof = await import("./profile.mjs").catch((e) => { console.warn("[chat] profiles unavailable:", e.message); return null; });
   const saved = await store.readJson(FILE, null);
   if (saved && Array.isArray(saved.messages)) S = { seq: Number(saved.seq) || 0, messages: saved.messages, removed: saved.removed || [], bans: saved.bans || {}, log: saved.log || [] };
 
@@ -180,11 +190,14 @@ export async function register(r, ctx) {
     if (S.messages.slice(-80).some((m) => lc(m.from) === a && now - m.at < 30 * 60e3 && fold(m.text).toLowerCase().replace(/\s+/g, " ") === key)) throw new HttpError(409, "You just said that.");
     times.push(now); recent.set(a, times);
     if (recent.size > 5000) recent.delete(recent.keys().next().value);
-    // shown next to the name: a linked X handle (Sign in with X) and the 1M $TROYA holder mark, read once at post time
-    const [x, h] = await Promise.all([
+    // shown next to the name: a linked X handle (Sign in with X), the 1M $TROYA holder mark and the $TROYA staking tier
+    // badge (only once the stake perks are on: server/stake.mjs badgeOf answers null before that), read once at post time
+    const [x, h, sb] = await Promise.all([
       withTimeout(import("./xsocial.mjs").then((m) => m.handleOf(a)).catch(() => null), 2500),
-      withTimeout(import("./holders.mjs").then((m) => m.holderOf(a)).catch(() => null), 3000)]);
+      withTimeout(import("./holders.mjs").then((m) => m.holderOf(a)).catch(() => null), 3000),
+      withTimeout(import("./stake.mjs").then((m) => m.badgeOf(a)).catch(() => null), 3000)]);
     const m = { id: ++S.seq, seq: S.seq, at: now, from: normAddress(a), text, x: /^[A-Za-z0-9_]{1,15}$/.test(x?.username || "") ? x.username : null, holder: !!h?.holder };
+    if (/^(bronze|silver|gold)$/.test(sb || "")) m.stake = sb;
     S.messages.push(m);
     if (S.messages.length > KEEP) S.messages.splice(0, S.messages.length - KEEP);
     save();

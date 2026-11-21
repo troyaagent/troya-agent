@@ -1,0 +1,101 @@
+/* Profiles (community request, 21 Nov 2026): the header card on Portfolio, the Edit profile dialog, and the chat's
+   profile pictures and name links. Same language as the Portfolio hero: glass card, chrome-ice accents, horizontal slices. */
+
+/* ---------- the header card ---------- */
+.pr-card { position: relative; margin-top: 18px; border-radius: 28px; overflow: hidden; isolation: isolate;
+  border: 1px solid var(--line); background: linear-gradient(180deg, rgba(255, 255, 255, .03), rgba(255, 255, 255, .008));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 30px 80px rgba(0, 0, 0, .35); }
+.pr-card[hidden] { display: none; }
+.pr-banner { position: relative; width: 100%; aspect-ratio: 3 / 1; max-height: 280px; overflow: hidden; background: var(--bg-2); }
+.pr-banner img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+.pr-banner::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, transparent 55%, rgba(3, 6, 10, .5)); }
+/* no banner yet: the wallet's own hue as soft room light over the horizontal slices */
+.pr-banner-def { --pr-h: 195;
+  background: radial-gradient(640px 280px at 78% 18%, hsl(var(--pr-h) 70% 68% / .3), transparent 70%),
+    radial-gradient(540px 320px at 8% 120%, hsl(calc(var(--pr-h) + 50) 60% 45% / .3), transparent 70%),
+    repeating-linear-gradient(180deg, rgba(160, 230, 255, .05) 0 1px, transparent 1px 9px),
+    linear-gradient(180deg, #0b131a, #06090d); }
+.pr-body { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "av id acts" ". bio bio"; column-gap: 20px; align-items: end; padding: 0 28px 24px; }
+.pr-av-ring { grid-area: av; align-self: start; margin-top: -56px; width: 116px; height: 116px; border-radius: 50%; padding: 4px; background: var(--bg);
+  box-shadow: 0 0 0 1px var(--line-2), 0 18px 40px rgba(0, 0, 0, .45); }
+.pr-av { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; background: var(--bg-3); }
+.pr-id { grid-area: id; min-width: 0; padding-top: 16px; }
+.pr-name { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: clamp(22px, 2.6vw, 30px); font-weight: 720; letter-spacing: -0.03em; line-height: 1.12; }
+.pr-name b { font-weight: inherit; overflow-wrap: anywhere; }
+.pr-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; letter-spacing: normal; }
+.pr-tag { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--line-3); background: var(--glass);
+  font-size: 11px; font-weight: 650; letter-spacing: .04em; line-height: 1; color: var(--fg-2); white-space: nowrap; }
+.pr-tag.team { color: #04212b; border-color: transparent; background: var(--chrome); }
+a.pr-tag { text-decoration: none; transition: border-color .25s, color .25s; }
+a.pr-tag:hover { border-color: rgba(142, 223, 245, .45); color: var(--fg); }
+.pr-addr { margin: 9px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
+.pr-copy { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--line-2); background: transparent;
+  color: var(--fg-2); font: inherit; cursor: pointer; transition: border-color .25s, color .25s; }
+.pr-copy svg { width: 13px; height: 13px; }
+.pr-copy:hover { border-color: rgba(142, 223, 245, .45); color: var(--fg); }
+.pr-ext { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-3); }
+.pr-ext:hover { color: var(--fg); text-decoration-color: var(--blue); }
+.pr-acts { grid-area: acts; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 16px; }
+.pr-acts .btn { height: 36px; padding: 0 14px; border-radius: 11px; }
+.pr-bio { grid-area: bio; margin: 12px 0 0; max-width: 62ch; font-size: 14px; line-height: 1.55; color: var(--fg-2); white-space: pre-line; overflow-wrap: anywhere; }
+.pr-bio-empty { color: var(--muted); font-size: 13px; }
+/* the public page of an address or username: no tabs, so the hero sits a little closer */
+.pr-public .pf2-hero { margin-top: 14px; }
+.pr-missing { margin-top: 18px; }
+
+@media (max-width: 640px) {
+  .pr-card { border-radius: 22px; margin-top: 14px; }
+  .pr-body { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "av acts" "id id" "bio bio"; column-gap: 12px; padding: 0 16px 18px; }
+  .pr-av-ring { width: 86px; height: 86px; margin-top: -42px; padding: 3px; }
+  .pr-acts { align-self: end; padding-top: 10px; }
+  .pr-acts .btn { height: 34px; padding: 0 12px; font-size: 12.5px; }
+  .pr-id { padding-top: 10px; }
+}
+@media (max-width: 380px) { .pr-acts .btn:not(.primary) { padding: 0 10px; } }
+
+/* ---------- the editor ---------- */
+.pr-ed { display: grid; gap: 14px; }
+.pr-ed-art { position: relative; margin-bottom: 4px; }
+.pr-ed-banner { border-radius: 16px; max-height: none; border: 1px solid var(--line-2); }
+.pr-ed-bn-acts { position: absolute; top: 10px; right: 10px; z-index: 1; display: flex; gap: 6px; }
+.pr-chip-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .22);
+  background: rgba(3, 6, 10, .62); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: #f3f8fb; font: inherit; font-size: 12px; font-weight: 550; cursor: pointer; transition: border-color .25s, background .25s; }
+.pr-chip-btn svg { width: 14px; height: 14px; }
+.pr-chip-btn:hover { border-color: rgba(142, 223, 245, .6); background: rgba(3, 6, 10, .78); }
+.pr-ed-av { position: absolute; left: 18px; bottom: -36px; width: 88px; height: 88px; margin: 0; padding: 3px; background: var(--bg-1); }
+.pr-ed-av > * { width: 100%; height: 100%; border-radius: 50%; display: block; }
+.pr-ed-av-acts { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; padding-left: 120px; }
+.pr-hint { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+.pr-hint.ok { color: var(--up); }
+.pr-hint.err { color: var(--down); }
+.pr-hint .over { color: var(--down); }
+.pr-bio-in { height: auto; min-height: 84px; padding: 9px 11px; resize: vertical; font: inherit; font-size: 13.5px; line-height: 1.5; }
+.pr-fine { margin: 0; line-height: 1.5; }
+.pr-note { margin: 0; min-height: 1em; font-size: 12.5px; color: var(--muted); }
+.pr-note:empty { display: none; }
+.pr-note.err { color: var(--down); }
+.pr-ed-foot { justify-content: flex-end; }
+.pr-mod { display: grid; gap: 8px; padding: 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--bg-2); }
+.pr-mod-row { gap: 8px; font-size: 13px; }
+@media (max-width: 520px) { .pr-ed-av { width: 72px; height: 72px; left: 12px; bottom: -30px; } .pr-ed-av-acts { padding-left: 96px; } .pr-ed-bn-acts { top: 8px; right: 8px; } }
+
+/* ---------- the chat: profile pictures and names ---------- */
+img.cc-av { display: block; object-fit: cover; background: var(--bg-3); }
+a.cc-name { text-decoration: none; }
+a.cc-name:hover, a.cc-name:focus-visible { text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-3); }
+.cc-sub { font-size: 11px; color: var(--muted); }
+.cc-prof { color: var(--blue); text-decoration: none; white-space: nowrap; }
+.cc-prof:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---------- light theme ---------- */
+html[data-theme="light"] .pr-card { background: var(--bg-1); box-shadow: 0 10px 30px rgba(20, 40, 60, .06); }
+html[data-theme="light"] .pr-banner::after { background: linear-gradient(180deg, transparent 60%, rgba(20, 30, 40, .12)); }
+html[data-theme="light"] .pr-banner-def {
+  background: radial-gradient(620px 260px at 78% 18%, hsl(var(--pr-h) 70% 55% / .2), transparent 70%),
+    radial-gradient(520px 300px at 8% 120%, hsl(calc(var(--pr-h) + 50) 55% 50% / .16), transparent 70%),
+    repeating-linear-gradient(180deg, rgba(10, 126, 163, .06) 0 1px, transparent 1px 9px),
+    linear-gradient(180deg, #eef6f9, #f7f5f0); }
+html[data-theme="light"] .pr-av-ring { background: var(--bg-1); box-shadow: 0 0 0 1px var(--line-2), 0 12px 30px rgba(20, 40, 60, .12); }
+html[data-theme="light"] .pr-tag.team { color: #fff; background: linear-gradient(180deg, #0b8fb8, #075f7b); }
+html[data-theme="light"] .pr-chip-btn { background: rgba(255, 255, 255, .88); color: var(--fg); border-color: var(--line-2); }
+html[data-theme="light"] .pr-chip-btn:hover { background: #fff; border-color: rgba(10, 126, 163, .45); }

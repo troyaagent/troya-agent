@@ -1,8 +1,12 @@
 // Portfolio: balances on Robinhood Chain and Hyperliquid, the Get started checklist, positions, inbox, history, weekly review.
+// The profile header (banner, photo, username, bio, badges; ../profile.js) sits on top. Anyone's page is public:
+// #/u/<username> (route u → this module), #/portfolio?u=<username> or #/portfolio?address=0x… show that wallet's profile,
+// balances, tokens and Hyperliquid positions, read-only (no tabs, no gas, brief or checklist: those are your own).
 import { h, clear, icon, pageHead, tabs, table, toast, num, usd, pct, short, useCss, every, store, ago, chainLogo, coinIcon, tokenIcon, tiny } from "../ui.js";
 import { api } from "../api.js";
 import { wallet, onWallet, openConnect, reader, signIn } from "../wallet.js";
 import { getStarted } from "./start.js";
+import { profileHeader } from "../profile.js";
 
 const hideSetup = store("troya.portfolio.hideSetup", false);
 const fmtPx = (p) => (p == null || !isFinite(p) ? "–" : num(p, p >= 1000 ? 1 : p >= 1 ? 4 : 6));
@@ -26,10 +30,21 @@ const JOURNAL_EX = { kind: "swap", title: "A swap you signed on the Swap page", 
 
 export async function mount(view, ctx) {
   useCss("portfolio");
+  useCss("profile");
   let alive = true;
   const stops = [];
-  let tab = ["inbox", "history", "owl"].includes(ctx.parts[0]) ? ctx.parts[0] : "overview";
-  const st = { rh: null, toks: null, hl: null, eth: null, errors: {}, brief: null, briefSum: null };
+  // whose page this is: a username to look up (#/u/<name>, ?u=), an address (?address=), else the connected wallet
+  const uHash = location.hash.match(/^#\/?u\/([^/?#]+)/);
+  const wantName = uHash ? decodeURIComponent(uHash[1]) : ctx.query?.u ? String(ctx.query.u).slice(0, 40) : null;
+  let pubAddr = /^0x[0-9a-fA-F]{40}$/.test(ctx.query?.address || "") ? ctx.query.address : null;
+  let resolving = !!wantName, missing = false;
+  // a page of someone else's wallet (your own address in the link is just your own page)
+  const isPub = () => resolving || missing || (!!pubAddr && pubAddr.toLowerCase() !== String(wallet.address || "").toLowerCase());
+  const who = () => (resolving || missing ? null : pubAddr && isPub() ? pubAddr : wallet.address);
+  let tab = !uHash && !wantName && !pubAddr && ["inbox", "history", "owl"].includes(ctx.parts[0]) ? ctx.parts[0] : "overview";
+  const st = { rh: null, toks: null, hl: null, eth: null, errors: {}, brief: null, briefSum: null, addr: null };
+  // another wallet on the page: nothing of the last one's is shown while the new one loads
+  const resetFor = (addr) => { if (st.addr !== addr) Object.assign(st, { addr, rh: null, toks: null, hl: null, tokUsd: 0, errors: {} }); };
   // the same checklist as the Desk and #/start, made once so a balance refresh re-draws the page without re-reading it
   const setup = getStarted({ layout: "card", hide: hideSetup });
   setup.el.style.margin = "16px 0 18px";                    // on the card itself, so a hidden card leaves no gap
@@ -41,12 +56,41 @@ export async function mount(view, ctx) {
     history.replaceState(null, "", `#/portfolio${v === "overview" ? "" : "/" + v}`);
     render();
   });
-  clear(view, h("div", { class: "pf2-tabs" }, tabsEl), body);
+  const prof = profileHeader();
+  const tabsWrap = h("div", { class: "pf2-tabs" }, tabsEl);
+  const wrap = h("div", {}, prof.el, tabsWrap, body);
+  clear(view, wrap);
+  // the header follows whose page it is; read again only when that (or the sign-in) changes
+  let profKey = null;
+  function paintProfile() {
+    if (resolving) return;
+    const pub = isPub(), addr = missing ? null : pub ? pubAddr : wallet.address || null;
+    const key = `${addr}|${pub}|${!!wallet.session}`;
+    if (key === profKey) return;
+    profKey = key;
+    prof.load(addr, { own: !pub && !!addr }).then((d) => {
+      if (alive && pub && d && who() === d.address) document.title = `${d.profile?.username || short(d.address)} · Troya Agent`;
+    });
+  }
+  if (wantName) {
+    prof.loadName(wantName).then((d) => {
+      if (!alive) return;
+      resolving = false;
+      if (d?.address) { pubAddr = d.address; profKey = `${d.address}|${isPub()}|${!!wallet.session}`; document.title = `${d.profile?.username || wantName} · Troya Agent`; }
+      else missing = true;
+      if (!isPub()) { profKey = null; paintProfile(); }   // your own name: your own page, with Edit profile
+      resetFor(who());
+      render();
+      loadBalances();
+      loadBrief();
+    });
+  }
 
   /* ---------- data ---------- */
   async function loadBalances() {
-    if (!wallet.address) return;
-    const addr = wallet.address;
+    const addr = who();
+    if (!addr) return;
+    resetFor(addr);
     const ethers = await import("ethers");
     const one = async (key, chain) => {
       try { st[key] = Number(ethers.formatEther(await reader(chain).getBalance(addr))); delete st.errors[key]; }
@@ -54,7 +98,7 @@ export async function mount(view, ctx) {
     };
     // draw as each source answers (at most every 400 ms), so one slow source never holds the page back
     let queued = false;
-    const soon = () => { if (queued) return; queued = true; setTimeout(() => { queued = false; if (alive && addr === wallet.address && tab === "overview") render(); }, 400); };
+    const soon = () => { if (queued) return; queued = true; setTimeout(() => { queued = false; if (alive && addr === who() && tab === "overview") render(); }, 400); };
     const step = (p) => p.finally(soon);
     await Promise.all([
       step(one("rh", "robinhood")),
@@ -63,10 +107,10 @@ export async function mount(view, ctx) {
       step(api.get("price/eth").then((p) => { st.eth = Number(p?.usd) || st.eth; }).catch(() => {})),
       step(api.get(`hl/user?address=${addr}`).then((u) => { st.hl = u; delete st.errors.hl; }).catch(() => { st.hl = null; st.errors.hl = true; })),
     ]);
-    if (alive && addr === wallet.address && tab === "overview") render();
+    if (alive && addr === who() && tab === "overview") render();
   }
   async function loadBrief() {
-    if (!wallet.session) { st.brief = null; return; }
+    if (!wallet.session || isPub()) { st.brief = null; return; }
     try { st.brief = await api.get("brief/me"); st.briefErr = null; } catch (e) { st.brief = null; st.briefErr = e.message || "unavailable"; }
     if (alive && tab === "overview") render();
   }
@@ -116,7 +160,7 @@ export async function mount(view, ctx) {
   const pnlCache = new Map();
   const tokPnlChip = h("span", { class: "pf2-chip", hidden: true });
   function paintPnlChip() {
-    const vals = [...pnlCache.values()].filter((p) => p?.status === "ok" && p.pnlUsd != null && p.addr === wallet.address);
+    const vals = [...pnlCache.values()].filter((p) => p?.status === "ok" && p.pnlUsd != null && p.addr === who());
     if (!vals.length) { tokPnlChip.hidden = true; return; }
     const sum = vals.reduce((s, p) => s + p.pnlUsd, 0);
     tokPnlChip.hidden = false;
@@ -137,7 +181,7 @@ export async function mount(view, ctx) {
       h("span", { class: up ? "up" : "down" }, `PnL ${sign}${num(Math.abs(p.pnlEth), 4)} ETH`, p.pnlUsd != null ? ` · ${sign}${usd(Math.abs(p.pnlUsd))}` : "", p.pnlPct != null ? ` · ${sign}${Math.abs(p.pnlPct).toFixed(1)}%` : ""),
       h("small", { class: "muted" }, `${buys}${p.avgEntryUsd != null ? ` · avg entry $${tiny(p.avgEntryUsd)}` : ""}`),
       // the card re-reads these numbers from the chain itself and prints the last trade's tx, so it cannot be typed in
-      p.pnlEth != null && x?.address ? h("button", { class: "link pf2-share", type: "button", style: { justifySelf: "start", fontSize: "12px" }, onclick: (e) => {
+      p.pnlEth != null && x?.address && !isPub() ? h("button", { class: "link pf2-share", type: "button", style: { justifySelf: "start", fontSize: "12px" }, onclick: (e) => {
         e.preventDefault(); e.stopPropagation();       // the row is a link to the coin page
         sharePnl(() => import("../sharecard.js").then((s) => s.chainPnlSpec({ wallet: p.addr || wallet.address, token: x.address, symbol: x.symbol })), `Share PnL · $${x.symbol}`);
       } }, "Share PnL") : null);
@@ -147,7 +191,7 @@ export async function mount(view, ctx) {
     import("../sharecard.js").then((s) => s.openPnlShare({ title, make })).catch((e) => toast(e.message, "error"));
   }
   async function fillPnl(slots) {
-    const addr = wallet.address;
+    const addr = who();
     // past the first 12 (each PnL reads the trades from the chain), one click reads it
     for (const [x, box] of slots.slice(12)) clear(box, h("button", { class: "link", type: "button", style: { justifySelf: "start", fontSize: "12px" }, onclick: (e) => {
       e.preventDefault(); e.stopPropagation();       // the row is a link to the coin page
@@ -161,13 +205,14 @@ export async function mount(view, ctx) {
         const p = await api.get(`/api/portfolio/pnl?address=${addr}&token=${x.address}`).catch(() => null);
         pnlCache.set(key, p ? { ...p, addr } : null);
       }
-      if (!alive || addr !== wallet.address) return;
+      if (!alive || addr !== who()) return;
       paintPnl(box, pnlCache.get(key), x);
       paintPnlChip();
     }
   }
   function overview() {
-    const connected = !!wallet.address;
+    const addr = who(), pub = isPub();
+    const connected = !!addr;
     const ethUsd = (n) => (n != null && st.eth ? usd(n * st.eth) : "");
     const tiles = h("div", { class: "pf-tiles" },
       tile("Robinhood Chain", connected ? (st.errors.rh ? "–" : st.rh == null ? "…" : `${num(st.rh, 5)} ETH`) : "–", connected ? (st.errors.rh ? "Robinhood Chain RPC unavailable" : ethUsd(st.rh)) : "Not connected", "Native ETH on Robinhood Chain (chain 4663), used for gas and swaps."),
@@ -187,15 +232,15 @@ export async function mount(view, ctx) {
     const pnl = st.hl?.unrealizedPnl;
     const hero = h("section", { class: "pf2-hero" },
       h("div", { class: "pf2-txt" },
-        h("p", { class: "d2-mic" }, h("i", { class: "live-dot" }), connected ? `Portfolio · ${short(wallet.address)}` : "Portfolio"),
+        h("p", { class: "d2-mic" }, h("i", { class: "live-dot" }), connected ? `Portfolio · ${short(addr)}` : "Portfolio"),
         h("div", { class: "pf2-total" }, connected ? (st.rh == null && !st.hl ? "…" : usd(total)) : "Connect a wallet"),
-        h("p", { class: "pf2-sub" }, connected ? "ETH and every token on Robinhood Chain, plus your Hyperliquid account. Each token's PnL is read from your own trades on chain." : "Your balances on Robinhood Chain and Hyperliquid, your open positions and your alerts, in one place."),
+        h("p", { class: "pf2-sub" }, pub ? "ETH and every token this wallet holds on Robinhood Chain, plus its Hyperliquid account. All of it is public on chain; each token's PnL is read from the wallet's own trades." : connected ? "ETH and every token on Robinhood Chain, plus your Hyperliquid account. Each token's PnL is read from your own trades on chain." : "Your balances on Robinhood Chain and Hyperliquid, your open positions and your alerts, in one place."),
         h("div", { class: "pf2-chips" },
           tokPnlChip,
           connected && pnl != null && (pnl !== 0 || st.hl?.positions?.length) ? h("span", { class: `pf2-chip ${pnl > 0 ? "up" : pnl < 0 ? "down" : ""}` }, `Perps PnL ${pnl > 0 ? "+" : ""}${usd(pnl)}`) : null,
           connected && st.hl ? h("span", { class: "pf2-chip" }, `${st.hl.positions.length} open position${st.hl.positions.length === 1 ? "" : "s"}`) : null,
           connected && st.toks ? h("span", { class: "pf2-chip" }, `${st.toks.length} token${st.toks.length === 1 ? "" : "s"}`) : null),
-        h("div", { class: "d2-acts" },
+        pub ? null : h("div", { class: "d2-acts" },
           connected ? h("a", { class: "btn primary d2-big", href: "#/swap" }, icon("swap"), "Swap") : h("button", { class: "btn primary d2-big", type: "button", onclick: () => openConnect() }, icon("wallet"), "Connect wallet"),
           h("a", { class: "btn d2-big", href: "#/bridge" }, "Bridge"), h("a", { class: "btn d2-big", href: "#/bridge?dir=hl" }, "Fund Hyperliquid"))),
       h("div", { class: "pf2-split" }, donut,
@@ -237,20 +282,21 @@ export async function mount(view, ctx) {
     };
     const pnlSlots = [];
     const toks = connected && st.toks?.length ? h("section", { class: "pf2-toks" },
-      h("div", { class: "pf2-sec-h" }, h("h2", {}, "Your tokens"), h("span", { class: "fine muted" }, `Robinhood Chain · ${usd(tokUsd)}`)),
+      h("div", { class: "pf2-sec-h" }, h("h2", {}, pub ? "Tokens" : "Your tokens"), h("span", { class: "fine muted" }, `Robinhood Chain · ${usd(tokUsd)}`)),
       front.length ? grid(front) : null,
       received.length ? h("details", { class: "pf2-dust" }, h("summary", { class: "fine muted" }, `${received.length} token${received.length === 1 ? "" : "s"} you received but never bought (${received.every((x) => x.priceUsd == null) ? "no price" : "no price or under one cent"})`), grid(received)) : null,
       older.length ? h("details", { class: "pf2-dust" }, h("summary", { class: "fine muted" }, `${older.length} ${front.length || received.length ? "more " : ""}without a price or worth under one cent`), grid(older)) : null,
       h("p", { class: "fine muted pf2-pnl-note" }, "PnL is in ETH: what this wallet paid for the token against what it got back from sells plus what it holds now, at today's price. Gas is not counted, and tokens that arrived by plain transfer are not counted as bought.")) : null;
     fillPnl(pnlSlots);
-    const gasCard = h("section", { class: "panel pf2-gas" });
-    paintGas(gasCard);
-    const parts = [hero, gasCard, toks];
-    if (connected && wallet.session) parts.push(briefPanel());
+    const parts = [hero];
+    // someone else's page: their public holdings only (gas, the brief and the checklist are your own)
+    if (!pub) { const gasCard = h("section", { class: "panel pf2-gas" }); paintGas(gasCard); parts.push(gasCard); }
+    parts.push(toks);
+    if (!pub && connected && wallet.session) parts.push(briefPanel());
     // the hero already offers Connect when no wallet is connected
 
     // Get started (then the optional Level up): every tick is read from the chain, the journal or the server, not guessed
-    parts.push(setup.el);
+    if (!pub) parts.push(setup.el);
 
     if (connected) {
       const pos = table({ emptyText: "No open Hyperliquid positions.", onRow: (p) => ctx.go(`#/perps/${p.coin}`), cols: [
@@ -263,7 +309,7 @@ export async function mount(view, ctx) {
         { key: "liq", label: "Liq. price", render: (p) => fmtPx(p.liquidationPx) },
       ] });
       if (st.hl) pos.setRows(st.hl.positions); else pos.setLoading(2);
-      parts.push(h("section", { class: "panel pf-sec" }, h("div", { class: "panel-h" }, h("h2", {}, "Hyperliquid positions"), h("a", { class: "link", href: "#/perps", style: { fontSize: "12px" } }, "Open Perps")), h("div", { style: { padding: "0 6px 8px" } }, pos)));
+      parts.push(h("section", { class: "panel pf-sec" }, h("div", { class: "panel-h" }, h("h2", {}, "Hyperliquid positions"), pub ? null : h("a", { class: "link", href: "#/perps", style: { fontSize: "12px" } }, "Open Perps")), h("div", { style: { padding: "0 6px 8px" } }, pos)));
 
       if (st.hl?.spot?.length) {
         const sp = table({ cols: [
@@ -436,6 +482,18 @@ export async function mount(view, ctx) {
 
   /* ---------- render ---------- */
   function render() {
+    const pub = isPub();
+    tabsWrap.hidden = pub;
+    wrap.classList.toggle("pr-public", pub);
+    if (pub) tab = "overview";
+    if (resolving) { clear(body, h("div", { class: "pf2-hero", style: { minHeight: "220px" } }, h("div", { class: "sk", style: { height: "48px", width: "min(320px, 70%)" } }))); return; }
+    if (missing) {
+      clear(body, h("div", { class: "panel pf-connect pr-missing" },
+        h("b", { style: { color: "var(--fg)", fontSize: "15px" } }, `No profile is called ${wantName}.`),
+        h("p", { style: { margin: 0, maxWidth: "36em", textAlign: "center", lineHeight: "1.5" } }, "The name may have changed: a username can change once a week. A wallet's page is always at its address."),
+        h("a", { class: "btn", href: "#/portfolio" }, "Your portfolio")));
+      return;
+    }
     tabsEl.set(tab);
     if (tab === "overview") clear(body, overview());
     else if (tab === "inbox") inbox(body);
@@ -445,11 +503,14 @@ export async function mount(view, ctx) {
 
   render();
   stops.push(onWallet(async () => {
-    st.ely = st.evm = st.hl = null;
+    st.ely = st.evm = null;
+    if (!isPub()) st.hl = null;
+    resetFor(who());
+    paintProfile();
     render();
     loadBalances();
     loadBrief();
   }));
-  stops.push(every(15000, () => { if (wallet.address && tab === "overview") loadBalances(); }));
+  stops.push(every(15000, () => { if (who() && tab === "overview") loadBalances(); }));
   return () => { alive = false; stops.forEach((f) => { try { f(); } catch {} }); };
 }

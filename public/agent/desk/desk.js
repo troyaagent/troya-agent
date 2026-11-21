@@ -91,6 +91,7 @@ const ROUTES = {
   bridge: "bridge", agent: "agent", assistant: "agent", portfolio: "portfolio", docs: "docs", start: "start", leaderboard: "leaderboard", gate: "gate", spot: "spot", lighter: "lighter", stocks: "stocks", liquidity: "liquidity", flywheel: "flywheel", social: "social", registry: "registry", rail: "rail", "troya-launches": "hippodrome", hippodrome: "hippodrome", create: "create", creator: "creator",
   herald: "herald", treasury: "treasury",                    // V8 F42: /agent/js/pages/herald.js
   stake: "stake",                                            // $TROYA staking (21 Nov): /agent/js/pages/stake.js
+  u: "portfolio",                                            // profiles (21 Nov): #/u/<username> → a wallet's public page
 };
 const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js" };
 // The sheets each page asks for with useCss at mount. route() requests them together with the module, so the stylesheet
@@ -98,7 +99,7 @@ const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", li
 // routes above to start the same downloads before this file has even arrived: change both together.
 const PAGE_CSS = {
   home: ["home", "start"], market: ["home", "market"], token: ["home", "market"], launchpad: ["home", "market"], gate: ["home"], treasury: ["home", "agent"],
-  swap: ["swap"], perps: ["perps"], bridge: ["bridge"], agent: ["agent"], portfolio: ["portfolio", "start"], docs: ["docs"], start: ["start"], leaderboard: ["start"], herald: ["herald"],
+  swap: ["swap"], perps: ["perps"], bridge: ["bridge"], agent: ["agent"], portfolio: ["portfolio", "start", "profile"], docs: ["docs"], start: ["start"], leaderboard: ["start"], herald: ["herald"],
   spot: ["perps"], registry: ["perps"], rail: ["perps"], hippodrome: ["perps"], create: ["perps"], creator: ["perps"],
   lighter: ["perps", "swap"], stocks: ["perps", "swap"], liquidity: ["perps", "swap"], flywheel: ["perps", "swap"], social: ["perps", "swap"],
   stake: ["stake"],

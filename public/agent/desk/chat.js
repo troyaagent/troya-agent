@@ -6,8 +6,9 @@
 //   mountChat(el, { inline: true })   the same panel drawn inside el (e.g. a Desk section)
 // Returns a stop function. New messages are read every 4 s while the panel is open and every 30 s while it is closed
 // (for the unread count); nothing is read while the tab is hidden.
-import { h, clear, toast, ago, short, modal } from "/agent/js/ui.js";
+import { h, clear, toast, ago, short, modal, useCss } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
+import { avatarFor, profileHref } from "/agent/js/profile.js";
 import { wallet, onWallet, signIn } from "/agent/js/wallet.js";
 import { chromeIcon } from "./chrome-icons.js";
 import { pulseCss } from "./pulse.js";
@@ -28,11 +29,11 @@ function ico(name) {
   el.innerHTML = STROKE[name].split(/(?=M)/).map((d) => `<path d="${d}"/>`).join("");
   return el;
 }
-// a soft colour from the wallet address, so the same wallet reads the same at a glance (no picture, no emoji)
-function avatar(addr) {
-  const a = lc(addr), hue = [...a.slice(2, 14)].reduce((x, c) => (x * 31 + c.charCodeAt(0)) % 360, 11);
-  return h("span", { class: "cc-av", "aria-hidden": "true", style: { background: `linear-gradient(135deg, hsl(${hue} 55% 58%), hsl(${(hue + 50) % 360} 50% 26%))` } });
-}
+// the wallet's profile picture (server/profile.mjs, sent as m.avatar), else a soft colour from its address, so the same
+// wallet reads the same at a glance (no emoji)
+const avatar = (m) => avatarFor(m.from, m.avatar, "cc-av");
+// how a message names its writer in a dialog or a toast: the profile username, else the X handle, else the short address
+const who = (m) => m.user || (m.x ? `@${m.x}` : short(m.from));
 // message text as DOM: troya.codes links and contract addresses become links inside the app; everything else is plain text
 const LINKY = /(?:https?:\/\/)?(?:www\.)?troya\.codes(?:\/[^\s<>"']*)?|\b0x[0-9a-fA-F]{40}\b/gi;
 function body(text) {
@@ -56,6 +57,7 @@ function body(text) {
 
 export function mountChat(host = document.body, { inline = false } = {}) {
   pulseCss();
+  useCss("profile");
   const floating = !inline;
   let seq = 0, me = null, open = !floating, alive = true, timer = 0, busy = false, sending = false, lastId = 0, expired = false, first = true;
   const nodes = new Map();          // id → element
@@ -101,14 +103,17 @@ export function mountChat(host = document.body, { inline = false } = {}) {
   // (on phones the keyboard closed every 4 s and the half-written message lost focus)
   let footKey = "";
   function paintFoot(force = false) {
-    const key = !me || expired ? `gate|${wallet.address ? 1 : 0}` : me.muted ? `muted|${me.muted.until || ""}|${me.muted.why || ""}` : "write";
+    const key = !me || expired ? `gate|${wallet.address ? 1 : 0}` : me.muted ? `muted|${me.muted.until || ""}|${me.muted.why || ""}` : `write|${me.profile?.username ? 1 : 0}`;
     if (!force && key === footKey && foot.firstChild) return;
     footKey = key;
-    const rules = h("div", { class: "cc-meta" }, h("span", {}, "No links but troya.codes · no promos or DM asks · admins never DM first"), count);
+    // no username yet: one link to the profile, where a name and a photo are set (the chat shows them instead of the address)
+    const setUp = me && !expired && !me.muted && !me.profile?.username
+      ? h("a", { class: "cc-prof", href: "#/portfolio", onclick: () => { if (floating) setOpen(false); } }, "Set your name and photo") : null;
+    const rules = h("div", { class: "cc-meta" }, h("span", {}, "No links but troya.codes · no promos or DM asks · admins never DM first", setUp ? " · " : null, setUp), count);
     if (!me || expired) {
       clear(foot, h("div", { class: "cc-gate" },
         h("button", { class: "btn primary", type: "button", onclick: async () => { try { await signIn(); } catch (e) { toast(e.message, "error"); } } }, wallet.address ? "Sign in to post" : "Connect to post"),
-        h("span", {}, "Reading is open to everyone. Your wallet address shows next to what you write.")));
+        h("span", {}, "Reading is open to everyone. Your profile name, or your wallet address, shows next to what you write.")));
       return;
     }
     if (me?.muted) {
@@ -155,9 +160,11 @@ export function mountChat(host = document.body, { inline = false } = {}) {
       h("button", { type: "button", onclick: () => remove(m) }, "Remove"),
       m.team ? null : h("button", { type: "button", onclick: () => ban(m) }, "Ban")) : null;
     const el = h("div", { class: `cc-msg${mine ? " mine" : ""}${m.team ? " team" : ""}${cont ? " cc-cont" : ""}`, "data-id": String(m.id), "data-from": lc(m.from), "data-at": String(m.at) },
-      avatar(m.from),
+      avatar(m),
       h("div", { class: "cc-m-h" },
-        h("b", { class: "cc-name", title: m.from }, m.name || short(m.from)),
+        // the name opens the writer's profile page (#/u/<name>, else the address's page)
+        h("a", { class: "cc-name", href: profileHref(m.user, m.from), title: m.from, onclick: () => { if (floating) setOpen(false); } }, m.name || short(m.from)),
+        m.user && m.x ? h("span", { class: "cc-sub", title: "X account linked with Sign in with X" }, `@${m.x}`) : null,
         m.team ? h("span", { class: "cc-tag team", title: "Troya team (a person, not a bot)" }, "Team") : null,
         m.holder ? h("span", { class: "cc-tag", title: "Holds at least 1,000,000 $TROYA" }, "Holder") : null,
         // $TROYA staking tier, read once at post time (sent only once the stake perks are on)
@@ -218,12 +225,12 @@ export function mountChat(host = document.body, { inline = false } = {}) {
       try {
         const r = await api.post("chat/ban", { address: m.from, hours, purge: purge.checked, reason: "Banned from the web chat" });
         dlg.close();
-        toast(`Banned ${m.x ? `@${m.x}` : short(m.from)}${r.purged ? `, ${r.purged} message${r.purged === 1 ? "" : "s"} removed` : ""}.`, "ok");
+        toast(`Banned ${who(m)}${r.purged ? `, ${r.purged} message${r.purged === 1 ? "" : "s"} removed` : ""}.`, "ok");
         poll(true);
       } catch (e) { toast(e.message, "error"); }
     };
     const dlg = modal({ title: "Ban from the chat", body: h("div", { class: "cc-ban" },
-      h("p", {}, `${m.x ? `@${m.x} (${short(m.from)})` : short(m.from)} will not be able to post. Reading stays open.`),
+      h("p", {}, `${m.user || m.x ? `${who(m)} (${short(m.from)})` : short(m.from)} will not be able to post. Reading stays open.`),
       h("label", {}, purge, "Also remove their messages"),
       h("div", { class: "row" },
         h("button", { class: "btn", type: "button", onclick: () => go(24) }, "24 hours"),

@@ -97,7 +97,13 @@ export function mountChat(host = document.body, { inline = false } = {}) {
   // the server's answer decides (a live sign-in cookie), so a session still counts while the wallet extension reconnects
   const canPost = () => !!me && !expired && !me.muted;
   const myAddr = () => lc(me?.address || wallet.address);
-  function paintFoot() {
+  // repaint the composer only when what it shows changes: re-inserting the textarea every poll blurred it
+  // (on phones the keyboard closed every 4 s and the half-written message lost focus)
+  let footKey = "";
+  function paintFoot(force = false) {
+    const key = !me || expired ? `gate|${wallet.address ? 1 : 0}` : me.muted ? `muted|${me.muted.until || ""}|${me.muted.why || ""}` : "write";
+    if (!force && key === footKey && foot.firstChild) return;
+    footKey = key;
     const rules = h("div", { class: "cc-meta" }, h("span", {}, "No links but troya.codes · no promos or DM asks · admins never DM first"), count);
     if (!me || expired) {
       clear(foot, h("div", { class: "cc-gate" },
@@ -154,6 +160,8 @@ export function mountChat(host = document.body, { inline = false } = {}) {
         h("b", { class: "cc-name", title: m.from }, m.name || short(m.from)),
         m.team ? h("span", { class: "cc-tag team", title: "Troya team (a person, not a bot)" }, "Team") : null,
         m.holder ? h("span", { class: "cc-tag", title: "Holds at least 1,000,000 $TROYA" }, "Holder") : null,
+        // $TROYA staking tier, read once at post time (sent only once the stake perks are on)
+        /^(bronze|silver|gold)$/.test(m.stake || "") ? h("span", { class: `cc-tag stk-badge t-${m.stake}`, title: `${m.stake[0].toUpperCase()}${m.stake.slice(1)} tier $TROYA staker` }, `${m.stake[0].toUpperCase()}${m.stake.slice(1)}`) : null,
         h("time", { class: "cc-time", datetime: new Date(m.at).toISOString(), title: new Date(m.at).toLocaleString() }, ago(m.at)),
         mod),
       h("div", { class: "cc-m-t" }, body(m.text)));

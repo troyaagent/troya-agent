@@ -1,235 +1,235 @@
 {
-  "name": "TroyaStake automated security scan",
-  "label": "Automated scan, not an audit by an outside firm",
-  "date": "2026-11-21",
-  "scannedAt": {
-    "slither pass 1": "2026-11-21T19:19:15Z",
-    "slither pass 2": "2026-11-21T19:19:58Z",
-    "wake": "2026-11-21T19:22:41Z"
-  },
-  "contract": {
-    "name": "TroyaStake",
-    "address": "0x1C867c13BD950a90aB75158C1C45061837aa02d2",
-    "chainId": 4663,
-    "network": "Robinhood Chain",
-    "source": "contracts/src/TroyaStake.sol",
-    "commit": "7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e",
-    "sourceUrl": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol",
-    "sourceSha256": "3ab20da95fa57018388a088571501ee69051fa330c2de8443b41670a13c9bca8",
-    "compiler": "solc 0.8.24+commit.e11b9ed9, optimizer on, 500 runs, evm shanghai",
-    "matchesDeployed": "Sourcify reports exact_match for this address; all 13 source files it verified (TroyaStake.sol and 12 OpenZeppelin 5.1.0 files) are byte-identical to the files scanned.",
-    "sourcify": "https://repo.sourcify.dev/4663/0x1C867c13BD950a90aB75158C1C45061837aa02d2"
-  },
-  "scope": "Findings limited to src/TroyaStake.sol. OpenZeppelin (lib/), forge-std and the tests were compiled with it but are outside the findings.",
-  "tools": [
+ "name": "TroyaStake automated security scan",
+ "label": "Automated scan; independent audit not done yet",
+ "date": "2026-11-21",
+ "scannedAt": {
+  "slither pass 1": "2026-11-21T19:19:15Z",
+  "slither pass 2": "2026-11-21T19:19:58Z",
+  "wake": "2026-11-21T19:22:41Z"
+ },
+ "contract": {
+  "name": "TroyaStake",
+  "address": "0x1C867c13BD950a90aB75158C1C45061837aa02d2",
+  "chainId": 4663,
+  "network": "Robinhood Chain",
+  "source": "contracts/src/TroyaStake.sol",
+  "commit": "7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e",
+  "sourceUrl": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol",
+  "sourceSha256": "3ab20da95fa57018388a088571501ee69051fa330c2de8443b41670a13c9bca8",
+  "compiler": "solc 0.8.24+commit.e11b9ed9, optimizer on, 500 runs, evm shanghai",
+  "matchesDeployed": "Sourcify reports exact_match for this address; all 13 source files it verified (TroyaStake.sol and 12 OpenZeppelin 5.1.0 files) are byte-identical to the files scanned.",
+  "sourcify": "https://repo.sourcify.dev/4663/0x1C867c13BD950a90aB75158C1C45061837aa02d2"
+ },
+ "scope": "Findings limited to src/TroyaStake.sol. OpenZeppelin (lib/), forge-std and the tests were compiled with it but are outside the findings.",
+ "tools": [
+  {
+   "tool": "Slither",
+   "by": "Trail of Bits",
+   "version": "0.11.6",
+   "url": "https://github.com/crytic/slither",
+   "detectors": 102,
+   "install": "pip install slither-analyzer==0.11.6 solc-select==1.2.0 (Python 3.12 venv), solc-select install 0.8.24",
+   "runs": [
     {
-      "tool": "Slither",
-      "by": "Trail of Bits",
-      "version": "0.11.6",
-      "url": "https://github.com/crytic/slither",
-      "detectors": 102,
-      "install": "pip install slither-analyzer==0.11.6 solc-select==1.2.0 (Python 3.12 venv), solc-select install 0.8.24",
-      "runs": [
-        {
-          "pass": "pass 1",
-          "what": "the deployed source, unchanged",
-          "command": "slither . --foundry-compile-all --include-paths \"src/TroyaStake.sol\" --json troyastake-slither.json",
-          "startedAt": "2026-11-21T19:19:15Z",
-          "counts": {
-            "high": 0,
-            "medium": 0,
-            "low": 1,
-            "informational": 2,
-            "optimization": 0
-          },
-          "raw": {
-            "text": "/security/troyastake-slither.txt",
-            "json": "/security/troyastake-slither.json"
-          },
-          "note": "Slither hit an internal error building its IR for _settle (line 203, a SafeCast call on a parenthesised sum that contains an overloaded Math.mulDiv). After that error it skips its data-flow (SSA) analysis for the whole contract, so this pass under-reports."
-        },
-        {
-          "pass": "pass 2",
-          "what": "a scan-only copy with line 203 split into two statements (same maths) so Slither can analyse everything; the deployed contract is not changed (it cannot be)",
-          "command": "slither . --foundry-compile-all --include-paths \"src/TroyaStake.sol\" --json troyastake-slither-pass2.json",
-          "startedAt": "2026-11-21T19:19:58Z",
-          "counts": {
-            "high": 0,
-            "medium": 2,
-            "low": 2,
-            "informational": 2,
-            "optimization": 0
-          },
-          "raw": {
-            "text": "/security/troyastake-slither-pass2.txt",
-            "json": "/security/troyastake-slither-pass2.json",
-            "diff": "/security/troyastake-slither-pass2.diff"
-          },
-          "note": "Found 6 results, including all 3 from pass 1. The triage below covers these 6."
-        }
-      ]
+     "pass": "pass 1",
+     "what": "the deployed source, unchanged",
+     "command": "slither . --foundry-compile-all --include-paths \"src/TroyaStake.sol\" --json troyastake-slither.json",
+     "startedAt": "2026-11-21T19:19:15Z",
+     "counts": {
+      "high": 0,
+      "medium": 0,
+      "low": 1,
+      "informational": 2,
+      "optimization": 0
+     },
+     "raw": {
+      "text": "/security/troyastake-slither.txt",
+      "json": "/security/troyastake-slither.json"
+     },
+     "note": "Slither hit an internal error building its IR for _settle (line 203, a SafeCast call on a parenthesised sum that contains an overloaded Math.mulDiv). After that error it skips its data-flow (SSA) analysis for the whole contract, so this pass under-reports."
     },
     {
-      "tool": "Wake",
-      "by": "Ackee Blockchain",
-      "version": "4.22.2",
-      "url": "https://github.com/ack3-ai/wake",
-      "detectors": 26,
-      "install": "pip install eth-wake==4.22.2 (separate Python 3.12 venv); Wake downloads solc 0.8.24 itself",
-      "runs": [
-        {
-          "pass": "all detectors",
-          "what": "the deployed source, unchanged; every impact and confidence level",
-          "command": "wake detect --export json all --min-impact info --min-confidence low",
-          "startedAt": "2026-11-21T19:22:41Z",
-          "counts": {
-            "high": 0,
-            "medium": 0,
-            "low": 0,
-            "warning": 0,
-            "info": 0
-          },
-          "raw": {
-            "text": "/security/troyastake-wake.txt",
-            "json": "/security/troyastake-wake.json",
-            "config": "/security/troyastake-wake.toml"
-          },
-          "note": "No detections. To rule out a skipped file, a scratch copy with one deliberately unsafe tx.origin line added to TroyaStake.sol was scanned the same way: Wake flagged it in src/TroyaStake.sol."
-        }
-      ]
-    },
-    {
-      "tool": "Aderyn",
-      "by": "Cyfrin",
-      "version": null,
-      "status": "not run",
-      "url": "https://github.com/Cyfrin/aderyn",
-      "reason": "Cyfrin has retired Aderyn and withdrawn its downloads, so it can no longer be installed. Wake was run in its place.",
-      "details": "The GitHub repository is archived ('Retired and no longer maintained'), the official installer of the last release (v0.6.8) now only prints that installation downloads were withdrawn and exits, the npm package @cyfrin/aderyn is unpublished and the crates.io versions are yanked. Checked on 2026-11-21."
+     "pass": "pass 2",
+     "what": "a scan-only copy with line 203 split into two statements (same maths) so Slither can analyse everything; the deployed contract is not changed (it cannot be)",
+     "command": "slither . --foundry-compile-all --include-paths \"src/TroyaStake.sol\" --json troyastake-slither-pass2.json",
+     "startedAt": "2026-11-21T19:19:58Z",
+     "counts": {
+      "high": 0,
+      "medium": 2,
+      "low": 2,
+      "informational": 2,
+      "optimization": 0
+     },
+     "raw": {
+      "text": "/security/troyastake-slither-pass2.txt",
+      "json": "/security/troyastake-slither-pass2.json",
+      "diff": "/security/troyastake-slither-pass2.diff"
+     },
+     "note": "Found 6 results, including all 3 from pass 1. The triage below covers these 6."
     }
-  ],
-  "counts": {
-    "beforeTriage": {
-      "total": 6,
-      "bySeverity": {
-        "high": 0,
-        "medium": 2,
-        "low": 2,
-        "informational": 2,
-        "optimization": 0
-      },
-      "byTool": {
-        "Slither": 6,
-        "Wake": 0
-      }
-    },
-    "afterTriage": {
-      "real": 0,
-      "informational": 3,
-      "falsePositive": 3
-    }
+   ]
   },
-  "findings": [
+  {
+   "tool": "Wake",
+   "by": "Ackee Blockchain",
+   "version": "4.22.2",
+   "url": "https://github.com/ack3-ai/wake",
+   "detectors": 26,
+   "install": "pip install eth-wake==4.22.2 (separate Python 3.12 venv); Wake downloads solc 0.8.24 itself",
+   "runs": [
     {
-      "id": "S1",
-      "detector": "incorrect-equality",
-      "toolSeverity": "Medium",
-      "confidence": "High",
-      "function": "stake()",
-      "line": 89,
-      "code": "got == 0",
-      "verdict": "false-positive",
-      "reason": "got is the balance change across this one transfer, and the check only refuses a deposit that delivered 0 coins. Coins sent to the contract by anyone else arrive in other transactions, so they cannot fake or block a real stake.",
-      "tool": "Slither",
-      "passes": [
-        "pass 2"
-      ],
-      "source": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol#L89"
-    },
-    {
-      "id": "S2",
-      "detector": "incorrect-equality",
-      "toolSeverity": "Medium",
-      "confidence": "High",
-      "function": "stakedFor()",
-      "line": 189,
-      "code": "s == 0",
-      "verdict": "false-positive",
-      "reason": "A read-only view that returns 0 when nothing is staked: since is 0 exactly when the stake is empty, because it is set from block.timestamp (never 0) whenever coins are staked. It moves nothing.",
-      "tool": "Slither",
-      "passes": [
-        "pass 2"
-      ],
-      "source": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol#L189"
-    },
-    {
-      "id": "S3",
-      "detector": "timestamp",
-      "toolSeverity": "Low",
-      "confidence": "Medium",
-      "function": "withdraw()",
-      "line": 130,
-      "code": "block.timestamp < a.unlockAt",
-      "verdict": "informational",
-      "reason": "This is the 3-day wait itself, so using the block time is intended. Whoever produces blocks can nudge their time slightly; against a 259,200-second wait that is noise, and it only changes when callers get back their own coins, which already stopped earning.",
-      "tool": "Slither",
-      "passes": [
-        "pass 1",
-        "pass 2"
-      ],
-      "source": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol#L130"
-    },
-    {
-      "id": "S4",
-      "detector": "timestamp",
-      "toolSeverity": "Low",
-      "confidence": "Medium",
-      "function": "stakedFor()",
-      "line": 189,
-      "code": "s == 0",
-      "verdict": "false-positive",
-      "reason": "The same check as the incorrect-equality result on this line. Slither flags it because since comes from block.timestamp, but the check asks whether anything is staked, not whether time has passed. Read-only.",
-      "tool": "Slither",
-      "passes": [
-        "pass 2"
-      ],
-      "source": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol#L189"
-    },
-    {
-      "id": "S5",
-      "detector": "pragma",
-      "toolSeverity": "Informational",
-      "confidence": "High",
-      "function": "whole project",
-      "line": 2,
-      "code": "pragma solidity ^0.8.24;",
-      "verdict": "informational",
-      "reason": "The Foundry project mixes version ranges (forge-std and tests >=0.8.13, OpenZeppelin ^0.8.20, the Troya contracts 0.8.24 and ^0.8.24). The deployed contract was compiled with exactly solc 0.8.24 (Sourcify exact match), so the range written in the source changes nothing on chain.",
-      "tool": "Slither",
-      "passes": [
-        "pass 1",
-        "pass 2"
-      ],
-      "source": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol#L2"
-    },
-    {
-      "id": "S6",
-      "detector": "low-level-calls",
-      "toolSeverity": "Informational",
-      "confidence": "High",
-      "function": "claim()",
-      "line": 167,
-      "code": "payable(msg.sender).call{value: r}(\"\")",
-      "verdict": "informational",
-      "reason": "call is the recommended way to send ETH (transfer and send cap gas at 2,300 and break smart-contract wallets). It pays only msg.sender, after owed is set to 0 and totalClaimed is updated, under nonReentrant, and the whole claim reverts if the payment fails, so ETH cannot be lost or paid twice.",
-      "tool": "Slither",
-      "passes": [
-        "pass 1",
-        "pass 2"
-      ],
-      "source": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol#L167"
+     "pass": "all detectors",
+     "what": "the deployed source, unchanged; every impact and confidence level",
+     "command": "wake detect --export json all --min-impact info --min-confidence low",
+     "startedAt": "2026-11-21T19:22:41Z",
+     "counts": {
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "warning": 0,
+      "info": 0
+     },
+     "raw": {
+      "text": "/security/troyastake-wake.txt",
+      "json": "/security/troyastake-wake.json",
+      "config": "/security/troyastake-wake.toml"
+     },
+     "note": "No detections. To rule out a skipped file, a scratch copy with one deliberately unsafe tx.origin line added to TroyaStake.sol was scanned the same way: Wake flagged it in src/TroyaStake.sol."
     }
-  ],
-  "notFound": "Neither tool reported reentrancy, unchecked token transfers or return values, arbitrary ETH or token sends, uninitialised storage, shadowing, selfdestruct, delegatecall or locked ether.",
-  "howToRerun": "In contracts/: the commands above, with solc 0.8.24. Slither: pip install slither-analyzer solc-select. Wake: pip install eth-wake, then wake init config."
+   ]
+  },
+  {
+   "tool": "Aderyn",
+   "by": "Cyfrin",
+   "version": null,
+   "status": "not run",
+   "url": "https://github.com/Cyfrin/aderyn",
+   "reason": "Cyfrin has retired Aderyn and withdrawn its downloads, so it can no longer be installed. Wake was run in its place.",
+   "details": "The GitHub repository is archived ('Retired and no longer maintained'), the official installer of the last release (v0.6.8) now only prints that installation downloads were withdrawn and exits, the npm package @cyfrin/aderyn is unpublished and the crates.io versions are yanked. Checked on 2026-11-21."
+  }
+ ],
+ "counts": {
+  "beforeTriage": {
+   "total": 6,
+   "bySeverity": {
+    "high": 0,
+    "medium": 2,
+    "low": 2,
+    "informational": 2,
+    "optimization": 0
+   },
+   "byTool": {
+    "Slither": 6,
+    "Wake": 0
+   }
+  },
+  "afterTriage": {
+   "real": 0,
+   "informational": 3,
+   "falsePositive": 3
+  }
+ },
+ "findings": [
+  {
+   "id": "S1",
+   "detector": "incorrect-equality",
+   "toolSeverity": "Medium",
+   "confidence": "High",
+   "function": "stake()",
+   "line": 89,
+   "code": "got == 0",
+   "verdict": "false-positive",
+   "reason": "got is the balance change across this one transfer, and the check only refuses a deposit that delivered 0 coins. Coins sent to the contract by anyone else arrive in other transactions, so they cannot fake or block a real stake.",
+   "tool": "Slither",
+   "passes": [
+    "pass 2"
+   ],
+   "source": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol#L89"
+  },
+  {
+   "id": "S2",
+   "detector": "incorrect-equality",
+   "toolSeverity": "Medium",
+   "confidence": "High",
+   "function": "stakedFor()",
+   "line": 189,
+   "code": "s == 0",
+   "verdict": "false-positive",
+   "reason": "A read-only view that returns 0 when nothing is staked: since is 0 exactly when the stake is empty, because it is set from block.timestamp (never 0) whenever coins are staked. It moves nothing.",
+   "tool": "Slither",
+   "passes": [
+    "pass 2"
+   ],
+   "source": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol#L189"
+  },
+  {
+   "id": "S3",
+   "detector": "timestamp",
+   "toolSeverity": "Low",
+   "confidence": "Medium",
+   "function": "withdraw()",
+   "line": 130,
+   "code": "block.timestamp < a.unlockAt",
+   "verdict": "informational",
+   "reason": "This is the 3-day wait itself, so using the block time is intended. Whoever produces blocks can nudge their time slightly; against a 259,200-second wait that is noise, and it only changes when callers get back their own coins, which already stopped earning.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1",
+    "pass 2"
+   ],
+   "source": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol#L130"
+  },
+  {
+   "id": "S4",
+   "detector": "timestamp",
+   "toolSeverity": "Low",
+   "confidence": "Medium",
+   "function": "stakedFor()",
+   "line": 189,
+   "code": "s == 0",
+   "verdict": "false-positive",
+   "reason": "The same check as the incorrect-equality result on this line. Slither flags it because since comes from block.timestamp, but the check asks whether anything is staked, not whether time has passed. Read-only.",
+   "tool": "Slither",
+   "passes": [
+    "pass 2"
+   ],
+   "source": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol#L189"
+  },
+  {
+   "id": "S5",
+   "detector": "pragma",
+   "toolSeverity": "Informational",
+   "confidence": "High",
+   "function": "whole project",
+   "line": 2,
+   "code": "pragma solidity ^0.8.24;",
+   "verdict": "informational",
+   "reason": "The Foundry project mixes version ranges (forge-std and tests >=0.8.13, OpenZeppelin ^0.8.20, the Troya contracts 0.8.24 and ^0.8.24). The deployed contract was compiled with exactly solc 0.8.24 (Sourcify exact match), so the range written in the source changes nothing on chain.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1",
+    "pass 2"
+   ],
+   "source": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol#L2"
+  },
+  {
+   "id": "S6",
+   "detector": "low-level-calls",
+   "toolSeverity": "Informational",
+   "confidence": "High",
+   "function": "claim()",
+   "line": 167,
+   "code": "payable(msg.sender).call{value: r}(\"\")",
+   "verdict": "informational",
+   "reason": "call is the recommended way to send ETH (transfer and send cap gas at 2,300 and break smart-contract wallets). It pays only msg.sender, after owed is set to 0 and totalClaimed is updated, under nonReentrant, and the whole claim reverts if the payment fails, so ETH cannot be lost or paid twice.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1",
+    "pass 2"
+   ],
+   "source": "https://github.com/troyaagent/troya-agent/blob/7a4fdb523b167a5aa0c4a7ed8430434be4eefe3e/contracts/src/TroyaStake.sol#L167"
+  }
+ ],
+ "notFound": "Neither tool reported reentrancy, unchecked token transfers or return values, arbitrary ETH or token sends, uninitialised storage, shadowing, selfdestruct, delegatecall or locked ether.",
+ "howToRerun": "In contracts/: the commands above, with solc 0.8.24. Slither: pip install slither-analyzer solc-select. Wake: pip install eth-wake, then wake init config."
 }

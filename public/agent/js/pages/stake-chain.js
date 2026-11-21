@@ -210,7 +210,7 @@ export function chainPanel({ get, connect }) {
       ["Coin", ["$TROYA ", ext(`${EXPLORER}/token/${t.token}`, h("span", { class: "mono" }, short(t.token, 4)))]],
       ["Deployed", [`${new Date(DEPLOYED.at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}, block ${DEPLOYED.block.toLocaleString("en-US")} · `, ext(`${EXPLORER}/tx/${DEPLOYED.tx}`, "transaction")]],
       ["Source", ["Verified, exact match: ", ext(bsCode, "Blockscout"), " · ", ext(sourcify, "Sourcify"), " · ", ext(SRC, "GitHub")]],
-      ["Audit", [h("b", { class: "stk-warn" }, "Not audited by an outside firm yet."), " Public tests: ", ext(TEST_DIR, "40 unit and fuzz, 4 invariants, 1 fork test"), auditScan]],
+      ["Audit", [h("span", { class: "faint" }, "Automated scan (0 real issues); independent audit not done yet."), " Public tests: ", ext(TEST_DIR, "40 unit and fuzz, 4 invariants, 1 fork test"), auditScan]],
     ];
     const cant = [
       ["Only 6 functions can change anything", "stake, requestUnstake, cancelUnstake, withdraw and claim act only on the calling wallet's own account; notifyReward only adds ETH. The other 11 functions only read. Blockscout lists all 17.",

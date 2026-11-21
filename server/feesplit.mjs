@@ -10,23 +10,29 @@
 // is the median of all of that hour's reads (data/mc-hourly.json). A credit uses its hour's tier; an hour with no read uses the
 // last hour before it that has one; before any read at all, the lowest tier.
 // Credits are the Pons fee escrow's Credited events for the creator wallet (the events flywheel.mjs scans), summed per hour
-// (data/fee-credits.json). Only weeklyRun() moves money; server/payouts.mjs calls it every Monday after the Herald payouts:
-//   · stakers: their ETH goes to TroyaStake.notifyReward(), shared by every coin staked at that moment, at one rate per staked
-//     coin (owner, 21 Nov 2026): a run pays share × min(1, totalStaked / target), the target being STAKE_FULL_TARGET_PCT
-//     (default 5) % of the current total supply; the unpaid part stays with the owner. Coins waiting out the cooldown do not
-//     count (the contract's totalStaked). So one staker with 1M $TROYA gets about 1/48 of the week's share. It is kept (the staker
-//     pot) while the stake contract is not live and until the second Monday after it goes live, so people have time to stake
-//     and the pot is not sniped minutes before; from then on it is sent every Monday. If nobody is staked at a paying run, or
-//     the run cannot send it (the gas reserve, a transaction that fails after retries), it stays with the owner: nothing is
-//     carried to the next week. The pre-launch pot follows the same rule on its paying Monday.
+// (data/fee-credits.json). Only dailyRun() moves money. It runs once a day at 01:00 UTC (owner, 21 Nov 2026: daily, not
+// weekly; the Herald payouts stay weekly on Monday in server/payouts.mjs) and settles the previous UTC day:
+//   · stakers: their ETH goes to TroyaStake.notifyReward() (paid into the staking contract every day; claim any time), shared
+//     by every coin staked at that moment, at one rate per staked coin: a run pays share × min(1, totalStaked / target), the
+//     target being STAKE_FULL_TARGET_PCT (default 5) % of the current total supply; the unpaid part stays with the owner.
+//     Coins waiting out the cooldown do not count (the contract's totalStaked).
+//     The pot from startBlock to go-live, and the first 7 days after go-live, is paid with the first daily run at least 7
+//     days after the contract went live, so early stakers get all of it on day 7; from then on every day.
+//     If nobody is staked at a paying run, the amount is too small to send (under STAKE_MIN_SEND_ETH, default 0.00002 ETH),
+//     or the run cannot send it (the gas reserve, a transaction that fails after retries), it stays with the owner: nothing
+//     is carried to the next day.
 //   · burn: the burn ETH buys $TROYA through the flywheel's buyback path (Troya Gate, the Universal Router only, 3% slippage
 //     bound) and burn()s all of it (flywheel-auto.mjs buybackAndBurn). What cannot be bought back stays with the owner.
 //   · the creator wallet keeps PAYOUT_RESERVE_ETH (0.003) for gas; stakers are paid before the burn when the wallet is short.
+//   · a part is marked "sending" and its cursor moved before anything is broadcast, so a crash never pays twice.
 //   · STAKE_REWARDS: "live" sends; "dry" (the default) works everything out and records it without sending and settles
-//     nothing (a later live run pays everything since the last live run, under the same rules); "off" skips the weekly run
+//     nothing (a later live run pays everything since the last live run, under the same rules); "off" skips the daily run
 //     (the market cap and the credits are still recorded: read-only).
-// Herald payouts (referral rewards and Cup prizes) are untouched: paid from the owner's part, as before.
-//   GET /api/feesplit     public: the rule, this hour's tier and market cap, this week so far, the staker pot, past weeks
+//   · the admins' Telegram gets one digest a week (Monday) and a message when a run fails, never a message a day; and
+//     nothing at all while no stake contract is configured and STAKE_REWARDS is not live.
+// Herald payouts (referral rewards and Cup prizes) are untouched: paid from the owner's part, weekly, as before.
+//   GET  /api/feesplit                 public: the rule, this hour's tier and market cap, today so far, the staker pot, past days
+//   POST /api/feesplit/run {day, dry}  admin: run one day now (default: yesterday, dry)
 import { Interface } from "ethers";
 import { rpc, CHAINS } from "./robinhood.mjs";
 import { TROYA, CREATOR, ESCROW } from "./flywheel.mjs";
@@ -41,24 +47,29 @@ export const TIERS = [
   { key: "mid", name: "$35k to $100k", minMc: 35_000, stakerBps: 50, burnBps: 0 },
   { key: "top", name: "$100k and up", minMc: 100_000, stakerBps: 100, burnBps: 10 },
 ];
+export const RUN_HOUR_UTC = 1;           // the daily run: 01:00 UTC, for the UTC day that just ended
+export const FIRST_PAY_DAYS = 7;         // the pot is paid with the first daily run at least 7 days after go-live
 const T_CREDITED = "0x4e45da441832cf53bdaa69235704fc0575e68210f459ee1562911024b12967d5";   // Credited(recipient, source, amount), as flywheel.mjs
 const HOUR = 3_600_000, DAY = 86_400_000, WEEK = 7 * DAY;
-const MIN_NOTIFY_WEI = 10n ** 13n;       // 0.00001 ETH
 const MIN_BURN_WEI = 5n * 10n ** 14n;    // 0.0005 ETH, the flywheel's own smallest buyback
 const lc = (s) => String(s || "").toLowerCase();
 const hex = (n) => "0x" + Number(n).toString(16);
 const pad = (a) => "0x" + lc(a).replace(/^0x/, "").padStart(64, "0");
 const ethOf = (wei) => Number(BigInt(wei || 0)) / 1e18;
 const r6 = (x) => +Number(x || 0).toFixed(6);
+const weiOfEth = (x) => BigInt(Math.round(Number(x) * 1e9)) * 10n ** 9n;
 export const modeOf = () => (["live", "dry", "off"].includes(process.env.STAKE_REWARDS) ? process.env.STAKE_REWARDS : "dry");
 const reserveEth = () => { const v = Number(process.env.PAYOUT_RESERVE_ETH); return v >= 0 && isFinite(v) && process.env.PAYOUT_RESERVE_ETH ? v : 0.003; };
+export const minSendEth = () => { const v = Number(process.env.STAKE_MIN_SEND_ETH); return process.env.STAKE_MIN_SEND_ETH && v >= 0 && isFinite(v) ? v : 0.00002; };
+const admins = () => String(process.env.X_ADMINS || process.env.TROYA_ADMINS || "").split(",").map((a) => a.trim().toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a));
 let store = null;
 
 export const WORDING = "A share of $TROYA creator fees that grows with market cap (0.1% → 0.5% at $35k → 1% at $100k of trading volume), varies with volume, not a promised yield.";
-export const NO_STAKERS = "If nobody is staked when the weekly share is paid, it stays with the team.";
+export const PAID_DAILY = "Paid into the staking contract every day; claim any time.";
+export const NO_STAKERS = "If nobody is staked when the daily share is paid, it stays with the team.";
 export const targetPct = () => { const v = Number(process.env.STAKE_FULL_TARGET_PCT); return v > 0 && v <= 100 ? v : 5; };
-export const RATE_RULE = () => `Each staked $TROYA earns the same rate. The full weekly share is paid once ${targetPct()}% of supply is staked; until then the unpaid part stays with the team.`;
-export const RULE = "The $TROYA creator wallet earns 2.6% of every $TROYA trade. Each fee is split by the $TROYA market cap in the hour it came in (the median of several reads that hour): under $35k stakers get 0.1% of trading volume, from $35k 0.5%, from $100k 1% and another 0.1% buys $TROYA back and burns it. Every Monday, after the Herald payouts, the stakers' ETH is sent to the stake contract and shared by every coin staked at that moment; claim it on the stake page. Each staked $TROYA earns the same rate: the full share is paid once 5% of the supply is staked, and with less staked only that fraction is paid (2.5% staked: half the share) while the rest stays with the team. Fees from before the contract is live are kept and paid on the second Monday after it goes live. Anything the run cannot send stays with the team; nothing is carried over.";
+export const RATE_RULE = () => `Each staked $TROYA earns the same rate. The full daily share is paid once ${targetPct()}% of supply is staked; until then the unpaid part stays with the team.`;
+export const RULE = "The $TROYA creator wallet earns 2.6% of every $TROYA trade. Each fee is split by the $TROYA market cap in the hour it came in (the median of several reads that hour): under $35k stakers get 0.1% of trading volume, from $35k 0.5%, from $100k 1% and another 0.1% buys $TROYA back and burns it. Paid into the staking contract every day (01:00 UTC, for the day before) and shared by every coin staked at that moment; claim any time on the stake page. Each staked $TROYA earns the same rate: the full share is paid once 5% of the supply is staked, and with less staked only that fraction is paid (2.5% staked: half the share) while the rest stays with the team. Fees from before the contract is live, and from its first 7 days, are paid together on day 7 after it goes live. Anything a run cannot send (nobody staked, under 0.00002 ETH, the gas reserve) stays with the team; nothing is carried over.";
 
 /* ---------------- pure parts (tools/feesplit-test.mjs feeds them fixtures) ---------------- */
 
@@ -109,28 +120,33 @@ export function paidOf(wei, totalStakedRaw, supplyRaw, pct = targetPct()) {
   if (!(target > 0n)) return 0n;
   return staked >= target ? w : (w * staked) / target;
 }
-/** The first Monday 00:00 UTC strictly after `ms`. */
-export function nextMonday(ms) {
-  const d = new Date(ms), day0 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  let m = day0 + ((7 - ((d.getUTCDay() + 6) % 7)) % 7) * DAY;
-  if (m <= ms) m += WEEK;
-  return m;
+/** 00:00 UTC of the day `ms` falls in, and that day's key ("2026-11-21"). */
+export const dayStart = (ms) => { const d = new Date(ms); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); };
+export const dayKey = (ms) => new Date(ms).toISOString().slice(0, 10);
+/** The first day boundary whose run pays the stakers: the first 00:00 UTC at least 7 days after go-live (its run is at 01:00). */
+export function firstPayAt(deployedAt) {
+  const t = deployedAt + FIRST_PAY_DAYS * DAY, d0 = dayStart(t);
+  return d0 === t ? t : d0 + DAY;
 }
-/** The Monday whose run first pays the stakers: the second Monday after the contract went live. */
-export const payFrom = (deployedAt) => nextMonday(deployedAt) + WEEK;
+/** When the daily run after `ms` happens (01:00 UTC today if not yet, else tomorrow). */
+export function nextRunAt(ms) {
+  const today = dayStart(ms) + RUN_HOUR_UTC * HOUR;
+  return ms < today ? today : today + DAY;
+}
 
 /**
- * What one weekly run does with the stakers' and the burn ETH (wei, BigInt). Stakers first, then the burn, both inside what
- * the creator wallet holds above the reserve. Nothing is carried: a part not sent is "return" (stays with the owner), except
- * the stakers' part before their first paying Monday, which is "hold" (the pot; settle false).
+ * What one daily run (settling everything up to `end`, a 00:00 UTC) does with the stakers' and the burn ETH (wei, BigInt).
+ * Stakers first, then the burn, both inside what the creator wallet holds above the reserve. Nothing is carried: a part not
+ * sent is "return" (stays with the owner), except the stakers' part before their first paying run, which is "hold" (the pot;
+ * settle false).
  */
-export function decideWeek({ end, stakerWei, burnWei, contractLive, deployedAt, totalStakedRaw, supplyRaw, targetPct: pct = targetPct(), balanceWei, reserveWei }) {
+export function decideRun({ end, stakerWei, burnWei, contractLive, deployedAt, totalStakedRaw, supplyRaw, targetPct: pct = targetPct(), balanceWei, reserveWei, minSendWei = weiOfEth(minSendEth()) }) {
   let room = BigInt(balanceWei) > BigInt(reserveWei) ? BigInt(balanceWei) - BigInt(reserveWei) : 0n;
-  const S = BigInt(stakerWei), B = BigInt(burnWei);
+  const S = BigInt(stakerWei), B = BigInt(burnWei), MIN = BigInt(minSendWei);
   let stakers;
-  if (!contractLive) stakers = { action: "hold", settle: false, reason: "The stake contract is not live yet: kept for the second Monday after it goes live." };
+  if (!contractLive) stakers = { action: "hold", settle: false, reason: "The stake contract is not live yet: kept for the first daily run 7 days after it goes live." };
   else if (!(deployedAt > 0)) stakers = { action: "hold", settle: false, reason: "The stake contract's deploy time is unknown (deployBlock in data/stake.json): kept." };
-  else if (end < payFrom(deployedAt)) stakers = { action: "hold", settle: false, payOn: payFrom(deployedAt), reason: `Kept until ${new Date(payFrom(deployedAt)).toISOString().slice(0, 10)}, the second Monday after the contract went live, so everyone has time to stake.` };
+  else if (end < firstPayAt(deployedAt)) stakers = { action: "hold", settle: false, payOn: firstPayAt(deployedAt) + RUN_HOUR_UTC * HOUR, reason: `Kept until the run of ${dayKey(firstPayAt(deployedAt))}, 7 days after the contract went live, so everyone has time to stake.` };
   else if (S === 0n) stakers = { action: "none", settle: true };
   else if (!(BigInt(totalStakedRaw || 0) > 0n)) stakers = { action: "return", settle: true, returnedWei: S, reason: "Returned to the owner: no stakers." };
   else {
@@ -140,7 +156,8 @@ export function decideWeek({ end, stakerWei, burnWei, contractLive, deployedAt, 
     const fractionPpm = target > 0n ? Number(staked >= target ? 1_000_000n : (staked * 1_000_000n) / target) : 0;
     const rate = fractionPpm < 1_000_000 ? `Paid at ${(fractionPpm / 10_000).toFixed(2)}%: ${(Number(staked) / 1e18).toLocaleString("en-US", { maximumFractionDigits: 0 })} of the ${(Number(target) / 1e18).toLocaleString("en-US", { maximumFractionDigits: 0 })} $TROYA target (${pct}% of supply) is staked; the rest stays with the team.` : null;
     const send = due < room ? due : room;
-    if (send < MIN_NOTIFY_WEI) stakers = { action: "return", settle: true, returnedWei: S, fractionPpm, dueWei: due, reason: due < MIN_NOTIFY_WEI ? `Returned to the owner: under 0.00001 ETH to send${rate ? ` (${rate.replace(/; the rest stays with the team\.$/, "")})` : ""}.` : "Returned to the owner: the creator wallet could not cover it above its gas reserve." };
+    if (due < MIN) stakers = { action: "return", settle: true, returnedWei: S, fractionPpm, dueWei: due, tooSmall: true, reason: `Returned to the owner: too small to send (${r6(ethOf(due))} ETH, under ${r6(ethOf(MIN))} ETH)${rate ? `. ${rate.replace(/; the rest stays with the team\.$/, "")}` : ""}.` };
+    else if (send < MIN) stakers = { action: "return", settle: true, returnedWei: S, fractionPpm, dueWei: due, reason: "Returned to the owner: the creator wallet could not cover it above its gas reserve." };
     else {
       stakers = { action: "send", settle: true, sendWei: send, returnedWei: S - send, fractionPpm, dueWei: due,
         ...(send < due ? { reason: `${rate ? `${rate.replace(/ the rest stays with the team\.$/, "")} ` : ""}Partly returned to the owner: the creator wallet keeps its gas reserve.` } : rate ? { reason: rate } : {}) };
@@ -286,35 +303,36 @@ async function contractState() {
   return { live: true, contract: cfg.contract, deployedAt, st };
 }
 
-/* ---------------- the weekly run (server/payouts.mjs, after the Herald payouts) ---------------- */
-const LDEF = { stakerFrom: 0, burnFrom: 0, weeks: {} };
+/* ---------------- the daily run (01:00 UTC, the UTC day that just ended) ---------------- */
+const LDEF = { stakerFrom: 0, burnFrom: 0, days: {}, digests: {}, failNotes: {} };
 let running = false;
-/** true once the week ending `end` is decided for this mode (a dry week is worked out again when the switch goes live) */
-export async function weekDone(season) {
+/** true once day `key` is decided for this mode (a dry day is worked out again when the switch goes live) */
+export async function dayDone(key) {
   const led = store ? await store.readJson(LEDGER, LDEF) : LDEF;
-  const w = led.weeks?.[season];
-  return !!w && (w.mode === "live" || modeOf() === "dry");
+  const d = led.days?.[key];
+  return !!d && (d.mode === "live" || modeOf() === "dry");
 }
 
 // deps: tests hand in a signer and a buyback (a local fork); the server always uses the creator wallet and the flywheel's path
-export async function weeklyRun({ season, start, end, reason = "schedule", dry = false, deps = {} } = {}) {
+export async function dailyRun({ day, start, end, reason = "schedule", dry = false, deps = {} } = {}) {
   const mode = modeOf();
-  if (mode === "off") return { mode, note: "The weekly fee split is off (STAKE_REWARDS=off)." };
+  if (mode === "off") return { mode, note: "The daily fee split is off (STAKE_REWARDS=off)." };
   if (!store) throw new Error("not started");
   if (running) throw new HttpError(409, "A fee split run is already going.");
   running = true;
   try {
+    end ??= start + DAY; day ??= dayKey(start);
     const cr = await store.readJson(CREDITS_FILE, {});
     const st0 = await startOf();
-    if (cr.startBlock !== st0.startBlock || !(cr.cursorTime >= end)) return { mode, waiting: true, note: "The creator-fee credits are not read up to the end of that week yet; the next run tries again." };
+    if (cr.startBlock !== st0.startBlock || !(cr.cursorTime >= end)) return { mode, waiting: true, note: "The creator-fee credits are not read up to the end of that day yet; the next run tries again." };
     const led = await store.readJson(LEDGER, LDEF);
-    const prev = led.weeks?.[season];
-    if (prev?.mode === "live") return { mode, already: true, week: prev };
+    const prev = led.days?.[day];
+    if (prev?.mode === "live") return { mode, already: true, day: prev };
     const live = mode === "live" && !dry;
     const mc = (await store.readJson(MC_FILE, { hours: {} })).hours || {};
     const hours = cr.hours || {};
     const stakerFrom = led.stakerFrom || 0, burnFrom = led.burnFrom || 0;
-    const S = accrue(hours, mc, stakerFrom, end), B = accrue(hours, mc, burnFrom, end), W = accrue(hours, mc, start, end);
+    const S = accrue(hours, mc, stakerFrom, end), B = accrue(hours, mc, burnFrom, end), D1 = accrue(hours, mc, start, end);
     const c = await contractState();
     const totalStakedRaw = c.live ? await c.st.totalStakedRaw().catch(() => null) : 0n;
     if (c.live && totalStakedRaw == null) throw new Error("Couldn't read totalStaked from the stake contract.");
@@ -323,30 +341,30 @@ export async function weeklyRun({ season, start, end, reason = "schedule", dry =
     const w = live ? deps.signer || await (await import("./flywheel-auto.mjs")).payoutSigner() : null;
     if (live && !w) throw new Error("The creator wallet key is not stored on the server, so nothing can be paid automatically.");
     const balanceWei = w ? await w.provider.getBalance(w.address) : BigInt(await rpc("robinhood", "eth_getBalance", [CREATOR, "latest"]));
-    const reserveWei = BigInt(Math.round(reserveEth() * 1e9)) * 10n ** 9n;
-    const dec = decideWeek({ end, stakerWei: S.stakerWei, burnWei: B.burnWei, contractLive: c.live, deployedAt: c.deployedAt || 0, totalStakedRaw: totalStakedRaw || 0n, supplyRaw, targetPct: targetPct(), balanceWei, reserveWei });
+    const reserveWei = weiOfEth(reserveEth());
+    const dec = decideRun({ end, stakerWei: S.stakerWei, burnWei: B.burnWei, contractLive: c.live, deployedAt: c.deployedAt || 0, totalStakedRaw: totalStakedRaw || 0n, supplyRaw, targetPct: targetPct(), balanceWei, reserveWei });
     const part = (d, acc, from) => ({ fromMs: from || null, accruedEth: r6(ethOf(acc)), action: d.action, sendEth: r6(ethOf(d.sendWei || 0n)), returnedEth: r6(ethOf(d.returnedWei || 0n)), reason: d.reason || null, payOn: d.payOn || null,
-      ...(d.fractionPpm != null ? { paidPct: d.fractionPpm / 10_000 } : {}),
+      ...(d.fractionPpm != null ? { paidPct: d.fractionPpm / 10_000 } : {}), ...(d.tooSmall ? { tooSmall: true } : {}),
       status: d.action === "send" ? (live ? "sending" : "dry") : d.action === "hold" ? "held" : d.action === "return" ? "returned" : "none" });
-    const entry = { season, start, end, at: Date.now(), reason, mode: live ? "live" : "dry", balanceEth: r6(ethOf(balanceWei)), reserveEth: reserveEth(),
-      contract: c.contract || null, contractLive: c.live, totalStaked: c.live ? String(totalStakedRaw) : null, supply: String(supplyRaw), targetPct: targetPct(), week: sumView(W),
+    const entry = { day, start, end, at: Date.now(), reason, mode: live ? "live" : "dry", balanceEth: r6(ethOf(balanceWei)), reserveEth: reserveEth(), minSendEth: minSendEth(),
+      contract: c.contract || null, contractLive: c.live, totalStaked: c.live ? String(totalStakedRaw) : null, supply: String(supplyRaw), targetPct: targetPct(), stats: sumView(D1),
       stakers: part(dec.stakers, S.stakerWei, stakerFrom), burn: part(dec.burn, B.burnWei, burnFrom) };
     const save = (cursors = {}) => store.update(LEDGER, LDEF, (x) => {
-      x.weeks ||= {};
-      if (x.weeks[season]?.mode !== "live" || x.weeks[season]?.at === entry.at) x.weeks[season] = entry;   // a live week is written once, by its own run
+      x.days ||= {};
+      if (x.days[day]?.mode !== "live" || x.days[day]?.at === entry.at) x.days[day] = entry;   // a live day is written once, by its own run
       Object.assign(x, cursors);
-      const keep = Object.keys(x.weeks).sort().slice(-60);
-      x.weeks = Object.fromEntries(keep.map((k) => [k, x.weeks[k]]));
+      const keep = Object.keys(x.days).sort().slice(-120);
+      x.days = Object.fromEntries(keep.map((k) => [k, x.days[k]]));
       return x;
     });
-    if (!live) { await save(); return finish(entry); }
+    if (!live) { await save(); return { mode: entry.mode, day: entry }; }
     // live: each part is marked "sending" and its cursor moved BEFORE anything is broadcast, so a crash can never pay twice
     const cursors = { ...(dec.stakers.settle ? { stakerFrom: end } : {}), ...(dec.burn.settle ? { burnFrom: end } : {}) };
     await save(cursors);
     if (dec.stakers.action === "send") await sendStakers(w, c.contract, dec.stakers.sendWei, entry.stakers);
-    if (dec.burn.action === "send") await sendBurn(dec.burn.sendWei, entry.burn, season, deps.buybackAndBurn);
+    if (dec.burn.action === "send") await sendBurn(dec.burn.sendWei, entry.burn, day, deps.buybackAndBurn);
     await save();
-    return finish(entry);
+    return { mode: entry.mode, day: entry };
   } finally { running = false; view = null; }
 }
 async function sendStakers(w, contract, value, rec) {
@@ -358,7 +376,7 @@ async function sendStakers(w, contract, value, rec) {
     catch (e) { last = `notifyReward would revert: ${String(e.shortMessage || e.message).slice(0, 160)}`; break; }
     let tx;
     try { tx = await w.sendTransaction({ to: contract, data, value, chainId: 4663 }); }
-    catch (e) { last = `Not sent: ${String(e.shortMessage || e.message).slice(0, 160)}`; await new Promise((r) => setTimeout(r, 20_000)); continue; }
+    catch (e) { last = `Not sent: ${String(e.shortMessage || e.message).slice(0, 160)}`; if (a < 3) await new Promise((r) => setTimeout(r, 20_000)); continue; }
     rec.hash = tx.hash;
     try {
       const rc = await tx.wait(1, 180_000);
@@ -368,32 +386,81 @@ async function sendStakers(w, contract, value, rec) {
         return;
       }
       last = "The transaction reverted on chain."; break;
-    } catch (e) { rec.status = "unknown"; rec.reason = `Sent, but the receipt could not be read (check ${tx.hash}): ${String(e.shortMessage || e.message).slice(0, 120)}`; return; }
+    } catch (e) { Object.assign(rec, { status: "unknown", failed: true, reason: `Sent, but the receipt could not be read (check ${tx.hash}): ${String(e.shortMessage || e.message).slice(0, 120)}` }); return; }
   }
-  Object.assign(rec, { status: "returned", returnedEth: r6(rec.returnedEth + rec.sendEth), sendEth: 0, reason: `Returned to the owner: ${last || "not sent"}` });
+  Object.assign(rec, { status: "returned", failed: true, returnedEth: r6(rec.returnedEth + rec.sendEth), sendEth: 0, reason: `Returned to the owner: ${last || "not sent"}` });
 }
-async function sendBurn(wei, rec, season, injected) {
+async function sendBurn(wei, rec, day, injected) {
   const fw = injected ? { buybackAndBurn: injected } : await import("./flywheel-auto.mjs");
   let last = null;
   for (let a = 1; a <= 2; a++) {
     rec.attempts = a;
     try {
-      const r = await fw.buybackAndBurn(ethOf(wei), { id: `split-${season}` });
+      const r = await fw.buybackAndBurn(ethOf(wei), { id: `split-${day}` });
       Object.assign(rec, { status: "sent", sentEth: rec.sendEth, buyHash: r.buyHash, burnHash: r.burnHash, troyaBurned: r.burned });
       return;
     } catch (e) {
       last = String(e.shortMessage || e.message).slice(0, 200);
-      if (e.bought) { Object.assign(rec, { status: "failed", buyHash: e.buyHash || null, reason: `Bought back but not burned: ${last}. The $TROYA sits in the creator wallet; burn it from the flywheel page.` }); return; }
+      if (e.bought) { Object.assign(rec, { status: "failed", failed: true, buyHash: e.buyHash || null, reason: `Bought back but not burned: ${last}. The $TROYA sits in the creator wallet; burn it from the flywheel page.` }); return; }
       if (a < 2) await new Promise((r) => setTimeout(r, 30_000));
     }
   }
-  Object.assign(rec, { status: "returned", returnedEth: r6(rec.returnedEth + rec.sendEth), sendEth: 0, reason: `Returned to the owner: the buyback could not run (${last}).` });
+  Object.assign(rec, { status: "returned", failed: true, returnedEth: r6(rec.returnedEth + rec.sendEth), sendEth: 0, reason: `Returned to the owner: the buyback could not run (${last}).` });
 }
-function finish(e) {
-  const line = (n, p) => `${n}: ${p.accruedEth} ETH, ${p.status}${p.sentEth ? ` ${p.sentEth} ETH` : ""}${p.returnedEth ? `, ${p.returnedEth} ETH to the owner` : ""}${p.reason ? ` (${p.reason})` : ""}${p.hash ? ` robinhoodchain.blockscout.com/tx/${p.hash}` : ""}${p.burnHash ? ` burn robinhoodchain.blockscout.com/tx/${p.burnHash}` : ""}`;
-  const t = Object.entries(e.week.byTier).filter(([, b]) => b.hours).map(([k, b]) => `${TIERS.find((x) => x.key === k)?.name}: ${b.creditedEth} ETH in ${b.hours} h`).join("; ");
-  import("./community.mjs").then((m) => m.notifyAdmins?.(`<b>$TROYA fee split${e.mode === "dry" ? " (dry run, nothing sent)" : ""}</b>, week ${e.season}\nCreator fees credited that week: ${e.week.creditedEth} ETH (${e.week.credits} credits${t ? `; ${t}` : ""}).\n${line("Stakers", e.stakers)}\n${line("Burn", e.burn)}`)).catch(() => {});
-  return { mode: e.mode, week: e };
+
+/* ---------------- the admins' Telegram: a weekly digest and failures only ---------------- */
+// silent while no stake contract is configured and the switch is not live (nothing can move then)
+async function shouldTell() {
+  if (modeOf() === "live") return true;
+  const c = await contractState().catch(() => ({ live: false }));
+  return !!c.contract;
+}
+const tell = (text) => import("./community.mjs").then((m) => m.notifyAdmins?.(text)).catch(() => {});
+async function failNote(day, text) {
+  if (!(await shouldTell())) return;
+  let fresh = false;
+  await store.update(LEDGER, LDEF, (x) => { x.failNotes ||= {}; if (!x.failNotes[day]) { x.failNotes[day] = Date.now(); fresh = true; } const k = Object.keys(x.failNotes).sort().slice(-60); x.failNotes = Object.fromEntries(k.map((y) => [y, x.failNotes[y]])); return x; });
+  if (fresh) await tell(`<b>$TROYA fee split</b>: the run for ${day} did not go through.\n${text}`);
+}
+const partLine = (n, p) => `${n}: ${p.accruedEth} ETH, ${p.status}${p.sentEth ? ` ${p.sentEth} ETH` : ""}${p.returnedEth ? `, ${p.returnedEth} ETH to the owner` : ""}${p.reason ? ` (${p.reason})` : ""}${p.hash ? ` robinhoodchain.blockscout.com/tx/${p.hash}` : ""}${p.burnHash ? ` burn robinhoodchain.blockscout.com/tx/${p.burnHash}` : ""}`;
+/** The digest of the 7 days before Monday `monday` (00:00 UTC), as text (exported for the tests). */
+export function digestText(days, monday) {
+  const list = days.filter((d) => d.start >= monday - WEEK && d.start < monday).sort((a, b) => a.start - b.start);
+  const sum = (f) => r6(list.reduce((s, d) => s + (Number(f(d)) || 0), 0));
+  const tiers = TIERS.map((t) => [t.name, list.reduce((s, d) => s + (d.stats?.byTier?.[t.key]?.hours || 0), 0)]).filter(([, h]) => h).map(([n, h]) => `${n} ${h} h`).join(", ");
+  const dry = list.some((d) => d.mode === "dry");
+  return `<b>$TROYA fee split, week to ${dayKey(monday - DAY)}</b>${dry ? " (dry run: nothing sent)" : ""}\n${list.length} daily run${list.length === 1 ? "" : "s"}. Creator fees credited: ${sum((d) => d.stats?.creditedEth)} ETH${tiers ? ` (${tiers})` : ""}.\n` +
+    `Stakers: ${sum((d) => d.stakers?.sentEth)} ETH sent, ${sum((d) => d.stakers?.returnedEth)} ETH to the owner${list.some((d) => d.stakers?.status === "held") ? `, pot held: ${list.filter((d) => d.stakers?.status === "held").at(-1)?.stakers?.accruedEth} ETH` : ""}${dry ? `, would send ${sum((d) => d.stakers?.status === "dry" ? d.stakers.sendEth : 0)} ETH` : ""}.\n` +
+    `Burn: ${sum((d) => d.burn?.sentEth)} ETH bought back and burned, ${sum((d) => d.burn?.returnedEth)} ETH to the owner.` +
+    (list.some((d) => d.stakers?.failed || d.burn?.failed) ? `\nProblems: ${list.filter((d) => d.stakers?.failed || d.burn?.failed).map((d) => d.day).join(", ")}.` : "");
+}
+async function weeklyDigest(monday) {
+  if (!(await shouldTell())) return;
+  const led = await store.readJson(LEDGER, LDEF);
+  const k = dayKey(monday);
+  if (led.digests?.[k]) return;
+  const days = Object.values(led.days || {});
+  if (!days.some((d) => d.start >= monday - WEEK && d.start < monday)) return;
+  await store.update(LEDGER, LDEF, (x) => { x.digests ||= {}; x.digests[k] = Date.now(); const ks = Object.keys(x.digests).sort().slice(-20); x.digests = Object.fromEntries(ks.map((y) => [y, x.digests[y]])); return x; });
+  await tell(digestText(days, monday));
+}
+let ticking = false;
+async function dailyTick() {
+  if (ticking || !store || modeOf() === "off") return;
+  ticking = true;
+  try {
+    const now = Date.now(), today = dayStart(now);
+    if (now < today + RUN_HOUR_UTC * HOUR) return;
+    const day = dayKey(today - DAY);
+    if (!(await dayDone(day))) {
+      const out = await dailyRun({ day, start: today - DAY, end: today }).catch(async (e) => { console.warn("[feesplit] run:", e.message); await failNote(day, e.message); return null; });
+      if (out?.waiting && now > today + 12 * HOUR) await failNote(day, out.note);
+      const d = out?.day;
+      if (d && (d.stakers?.failed || d.burn?.failed)) await failNote(day, [d.stakers?.failed ? partLine("Stakers", d.stakers) : "", d.burn?.failed ? partLine("Burn", d.burn) : ""].filter(Boolean).join("\n"));
+    }
+    if (new Date(now).getUTCDay() === 1) await weeklyDigest(today);
+  } catch (e) { console.warn("[feesplit] tick:", e.message); }
+  finally { ticking = false; }
 }
 
 /* ---------------- the view (stake page, /api/stake/stats, /api/feesplit) ---------------- */
@@ -402,30 +469,32 @@ export async function feeSplitView() {
   if (view && Date.now() - view.at < 60_000) return view.v;
   const [st, cr, mcf, led, c] = await Promise.all([startOf(), store.readJson(CREDITS_FILE, {}), store.readJson(MC_FILE, { hours: {} }), store.readJson(LEDGER, LDEF), contractState().catch(() => ({ live: false }))]);
   const mc = mcf.hours || {}, hours = cr.startBlock === st.startBlock ? cr.hours || {} : {};
-  const now = Date.now(), monday = nextMonday(now) - WEEK;
+  const now = Date.now(), today = dayStart(now);
   const cur = mcAt(mc, hourKey(now)), tier = cur.mc == null ? TIERS[0] : tierOfMc(cur.mc);
-  const week = accrue(hours, mc, monday, Infinity), pot = accrue(hours, mc, led.stakerFrom || 0, Infinity), burnPot = accrue(hours, mc, led.burnFrom || 0, Infinity);
-  const payOn = c.live && c.deployedAt ? Math.max(nextMonday(now), payFrom(c.deployedAt)) + HOUR : null;
+  const todayA = accrue(hours, mc, today, Infinity), pot = accrue(hours, mc, led.stakerFrom || 0, Infinity), burnPot = accrue(hours, mc, led.burnFrom || 0, Infinity);
+  const payOn = c.live && c.deployedAt ? Math.max(nextRunAt(now), firstPayAt(c.deployedAt) + RUN_HOUR_UTC * HOUR) : null;
   const supplyRaw = await supplyNow().catch(() => 0n);
   const stakedRaw = c.live ? await c.st.totalStakedRaw().catch(() => 0n) : 0n;
   const targetRaw = targetOf(supplyRaw), frac = targetRaw > 0n ? Number(stakedRaw >= targetRaw ? 1_000_000n : (stakedRaw * 1_000_000n) / targetRaw) / 1_000_000 : 0;
   const paidNow = (wei) => r6(ethOf(paidOf(wei, stakedRaw, supplyRaw)));
   // cross-check with flywheel.mjs: its running total of credits minus the owner's creditedWeiAtStart, up to its own cursor
   const fw = await store.readJson("flywheel.json", {});
-  const weeks = Object.values(led.weeks || {}).sort((a, b) => b.start - a.start).slice(0, 8).map((w) => ({
-    season: w.season, start: w.start, end: w.end, mode: w.mode, credits: w.week?.credits, creditedEth: w.week?.creditedEth, byTier: w.week?.byTier,
-    stakers: pick(w.stakers), burn: pick(w.burn) }));
+  const days = Object.values(led.days || {}).sort((a, b) => b.start - a.start).slice(0, 14).map((d) => ({
+    day: d.day, start: d.start, end: d.end, mode: d.mode, credits: d.stats?.credits, creditedEth: d.stats?.creditedEth, byTier: d.stats?.byTier,
+    stakers: pick(d.stakers), burn: pick(d.burn) }));
+  const firstPay = c.live && c.deployedAt ? firstPayAt(c.deployedAt) + RUN_HOUR_UTC * HOUR : null;
   const v = {
-    name: "$TROYA fee split", mode: modeOf(), wording: WORDING, noStakers: NO_STAKERS, rule: RULE,
+    name: "$TROYA fee split", mode: modeOf(), wording: WORDING, paid: PAID_DAILY, noStakers: NO_STAKERS, rule: RULE,
     tiers: TIERS.map((t) => ({ key: t.key, name: t.name, minMcUsd: t.minMc, stakersPctOfVolume: t.stakerBps / 100, burnPctOfVolume: t.burnBps / 100, stakersShareOfCreatorFees: t.stakerBps / CREATOR_BPS, burnShareOfCreatorFees: t.burnBps / CREATOR_BPS })),
     start: { block: st.startBlock, from: st.from },
+    schedule: { every: "day", hourUtc: RUN_HOUR_UTC, nextRunAt: nextRunAt(now), firstPayAt: firstPay, minSendEth: minSendEth(), firstPayDays: FIRST_PAY_DAYS },
     now: { hour: hourKey(now), mcUsd: cur.mc, mcHour: cur.hour, sampledThisHour: !!mc[hourKey(now)]?.median, readsThisHour: mc[hourKey(now)]?.n || 0, tier: { key: tier.key, name: tier.name, stakersPctOfVolume: tier.stakerBps / 100, burnPctOfVolume: tier.burnBps / 100 } },
-    week: { start: monday, ...sumView(week), stakersReceiveEth: paidNow(week.stakerWei) },
+    today: { start: today, ...sumView(todayA), stakersReceiveEth: paidNow(todayA.stakerWei) },
     rate: { rule: RATE_RULE(), targetPct: targetPct(), targetTokens: Math.round(ethOf(targetRaw)), stakedTokens: Math.round(ethOf(stakedRaw)), supplyTokens: Math.round(ethOf(supplyRaw)),
-      paidPct: +(frac * 100).toFixed(2), line: `${compactNum(ethOf(stakedRaw))} of ${compactNum(ethOf(targetRaw))} staked (${(frac * 100).toFixed(2)}%) → stakers receive ${(frac * 100).toFixed(2)}% of this week's share.` },
+      paidPct: +(frac * 100).toFixed(2), line: `${compactNum(ethOf(stakedRaw))} of ${compactNum(ethOf(targetRaw))} staked (${(frac * 100).toFixed(2)}%) → stakers receive ${(frac * 100).toFixed(2)}% of today's share.` },
     pot: { stakerEth: r6(ethOf(pot.stakerWei)), receiveEthAtTodaysStake: paidNow(pot.stakerWei), sinceMs: led.stakerFrom || null, burnEth: r6(ethOf(burnPot.burnWei)), payOn, contractLive: !!c.live,
-      payNote: !c.live ? "Paid on the second Monday after the stake contract goes live, if anyone is staked then." : `Paid on ${new Date(payOn).toISOString().slice(0, 10)}, if anyone is staked then.` },
-    lastWeek: weeks[0] || null, weeks,
+      payNote: !c.live ? "Paid with the first daily run 7 days after the stake contract goes live, if anyone is staked then." : `Paid on ${dayKey(payOn)} at 01:00 UTC, if anyone is staked then.` },
+    lastDay: days[0] || null, days,
     credits: { cursor: cr.cursor ?? null, readUpTo: cr.cursorTime || null, scannedAt: cr.scannedAt || null, last: (cr.last || []).slice(0, 10) },
     check: { creditedWeiAtStart: st.creditedWeiAtStart, flywheelCreditedEth: fw.credited ? ethOf(fw.credited) : null, flywheelSinceStartEth: fw.credited ? r6(ethOf(BigInt(fw.credited) - BigInt(st.creditedWeiAtStart || 0))) : null, flywheelScanned: fw.scanned ?? null, mineSinceStartEth: r6(ethOf(Object.values(hours).reduce((s, h) => s + BigInt(h.wei), 0n))), mineCursor: cr.cursor ?? null },
   };
@@ -433,14 +502,24 @@ export async function feeSplitView() {
   return v;
 }
 const compactNum = (n) => (n >= 1e9 ? `${+(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${+(n / 1e3).toFixed(1)}K` : String(Math.round(n)));
-const pick = (p) => (p ? { accruedEth: p.accruedEth, status: p.status, sentEth: p.sentEth || 0, returnedEth: p.returnedEth || 0, reason: p.reason || null, paidPct: p.paidPct ?? null, hash: p.hash || null, buyHash: p.buyHash || null, burnHash: p.burnHash || null, troyaBurned: p.troyaBurned || null, payOn: p.payOn || null } : null);
+const pick = (p) => (p ? { accruedEth: p.accruedEth, status: p.status, sentEth: p.sentEth || 0, sendEth: p.sendEth || 0, returnedEth: p.returnedEth || 0, reason: p.reason || null, paidPct: p.paidPct ?? null, tooSmall: !!p.tooSmall, hash: p.hash || null, buyHash: p.buyHash || null, burnHash: p.burnHash || null, troyaBurned: p.troyaBurned || null, payOn: p.payOn || null } : null);
 
 export async function register(r, ctx) {
   store = ctx.store;
   setTimeout(() => { sampleMc().catch(() => {}); scanCredits().catch(() => {}); }, 75_000).unref?.();
   setInterval(() => sampleMc().catch(() => {}), 10 * 60_000).unref?.();
   setInterval(() => scanCredits().catch(() => {}), 5 * 60_000).unref?.();
+  setTimeout(() => dailyTick().catch(() => {}), 150_000).unref?.();
+  setInterval(() => dailyTick().catch(() => {}), 10 * 60_000).unref?.();
   r.get("/api/feesplit", () => feeSplitView(), { weight: 1 });
+  r.post("/api/feesplit/run", async ({ req, body }) => {
+    const s = await import("./auth.mjs").then((m) => m.getSession(req)).catch(() => null);
+    if (!s || !admins().includes(lc(s.address))) throw new HttpError(403, "Admins only.");
+    const today = dayStart(Date.now());
+    const start = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.day || "")) ? Date.parse(`${body.day}T00:00:00Z`) : today - DAY;
+    if (!(start < today)) throw new HttpError(400, "Only a day that has ended can be run.");
+    return dailyRun({ day: dayKey(start), start, end: start + DAY, reason: "admin", dry: body?.dry !== false });
+  });
 }
 
-export const _test = { setStore: (st) => { store = st; view = null; } };
+export const _test = { setStore: (st) => { store = st; view = null; }, dailyTick };

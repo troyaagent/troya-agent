@@ -2,7 +2,7 @@
 // the age of your stake, the next tier's progress, each tier's perks and the risks in plain words.
 // Your own numbers are read straight from the chain through Troya's relay (fresh after every step); the terms, tiers and
 // totals come from /api/stake. Every write is signed in your own wallet. The contract has no owner and takes no fee.
-// The weekly creator-fee share (server/feesplit.mjs, owner 21 Nov 2026) is shown from /api/feesplit: a share of $TROYA creator
+// The daily creator-fee share (server/feesplit.mjs, owner 21 Nov 2026) is shown from /api/feesplit: a share of $TROYA creator
 // fees that grows with market cap (0.1% to 0.5% at $35k to 1% at $100k of trading volume), varies with volume, not a promised yield.
 import { Interface } from "ethers";
 import { h, clear, useCss, icon, toast, short, compact, pageHead, seg, review } from "../ui.js";
@@ -83,7 +83,7 @@ export async function mount(view) {
   const shareBox = h("p", { class: "fine stk-share" });
   const headBadge = h("span", { class: "stk-state" });
   clear(view, h("div", { class: "dk stk" },
-    pageHead("Stake $TROYA", "Stake $TROYA to earn a tier: Bronze, Silver or Gold, from how much you stake and for how long. Each tier unlocks perks inside Troya. Unstaking takes 3 days. Once a week stakers also share part of the $TROYA creator fees in ETH: a share that grows with market cap, varies with volume, not a promised yield.", { act: headBadge }),
+    pageHead("Stake $TROYA", "Stake $TROYA to earn a tier: Bronze, Silver or Gold, from how much you stake and for how long. Each tier unlocks perks inside Troya. Unstaking takes 3 days. Stakers also share part of the $TROYA creator fees in ETH, paid into the staking contract every day (claim any time): a share that grows with market cap, varies with volume, not a promised yield.", { act: headBadge }),
     tiles, shareBox, h("div", { class: "stk-grid" }, act, prog), tiersBox, risks, foot));
 
   /* ---------------- data ---------------- */
@@ -128,31 +128,33 @@ export async function mount(view) {
       : "The staking contract is not live yet. When it is, its address shows here with a link to the explorer.");
   }
 
-  // the $TROYA fee split (/api/feesplit): this week's tier and the stakers' ETH so far, the staker pot and when it is paid,
-  // last week, and the rule in plain words (it is live before the contract: fees count for stakers from 21 Nov 2026)
+  // the $TROYA fee split (/api/feesplit): today's tier and the stakers' ETH so far, the staker pot and when it is paid,
+  // yesterday's run, and the rule in plain words (it is counted before the contract: fees count for stakers from 21 Nov 2026)
   function paintShare() {
     const t = st.terms, f = st.split;
     const wording = f?.wording || t.share?.wording || "A share of $TROYA creator fees that grows with market cap, varies with volume, not a promised yield.";
-    const nos = f?.noStakers || t.share?.noStakers || "If nobody is staked when the weekly share is paid, it stays with the team.";
-    if (!f) { clear(shareBox, h("b", {}, "Creator fee share. "), wording, " ", nos); return; }
+    const paid = f?.paid || t.share?.paid || "Paid into the staking contract every day; claim any time.";
+    const nos = f?.noStakers || t.share?.noStakers || "If nobody is staked when the daily share is paid, it stays with the team.";
+    if (!f) { clear(shareBox, h("b", {}, "Creator fee share. "), wording, " ", paid, " ", nos); return; }
     const e6 = (x) => `${(+x || 0).toFixed(6)} ETH`;
     const mc = f.now?.mcUsd;
     const part = f.rate && f.rate.paidPct < 100;
-    const week = `This week: tier ${f.now?.tier?.name || "–"} at MC ${mc ? `$${compact(mc, 1)}` : "not read yet"}, stakers get ${e6(part ? f.week?.stakersReceiveEth : f.week?.stakerEth)} so far${part ? ` (of a ${e6(f.week?.stakerEth)} share)` : ""}${f.week?.burnEth ? `, ${e6(f.week.burnEth)} to buy back and burn` : ""}.`;
-    const pot = `Staker pot so far: ${e6(f.pot?.stakerEth)}, ${f.pot?.payOn ? `paid on ${dateOf(f.pot.payOn)}` : "paid on the second Monday after the stake contract goes live"}${part ? ` (at today's stake, stakers would receive ${e6(f.pot?.receiveEthAtTodaysStake)} of it)` : ""}${f.mode === "live" ? "" : " (weekly payments are not switched on yet)"}.`;
-    const lw = f.lastWeek;
+    const today = `Today: tier ${f.now?.tier?.name || "–"} at MC ${mc ? `$${compact(mc, 1)}` : "not read yet"}, stakers get ${e6(part ? f.today?.stakersReceiveEth : f.today?.stakerEth)} so far${part ? ` (of a ${e6(f.today?.stakerEth)} share)` : ""}${f.today?.burnEth ? `, ${e6(f.today.burnEth)} to buy back and burn` : ""}.`;
+    const held = !f.pot?.contractLive || (f.schedule?.firstPayAt && Date.now() < f.schedule.firstPayAt);
+    const pot = `Staker pot so far: ${e6(f.pot?.stakerEth)}, ${f.pot?.payOn ? `paid on ${dateOf(f.pot.payOn)}` : "paid with the first daily run 7 days after the stake contract goes live"}${part ? ` (at today's stake, stakers would receive ${e6(f.pot?.receiveEthAtTodaysStake)} of it)` : ""}${f.mode === "live" ? "" : " (payments are not switched on yet)"}.`;
+    const ld = f.lastDay;
     const why = (r) => String(r || "").replace(/^Returned to the owner: /, "").replace(/[.]$/, "");
-    const lwText = (p) => (!p ? "" : p.status === "sent" ? `${e6(p.sentEth)} sent` : p.status === "held" ? `${e6(p.accruedEth)} kept in the pot`
+    const ldText = (p) => (!p ? "" : p.status === "sent" ? `${e6(p.sentEth)} sent` : p.status === "held" ? `${e6(p.accruedEth)} kept in the pot`
       : p.status === "returned" ? `${e6(p.returnedEth)} stayed with the team${p.reason ? ` (${why(p.reason)})` : ""}`
       : p.status === "dry" ? `${e6(p.sendEth || p.accruedEth)} worked out, not sent` : p.status === "none" ? "nothing" : p.status);
     const tierLines = (f.tiers || []).map((x) => h("li", {}, h("b", {}, x.name), `: stakers ${x.stakersPctOfVolume}% of volume${x.burnPctOfVolume ? `, plus ${x.burnPctOfVolume}% bought back and burned` : ""}`));
     clear(shareBox,
-      h("div", { class: "stk-share-l" }, h("b", {}, week)),
-      h("div", { class: "stk-share-l" }, h("b", {}, pot)),
+      h("div", { class: "stk-share-l" }, h("b", {}, today)),
+      held || f.pot?.stakerEth ? h("div", { class: "stk-share-l" }, h("b", {}, pot)) : null,
       f.rate ? h("div", { class: "stk-share-l" }, h("b", {}, f.rate.line), " ", f.rate.rule) : null,
-      lw ? h("div", { class: "stk-share-l muted" }, `Last week (${lw.season}): stakers ${lwText(lw.stakers)}; burn ${lwText(lw.burn)}.`,
-        lw.stakers?.hash ? [" ", h("a", { class: "ulink", href: `${EXPLORER}/tx/${lw.stakers.hash}`, target: "_blank", rel: "noopener" }, "Transaction")] : null) : null,
-      h("div", { class: "stk-share-l" }, wording, " ", h("b", {}, nos)),
+      ld ? h("div", { class: "stk-share-l muted" }, `Yesterday (${ld.day}): stakers ${ldText(ld.stakers)}; burn ${ldText(ld.burn)}.`,
+        ld.stakers?.hash ? [" ", h("a", { class: "ulink", href: `${EXPLORER}/tx/${ld.stakers.hash}`, target: "_blank", rel: "noopener" }, "Transaction")] : null) : null,
+      h("div", { class: "stk-share-l" }, wording, " ", h("b", {}, paid), " ", h("b", {}, nos)),
       h("details", { class: "stk-share-how" }, h("summary", {}, "How the share works"), h("p", {}, f.rule), h("ul", {}, tierLines),
         h("p", { class: "muted" }, "The market cap of each hour is the median of several reads that hour (Troya's market index, DexScreener and the pool price on chain), so a short pump does not move the tier.")));
   }
@@ -178,7 +180,7 @@ export async function mount(view) {
   function paintAct() {
     const t = st.terms, me = st.me;
     if (tick) { clearInterval(tick); tick = null; }
-    if (!t.deployed) return clear(act, h("h3", {}, "Stake"), h("p", { class: "muted" }, "Staking opens when the contract is live on Robinhood Chain. There is nothing to sign yet. The tiers, perks, the weekly creator-fee share and the risks below are the plan."));
+    if (!t.deployed) return clear(act, h("h3", {}, "Stake"), h("p", { class: "muted" }, "Staking opens when the contract is live on Robinhood Chain. There is nothing to sign yet. The tiers, perks, the daily creator-fee share and the risks below are the plan."));
     if (!wallet.address) return clear(act, h("h3", {}, "Stake"), h("p", { class: "muted" }, "Connect the wallet that holds your $TROYA. Staking is signed in your own wallet; Troya never holds your coins."),
       h("button", { class: "btn primary", type: "button", onclick: () => openConnect() }, icon("wallet"), "Connect wallet"));
     if (!me) return clear(act, h("h3", {}, "Stake"), h("div", { class: "alert error" }, st.err || "Couldn't read your stake right now."), h("button", { class: "btn", type: "button", onclick: load }, icon("refresh"), "Try again"));
@@ -295,7 +297,7 @@ export async function mount(view) {
       ["3 days to get out", "Unstaking takes 3 days, and you cannot sell coins that are staked or waiting. If the price falls in those days, there is no faster way out."],
       ["The wait restarts", "Asking to unstake more while coins already wait adds them and restarts the 3-day wait for all of them."],
       ["Nobody can undo a mistake", "There is no owner, admin, pause or upgrade. $TROYA sent straight to the contract address, instead of through Stake, is lost for good."],
-      ["Not a yield", "The weekly ETH is a share of $TROYA creator fees: it moves with trading volume and with the market cap tier, can be zero in a quiet week, and is not promised. It goes to the coins staked at the moment it arrives (Monday, after the Herald payouts); coins waiting out the cooldown get none. If nobody is staked then, it stays with the team."],
+      ["Not a yield", "The daily ETH is a share of $TROYA creator fees: it moves with trading volume and with the market cap tier, can be zero on a quiet day, and is not promised. It goes to the coins staked at the moment it arrives (every day at 01:00 UTC, for the day before); coins waiting out the cooldown get none. If nobody is staked then, or it is under 0.00002 ETH, it stays with the team."],
       ["Tiers can move", "Tier sizes are a share of the total supply, and the team can change sizes and perks. A tier you reach today can need more later."],
       t.holdersCountStaked ? ["Holder tiers", "Treasury holder tiers count your staked and waiting coins too."]
         : ["Holder tiers", "For now Treasury holder tiers read your wallet balance only: coins you stake leave your wallet and stop counting there."],

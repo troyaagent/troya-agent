@@ -4,9 +4,9 @@
 // no restart. The contract address lives there too ("contract"), or in STAKE_CONTRACT; until one is set, every answer says
 // deployed:false and every wallet has no tier.
 // Perks carry no money: earlier Sentry alerts, a larger assistant and Council quota, free Gate API calls, Arena Cup points,
-// a badge. This module only reads: it sends no transaction, holds no key and moves no coin. The weekly ETH share to stakers
+// a badge. This module only reads: it sends no transaction, holds no key and moves no coin. The daily ETH share to stakers
 // (a share of $TROYA creator fees that grows with market cap, varies with volume, not a promised yield) is worked out and
-// sent by server/feesplit.mjs (run from server/payouts.mjs); /api/stake/stats shows it.
+// sent by server/feesplit.mjs (its own daily run at 01:00 UTC); /api/stake/stats shows it.
 // Owner decisions, 21 Nov 2026: staked $TROYA (staked + waiting) counts for the 1M holder status (holders.mjs); Sentry
 // lead at most 30 s Gold, 15 s Silver, 5 s Bronze; perks stay off (perksLive false) until the contract is deployed.
 //   GET /api/stake                 terms: contract, cooldown, the tiers in $TROYA and days, the perks of each tier
@@ -376,8 +376,8 @@ export async function stakeTerms() {
     noTier: perksOf(cfg, null),
     perksLive: cfg.perksLive, holdersCountStaked: cfg.holdersCountStaked,
     rule: "A tier needs both: at least its share of the $TROYA total supply staked, and staked for at least its days. A top-up moves the start time forward in proportion to the coins added. Coins waiting out the 3-day cooldown count for nothing.",
-    rewards: `${fs?.WORDING || ""} ${fs?.NO_STAKERS || ""}`.trim(),
-    share: fs ? { mode: fs.modeOf(), wording: fs.WORDING, noStakers: fs.NO_STAKERS, rule: fs.RULE, rate: fs.RATE_RULE(), tiers: fs.TIERS.map((t) => ({ key: t.key, name: t.name, minMcUsd: t.minMc, stakersPctOfVolume: t.stakerBps / 100, burnPctOfVolume: t.burnBps / 100 })) } : null,
+    rewards: `${fs?.WORDING || ""} ${fs?.PAID_DAILY || ""} ${fs?.NO_STAKERS || ""}`.trim(),
+    share: fs ? { mode: fs.modeOf(), wording: fs.WORDING, paid: fs.PAID_DAILY, noStakers: fs.NO_STAKERS, rule: fs.RULE, rate: fs.RATE_RULE(), tiers: fs.TIERS.map((t) => ({ key: t.key, name: t.name, minMcUsd: t.minMc, stakersPctOfVolume: t.stakerBps / 100, burnPctOfVolume: t.burnBps / 100 })) } : null,
   };
 }
 

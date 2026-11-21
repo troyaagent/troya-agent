@@ -12,7 +12,6 @@
 //   · each payment is a plain ETH transfer, sealed, listed at GET /api/payouts and reported to the admins' Telegram.
 //   GET  /api/payouts              public: past weeks, each payment with its transaction (wallets shortened)
 //   POST /api/payouts/run {dry}    admin: work out (and, when live and not dry, pay) the last closed week now
-//   POST /api/payouts/split/run {dry}  admin: the $TROYA fee split of the last closed week now (server/feesplit.mjs; STAKE_REWARDS)
 import { HttpError } from "./api.mjs";
 import { getSession } from "./auth.mjs";
 
@@ -30,22 +29,14 @@ const fromTs = () => { const t = Date.parse(process.env.HERALD_PAYOUTS_FROM || "
 let store = null, busy = false;
 
 // creator fees claimed inside [start, end): the flywheel's claim list carries block numbers; each block's time is read once
-// (and remembered: the Herald payouts and the stakers' share read the same week)
-const blockTimes = new Map();
-async function blockTime(block) {
-  if (blockTimes.has(block)) return blockTimes.get(block);
-  const { rpc } = await import("./robinhood.mjs");
-  const b = await rpc("robinhood", "eth_getBlockByNumber", ["0x" + Number(block).toString(16), false]).catch(() => null);
-  const t = b?.timestamp ? Number(BigInt(b.timestamp)) * 1000 : 0;
-  if (t) { blockTimes.set(block, t); if (blockTimes.size > 5000) blockTimes.delete(blockTimes.keys().next().value); }
-  return t;
-}
 async function claimedEth(start, end) {
+  const { rpc } = await import("./robinhood.mjs");
   const f = await store.readJson("flywheel.json", {});
   let sum = 0;
   for (const c of f.claims || []) {
     if (!(c.block > 0) || !(c.eth > 0)) continue;
-    const t = await blockTime(c.block);
+    const b = await rpc("robinhood", "eth_getBlockByNumber", ["0x" + Number(c.block).toString(16), false]).catch(() => null);
+    const t = b?.timestamp ? Number(BigInt(b.timestamp)) * 1000 : 0;
     if (t >= start && t < end) sum += c.eth;
   }
   return sum;
@@ -119,49 +110,23 @@ async function run({ dry = false, reason = "schedule" } = {}) {
   } finally { busy = false; }
 }
 
-/* ---------- the $TROYA fee split (owner, 21 Nov 2026) ----------
-   server/feesplit.mjs works out each week's stakers' share and burn from the creator-fee credits and the hourly market cap,
-   and sends them (STAKE_REWARDS=live; dry by default). It runs here, every Monday, once that week's Herald payouts are
-   settled (paid, partial, dry in dry mode, off, or a week before HERALD_PAYOUTS_FROM), so the Herald budget is paid first;
-   Herald itself is unchanged and paid from the owner's part. */
-const splitOn = () => (["live", "dry", "off"].includes(process.env.STAKE_REWARDS) ? process.env.STAKE_REWARDS : "dry") !== "off";
-async function splitTick(inp) {
-  const fs = await import("./feesplit.mjs");
-  if (await fs.weekDone(inp.season)) return;
-  const out = await fs.weeklyRun({ season: inp.season, start: inp.start, end: inp.end, reason: "schedule" }).catch((e) => {
-    console.warn("[payouts] fee split:", e.message);
-    import("./community.mjs").then((c) => c.notifyAdmins?.(`<b>$TROYA fee split stopped</b>: ${e.message}`)).catch(() => {});
-    return null;
-  });
-  if (out?.waiting) console.log("[payouts] fee split:", out.note);
-}
-
-// the last closed week is paid once, an hour after it closes; the stakers' share of that week follows the Herald payouts
+// the last closed week is paid once, an hour after it closes
 async function tick() {
-  const heraldOn = mode() !== "off";
-  const stakeOn = splitOn();
-  if (!heraldOn && !stakeOn) return;
+  if (mode() === "off") return;
   const now = new Date();
   const monday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - ((now.getUTCDay() + 6) % 7));
   if (Date.now() < monday + 3600_000) return;
   const herald = await import("./herald.mjs");
   const inp = await herald.payoutInputs().catch(() => null);
   const season = inp?.season;
-  if (!season) return;
-  let settled = true;                                  // Herald off, or a week before payouts began: nothing to wait for
-  if (heraldOn && inp.start >= fromTs()) {
-    const led = await store.readJson(FILE, DEF);
-    const w = led.weeks[season];
-    if (!(w && (w.status === "paid" || w.status === "partial" || (w.status === "dry" && mode() === "dry")))) {
-      const out = await run({ reason: "schedule" }).catch((e) => {
-        console.warn("[payouts]", e.message);
-        import("./community.mjs").then((c) => c.notifyAdmins?.(`<b>Herald payouts stopped</b>: ${e.message}`)).catch(() => {});
-        return null;
-      });
-      settled = !!out && (!!out.skipped || !!out.already || ["paid", "partial", "dry"].includes(out.week?.status));
-    }
-  }
-  if (stakeOn && settled) await splitTick(inp);
+  if (!season || !(inp.start >= fromTs())) return;
+  const led = await store.readJson(FILE, DEF);
+  const w = led.weeks[season];
+  if (w && (w.status === "paid" || w.status === "partial" || (w.status === "dry" && mode() === "dry"))) return;
+  await run({ reason: "schedule" }).catch((e) => {
+    console.warn("[payouts]", e.message);
+    import("./community.mjs").then((c) => c.notifyAdmins?.(`<b>Herald payouts stopped</b>: ${e.message}`)).catch(() => {});
+  });
 }
 
 export async function register(r, ctx) {
@@ -181,12 +146,6 @@ export async function register(r, ctx) {
     if (!s || !admins().includes(lc(s.address))) throw new HttpError(403, "Admins only.");
     return run({ dry: body?.dry !== false, reason: "admin" });
   });
-  r.post("/api/payouts/split/run", async ({ req, body }) => {
-    const s = getSession(req);
-    if (!s || !admins().includes(lc(s.address))) throw new HttpError(403, "Admins only.");
-    const inp = await (await import("./herald.mjs")).payoutInputs();
-    return (await import("./feesplit.mjs")).weeklyRun({ season: inp.season, start: inp.start, end: inp.end, reason: "admin", dry: body?.dry !== false });
-  });
 }
 
-export { plan as _plan, run as _run, tick as _tick };
+export { plan as _plan, run as _run };

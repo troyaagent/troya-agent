@@ -69,14 +69,14 @@ export async function mount(view) {
     paintPanel();
   }
 
-  // the fee split: this hour's market-cap tier, this week's stakers' and burn parts, last week's burn
+  // the fee split: this hour's market-cap tier, today's stakers' and burn parts, yesterday's burn
   function paintSplit() {
     const f = st.split;
     splitBox.hidden = !f;
     if (!f) return;
-    const lb = f.lastWeek?.burn;
-    clear(splitBox, h("b", {}, "Fee split: "), `this hour ${f.now?.tier?.name || "–"} at MC ${f.now?.mcUsd ? usd(f.now.mcUsd) : "not read yet"}. This week so far: stakers ${fx(f.week?.stakerEth || 0)} ETH, buyback and burn ${fx(f.week?.burnEth || 0)} ETH (from $100k). `,
-      lb ? `Last week's burn: ${lb.status === "sent" ? `${fx(lb.sentEth)} ETH bought back and burned` : lb.status === "returned" ? `${fx(lb.returnedEth)} ETH stayed with the team` : lb.status === "dry" ? `${fx(lb.sendEth || lb.accruedEth)} ETH worked out, not sent` : "nothing"}. ` : "",
+    const lb = f.lastDay?.burn;
+    clear(splitBox, h("b", {}, "Fee split: "), `this hour ${f.now?.tier?.name || "–"} at MC ${f.now?.mcUsd ? usd(f.now.mcUsd) : "not read yet"}. Today so far: stakers ${fx(f.today?.stakerEth || 0)} ETH, buyback and burn ${fx(f.today?.burnEth || 0)} ETH (from $100k). `,
+      lb ? `Yesterday's burn: ${lb.status === "sent" ? `${fx(lb.sentEth)} ETH bought back and burned` : lb.status === "returned" ? `${fx(lb.returnedEth)} ETH stayed with the team` : lb.status === "dry" ? `${fx(lb.sendEth || lb.accruedEth)} ETH worked out, not sent` : "nothing"}. ` : "",
       f.wording, " ", h("a", { class: "ulink", href: "#/stake" }, "Stake $TROYA"));
   }
 

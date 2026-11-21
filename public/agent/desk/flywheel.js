@@ -40,13 +40,15 @@ export async function mount(view) {
   let alive = true;
   const st = { d: null, err: null, busy: null, ethIn: "", share: "50", cyc: load() };
   const top = h("div", { class: "fw-top" }), panel = h("div", { class: "panel sd-panel fw-panel" });
+  const splitBox = h("p", { class: "fine fw-split", hidden: true });   // the $TROYA fee split (/api/feesplit), 21 Nov 2026
   clear(view, h("div", { class: "dk fw" },
     pageHead("$TROYA flywheel", "Creator fees buy $TROYA back, burn it and lock liquidity in the pool for good. Every cycle is signed by the creator wallet and read back from the chain."),
-    top, panel,
+    top, splitBox, panel,
     h("p", { class: "fine lt-legal" }, "Every number here comes from the chain: the Pons fee escrow, the $TROYA contract and the Uniswap v4 PositionManager. ", h("a", { class: "ulink", href: "/flywheel", target: "_blank", rel: "noopener" }, "Public page"), ". Not financial advice.")));
 
   async function refresh() {
     try { st.d = await api.get("flywheel"); st.err = null; } catch (e) { st.err = e.message; }
+    st.split = await api.get("feesplit").catch(() => st.split || null);
     if (alive) paint();
   }
   const isCreator = () => wallet.address && st.d && lc(wallet.address) === lc(st.d.creator);
@@ -63,7 +65,19 @@ export async function mount(view) {
       tile("$TROYA burned", big(d.burned.total), `${d.burned.pctOfMinted.toFixed(2)}% of the 1B minted`),
       tile("Liquidity locked", usd(d.locked.usd), `${d.locked.positions.length} position${d.locked.positions.length === 1 ? "" : "s"} at 0x…dEaD`),
       tile("Cycles", String(d.totals.cycles), d.totals.cycles ? `${big(d.totals.troyaBurned)} burned by cycles` : "none yet")));
+    paintSplit();
     paintPanel();
+  }
+
+  // the fee split: this hour's market-cap tier, this week's stakers' and burn parts, last week's burn
+  function paintSplit() {
+    const f = st.split;
+    splitBox.hidden = !f;
+    if (!f) return;
+    const lb = f.lastWeek?.burn;
+    clear(splitBox, h("b", {}, "Fee split: "), `this hour ${f.now?.tier?.name || "–"} at MC ${f.now?.mcUsd ? usd(f.now.mcUsd) : "not read yet"}. This week so far: stakers ${fx(f.week?.stakerEth || 0)} ETH, buyback and burn ${fx(f.week?.burnEth || 0)} ETH (from $100k). `,
+      lb ? `Last week's burn: ${lb.status === "sent" ? `${fx(lb.sentEth)} ETH bought back and burned` : lb.status === "returned" ? `${fx(lb.returnedEth)} ETH stayed with the team` : lb.status === "dry" ? `${fx(lb.sendEth || lb.accruedEth)} ETH worked out, not sent` : "nothing"}. ` : "",
+      f.wording, " ", h("a", { class: "ulink", href: "#/stake" }, "Stake $TROYA"));
   }
 
   /* ---------- the cycle (creator wallet only) ---------- */

@@ -18,6 +18,7 @@ const SI = {
   aegis: "M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6l7-3zM9 12l2 2 4-4",
   scepter: "M12 9v12M8 5l2 3h4l2-3-2.5 1L12 3l-1.5 3zM10 13h4",
   treasury: "M4 10h16v10H4zM2 10l10-6 10 6M8 14v3M12 14v3M16 14v3",
+  stake: "M12 14.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11zM8.6 13.4 7 21l5-2.6 5 2.6-1.6-7.6M12 6.4l1 2.1 2.3.3-1.7 1.6.4 2.3-2-1.1-2 1.1.4-2.3-1.7-1.6 2.3-.3z",
   spot: "M4 19h16M7 15l3-3 3 2 5-6M17 8h2v2",
   lighter: "M13 2 4 14h7l-1 8 9-12h-7l1-8z",
   stocks: "M4 20V10m6 10V4m6 16v-7m6 7V8",
@@ -75,7 +76,7 @@ export const GROUPS = [
   ["Agent", [["Chat", "#/agent", "chat"], ["Agent control", "#/agent/scepter", "scepter"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Launch Autopilot", "#/agent/sentry", "sentry"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Exit guard", "#/agent/aegis", "aegis"], ["Strategy arena", "#/agent/arena", "arena"]]],
   ["Portfolio", [["Overview", "#/portfolio", "portfolio"], ["History", "#/portfolio/history", "history"], ["Weekly review", "#/portfolio/owl", "news"]]],
   // Safety, Verify and The Record are public pages: one entry, opened in a new tab so the app keeps its place
-  ["More", [["Invite & earn", "#/herald", "herald"], ["Holder tiers", "#/treasury", "treasury"], ["$TROYA flywheel", "#/flywheel", "flywheel"], ["AI calls", "#/registry", "agent"], ["Robinhood MCP rail", "#/rail", "rail"], ["Social", "#/social", "social"], ["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Safety", "/safety", "verify"], ["What's new", "/roadmap#v8", "news"], ["Plans and tiers", "/plans", "plans"], ["Report a bug", "/community", "bug"]]],
+  ["More", [["Invite & earn", "#/herald", "herald"], ["Holder tiers", "#/treasury", "treasury"], ["Stake $TROYA", "#/stake", "stake"], ["$TROYA flywheel", "#/flywheel", "flywheel"], ["AI calls", "#/registry", "agent"], ["Robinhood MCP rail", "#/rail", "rail"], ["Social", "#/social", "social"], ["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Safety", "/safety", "verify"], ["What's new", "/roadmap#v8", "news"], ["Plans and tiers", "/plans", "plans"], ["Report a bug", "/community", "bug"]]],
 ];
 // not in the sidebar, still found by Search (⌘K): the Inbox has the bell and the Portfolio badge; Verify and The Record sit under Safety
 const SEARCH_ONLY = [["Portfolio", [["Inbox", "#/portfolio/inbox", "inbox"]]], ["More", [["Verify", "/verify", "proof"], ["The Record", "/record", "record"]]]];
@@ -89,6 +90,7 @@ const ROUTES = {
   "": "home", market: "market", token: "token", swap: "swap", perps: "perps", launch: "launchpad",
   bridge: "bridge", agent: "agent", assistant: "agent", portfolio: "portfolio", docs: "docs", start: "start", leaderboard: "leaderboard", gate: "gate", spot: "spot", lighter: "lighter", stocks: "stocks", liquidity: "liquidity", flywheel: "flywheel", social: "social", registry: "registry", rail: "rail", "troya-launches": "hippodrome", hippodrome: "hippodrome", create: "create", creator: "creator",
   herald: "herald", treasury: "treasury",                    // V8 F42: /agent/js/pages/herald.js
+  stake: "stake",                                            // $TROYA staking (21 Nov): /agent/js/pages/stake.js
 };
 const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js" };
 // The sheets each page asks for with useCss at mount. route() requests them together with the module, so the stylesheet
@@ -99,6 +101,7 @@ const PAGE_CSS = {
   swap: ["swap"], perps: ["perps"], bridge: ["bridge"], agent: ["agent"], portfolio: ["portfolio", "start"], docs: ["docs"], start: ["start"], leaderboard: ["start"], herald: ["herald"],
   spot: ["perps"], registry: ["perps"], rail: ["perps"], hippodrome: ["perps"], create: ["perps"], creator: ["perps"],
   lighter: ["perps", "swap"], stocks: ["perps", "swap"], liquidity: ["perps", "swap"], flywheel: ["perps", "swap"], social: ["perps", "swap"],
+  stake: ["stake"],
 };
 export const prefs = store("troya.prefs", { slippage: 1, density: "comfortable", motion: "system", lang: "auto" });
 

@@ -13,6 +13,7 @@ const NAV = [
 const ROUTES = {
   "": "home", market: "market", token: "token", swap: "swap", perps: "perps", launch: "launchpad",
   bridge: "bridge", agent: "agent", assistant: "agent", portfolio: "portfolio", docs: "docs", start: "start", leaderboard: "leaderboard",
+  stake: "stake",
 };
 export const prefs = store("troya.prefs", { slippage: 1, density: "comfortable", motion: "system", lang: "auto" });
 

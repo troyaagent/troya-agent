@@ -1,5 +1,7 @@
 // Phase 3 · holder perks for $TROYA.
-//   HOLDER_MIN     tokens needed (default 1,000,000 = 0.1% of supply), counted across the signed-in wallet and its Agent Wallet
+//   HOLDER_MIN     tokens needed (default 1,000,000 = 0.1% of supply), counted across the signed-in wallet and its Agent Wallet,
+//                  plus the $TROYA either of them has in the stake contract, staked or waiting out the cooldown (owner,
+//                  21 Nov 2026; server/stake.mjs, nothing is added while no stake contract is configured)
 //   HOLDER_START   ISO time the perks switch on (announced first, as the roadmap says); unset = on
 // Perks: more assistant messages a day, more active playbooks, and a private Telegram DM for every coin Troya Sentry posts.
 // Balances are read from chain and cached for 10 minutes. Nothing here moves tokens or asks anyone to.
@@ -24,6 +26,18 @@ export const perksOn = () => !!troyaCa() && Date.now() >= START;
 async function agentAddress(owner) {
   try { const m = await import("./agentwallet.mjs"); return (await m.getAgentWallet(owner))?.address || null; } catch { return null; }
 }
+// $TROYA `a` has in the stake contract (staked + waiting). 0 while no contract is configured or staked coins do not count
+// (data/stake.json holdersCountStaked: false). With a contract, a failed read is an error like a failed balance read:
+// counting it as 0 would turn a staked 1M holder into a non-holder (and fix a fee splitter on a launch for good).
+async function stakedOf(a) {
+  const st = await import("./stake.mjs").catch(() => null);
+  if (!st) return 0;
+  const cfg = await st.stakeConfig().catch(() => null);
+  if (!cfg?.contract || !cfg.holdersCountStaked) return 0;
+  const s = await st.stakedTokens(a);
+  if (!s.known) throw new Error("Couldn't read the staked $TROYA right now.");
+  return s.deployed ? (s.staked || 0) + (s.pending || 0) : 0;
+}
 // { holder, balance, min, on, start } for one owner address
 export async function holderOf(owner) {
   const ca = troyaCa(), k = String(owner || "").toLowerCase();
@@ -43,6 +57,7 @@ export async function holderOf(owner) {
     }
     if (!t) throw new Error("Couldn't read the $TROYA balance right now.");
     balance += Number(t.amount);
+    balance += await stakedOf(a);
   }
   const v = { holder: balance >= MIN, balance, min: MIN, start: START || null };
   memo.set(k, { at: Date.now(), v });

@@ -78,12 +78,19 @@ export async function attest(obj, label = "Troya record") {
 /* ---------- ledger ---------- */
 const settings = async () => ({ ...DEFAULTS, ...((await store.readJson(FILE, {})).settings || {}) });
 export const gateSettings = () => settings();   // V8 F46 Treasury shows the checks a day per tier
+// $TROYA staking (owner, 21 Nov 2026): a staker's tier adds its gateFreePerDay free checks a day on top of the wallet's
+// own (server/stake.mjs activePerks; 0 until a stake contract is live and its perks are switched on)
+async function stakeFree(address) {
+  const p = await import("./stake.mjs").then((m) => m.activePerks(address)).catch(() => null);
+  const n = Math.round(Number(p?.gateFreePerDay) || 0);
+  return n > 0 ? Math.min(n, 100_000) : 0;
+}
 async function creditOf(address) {
   const d = await store.readJson(FILE, {}), a = lc(address), s = await settings();
   const used = d.usage?.day === today() ? d.usage.by?.[a] || 0 : 0;
   const holder = await import("./holders.mjs").then((m) => m.holderOf(a)).catch(() => null);
   // V8 F46 Treasury: the daily free checks grow with the holder tier
-  const free = await import("./treasury.mjs").then((m) => m.gateFreeFor(a, s)).catch(() => (holder?.holder ? s.holderFreePerDay : s.freePerDay));
+  const free = (await import("./treasury.mjs").then((m) => m.gateFreeFor(a, s)).catch(() => (holder?.holder ? s.holderFreePerDay : s.freePerDay))) + (await stakeFree(a));
   return { address: getAddress(a), balanceUsdg: (d.credits?.[a] || 0) / 1e6, checksLeft: Math.floor((d.credits?.[a] || 0) / micro(s.priceUsdg)), freePerDay: free, freeLeftToday: Math.max(0, free - used), holder: !!holder?.holder,
     deposits: Object.entries(d.deposits || {}).filter(([, x]) => x.from === a).map(([k, x]) => ({ tx: k.split(":")[0], usdg: x.usdg, at: x.at })).sort((p, q) => q.at - p.at).slice(0, 50) };
 }
@@ -129,7 +136,7 @@ async function charge(id, ip, { preferCredit = false } = {}) {
   if (!s.enabled) throw new HttpError(503, "The Gate API is paused right now.");
   const holder = id.address ? await import("./holders.mjs").then((m) => m.holderOf(id.address)).catch(() => null) : null;
   const key = id.address || `ip:${ip}`;
-  const free = id.address ? await import("./treasury.mjs").then((m) => m.gateFreeFor(id.address, s)).catch(() => (holder?.holder ? s.holderFreePerDay : s.freePerDay)) : s.anonPerDay;
+  const free = id.address ? (await import("./treasury.mjs").then((m) => m.gateFreeFor(id.address, s)).catch(() => (holder?.holder ? s.holderFreePerDay : s.freePerDay))) + (await stakeFree(id.address)) : s.anonPerDay;
   const price = micro(s.priceUsdg);
   let paid = null;
   await store.update(FILE, {}, (d) => {
@@ -175,7 +182,8 @@ async function runCheck(token, { amountEth, from, withAssay }) {
   const ring = await import("./ringradar.mjs").then((m) => m.ringFlags(token)).catch(() => []);   // V7 F31, from the radar's cache
   const oath = await import("./oath.mjs").then((m) => m.oathOf(token)).catch(() => null);           // V7 F32 tier 2
   const oathFlag = oath?.status === "broken" ? [{ key: "oath", level: "red", title: "Oath broken", detail: `the dev broke its pledge (${oath.breaches.length} breach${oath.breaches.length > 1 ? "es" : ""}); see troya.codes/oath` }] : [];
-  const flags = [...(a?.status === "done" ? (a.flags || []).filter((f) => f.key !== "partial").map((f) => Object.fromEntries(ASSAY_KEEP.map((k) => [k, f[k]]))) : []), ...ring, ...oathFlag];
+  const devlinks = await import("./devlinks.mjs").then((m) => m.devLinkFlags(token)).catch(() => []);   // V8 dev side wallets, from its cache
+  const flags = [...(a?.status === "done" ? (a.flags || []).filter((f) => f.key !== "partial").map((f) => Object.fromEntries(ASSAY_KEEP.map((k) => [k, f[k]]))) : []), ...ring, ...oathFlag, ...devlinks];
   const red = flags.some((f) => f.level === "red");
   const v = vd.v === "nobuys" ? "untested" : vd.v === "passed" && red ? "caution" : vd.v;
   const attested = {

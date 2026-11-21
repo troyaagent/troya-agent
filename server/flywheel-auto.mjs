@@ -102,7 +102,7 @@ async function tell(text) {
 
 /* ---------- one cycle ---------- */
 async function cycle(reason = "schedule") {
-  if (running) return { skipped: "A cycle is already running." };
+  if (running || splitBusy) return { skipped: "A cycle is already running." };
   running = true;
   const s = { ...DEFAULTS, ...(await store.readJson(SET, {})) };
   const log = { at: Date.now(), reason, steps: [], note: null, error: null };
@@ -192,7 +192,7 @@ async function campaignTick() {
   if (!c?.active) return;
   const now = Date.now();
   if (now >= c.endsAt || c.spentUsd >= c.totalUsd - 0.01) { await finishCampaign(c, now >= c.endsAt ? "The time window ended." : "The target was reached."); return; }
-  if (now < (c.nextAt || 0) || running) return;
+  if (now < (c.nextAt || 0) || running || splitBusy) return;
   campBusy = true;
   const log = { at: now, steps: [] };
   try {
@@ -332,6 +332,41 @@ export async function register(r, ctx) {
 // referral rewards, only inside payouts.mjs's rails (a share of that week's claimed creator fees, a weekly dollar cap,
 // only the wallets on that week's list, a gas reserve kept). Plain ETH transfers; nothing else is signed through this.
 export async function payoutSigner() { return signer(); }
+
+// The $TROYA fee split's weekly burn (server/feesplit.mjs, owner 21 Nov 2026: at a market cap of $100k and up, 0.1% of volume
+// is bought back and burned). The burn campaign's path exactly: the gas reserve kept, Troya Gate on the buy, the Universal
+// Router only (3% slippage bound, value checked), then burn() of every $TROYA the buy brought, both steps signed through
+// send() above (allowed() refuses anything else) and logged with recordStep() so they show on the flywheel page.
+// Throws when it cannot run; an error after the buy carries `bought: true` and `buyHash` (the $TROYA then waits in the wallet).
+let splitBusy = false;
+export async function buybackAndBurn(ethAmt, { id = `split${Date.now()}` } = {}) {
+  if (running || campBusy || splitBusy) throw new Error("Another flywheel step is running.");
+  splitBusy = true;
+  const log = { at: Date.now(), steps: [] };
+  try {
+    const w = await signer();
+    if (!w) throw new Error("No creator key is stored.");
+    const amt = +Number(ethAmt).toFixed(8);
+    if (!(amt >= 0.0005)) throw new Error("Below the 0.0005 ETH smallest buyback.");
+    const bal = Number(formatEther(await provider.getBalance(CREATOR)));
+    if (bal - amt < DEFAULTS.reserveEth) throw new Error(`The creator wallet holds ${bal.toFixed(5)} ETH; it needs ${amt.toFixed(5)} ETH plus ${DEFAULTS.reserveEth} for gas.`);
+    const gate = await local(`/api/swap/gate?in=eth&out=${TROYA}&amount=${amt}`);
+    if (gate.pass === false) throw new Error(`Troya Gate stopped the buyback: ${(gate.checks || []).filter((x) => x.status === "fail").map((x) => `${x.label || x.name}: ${x.detail}`).join("; ")}`);
+    const built = await local("/api/swap/build", { from: CREATOR, tokenIn: "ETH", tokenOut: TROYA, amountIn: String(amt), slippageBps: 300 });
+    if (lc(built.to) !== lc(UR)) throw new Error("The swap route is not the Universal Router; skipped for safety.");
+    if (BigInt(built.value || 0) > parseEther(amt.toFixed(18)) + 1000n) throw new Error("The swap would spend more than planned; skipped.");
+    const before = await troyaOf(CREATOR);
+    const b = await send(w, built, log, "buyback");
+    await recordStep({ cycle: id, step: "buyback", hash: b.hash }).catch(() => {});
+    try {
+      const got = (await troyaOf(CREATOR)) - before;
+      if (got <= 0n) throw new Error("The buyback brought no $TROYA.");
+      const bu = await send(w, { to: TROYA, data: TOK.encodeFunctionData("burn", [got]), value: 0 }, log, "burn");
+      await recordStep({ cycle: id, step: "burn", hash: bu.hash }).catch(() => {});
+      return { buyHash: b.hash, burnHash: bu.hash, burned: Number(formatEther(got)), eth: amt };
+    } catch (e) { throw Object.assign(e, { bought: true, buyHash: b.hash }); }
+  } finally { splitBusy = false; }
+}
 
 export async function setEnabled(on) {
   if (!store) return null;

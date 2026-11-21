@@ -567,11 +567,21 @@ async function parserAnswer(ctx, text, lang) {
 
 /* ---------- usage + history ---------- */
 const today = () => new Date().toISOString().slice(0, 10);
+// messages a day for `address`: the free quota, or the holder quota for 1M $TROYA (Phase 3), times the $TROYA staking
+// tier's aiQuotaX (owner, 21 Nov 2026; 1 until a stake contract is live and its perks are switched on)
+async function dailyLimit(address, op) {
+  const hp = await import("./holders.mjs").catch(() => null);
+  const holder = !!(hp && (await hp.hasPerks(address).catch(() => false)));
+  const base = holder ? hp.PERKS.messagesPerDay : op.freeMessagesPerDay;
+  const st = await import("./stake.mjs").catch(() => null);
+  const x = st ? Number((await st.activePerks(address).catch(() => null))?.aiQuotaX) : 1;
+  const stakeX = x > 1 && isFinite(x) ? Math.min(x, 10) : 1;
+  return { limit: stakeX > 1 ? Math.round(base * stakeX) : base, holder, stakeX };
+}
 async function takeMessage(address) {
   const op = await operatorPolicy();
-  // Phase 3: $TROYA holders get more messages a day
-  const hp = await import("./holders.mjs").catch(() => null);
-  const limit = hp && (await hp.hasPerks(address).catch(() => false)) ? hp.PERKS.messagesPerDay : op.freeMessagesPerDay;
+  // Phase 3: $TROYA holders get more messages a day; $TROYA stakers get their tier's multiplier on top
+  const { limit } = await dailyLimit(address, op);
   let used;
   await store.update("chat-usage.json", {}, (all) => {
     const k = address.toLowerCase();
@@ -751,9 +761,8 @@ export async function register(r, ctx) {
     const s = requireSession(req);
     const op = await operatorPolicy();
     const u = (await store.readJson("chat-usage.json", {}))[s.address.toLowerCase()];
-    const hp = await import("./holders.mjs").catch(() => null);
-    const holder = !!(hp && (await hp.hasPerks(s.address).catch(() => false)));
-    return { used: u?.day === today() ? u.n : 0, limit: holder ? hp.PERKS.messagesPerDay : op.freeMessagesPerDay, holder, llm: llmOn() };
+    const { limit, holder, stakeX } = await dailyLimit(s.address, op);
+    return { used: u?.day === today() ? u.n : 0, limit, holder, ...(stakeX > 1 ? { stakeX } : {}), llm: llmOn() };
   });
   r.post("/api/assistant/feedback", async ({ req, body }) => {
     const s = requireSession(req);

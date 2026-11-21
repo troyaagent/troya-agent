@@ -36,7 +36,9 @@ export async function mount(view) {
     const yourCard = !wallet.session
       ? signInBox("Your tier, your balance and your pins belong to the wallet you sign in with.")
       : h("section", { class: "panel ts-you" },
-        h("div", {}, h("small", { class: "fine muted" }, "Your tier"), h("h2", {}, you?.name || "Visitor"),
+        h("div", {}, h("small", { class: "fine muted" }, "Your tier"), h("h2", {}, you?.name || "Visitor",
+          // $TROYA staking: the staker's tier badge, sent only once the stake perks are on
+          you?.stakeBadge ? h("span", { class: `badge-s stk-badge t-${you.stakeBadge}`, style: { marginLeft: "10px" }, title: "Your $TROYA staking tier" }, `${you.stakeBadge[0].toUpperCase()}${you.stakeBadge.slice(1)} staker`) : null),
           h("p", { class: "fine muted" }, you?.known ? `${compact(you.balance || 0, 2)} $TROYA counted.${you.next ? ` ${compact(you.next.min - you.balance, 2)} more for ${you.next.name}.` : " The top tier."}` : "Your balance could not be read right now.")),
         you?.next ? h("div", { class: "ts-bar", title: `${you.name} → ${you.next.name}` }, h("i", { style: { width: `${Math.max(2, Math.min(100, ((you.balance || 0) / you.next.min) * 100)).toFixed(1)}%` } })) : null,
         h("a", { class: "btn", href: `#/swap?out=${CA}` }, icon("swap"), "Buy $TROYA"));

@@ -10,7 +10,7 @@
 
 import { ponsState } from "./robinhood.mjs";
 
-const RPC = process.env.ROBINHOOD_RPC || "https://rpc.mainnet.chain.robinhood.com";
+const RPC = process.env.ROBINHOOD_WIDE_RPC || "https://rpc.mainnet.chain.robinhood.com";   // wide eth_getLogs spans need the official RPC
 const FACTORY = "0x7ed598bcef8bd9edd8c97a195c6d13f40801ec7e";
 const T_LAUNCH = "0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607";
 const T_TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";

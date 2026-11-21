@@ -525,6 +525,7 @@ function record(s, r, posted, reason, j) {
   recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, posted, ...(r.source ? { source: r.source } : {}), reason, raised: r.pons?.raised ?? null, progressPct: r.pons?.progressPct ?? null, buyers: r.buyers ? r.buyers.organic : null, eligible: !!posted || (meetsBar(r) && !COPY_HOLD.test(reason || "")), at: r.at, post: postUrl(j) });
   recent.length = Math.min(recent.length, 200);
   s.recent = recent.slice(0, 200);                                   // survives restarts
+  return recent[0];
 }
 
 async function work(s) {
@@ -565,11 +566,18 @@ async function work(s) {
       if (why) { bump(s, r.v); record(s, r, false, why, null); continue; }                 // deep enough, but bots, a copy or too few buyers
       if (POOLS === "dry") { await store.append("sentry-pools-preview.jsonl", { t: Date.now(), token: r.token, pool: q.pool, text: formatPost(r) }); continue; }
       r.assay = await quickAssay(r.token);
-      const jp = await send(CHANNEL, formatPost(r), poolButtons(r.token), null).catch((e) => ({ ok: false, description: e.message }));
-      if (!jp.ok) console.warn("[sentry] pool post failed:", jp.description);
-      if (MODE !== "dry") holderDms(r, null).catch((e) => console.warn("[sentry] holder DMs:", e.message));
+      // $TROYA stakers first (their DMs now, the channel post on a timer), or exactly as before when nobody has a lead
+      const leadsP = await stakerLeads();
+      let jp = { ok: false }, laterP = null;
+      if (leadsP.length || waiting) laterP = postWithLead({ r, text: formatPost(r), markup: poolButtons(r.token), logo: null, leads: leadsP, pool: true });
+      else {
+        jp = await send(CHANNEL, formatPost(r), poolButtons(r.token), null).catch((e) => ({ ok: false, description: e.message }));
+        if (!jp.ok) console.warn("[sentry] pool post failed:", jp.description);
+        if (MODE !== "dry") holderDms(r, null).catch((e) => console.warn("[sentry] holder DMs:", e.message));
+      }
       bump(s, r.v); bump(s, "posted"); markPosted(s, r);
-      record(s, r, true, null, jp);
+      const rowP = record(s, r, true, null, jp);
+      if (laterP) laterP.item = rowP;
       continue;
     }
     if (r.snipe && q.tries < 3) { q.due = now + 60000; q.tries++; continue; }
@@ -590,29 +598,110 @@ async function work(s) {
     const post = !why;
     if (!post && r.v === "passed" && !permanent(r, copy) && (q.lt || 0) < TRACTION_S.length) { q.due = now + TRACTION_S[q.lt || 0] * 1000; q.lt = (q.lt || 0) + 1; continue; }
     s.queue = s.queue.filter((x) => x !== q);
-    let j = { ok: false };
+    let j = { ok: false }, later = null;
     if (post) {
       const logo = await logoFor(r.token).catch(() => null);
       r.assay = await quickAssay(r.token);
-      j = await send(CHANNEL, formatPost(r), buttons(r.token), logo).catch((e) => ({ ok: false, description: e.message }));
-      if (!j.ok) console.warn("[sentry] post failed:", j.description);
-      if (MODE !== "dry") holderDms(r, logo && fileIds.has(logo.cid) ? { cid: logo.cid, fileId: fileIds.get(logo.cid) } : null).catch((e) => console.warn("[sentry] holder DMs:", e.message));
+      // $TROYA stakers first (their DMs now, the channel post on a timer), or exactly as before when nobody has a lead
+      const leads = await stakerLeads();
+      if (leads.length || waiting) later = postWithLead({ r, text: formatPost(r), markup: buttons(r.token), logo, leads, pool: false });
+      else {
+        j = await send(CHANNEL, formatPost(r), buttons(r.token), logo).catch((e) => ({ ok: false, description: e.message }));
+        if (!j.ok) console.warn("[sentry] post failed:", j.description);
+        if (MODE !== "dry") holderDms(r, logo && fileIds.has(logo.cid) ? { cid: logo.cid, fileId: fileIds.get(logo.cid) } : null).catch((e) => console.warn("[sentry] holder DMs:", e.message));
+      }
       bump(s, "posted"); markPosted(s, r);
     }
     bump(s, r.v);
-    record(s, r, post, why, j);
+    const row = record(s, r, post, why, j);
+    if (later) later.item = row;
   }
 }
 
-// Phase 3: linked $TROYA holders get each result as a private message too (the bot can only DM people who started it)
-async function holderDms(r, logo) {
+// Phase 3: linked $TROYA holders get each result as a private message too (the bot can only DM people who started it).
+// `skip`: chats that already had this post (the staker lead below); `text`/`kb`: a post resumed after a restart.
+async function holderDms(r, logo, skip = null, text = formatPost(r), kb = r.source ? poolButtons(r.token) : buttons(r.token)) {
   const hp = await import("./holders.mjs").catch(() => null);
   if (!hp) return;
-  const kb = r.source ? poolButtons(r.token) : buttons(r.token);
   for (const chat of await hp.holderChats()) {
-    const sent = logo ? await sendPhoto(chat, logo, formatPost(r), kb).catch(() => null) : null;
-    if (!sent?.ok) await tg("sendMessage", { chat_id: chat, text: formatPost(r), parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } }).catch(() => {});
+    if (skip?.has(String(chat))) continue;
+    const sent = logo ? await sendPhoto(chat, logo, text, kb).catch(() => null) : null;
+    if (!sent?.ok) await tg("sendMessage", { chat_id: chat, text, parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } }).catch(() => {});
     await new Promise((x) => setTimeout(x, 60));
+  }
+}
+
+/* ---------- the staker lead (owner, 21 Nov 2026) ----------
+   $TROYA stakers with a tier (server/stake.mjs stakerChats: only once the stake perks are on, only linked wallets) get a
+   channel post by private message first: Gold 30 s, Silver 15 s, Bronze 5 s before the public channel (never more than
+   LEAD_MAX_S). The loop never waits for it: each tier's DMs are put on a timer, the channel post goes on one chain, and the
+   chain posts in the order the posts were decided, each no earlier than its own time, so a later post never overtakes an
+   earlier one. The 1M holder DMs follow the channel post as before, minus the chats that already had it. A post still
+   waiting when the server stops is kept in data/sentry-pending.json and sent when it starts again. With no staker lead (no
+   stake contract, perks off, no tiered wallet linked) and nothing waiting, a post goes out exactly as it always did. */
+const LEAD_MAX_S = 30, PENDING = "sentry-pending.json";
+const TIER_NAME = { gold: "Gold", silver: "Silver", bronze: "Bronze" };
+let chain = Promise.resolve(), waiting = 0, lastDue = 0, recentDirty = false;
+
+async function stakerLeads() {
+  if (MODE === "dry" || !TG) return [];
+  const st = await import("./stake.mjs").catch(() => null);
+  const list = st ? await st.stakerChats().catch(() => []) : [];
+  return list.map((x) => ({ ...x, leadSec: Math.min(LEAD_MAX_S, Math.max(0, Math.round(Number(x.leadSec) || 0))) })).filter((x) => x.leadSec > 0 && x.chat != null);
+}
+async function dmOne(chat, text, kb, logo) {
+  const lg = logo ? (fileIds.has(logo.cid) ? { cid: logo.cid, fileId: fileIds.get(logo.cid) } : logo) : null;
+  const sent = lg && text.length <= 1024 ? await sendPhoto(chat, lg, text, kb).catch(() => null) : null;
+  if (!sent?.ok) await tg("sendMessage", { chat_id: chat, text, parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } }).catch(() => {});
+}
+const keepPending = (fn) => store.update(PENDING, { items: [] }, (d) => { d.items = fn(d.items || []).slice(-50); return d; }).catch(() => {});
+
+// one channel post, queued: `p` = { r, text, markup, logo, leads, pool }. Returns at once with a handle whose `item` (the
+// /api/sentry/recent row, set by the caller) gets the post link once the channel post is out.
+function postWithLead(p) {
+  const lead = p.leads.length ? Math.max(...p.leads.map((x) => x.leadSec)) : 0;
+  const at = Math.max(Date.now() + lead * 1000, lastDue);
+  lastDue = at;
+  const handle = { item: null, at };
+  const id = `${p.r?.token || "?"}:${at}`;
+  const skip = new Set([...(p.skip || []), ...p.leads.map((x) => x.chat)].map(String));   // chats that have it before the channel
+  const byLead = new Map();
+  for (const x of p.leads) { if (!byLead.has(x.leadSec)) byLead.set(x.leadSec, []); byLead.get(x.leadSec).push(x); }
+  for (const [sec, list] of [...byLead].sort((a, b) => b[0] - a[0])) {
+    setTimeout(async () => {
+      for (const x of list) {
+        await dmOne(x.chat, `${p.text}
+
+<i>${TIER_NAME[x.tier] || "Staker"} tier: you get this ${sec} s before the public channel.</i>`, p.markup, p.logo).catch(() => {});
+        await new Promise((res) => setTimeout(res, 60));
+      }
+    }, Math.max(0, at - sec * 1000 - Date.now()));
+  }
+  waiting++;
+  const saved = keepPending((l) => [...l, { id, token: p.r?.token || null, text: p.text, markup: p.markup, pool: !!p.pool, at, logoCid: p.logo?.cid || null, skip: [...skip] }]);
+  chain = chain.then(async () => {
+    await saved;
+    const wait = at - Date.now();
+    if (wait > 0) await new Promise((res) => setTimeout(res, wait));
+    const j = await send(CHANNEL, p.text, p.markup, p.logo).catch((e) => ({ ok: false, description: e.message }));
+    if (!j.ok) console.warn(`[sentry] ${p.pool ? "pool " : ""}post failed:`, j.description);
+    await keepPending((l) => l.filter((x) => x.id !== id));
+    const row = handle.item || (p.r?.token ? recent.find((x) => x.token === p.r.token && x.posted && !x.post) : null);
+    if (row && j.ok) { row.post = postUrl(j); recentDirty = true; }
+    const lg = !p.pool && p.logo && fileIds.has(p.logo.cid) ? { cid: p.logo.cid, fileId: fileIds.get(p.logo.cid) } : null;
+    holderDms(p.r || { token: p.token, source: p.pool ? "pool" : null }, lg, skip, p.text, p.markup).catch((e) => console.warn("[sentry] holder DMs:", e.message));
+  }).catch((e) => console.warn("[sentry] queued post:", e.message)).finally(() => { waiting--; });
+  return handle;
+}
+// posts that were still waiting when the server stopped (younger than 15 minutes): sent now, in order, no new lead
+async function resumePending() {
+  const d = await store.readJson(PENDING, { items: [] });
+  const items = (d.items || []).filter((x) => x && x.text && x.at > Date.now() - 15 * 60_000).sort((a, b) => a.at - b.at);
+  await store.writeJson(PENDING, { items: [] });
+  for (const x of items) {
+    const logo = !x.pool && x.token ? await logoFor(x.token).catch(() => null) : null;
+    console.log(`[sentry] resuming a post that was waiting at the restart: ${x.token}`);
+    postWithLead({ r: x.token ? { token: x.token } : null, token: x.token, text: x.text, markup: x.markup, logo, leads: [], pool: !!x.pool, skip: x.skip });
   }
 }
 
@@ -640,6 +729,7 @@ async function tick() {
     pruneWallets();
     if (walletsDirty && Date.now() - lastWalletSave > 60000) { walletsDirty = false; lastWalletSave = Date.now(); await saveWallets().catch((e) => console.warn("[sentry] wallets:", e.message)); }
     await recap(s).catch((e) => console.warn("[sentry] recap:", e.message));
+    if (recentDirty) { recentDirty = false; s.recent = recent.slice(0, 200); }   // post links of queued posts (staker lead)
     await store.writeJson(STATE, s);
   } finally { busy = false; }
 }
@@ -667,6 +757,10 @@ export async function register(r, ctx) {
   if (!MODE || (MODE !== "dry" && !TG)) return;
   console.log(`[sentry] watching Pons launches${POOLS ? ", new pools and the other launchpads" : ""} → ${MODE === "dry" ? "data/sentry-preview.jsonl (dry)" : CHANNEL}`);
   setTimeout(() => store.readJson(STATE, {}).then(warmUp).catch((e) => console.warn("[sentry] warm-up:", e.message)), 3000).unref();
+  if (MODE !== "dry") setTimeout(() => resumePending().catch((e) => console.warn("[sentry] resume:", e.message)), 4000).unref();
   setTimeout(() => tick().catch(() => {}), 5000).unref();
   setInterval(() => tick().catch(() => {}), 15000).unref();
 }
+
+// tests only (tools/sentry-lead-test.mjs): the staker-lead queue without the chain loop
+export const _test = { postWithLead, setStore: (s) => { store = s; }, waiting: () => waiting, recent };

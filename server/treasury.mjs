@@ -55,13 +55,18 @@ export async function register(r, ctx) {
     const s = getSession(req);
     const me = s ? await tierOf(s.address) : null;
     const g = await import("./gateapi.mjs").then((m) => m.gateSettings?.()).catch(() => null);
+    // $TROYA staking (owner, 21 Nov 2026): staked coins count in the balance once a stake contract is live, and a staker's
+    // tier badge shows here once the stake perks are on. Neither changes this answer while no contract is configured.
+    const st = await import("./stake.mjs").catch(() => null);
+    const stakeOn = st ? await st.stakeLive().catch(() => false) : false;
+    const badge = me && stakeOn ? await st.badgeOf(s.address).catch(() => null) : null;
     return {
       name: "Troya Treasury",
-      counted: "your signed-in wallet plus its Agent Wallet",
+      counted: stakeOn ? "your signed-in wallet plus its Agent Wallet, and the $TROYA you have staked" : "your signed-in wallet plus its Agent Wallet",
       tiers: TIERS.map((t) => ({ key: t.key, name: t.name, min: t.min, watchfirePins: t.pins, gateChecksPerDay: g ? (t.key === "soldier" ? g.holderFreePerDay : t.perks ? Math.round(g.holderFreePerDay * t.gateX) : Math.round(g.freePerDay * t.gateX)) : null, perks: !!t.perks })),
       perks: "From Soldier up: 200 assistant messages a day, 100 playbooks, a Telegram DM for every coin Sentry posts, launches through Troya without the daily limit and the whole creator fee.",
       pro: pro() || { note: "Pro plans, paid in $TROYA or a stablecoin, open once the team sets their prices." },
-      you: me ? { tier: me.tier.key, name: me.tier.name, balance: me.balance, known: me.known, next: TIERS.find((t) => t.min > me.balance) || null, pins: (await pinsOf(s.address)).length, maxPins: me.tier.pins } : null,
+      you: me ? { tier: me.tier.key, name: me.tier.name, balance: me.balance, known: me.known, next: TIERS.find((t) => t.min > me.balance) || null, pins: (await pinsOf(s.address)).length, maxPins: me.tier.pins, ...(badge ? { stakeBadge: badge } : {}) } : null,
     };
   }, { weight: 1 });
   r.get("/api/treasury/pins", async ({ req }) => {

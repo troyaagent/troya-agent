@@ -205,13 +205,17 @@ async function cup(offset, me) {
     cupMemo.set(w.label, base);
     if (cupMemo.size > 8) cupMemo.delete(cupMemo.keys().next().value);
   }
-  const pub = (r) => { const { owner, ...rest } = r; return { ...rest, mine: !!me && lc(owner) === me }; };
+  // $TROYA staking (owner, 21 Nov 2026): a staker's tier shows its Arena Cup points next to the row, display only; the order
+  // and the prizes stay PnL %. No points (and no field) while the stake perks are off or no stake contract is set.
+  const pts = await import("./stake.mjs").then((m) => m.cupPointsFor([...base.ranked, ...base.running].map((r) => r.owner).filter(Boolean))).catch(() => new Map());
+  const pub = (r) => { const { owner, ...rest } = r; const sp = pts.get(lc(owner)); return { ...rest, ...(sp ? { stakePoints: sp } : {}), mine: !!me && lc(owner) === me }; };
   const ranked = base.ranked.map(pub);
   return { name: "Arena Cup", season: w.label, start: w.start, end: w.end, final: offset > 0, endsIn: offset ? 0 : Math.max(0, w.end - Date.now()),
     rule: "User strategies on paper, ranked by PnL % over the week (profit divided by the ETH put in), not by volume. At least 3 closed trades. Trades count in the week they close.",
     prize: cupPrize() || PRIZES_OFF, prizeOn: !!cupPrize(),
     ranked: ranked.slice(0, 50), running: base.running.slice(0, 20).map(pub), ai: base.ai.map(pub), mine: ranked.find((r) => r.mine) || base.running.map(pub).find((r) => r.mine) || null,
-    note: "Paper money at real prices, quoted on chain the moment a trade opens and closes. AI traders are shown for reference and are not in the Cup." };
+    note: "Paper money at real prices, quoted on chain the moment a trade opens and closes. AI traders are shown for reference and are not in the Cup.",
+    ...(pts.size ? { stakePointsNote: "Stake points: $TROYA stakers' tier points, shown for fun. They do not change the order or the prizes, which go by PnL %." } : {}) };
 }
 
 /* ---------- submissions: a few per wallet per hour ---------- */

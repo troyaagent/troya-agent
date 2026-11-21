@@ -79,6 +79,8 @@ const MODULES = [
   "./tokenage.mjs",    // token age: when a coin was born (its creation block), cached for good (community request, 20 Nov)
   "./pulse.mjs",       // Desk pulse (community request, 21 Nov): coins that passed Sentry, coins that just graduated (read from the chain)
   "./chat.mjs",        // community chat in the app (community request, 21 Nov): public to read, wallet sign-in to post, same guard as the TG group
+  "./stake.mjs",       // $TROYA staking (21 Nov): tiers from TroyaStake on chain and the perks behind them; read-only, off until a contract is set
+  "./feesplit.mjs",    // $TROYA fee split (21 Nov): creator fees split by the hourly market cap (stakers, burn, owner); sent weekly by payouts.mjs (STAKE_REWARDS)
 ];
 
 const routes = [];

@@ -117,6 +117,32 @@ export function councilText(c) {
   return lines.join("\n");
 }
 
+// Council sittings a minute (owner, 21 Nov 2026: $TROYA stakers get their tier's aiQuotaX on the Council too). The budget is
+// the one the router held per IP before (weight 6 against 10 a minute: one sitting a minute, the window starting at the
+// first call), now counted here: per IP as before, or per signed-in wallet with its stake multiplier once the stake perks
+// are on. The router's own bucket for this route is set wide enough (60) for a Gold staker; its global per-IP ceiling is
+// unchanged. Without stake perks this is exactly the old limit and the same 429.
+const COST = 6, BUDGET = 10, sittings = new Map();
+function overBudget(key, x) {
+  const now = Date.now();
+  let b = sittings.get(key);
+  if (!b || now - b.t > 60_000) { b = { t: now, n: 0 }; sittings.set(key, b); }
+  b.n += COST;
+  if (sittings.size > 20000) for (const [k, v] of sittings) if (now - v.t > 60_000) sittings.delete(k);
+  return b.n > BUDGET * x;
+}
+async function stakeX(req) {
+  const s = await import("./auth.mjs").then((m) => m.getSession(req)).catch(() => null);
+  if (!s?.address) return { x: 1 };
+  const p = await import("./stake.mjs").then((m) => m.activePerks(s.address)).catch(() => null);
+  const x = Number(p?.aiQuotaX);
+  return x > 1 && isFinite(x) ? { x: Math.min(x, 10), address: lc(s.address) } : { x: 1 };
+}
+
 export async function register(r) {
-  r.get("/api/council/:token", async ({ params }) => council(params.token), { weight: 6, perMin: 10 });
+  r.get("/api/council/:token", async ({ req, params, ip }) => {
+    const { x, address } = await stakeX(req);
+    if (overBudget(x > 1 ? `w:${address}` : `ip:${ip}`, x)) throw new HttpError(429, "Too many requests, slow down.");
+    return council(params.token);
+  }, { weight: 6, perMin: 60 });
 }

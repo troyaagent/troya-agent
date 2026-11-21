@@ -151,7 +151,9 @@ export async function mount(view) {
     const rows = (list, ranked) => h("tbody", {}, list.map((r) => h("tr", { class: r.mine ? "mine" : "" },
       h("td", {}, ranked ? String(r.rank) : "–"), h("td", { class: r.model ? "" : "mono" },
         AI_LOGOS[r.id] ? h("img", { class: "hr-logo", src: `/img/logos/ai/${AI_LOGOS[r.id]}.svg`, alt: "", width: 14, height: 14, loading: "lazy", decoding: "async" }) : null,
-        r.name, r.mine ? h("span", { class: "badge-s blue hr-you" }, "you") : null),
+        r.name, r.mine ? h("span", { class: "badge-s blue hr-you" }, "you") : null,
+        // $TROYA staking tier points: display only, the order and the prizes stay PnL %
+        r.stakePoints ? h("span", { class: "badge-s stk-badge hr-stk", title: "$TROYA staker points, shown for fun: they do not change the order or the prizes" }, `${r.stakePoints} pts`) : null),
       h("td", { class: `b ${r.pnlPct > 0 ? "up" : r.pnlPct < 0 ? "down" : ""}` }, pct(r.pnlPct)), h("td", {}, eth(r.pnlEth)), h("td", {}, String(r.closed)), h("td", {}, r.closed ? `${Math.round((r.wins / r.closed) * 100)}%` : "–"))));
     const thead = () => h("thead", {}, h("tr", {}, ["#", "Trader", "PnL %", "PnL", "Closed", "Won"].map((x) => h("th", {}, x))));
     clear(cupBox, head,
@@ -161,6 +163,7 @@ export async function mount(view) {
           h("a", { class: "btn primary sm", href: "#/agent/arena" }, "Open the Arena")),
       d.running.length ? h("p", { class: "fine muted hr-pad" }, `In the running with fewer than 3 closed trades: ${d.running.map((r) => `${r.name} (${r.closed})`).join(", ")}.`) : null,
       h("p", { class: "fine muted hr-pad" }, d.rule),
+      d.stakePointsNote ? h("p", { class: "fine muted hr-pad" }, d.stakePointsNote) : null,
       d.ai.length ? h("details", { class: "hr-ai" }, h("summary", {}, `AI traders this week, for reference (${d.ai.length})`), h("div", { class: "hr-scroll" }, h("table", { class: "hr-tbl" }, thead(), rows(d.ai, false)))) : null,
       h("p", { class: "fine muted hr-pad" }, d.note, " ", h("a", { class: "link", href: "#/agent/arena" }, "Enter with a strategy")));
   }

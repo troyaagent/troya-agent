@@ -1173,6 +1173,14 @@ export async function sellCheck({ token, amountRaw, to = "ETH", _recheck = true 
 export async function gateCheck({ tokenIn, tokenOut, amountIn, amountInRaw, from, slippageBps = 100 }) {
   const checks = [];
   const add = (key, status, label, detail) => checks.push({ key, status, label, detail });
+  // V8 dev side wallets (devlinks.mjs): on a buy paid in ETH, WETH or USDG, read beside the quote and added as the last
+  // line. It never holds the Gate up for long: a coin read for the first time waits at most DEVLINKS_WAIT_MS from the
+  // start, the read goes on in the background and the next check (the one Swap runs again) has it
+  const DEVLINKS_WAIT_MS = Math.max(0, Number(process.env.DEVLINKS_WAIT_MS ?? 1500) || 0);
+  const majors = [lower(ADDR.weth), lower(ADDR.usdg)];
+  const coinOut = isAddress(String(tokenOut || "")) && !majors.includes(lower(tokenOut)) && !STOCKS.some((s) => lower(s.address) === lower(tokenOut)) ? tokenOut : null;
+  const devlinks = coinOut && (isNative(tokenIn) || majors.includes(lower(tokenIn)))
+    ? import("./devlinks.mjs").then((m) => m.gateLine(coinOut, { waitMs: DEVLINKS_WAIT_MS })).catch(() => null) : null;
   let q;
   try { q = await sharedQuote({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps, from }); add("route", "pass", "Route", q.route.label); }
   catch (e) { add("route", "fail", "Route", e.message); return { pass: false, checks }; }
@@ -1227,6 +1235,7 @@ export async function gateCheck({ tokenIn, tokenOut, amountIn, amountInRaw, from
       }
     } catch (e) { add("sell", "warn", "Test sell", e.message); add("tax", "skip", "Transfer tax", "Not measured"); }
   }
+  if (devlinks && q.side === "buy") { const l = await devlinks; if (l) add(l.key, l.status, l.label, l.detail); }
   // a Kyber route is simulated above, but nobody gets its calldata to sign until KYBER_LIVE is on
   if (q.venue === "kyberswap" && !KYBER_LIVE) tx = null;
   // pass as sentry.verdict() reads it: on a curve the depth line informs, it never decides

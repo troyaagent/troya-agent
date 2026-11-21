@@ -8,6 +8,10 @@
 //   tax-up      the sell tax rose to 10% or more (red)
 //   cannot-sell the sell test failed twice in a row (red)
 //   oath-broken the dev broke its Oath (red)        ring   Ring Radar called the launch rigged (amber, once)
+//   dev-linked-sell  wallets tied to the dev (V8 dev side wallets, devlinks.mjs: coins or ETH moved with the dev, a small
+//               shared funder, trades through one private contract) sold ≥0.2% of the supply in 10 minutes (amber), or
+//               ≥1% in 10 minutes, ≥2% in one sale, or ≥0.5% with 3+ of them selling within a minute (red)
+//   cluster-sell the same for a wallet cluster not tied to the dev (gathered into one wallet, funded by one small wallet)
 // Each alert goes to the holder's inbox and Telegram DM, with a cool-down per coin and kind. In "exit" mode a red alert
 // also builds a full sell of that coin to ETH: a ticket to approve, or, with the Agent Wallet on and AEGIS_AUTO_EXIT=1,
 // a sell through the Gate and the wallet's caps. Red alerts are sealed (V7 F35).
@@ -28,7 +32,7 @@ const lc = (s) => String(s || "").toLowerCase();
 const hex = (n) => "0x" + n.toString(16);
 const pct = (a, s) => (s > 0n ? Number((a * 1_000_000n) / s) / 10_000 : 0);
 let store = null, busy = false, R = null;
-const live = new Map();          // token → { supply, devs:Set, top:Set, followed:Set, venues:Set, sells:[{w,v,at,tx,dev}], sell:{at,ok,tax,fails}, curveQuote:[{at,q}] }
+const live = new Map();          // token → { supply, devs:Set, top:Set, followed:Set, linked:Set, loose:Set, venues:Set, sells:[{w,v,at,tx,dev,linked,loose}], sell:{at,ok,tax,fails}, curveQuote:[{at,q}] }
 
 async function chain() { return (R ||= await import("./robinhood.mjs")); }
 
@@ -82,7 +86,7 @@ async function setupCoin(token, st) {
   let c = live.get(t);
   if (!c) {
     c = { devs: new Set(), top: new Set(), followed: new Set(st?.followed || []), venues: new Set([lc(ADDR.poolManager), lc(ADDR.universalRouter), lc(ADDR.swapRouter02), "0x204faca1764b154221e35c0d20abb3c525710498", "0x6131b5fae19ea4f9d964eac0408e4408b66337b5"]),
-      sells: [], sell: { at: 0, ok: null, tax: null, fails: 0 }, curveQuote: [], topAt: 0, supply: 0n, pons: false };
+      sells: [], sell: { at: 0, ok: null, tax: null, fails: 0 }, curveQuote: [], topAt: 0, supply: 0n, pons: false, linked: new Set(), loose: new Set() };
     live.set(t, c);
   }
   if (!c.supply) c.supply = BigInt(await rpc("robinhood", "eth_call", [{ to: t, data: "0x18160ddd" }, "latest"]).catch(() => "0x0"));
@@ -102,6 +106,14 @@ async function setupCoin(token, st) {
   const oath = await (await import("./oath.mjs")).oathOf(t).catch(() => null);
   for (const w of oath?.pledge?.wallets || []) c.devs.add(lc(w));
   c.oathBroken = oath?.status === "broken";
+  // V8 dev side wallets: the wallets tied to the dev and the clusters not tied to it, from devlinks.mjs's cache (a stale
+  // or missing report starts a read in the background); a sale through a relay it found (a bot's router) is a sale
+  const ds = (await import("./devlinks.mjs").catch(() => null))?.devSideOf(t);
+  if (ds) {
+    c.linked = new Set([...ds.linked].filter((w) => !c.devs.has(w)));
+    c.loose = new Set([...ds.loose].filter((w) => !c.devs.has(w) && !c.linked.has(w)));
+    for (const v of ds.relays || []) c.venues.add(lc(v));
+  }
   if (Date.now() - c.topAt > TOP_MS) {
     const th = await (await import("./market.mjs")).topHolders(t).catch(() => null);
     c.top = new Set((th?.holders || []).filter((h) => h.wallet).slice(0, 10).map((h) => lc(h.address)));
@@ -110,7 +122,8 @@ async function setupCoin(token, st) {
   return c;
 }
 
-function watchedOf(c) { return [...new Set([...c.devs, ...c.top, ...c.followed])].filter((w) => !c.venues.has(w)).slice(0, 30); }
+// the dev, the wallets it moved coins to and the wallets tied to it first, then the top holders and other clusters
+function watchedOf(c) { return [...new Set([...c.devs, ...c.followed, ...c.linked, ...c.top, ...c.loose])].filter((w) => !c.venues.has(w)).slice(0, 80); }
 
 async function scanCoin(token, st, raise) {
   const { rpc, CHAINS } = await chain();
@@ -127,13 +140,22 @@ async function scanCoin(token, st, raise) {
       const fromW = "0x" + l.topics[1].slice(26), toW = "0x" + l.topics[2].slice(26), v = BigInt(l.data);
       const dev = c.devs.has(fromW) || c.followed.has(fromW);
       if (c.venues.has(toW)) {
-        c.sells.push({ w: fromW, v, at: Date.now(), tx: l.transactionHash, dev });
+        const linked = !dev && c.linked.has(fromW), loose = !dev && !linked && c.loose.has(fromW);
+        c.sells.push({ w: fromW, v, at: Date.now(), tx: l.transactionHash, dev, linked, loose });
         c.sells = c.sells.filter((s) => Date.now() - s.at < 3600_000);
         const oneP = pct(v, c.supply);
         if (dev) {
           const hour = pct(c.sells.filter((s) => s.dev).reduce((a, s) => a + s.v, 0n), c.supply);
           if (hour >= 1) await raise("dev-sell", "red", `The dev side sold ${hour.toFixed(2)}% of the supply in the last hour`, l.transactionHash, hour);
           else if (oneP >= 0.2) await raise("dev-sell", "amber", `The dev side sold ${oneP.toFixed(2)}% of the supply`, l.transactionHash);
+        } else if (linked || loose) {
+          // wallets tied to the dev (or a cluster) starting to sell: in exit mode a red one builds the sell
+          const mine = c.sells.filter((s) => (linked ? s.linked : s.loose));
+          const ten = pct(mine.filter((s) => Date.now() - s.at < 600_000).reduce((a, s) => a + s.v, 0n), c.supply);
+          const sellers = new Set(mine.filter((s) => Date.now() - s.at < 60_000).map((s) => s.w)).size;
+          const kind = linked ? "dev-linked-sell" : "cluster-sell", who = linked ? "Wallets tied to the dev" : "A wallet cluster (not tied to the dev)";
+          if (ten >= 1 || oneP >= 2 || (sellers >= 3 && ten >= 0.5)) await raise(kind, "red", `${who} sold ${ten.toFixed(2)}% of the supply in the last 10 minutes${sellers >= 3 ? ` (${sellers} wallets within a minute)` : ""}`, l.transactionHash, ten);
+          else if (ten >= 0.2) await raise(kind, "amber", `${who} sold ${ten.toFixed(2)}% of the supply in the last 10 minutes`, l.transactionHash);
         } else if (c.top.has(fromW)) {
           const hour = pct(c.sells.filter((s) => s.w === fromW).reduce((a, s) => a + s.v, 0n), c.supply);
           if (hour >= 6) await raise("whale-sell", "red", `A top holder (${fromW.slice(0, 8)}…) sold ${hour.toFixed(2)}% of the supply in the last hour`, l.transactionHash, hour);
@@ -316,13 +338,14 @@ export async function aegisToken(token) {
   const st = d.coins?.[t] || null;
   const c = live.get(t);
   return { token: getAddress(t), symbol: st?.symbol || null, guarded: !!st,
-    watching: c ? { dev: c.devs.size, topHolders: c.top.size, followed: c.followed.size } : null,
+    watching: c ? { dev: c.devs.size, topHolders: c.top.size, followed: c.followed.size, devLinked: c.linked.size, clusters: c.loose.size } : null,
     sellTest: st?.sell || null, events: (st?.events || []).map(pubEvent),
     note: st ? "Watched once a minute while someone guards it." : "Nobody guards this coin yet. Turn Aegis on in the app and every coin you hold is watched." };
 }
 
 export async function register(r, ctx) {
   store = ctx.store;
+  import("./devlinks.mjs").then((m) => m.initDevLinks(ctx.store)).catch(() => {});   // its funder cache, even before its routes load
   setTimeout(() => tick().catch(() => {}), 75_000);
   setInterval(() => tick().catch(() => {}), TICK_MS).unref();
   r.get("/api/aegis/feed", () => publicFeed(), { weight: 1 });
@@ -350,5 +373,5 @@ export async function probe(token, fromBlock, { testRaw = null, windows = 6 } = 
   const raise = async (kind, level, text, tx, mag = null) => { evs.push({ kind, level, text, tx, mag }); };
   for (let i = 0; i < windows; i++) { const before = st.lastBlock; await scanCoin(lc(token), st, raise); if (st.lastBlock === before) break; }
   const c = live.get(lc(token));
-  return { lastBlock: st.lastBlock, sell: st.sell || null, events: evs, watched: c ? { dev: [...c.devs], top: c.top.size, followed: [...c.followed] } : null };
+  return { lastBlock: st.lastBlock, sell: st.sell || null, events: evs, watched: c ? { dev: [...c.devs], top: c.top.size, followed: [...c.followed], devLinked: [...c.linked], clusters: c.loose.size } : null };
 }

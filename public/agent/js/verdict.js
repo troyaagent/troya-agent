@@ -31,6 +31,7 @@ function plain(c) {
     case "sell": return "it could not be sold back in the test sell";
     case "tax": return `too much is lost on every transfer${n ? ` (${n})` : ""}`;
     case "gate": return "the checks could not run just now";
+    case "devlinks": return /^dev side is selling now/i.test(d) ? "the dev and the wallets tied to it are selling it right now" : "the dev and the wallets tied to it hold most of it";
     default: return c?.label ? `${String(c.label).toLowerCase()} failed` : "the checks did not pass";
   }
 }

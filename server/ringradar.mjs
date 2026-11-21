@@ -57,6 +57,15 @@ async function traceInner(txHash) {
   walk(r?.result);
   return found;
 }
+/** One Pons launch call, decoded (V8 dev side wallets reads the wallets the dev freed from the snipe tax, and where the
+ *  first buy went): { via, deployer, creator, exemptions, firstBuyRecipient, from }. A launch never changes: cache it. */
+export async function launchCall(txHash) {
+  const tx = await rpc("robinhood", "eth_getTransactionByHash", [txHash], { timeoutMs: 15_000 });
+  if (!tx) return null;
+  const d = decodeLaunch(tx.to, tx.input) || (await traceInner(txHash));
+  return { via: d?.via || null, deployer: lc(d?.deployer || tx.from), creator: lc(d?.creatorFeeRecipient), exemptions: [...new Set((d?.exemptions || []).filter((w) => w && w !== ZERO))],
+    firstBuyRecipient: d?.firstBuyRecipient && d.firstBuyRecipient !== ZERO ? lc(d.firstBuyRecipient) : null, from: lc(tx.from), decoded: !!d };
+}
 export async function findLaunchTx(token) {
   // the TokenLaunched log carries the coin as topic 1; search back in 30k-block steps (the official RPC's range) up to ~2 days
   const head = Number(BigInt(await rpc("robinhood", "eth_blockNumber", [])));

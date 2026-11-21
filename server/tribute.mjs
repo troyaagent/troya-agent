@@ -427,7 +427,8 @@ function incomeReasons(S, R, vol) {
     out.push({ level: R.creatorPct >= RULES.creatorRed ? "red" : "amber", text: `${all ? "All" : pctS(R.creatorPct)} of the income its holders were paid in the last ${days}${all ? `, ${what}${tot},` : tot} came from ${who}, not from trading fees or outside payers.` });
   }
   if (R.ownCoinPct >= RULES.ownCoinAmber) out.push({ level: "amber", text: `${R.ownCoinPct >= 99.5 ? "All of that income was" : `${pctS(R.ownCoinPct)} of that income was`} paid in ${R.ownAssets.join(" and ")}, the project's own coin, not in ETH or USDG.` });
-  if (R.creatorHoldsPct >= 50) out.push({ level: "info", text: `The creator's wallets hold ${pctS(R.creatorHoldsPct)} of the revenue token, so most of what it pays flows back to them.` });
+  // 90%+ in the creator's hands: the "revenue" mostly pays the creator back, which is a reason to look closer (amber), not just a note
+  if (R.creatorHoldsPct >= 50) out.push({ level: R.creatorHoldsPct >= 90 ? "amber" : "info", text: `The creator's wallets hold ${pctS(R.creatorHoldsPct)} of the revenue token, so most of what it pays flows back to them.` });
   if (R.tradingPct >= 50 && vol?.status === "red") out.push({ level: "amber", text: `Most of its income is trading fees, but the volume paying those fees looks scripted (see below).` });
   if (!out.some((x) => x.level === "red" || x.level === "amber")) {
     const mix = [["trading", "trading fees"], ["outside", "outside wallets"], ["unknown", "senders not identified"], ["minted", "newly minted coins"]].filter(([k]) => (R.byKind[k] || 0) > 0)

@@ -107,7 +107,11 @@ async function run({ dry = false, reason = "schedule" } = {}) {
     const head = week.status === "dry" ? "Herald payouts (dry run, nothing sent)" : `Herald payouts ${week.status}`;
     import("./community.mjs").then((c) => c.notifyAdmins?.(`<b>${head}</b>, week ${p.season}\nCreator fees claimed that week: ${p.claimedEth} ETH. Budget: ${p.capPct}% of it, at most $${p.maxUsd} = $${p.budgetUsd}. Due: $${p.dueUsd}${p.factor < 1 ? `, paid at ${Math.round(p.factor * 100)}%` : ""}.\n${lines.join("\n") || "Nobody to pay this week (no Cup winners with 3+ closed trades, no referral rewards of $1 or more)."}`)).catch(() => {});
     return { mode: mode(), week };
-  } finally { busy = false; }
+  } finally {
+    busy = false;
+    // the weekly prize pool (server/prizes.mjs) is paid right after the scheduled Herald run, whatever that run did
+    if (reason === "schedule") import("./prizes.mjs").then((m) => m.afterHerald?.()).catch(() => {});
+  }
 }
 
 // the last closed week is paid once, an hour after it closes

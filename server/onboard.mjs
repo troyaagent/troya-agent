@@ -4,6 +4,8 @@
 // Phase 9 · leaderboard and copy: closed Sentry Autopilot results of users who opted in, ranked by return.
 //   GET /api/leaderboard?days=7 · POST /api/leaderboard/copy {address} (copies that trader's rules into yours)
 //   Telegram (via tgterm.mjs): /leaderboard · /copy 1
+// 22 Nov 2026: the weekly prize pool for the most active traders (server/prizes.mjs, GET /api/leaderboard/prizes) leads the
+// page and Telegram's /leaderboard; /api/leaderboard carries its hint for the Desk.
 import { getAgentWallet } from "./agentwallet.mjs";
 import { getBalances } from "./robinhood.mjs";
 import { hlUserState, hlInfo } from "./hl.mjs";
@@ -111,9 +113,11 @@ export async function copyRules(toAddress, fromAddress) {
   return ap.setUser(toAddress, { rules: src.rules });
 }
 export async function leaderboardText(days = 7) {
+  // the weekly prize pool (server/prizes.mjs) leads: volume standings and each rank's estimated prize
+  const prize = await import("./prizes.mjs").then((m) => m.prizeText()).catch(() => "");
   const rows = await leaderboard({ days });
-  if (!rows.length) return "No one is on the leaderboard yet. Turn on Sentry Autopilot (/autopilot on) and opt in from the app: Agent → Sentry Autopilot → Show my results.";
-  const L = [`<b>Sentry Autopilot leaderboard · last ${days} days</b>`];
+  if (!rows.length) return [prize, "No one is on the Sentry Autopilot leaderboard yet. Turn on Sentry Autopilot (/autopilot on) and opt in from the app: Agent → Sentry Autopilot → Show my results."].filter(Boolean).join("\n\n");
+  const L = [...(prize ? [prize, ""] : []), `<b>Sentry Autopilot leaderboard · last ${days} days</b>`];
   for (const r of rows.slice(0, 10)) L.push(`${r.rank}. <code>${r.trader}</code> · ${r.mode} · ${r.returnPct >= 0 ? "+" : ""}${r.returnPct.toFixed(1)}% · ${r.closed} closed · ${(r.winRate * 100).toFixed(0)}% won${r.rules ? ` · min ${r.rules.minRaisedEth} ETH, tp ${r.rules.takeProfitX}x, sl ${r.rules.stopPct}%` : ""}`);
   L.push("", "/copy 1 copies the rules of rank 1 into your Autopilot. Practice results are play money at real prices.");
   return L.join("\n");
@@ -124,7 +128,9 @@ export async function register(r, ctx) {
   const { requireSession } = await import("./auth.mjs");
   const { HttpError } = await import("./api.mjs");
   r.get("/api/onboarding", async ({ req }) => onboarding(requireSession(req).address));
-  r.get("/api/leaderboard", async ({ query }) => ({ days: Number(query.days) || 7, rows: (await leaderboard({ days: Number(query.days) || 7 })).map(({ address, ...x }) => x) }), { perMin: 60 });
+  // prizes: the weekly prize pool's hint (server/prizes.mjs), so the Desk shows the Leaderboard link while a pool runs
+  r.get("/api/leaderboard", async ({ query }) => ({ days: Number(query.days) || 7, rows: (await leaderboard({ days: Number(query.days) || 7 })).map(({ address, ...x }) => x),
+    prizes: await import("./prizes.mjs").then((m) => m.hint()).catch(() => null) }), { perMin: 60 });
   r.post("/api/leaderboard/copy", async ({ req, body }) => {
     const s = requireSession(req);
     const rows = await leaderboard({ days: 90 });

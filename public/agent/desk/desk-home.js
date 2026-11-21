@@ -331,6 +331,9 @@ export async function mount(view, { go, ask: askDrawer }) {
   const heroOn = () => alive && hero.isConnected;
   async function heroNumbers() {
     if (!heroOn()) return;
+    // the burn first, from the light proof read (1,000,000,000 − totalSupply() on chain, cached 5 minutes), so the tile does
+    // not wait for the whole flywheel view
+    try { const pb = await api.get("/api/proof/burn"); if (pb?.burnedWhole > 0) { kBurn.textContent = compact(pb.burnedWhole); kBurnS.textContent = `${Number(pb.pctOfMinted).toFixed(2)}% of the 1B minted · 1B − totalSupply()`; tagFlyB.textContent = `${compact(pb.burnedWhole)} burned`; } } catch {}
     try {
       const f = await api.get("flywheel");
       if (f.price?.troyaUsd) kTro.textContent = troyaPx(f.price.troyaUsd);

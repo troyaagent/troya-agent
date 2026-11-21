@@ -260,8 +260,9 @@ function navGroup([g, items]) {
   return h("div", { class: "d-group" }, h("h5", { style: { display: "flex", alignItems: "center", gap: "8px" } }, btn, extra), list);
 }
 clear($("[data-nav]"), GROUPS.map(navGroup));
-// Leaderboard stays hidden until traders opt in (the same check as the Desk home); the route itself always works
-api.get("leaderboard?days=30").then((d) => { if (d?.rows?.length) for (const a of document.querySelectorAll("[data-leaderboard]")) a.hidden = false; }).catch(() => {});
+// Leaderboard stays hidden until traders opt in (the same check as the Desk home) or the weekly prize pool runs
+// (prizes.show, 22 Nov 2026); the route itself always works
+api.get("leaderboard?days=30").then((d) => { if (d?.rows?.length || d?.prizes?.show) for (const a of document.querySelectorAll("[data-leaderboard]")) a.hidden = false; }).catch(() => {});
 const caShort = SITE.ca ? short(SITE.ca, 4) : "Not live yet";
 clear($("[data-side-foot]"),
   h("button", { class: "d-ca", type: "button", title: "Copy contract address", onclick: async () => {

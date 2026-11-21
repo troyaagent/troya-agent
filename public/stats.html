@@ -65,11 +65,12 @@
   <section class="ip" aria-labelledby="pr-h">
     <div class="eyebrow-line"><span>03 / Proof</span></div>
     <h2 id="pr-h" class="h2 words" data-words style="margin-bottom:32px">Work the product did</h2>
+    <p class="lead" style="margin:0 0 22px;color:var(--muted);font-size:14px"><b data-live="burn.total">–</b> $TROYA burned (1,000,000,000 minus totalSupply(), read on chain) · <b data-live="trades.arena">–</b> Arena trades with real money · <b data-live="trades.steps">–</b> real-money tests on /verify. Every one with its transaction: <a class="ulink" href="/proof">Proof</a>.</p>
     <div class="stats-grid" data-stats="proof"></div>
     <p class="lead rv" data-stats-at style="margin-top:28px;color:var(--muted);font-size:14px"></p>
     <div class="cta-band">
       <h2 class="h2 sm words" data-words>Check the receipts yourself.</h2>
-      <div class="acts rv"><a class="ulink" href="/verify">Real-money receipts</a><a class="ulink" href="/agent">Open app</a><a class="ulink" href="/api/stats">Raw numbers (JSON)</a></div>
+      <div class="acts rv"><a class="ulink" href="/proof">Proof</a><a class="ulink" href="/verify">Real-money receipts</a><a class="ulink" href="/agent">Open app</a><a class="ulink" href="/api/stats">Raw numbers (JSON)</a></div>
     </div>
   </section>
 </main>
@@ -83,11 +84,17 @@
 const LABELS = {
   usage: [["walletsUsedTroya", "wallets that used Troya"], ["walletsLast7Days", "of them in the last 7 days"], ["tradesExecuted", "trades executed through Troya"], ["tradesLast7Days", "trades in the last 7 days"], ["tradesFromXOrTelegram", "trades placed from X or Telegram"], ["coinsLaunched", "coins launched through Troya"], ["agentWallets", "Agent Wallets opened"], ["playbooksCreated", "playbooks set up"], ["paidGateCalls", "paid Gate checks by other apps and agents"]],
   community: [["holders", "$TROYA holders"], ["telegramMembers", "Telegram members"], ["xFollowers", "followers on X"]],
-  proof: [["launchesCheckedBySentry", "launches checked and graded by Sentry"], ["sentryPasses", "clean launches Sentry posted"], ["arenaTrades", "Arena trades by the AI traders"], ["arenaLiveTrades", "of them with real money"], ["troyaBurned", "$TROYA burned on chain"], ["realMoneyTests", "real-money tests on /verify"]],
+  proof: [["launchesCheckedBySentry", "launches checked and graded by Sentry"], ["sentryPasses", "clean launches Sentry posted"], ["arenaTrades", "Arena trades by the AI traders"], ["arenaLiveTrades", "of them with real money"], ["troyaBurned", "$TROYA burned: 1B minus totalSupply() on chain"], ["realMoneyTests", "real-money tests on /verify"]],
 };
 const fmt = (v) => (v == null ? "–" : Number(v).toLocaleString("en-US"));
 async function load() {
   let d; try { d = await (await fetch("/api/stats")).json(); } catch { return; }
+  // the burn from the chain itself (1,000,000,000 − totalSupply(), /api/proof/burn) and the real-money steps on /verify
+  // (articles with a roadmap number, not every card on the page), both from the proof endpoints
+  const [pb, pt] = await Promise.all([fetch("/api/proof/burn").then((r) => r.json()).catch(() => null), fetch("/api/proof/trades").then((r) => r.json()).catch(() => null)]);
+  if (d.proof && pb?.burnedWhole > 0) d.proof.troyaBurned = pb.burnedWhole;
+  if (d.proof && pt?.counts?.verifySteps > 0) d.proof.realMoneyTests = pt.counts.verifySteps;
+  if (d.proof && pt?.counts) d.proof.arenaLiveTrades = pt.counts.arenaLive;
   for (const [k, rows] of Object.entries(LABELS)) {
     const el = document.querySelector(`[data-stats="${k}"]`);
     el.innerHTML = rows.map(([f, label]) => `<div class="stat-card"><b>${fmt(d[k]?.[f])}</b><span>${label}</span></div>`).join("");

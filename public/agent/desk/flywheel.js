@@ -62,7 +62,7 @@ export async function mount(view) {
     clear(top, h("div", { class: "fw-tiles" },
       tile("Creator fees earned", `${fx(d.fees.earnedEth)} ETH`, e ? usd(d.fees.earnedEth * e) : null),
       tile("Waiting to claim", `${fx(d.fees.waitingEth)} ETH`, `${d.fees.claims} claims so far`),
-      tile("$TROYA burned", big(d.burned.total), `${d.burned.pctOfMinted.toFixed(2)}% of the 1B minted`),
+      tile("$TROYA burned", big(d.burned.total), `1B − totalSupply(), read on chain: ${d.burned.pctOfMinted.toFixed(2)}% of the 1B minted`),
       tile("Liquidity locked", usd(d.locked.usd), `${d.locked.positions.length} position${d.locked.positions.length === 1 ? "" : "s"} at 0x…dEaD`),
       tile("Cycles", String(d.totals.cycles), d.totals.cycles ? `${big(d.totals.troyaBurned)} burned by cycles` : "none yet")));
     paintSplit();

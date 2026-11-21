@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | Proof</title>
+<meta name="description" content="Every claim Troya makes, with its evidence: the $TROYA burn read from totalSupply(), Troya Gate run live on any coin with each check explained, and every real trade by Troya's agents with its transaction. No wallet needed.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | Proof">
+<meta property="og:description" content="The burn from totalSupply(), the Gate run live, every agent trade with its transaction. Machine-readable at /proof.json.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/proof">
+<meta property="og:url" content="https://troya.codes/proof">
+<meta property="og:image" content="https://troya.codes/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
+<meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<link rel="alternate" type="application/json" href="/proof.json" title="Every Troya claim with its evidence (JSON)">
+<meta name="theme-color" content="#0d0c0b">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<link rel="preload" href="/home/fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/home/pages.css">
+<link rel="stylesheet" href="/home/proof.css">
+<link rel="stylesheet" href="/css/buybar.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+</head>
+<body class="site pn">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="pn-nav" data-pn-nav>
+  <a class="pn-logo" href="/" aria-label="Troya Agent home"><span>Troya</span><b>Agent</b><small>MMXXVI</small></a>
+  <div class="pn-r">
+    <nav class="bb-soc" aria-label="Troya elsewhere"><a class="bb-com" href="/proof" aria-current="page">Proof</a><a class="bb-com" href="/roadmap">Roadmap</a><a class="bb-com" href="/community">Community</a><a href="https://x.com/Troyaagent" target="_blank" rel="noopener" aria-label="Troya on X" title="X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.12z"/></svg></a><a href="https://t.me/troyaagent" target="_blank" rel="noopener" aria-label="Troya on Telegram" title="Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg></a><a href="https://github.com/troyaagent/troya-agent" target="_blank" rel="noopener" aria-label="Troya on GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg></a></nav>
+    <div class="bb-buy" data-bb><button class="bb-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="bb-menu" data-bb-btn><img src="/img/logo-3d-128.png" alt="" width="24" height="24">Buy<span class="bb-t">$TROYA</span><svg class="bb-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button><div class="bb-menu" id="bb-menu" hidden data-bb-menu><a class="bb-i bb-main" href="/agent/#/swap?out=0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="/agent/#/swap?out={ca}"><img src="/img/logo-3d-128.png" alt="" width="36" height="36"><span><b>Troya Swap</b><small>Our own desk. The Gate checks $TROYA first, then Troya routes the best price on Robinhood Chain.</small></span><em>Best</em></a><a class="bb-i" href="https://ponsfamily.com/launchpad/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://ponsfamily.com/launchpad/{ca}" target="_blank" rel="noopener"><img src="/img/logos/pons.svg" alt="" width="36" height="36"><span><b>Pons</b><small>The launchpad where $TROYA started</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><a class="bb-i" href="https://fomo.family/tokens/robinhood/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://fomo.family/tokens/robinhood/{ca}" target="_blank" rel="noopener"><img src="/img/logos/fomo.png" alt="" width="36" height="36"><span><b>Fomo</b><small>The social trading app, on web and phone</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><a class="bb-i" href="https://dexscreener.com/robinhood/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://dexscreener.com/robinhood/{ca}" target="_blank" rel="noopener"><img src="/img/logos/dexscreener.png" alt="" width="36" height="36"><span><b>DexScreener</b><small>Live chart, pools and trades</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><button class="bb-ca" type="button" data-bb-ca><span>CA</span><code data-bb-ca-full>0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074</code><b>Copy</b></button></div></div>
+    <a class="pn-pill" href="/agent">Open app</a>
+    <button class="pn-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="pn-menu" data-pn-burger><i></i><i></i></button>
+  </div>
+</header>
+<nav class="pn-menu" id="pn-menu" aria-label="Site" data-pn-menu></nav>
+
+<main id="main">
+  <section class="page-hero" aria-labelledby="ph">
+    <canvas class="rain" data-rain aria-hidden="true"></canvas>
+    <span class="eyebrow"><i class="dot"></i>Proof</span>
+    <h1 id="ph">Every claim, checkable</h1>
+    <p class="lead">No wallet and no account needed. Every number on this page is read from Robinhood Chain or from Troya's own records at the moment the page is served, and each one links to where you can check it yourself. Anything not running yet is marked planned. The same claims, machine-readable, each with its transactions, contracts and the eth_call to send yourself: <a class="ulink" href="/proof.json">proof.json</a>.</p>
+    <p class="pf-glance"><span><b data-live="claims.live">–</b> claims live</span><span><b data-live="claims.planned">–</b> planned</span><span><b data-live="burn.total">–</b> $TROYA burned</span><span><b data-live="trades.arena">–</b> Arena live trades</span><span>Gate on $TROYA <b data-live="gate.verdict">–</b> · <span data-live="gate.when">–</span></span></p>
+    <nav class="pf-jump" aria-label="On this page"><a href="#burn">Burn</a><a href="#gate">Gate</a><a href="#trades">Agent trades</a><a href="#contracts">Contracts</a><a href="#team">Team</a><a href="#claims">Live and planned</a><a href="/proof.json">proof.json</a></nav>
+  </section>
+
+  <section class="ip" id="burn" aria-labelledby="burn-h">
+    <div class="eyebrow-line"><span>01 / The burn</span></div>
+    <div class="split" style="margin-bottom:36px">
+      <h2 id="burn-h" class="h2">1,000,000,000 minus totalSupply()</h2>
+      <p class="lead">$TROYA was minted once, 1,000,000,000 coins straight into its Pons curve. Every burn since used the token's own burn(), which takes the coins out of the total supply instead of parking them at a dead address. So the whole burn is one read on the token contract: 1,000,000,000 minus totalSupply() now.</p>
+    </div>
+    <div class="rec-stats" data-frag="burn-tiles"><!--live:burn-tiles--><div class="rec-tile" data-pf-pending><span>$TROYA burned</span><b>…</b><small>reading totalSupply() on chain</small></div><!--/live:burn-tiles--></div>
+    <div data-frag="burn-note"><!--live:burn-note--><p class="rec-note" data-pf-pending>Reading totalSupply() on chain. The live number is also at <a class="ulink" href="/api/proof/burn">/api/proof/burn</a>.</p><!--/live:burn-note--></div>
+    <div class="pf-box">
+      <p class="pf-box-h"><b>Read it from the chain yourself</b> <span>sends eth_call totalSupply() and balanceOf(0x…dEaD) to Robinhood Chain through this site's RPC relay and shows the raw answer</span></p>
+      <button class="pf-btn" type="button" data-pf-supply>Read totalSupply() now</button>
+      <pre class="pf-out" data-pf-supply-out hidden></pre>
+      <p class="rec-note">Or send it to the public RPC yourself: <code>POST https://rpc.mainnet.chain.robinhood.com</code> with <code>{"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"to":"0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074","data":"0x18160ddd"},"latest"]}</code>. The answer is the supply in wei (18 decimals).</p>
+    </div>
+    <h3 class="pf-h3">Every burn transaction</h3>
+    <div class="rec-wrap pf-scroll"><table class="rec-tbl"><thead><tr><th>Block</th><th>Burned</th><th>Signed by · call</th><th>Transaction</th></tr></thead><tbody data-frag="burn-rows"><!--live:burn-rows--><tr><td colspan="4" class="rec-empty" data-pf-pending>Reading the burns…</td></tr><!--/live:burn-rows--></tbody></table></div>
+    <p class="rec-note">Listed: transfers of $TROYA from the creator wallet to the zero address, read from the chain since the launch block; the signer and the function called are read from each transaction. GeckoTerminal still shows a total supply of 1,000,000,000: that is the number it stored at launch, not a live read.</p>
+  </section>
+
+  <section class="ip" id="gate" aria-labelledby="gate-h">
+    <div class="eyebrow-line"><span>02 / Troya Gate</span></div>
+    <div class="split" style="margin-bottom:36px">
+      <h2 id="gate-h" class="h2">Run the Gate on a coin</h2>
+      <p class="lead">Paste any Robinhood Chain coin. The box calls the same public Gate the Swap page and Sentry use (<code>GET /api/swap/gate</code>), with no wallet, and shows every check with what it read. The simulated buy comes back as an eth_call you can send to the chain yourself.</p>
+    </div>
+    <form class="pf-box pf-run" data-pf-gate data-pf-auto="1">
+      <label class="pf-lbl" for="pf-coin">Coin contract on Robinhood Chain</label>
+      <div class="pf-row">
+        <input id="pf-coin" name="coin" type="text" inputmode="text" autocomplete="off" spellcheck="false" value="0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" aria-describedby="pf-coin-h">
+        <select name="amount" aria-label="Simulated buy size"><option value="0.001">0.001 ETH</option><option value="0.01" selected>0.01 ETH</option><option value="0.1">0.1 ETH</option></select>
+        <button class="pf-btn" type="submit">Run the Gate</button>
+      </div>
+      <p class="pf-hint" id="pf-coin-h">Try <button type="button" class="pf-chip" data-pf-coin="0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074">$TROYA</button> <button type="button" class="pf-chip" data-pf-coin="0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC">NVDA stock token</button> or paste a Pons, Uniswap or launchpad coin. Nothing is signed or sent.</p>
+      <div class="pf-result" data-pf-gate-out aria-live="polite"></div>
+    </form>
+    <h3 class="pf-h3">The server's own run on $TROYA</h3>
+    <p class="rec-note">This server runs the Gate on a 0.01 ETH buy of $TROYA every 10 minutes and writes the answer into this page, so it can be read without JavaScript. Last run: <span data-live="gate.when">–</span>. As JSON: <a class="ulink" href="/api/proof/gate">/api/proof/gate</a>.</p>
+    <div data-frag="gate-example"><!--live:gate-example--><p class="rec-note" data-pf-pending>The first run after a restart takes about a minute. Meanwhile: <a class="ulink" href="/api/swap/gate?tokenIn=ETH&amp;tokenOut=0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074&amp;amountIn=0.01">the Gate on $TROYA as JSON</a>.</p><!--/live:gate-example--></div>
+  </section>
+
+  <section class="ip" id="trades" aria-labelledby="tr-h">
+    <div class="eyebrow-line"><span>03 / Agent trades</span></div>
+    <div class="split" style="margin-bottom:36px">
+      <h2 id="tr-h" class="h2">Every trade, with its transaction</h2>
+      <p class="lead">Real transactions by Troya's agents and by the team's tests, read from the server's own records. A row without a transaction hash is left out. Wallets are named only where the site already names them; a user's own Agent Wallet shows up only as its transaction. As JSON: <a class="ulink" href="/api/proof/trades">/api/proof/trades</a>.</p>
+    </div>
+    <div class="rec-stats" data-frag="trade-tiles"><!--live:trade-tiles--><div class="rec-tile" data-pf-pending><span>Arena live trades</span><b>…</b><small>reading the records</small></div><!--/live:trade-tiles--></div>
+
+    <h3 class="pf-h3">Arena: the AI traders with real ETH</h3>
+    <p class="rec-note">Five AI models trade side by side; their real-money twins buy and sell from the Arena Agent Wallet <a class="ulink" href="https://robinhoodchain.blockscout.com/address/0xba9e826D5eb02061c3323E7F163F0645073E377d">0xba9e…377d</a> on the Troya server, through Troya Gate and inside a small budget per trader. Losses are listed like wins.</p>
+    <div class="rec-wrap pf-scroll"><table class="rec-tbl"><thead><tr><th>Time</th><th>Trader</th><th>Coin</th><th>Size</th><th>Result</th><th>Transactions</th></tr></thead><tbody data-frag="trades-arena"><!--live:trades-arena--><tr><td colspan="6" class="rec-empty" data-pf-pending>Reading the Arena…</td></tr><!--/live:trades-arena--></tbody></table></div>
+
+    <h3 class="pf-h3">Agent Wallet jobs</h3>
+    <p class="rec-note">Trades Troya's jobs and bots executed from an Agent Wallet (Autopilot, Champions, Aegis, playbooks, Telegram, X and the app), newest first.</p>
+    <div class="rec-wrap pf-scroll"><table class="rec-tbl"><thead><tr><th>Time</th><th>Job</th><th>What</th><th>Transactions</th></tr></thead><tbody data-frag="trades-jobs"><!--live:trades-jobs--><tr><td colspan="4" class="rec-empty" data-pf-pending>Reading the journal…</td></tr><!--/live:trades-jobs--></tbody></table></div>
+
+    <h3 class="pf-h3">Coins launched through Troya</h3>
+    <div class="rec-wrap"><table class="rec-tbl"><thead><tr><th>Time</th><th>Coin</th><th>From</th><th>Contract</th><th>Launch</th></tr></thead><tbody data-frag="trades-launches"><!--live:trades-launches--><tr><td colspan="5" class="rec-empty" data-pf-pending>Reading the launches…</td></tr><!--/live:trades-launches--></tbody></table></div>
+
+    <h3 class="pf-h3">Paid Gate checks and payouts</h3>
+    <div class="rec-wrap"><table class="rec-tbl"><thead><tr><th>Time</th><th>What</th><th>Chain</th><th>Transaction</th></tr></thead><tbody data-frag="trades-sales"><!--live:trades-sales--><tr><td colspan="4" class="rec-empty" data-pf-pending>Reading the ledger…</td></tr><!--/live:trades-sales--></tbody></table></div>
+
+    <h3 class="pf-h3">Real-money tests on /verify</h3>
+    <p class="rec-note">Each feature opened only after a test with real money. Every test transaction with its signer and role; the story of each step is on <a class="ulink" href="/verify">Verify</a>.</p>
+    <div class="rec-wrap pf-scroll"><table class="rec-tbl"><thead><tr><th>Time</th><th>Step</th><th>Chain</th><th>Signed by</th><th>Transaction</th></tr></thead><tbody data-frag="trades-verify"><!--live:trades-verify--><tr><td colspan="5" class="rec-empty" data-pf-pending>Reading the tests…</td></tr><!--/live:trades-verify--></tbody></table></div>
+  </section>
+
+  <section class="ip" id="contracts" aria-labelledby="ct-h">
+    <div class="eyebrow-line"><span>04 / Contracts</span></div>
+    <div class="split" style="margin-bottom:36px">
+      <h2 id="ct-h" class="h2">Read on chain, every 30 minutes</h2>
+      <p class="lead">The token, Troya's own contracts and the liquidity positions sent to 0x…dEaD. Each fact comes from a call to the contract itself (owner(), token(), COOLDOWN(), ownerOf()); verification status is read from Sourcify, never assumed.</p>
+    </div>
+    <div class="rec-wrap"><table class="rec-tbl"><thead><tr><th>Contract</th><th>Address</th><th>Read from the chain</th></tr></thead><tbody data-frag="contracts"><!--live:contracts--><tr><td colspan="3" class="rec-empty" data-pf-pending>Reading the contracts…</td></tr><!--/live:contracts--></tbody></table></div>
+  </section>
+
+  <section class="ip" id="team" aria-labelledby="tm-h">
+    <div class="eyebrow-line"><span>05 / Team and accountability</span></div>
+    <div class="split" style="margin-bottom:36px">
+      <h2 id="tm-h" class="h2">Who signs what</h2>
+      <p class="lead">Troya is built in public by the Troya Agent team. These are the accounts it speaks from and the wallets it answers for, each one already named on this site; no person is named here.</p>
+    </div>
+    <div class="steps pf-team">
+      <article class="step"><span class="n">01</span><h3>Code in the open</h3><p>The app, the Gate, the Agent Wallet caps, Sentry, the bots and the contracts are public under MIT, with the commit history.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent" target="_blank" rel="noopener">GitHub organisation</a> <a class="ulink" href="https://github.com/troyaagent/troya-agent" target="_blank" rel="noopener">troya-agent repository</a> <a class="ulink" href="https://www.npmjs.com/package/@troyaagent/mcp" target="_blank" rel="noopener">npm</a></p></article>
+      <article class="step"><span class="n">02</span><h3>Where the team answers</h3><p>Announcements on X and in the Telegram group, where bug reports and questions get answers; Sentry posts in its own channel.</p><p class="vlinks"><a class="ulink" href="https://x.com/Troyaagent" target="_blank" rel="noopener">X @Troyaagent</a> <a class="ulink" href="https://t.me/troyaagent" target="_blank" rel="noopener">Telegram group</a> <a class="ulink" href="https://t.me/s/troyasentry" target="_blank" rel="noopener">Sentry channel</a> <a class="ulink" href="/community">Report a bug</a></p></article>
+      <article class="step"><span class="n">03</span><h3>No admin keys on staking</h3><p>TroyaStake has no owner, admin, pause, upgrade, fee or rescue function: owner() reverts, and only a staker can move their own coins. The Holder Pass and the Oath Vault have no owner either.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/src/TroyaStake.sol" target="_blank" rel="noopener">TroyaStake source</a> <a class="ulink" href="#contracts">Read on chain</a></p></article>
+      <article class="step"><span class="n">04</span><h3>The one owner key</h3><p>The fee-split factory has an owner, the team wallet. It can change only where Troya's share of a launched coin's fees goes; it cannot change a coin's split or touch the creator's share.</p><p class="vlinks"><a class="ulink" href="https://github.com/troyaagent/troya-agent/blob/main/contracts/src/TroyaFeeSplitter.sol" target="_blank" rel="noopener">TroyaFeeSplitter source</a> <a class="ulink" href="https://robinhoodchain.blockscout.com/address/0x266323d6ce63E4dfE62cC87bD14cA6C97BB2F525" target="_blank" rel="noopener">Factory</a></p></article>
+      <article class="step"><span class="n">05</span><h3>Custody, plainly</h3><p>Trades on the Swap page are signed in your own wallet. The optional Agent Wallet is custodial: the operator stores its key encrypted, it pays back only to its owner, and it should hold pocket money only. The Arena's and the flywheel's keys sit on the server the same way.</p><p class="vlinks"><a class="ulink" href="/risk-controls">Risk controls</a> <a class="ulink" href="/safety">Safety</a></p></article>
+      <article class="step"><span class="n">06</span><h3>No audit yet</h3><p>There is no third-party security audit of Troya. Sixteen properties of three contracts (the fee splitter, the Holder Pass and the Oath Vault) were proven with a prover and are listed on Seal; that is not an audit.</p><p class="vlinks"><a class="ulink" href="/seal">Seal and proven properties</a></p></article>
+    </div>
+    <h3 class="pf-h3">Wallets the site names</h3>
+    <div class="rec-wrap"><table class="rec-tbl"><thead><tr><th>Wallet</th><th>Address</th></tr></thead><tbody data-frag="wallets"><!--live:wallets--><tr><td colspan="2" class="rec-empty" data-pf-pending>Reading…</td></tr><!--/live:wallets--></tbody></table></div>
+  </section>
+
+  <section class="ip" id="claims" aria-labelledby="cl-h">
+    <div class="eyebrow-line"><span>06 / Live and planned</span></div>
+    <div class="split" style="margin-bottom:36px">
+      <h2 id="cl-h" class="h2">What runs today, and what does not yet</h2>
+      <p class="lead">Every claim on the site, sorted by whether it runs today. A switch that is off on this server makes its claim planned, whatever an older post says. Each claim's full evidence is in <a class="ulink" href="/proof.json">proof.json</a>.</p>
+    </div>
+    <h3 class="pf-h3">Live</h3>
+    <ul class="pf-claims" data-frag="claims-live"><!--live:claims-live--><li class="pf-claim" data-pf-pending>Reading…</li><!--/live:claims-live--></ul>
+    <h3 class="pf-h3">Planned</h3>
+    <ul class="pf-claims" data-frag="claims-planned"><!--live:claims-planned--><li class="pf-claim" data-pf-pending>Reading…</li><!--/live:claims-planned--></ul>
+  </section>
+
+  <section class="ip" aria-labelledby="no-h">
+    <div class="eyebrow-line"><span>07 / What this page does not say</span></div>
+    <div class="split">
+      <h2 id="no-h" class="h2 sm">Read it plainly</h2>
+      <p class="lead">A passed Gate is a check of a moment, never a safe stamp. Past trades, the Arena's included, say nothing about future results. Not financial advice. Crypto is volatile.</p>
+    </div>
+    <div class="cta-band">
+      <h2 class="h2 sm">Check it, then trade.</h2>
+      <div class="acts"><a class="ulink" href="/verify">Verify</a><a class="ulink" href="/flywheel">Flywheel</a><a class="ulink" href="/proof.json">proof.json</a><a class="ulink" href="/agent">Open the app</a></div>
+    </div>
+  </section>
+</main>
+
+<footer class="pn-foot" data-pn-foot></footer>
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/home/pages.js"></script>
+<script src="/js/buybar.js" defer></script>
+<script src="/home/rain.js" defer></script>
+<script type="module" src="/home/proof.js"></script>
+</body>
+</html>

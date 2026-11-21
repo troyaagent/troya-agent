@@ -18,7 +18,7 @@
     $("[data-fw-stats]").innerHTML = [
       tile("Creator fees earned", ethf(d.fees.earnedEth), `${e ? usd(d.fees.earnedEth * e) + " · " : ""}${n(d.fees.credits)} credits from the Pons escrow`),
       tile("Claimed", ethf(d.fees.claimedEth), `${n(d.fees.claims)} claims · ${ethf(d.fees.waitingEth)} waiting now`),
-      tile("$TROYA burned", big(d.burned.total), `${d.burned.pctOfMinted.toFixed(2)}% of the 1B minted · supply ${big(d.burned.supply)}`),
+      tile("$TROYA burned", big(d.burned.total), `1B − totalSupply() ${big(d.burned.supply)}: ${d.burned.pctOfMinted.toFixed(2)}% of the 1B minted`),
       tile("Liquidity locked", usd(d.locked.usd), `${d.locked.positions.length} position${d.locked.positions.length === 1 ? "" : "s"} owned by 0x…dEaD · ${ethf(d.locked.eth)} + ${big(d.locked.troya)} $TROYA`),
       tile("Cycles run", n(d.totals.cycles), d.totals.cycles ? `${ethf(d.totals.ethToBuyback)} into buybacks · ${big(d.totals.troyaBurned)} burned` : "the first cycle starts the ledger"),
       tile("$TROYA price", d.price.troyaUsd ? `$${d.price.troyaUsd.toPrecision(3)}` : "–", `${n(d.price.troyaPerEth)} per ETH, from the pool`),
@@ -44,17 +44,28 @@
       <td>${esc(p.pool)}</td><td>${p.fullRange ? "Full range" : "Custom range"}${p.inRange ? "" : ' <em class="rec-via">out of range</em>'}</td>
       <td>${ethf(p.eth)} + ${big(p.troya)} $TROYA</td><td>${usd(p.usd)}</td><td>${tx(p.hash, short(p.hash))}</td></tr>`).join("");
   }
-  function burns(d) {
-    const el = $("[data-fw-burns]");
-    $("[data-fw-burnlead]").textContent = `${big(d.burned.byCreator)} $TROYA burned by the creator wallet so far, ${d.burned.viaBurn > 0 ? "with the token's burn(), which takes it out of the total supply" : "sent to 0x…dEaD"}.`;
-    const row = (b) => `<tr><td>${n(b.block)}</td><td>${big(b.troya)} $TROYA</td><td>${tx(b.hash, short(b.hash))}</td></tr>`;
-    const all = d.burned.burns || [], FIRST = 10;
-    el.innerHTML = all.length ? all.slice(0, FIRST).map(row).join("")
-      + (all.length > FIRST ? `<tr class="rec-more"><td colspan="3"><button type="button" class="btn-line" data-fw-more>Show all ${all.length} burns</button></td></tr>` : "")
-      : '<tr><td colspan="3" class="rec-empty">No burns yet.</td></tr>';
-    el.querySelector("[data-fw-more]")?.addEventListener("click", () => { el.innerHTML = all.map(row).join(""); });
+  // the burn lead and the burn table come from /api/proof/burn: 1,000,000,000 − totalSupply() on chain, every burn
+  // transaction with the wallet that signed it (the server writes the same rows into the page, server/proof.mjs)
+  function contracts(d) {
     const a = (addr, t) => `<a class="ulink" href="${AD}${esc(addr)}" target="_blank" rel="noopener">${t} ${short(addr)}</a>`;
     $("[data-fw-contracts]").innerHTML = `Addresses: ${a(d.token, "$TROYA")} · ${a(d.creator, "creator wallet")} · ${a(d.escrow, "Pons fee escrow")} · ${a(d.positionManager, "Uniswap v4 PositionManager")}.`;
+  }
+  // on its own, so the burns show even when the flywheel view is slow
+  async function burns() {
+    const CREATOR = "0x57b09fe6dab0a7d3776e56e6388c773d6c4d09e4";
+    let b;
+    try { b = await (await fetch("/api/proof/burn", { cache: "no-store" })).json(); } catch { return; }
+    if (!b?.burns) return;
+    const whole = Number(b.burnedWhole).toLocaleString("en-US");
+    $("[data-fw-burnlead]").innerHTML = `<b>${esc(whole)}</b> $TROYA burned so far: 1,000,000,000 minted minus totalSupply() ${esc(b.totalSupply)} at block ${n(b.block)}.`;
+    const el = $("[data-fw-burns]");
+    const who = (x) => (x.signer ? `${x.signer.toLowerCase() === CREATOR ? "creator wallet" : short(x.signer)}${x.call ? ` · ${esc(x.call.replace(" on $TROYA", ""))}` : ""}` : '<span class="rec-na">reading</span>');
+    const row = (x) => `<tr><td>${n(x.block)}</td><td>${big(x.troya)} $TROYA</td><td>${who(x)}</td><td>${tx(x.hash, short(x.hash))}</td></tr>`;
+    const all = b.burns.list || [], FIRST = 10;
+    el.innerHTML = all.length ? all.slice(0, FIRST).map(row).join("")
+      + (all.length > FIRST ? `<tr class="rec-more"><td colspan="4"><button type="button" class="btn-line" data-fw-more>Show all ${all.length} burns</button></td></tr>` : "")
+      : '<tr><td colspan="4" class="rec-empty">No burns yet.</td></tr>';
+    el.querySelector("[data-fw-more]")?.addEventListener("click", () => { el.innerHTML = all.map(row).join(""); });
   }
 
   async function load() {
@@ -62,11 +73,12 @@
       const d = await (await fetch("/api/flywheel", { cache: "no-store" })).json();
       if (d.error) throw new Error(d.error);
       $("[data-fw-rules]").textContent = d.rules;
-      stats(d); cycles(d); locked(d); burns(d);
+      stats(d); cycles(d); locked(d); contracts(d);
     } catch {
       $("[data-fw-rules]").textContent = "The chain could not be read right now. Try again in a minute.";
     }
   }
-  load();
+  load(); burns();
   setInterval(load, 60_000);
+  setInterval(burns, 120_000);
 })();

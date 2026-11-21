@@ -9,8 +9,39 @@ Ask in plain words, read what Troya Gate found, then sign. Live at **[troya.code
 The same address is shown on [troya.codes](https://troya.codes). Trade it on [Pons](https://ponsfamily.com/launchpad/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074) or through Troya Gate in the [app](https://troya.codes/agent#/swap?in=eth&out=0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074).
 
 - App: [troya.codes/agent](https://troya.codes/agent)
-- Real transactions made with this code: [troya.codes/verify](https://troya.codes/verify)
+- Real transactions made with this code: [troya.codes/verify](https://troya.codes/verify) · every claim with its evidence: [troya.codes/proof](https://troya.codes/proof) ([JSON](https://troya.codes/proof.json))
 - X: [@Troyaagent](https://x.com/Troyaagent) · Telegram: [t.me/troyaagent](https://t.me/troyaagent)
+
+## Proof
+
+Every claim Troya makes can be checked without a wallet:
+
+- **[troya.codes/proof](https://troya.codes/proof)**: the $TROYA burn read from the chain, Troya Gate run live on any coin with each check explained, every real trade by Troya's agents with its transaction, the contracts read on chain, and what is live versus planned. The numbers are written into the HTML by the server, so they read without JavaScript.
+- **[troya.codes/proof.json](https://troya.codes/proof.json)**: the same claims, machine-readable, each with status `live` or `planned` and its evidence (transaction hashes, contract addresses, API URLs, `eth_call` bodies).
+- **[troya.codes/verify](https://troya.codes/verify)**: the real-money test behind each shipped feature, with signers.
+
+**Check the burn yourself.** $TROYA was minted once (1,000,000,000) and every burn uses the token's own `burn()`, which lowers the total supply instead of parking coins at a dead address. So: burned = 1,000,000,000 − `totalSupply()`.
+
+```bash
+curl -s https://rpc.mainnet.chain.robinhood.com -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"to":"0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074","data":"0x18160ddd"},"latest"]}'
+# result = totalSupply in wei (18 decimals); 1,000,000,000 minus it is what has been burned
+```
+
+Or open the token on [Blockscout](https://robinhoodchain.blockscout.com/token/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074) and read its total supply. Every burn transaction and the wallet that signed it: [/api/proof/burn](https://troya.codes/api/proof/burn).
+
+**Contracts on Robinhood Chain (4663)**
+
+| Contract | Address | Source |
+|---|---|---|
+| $TROYA (Pons token, no `owner()`) | [`0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074`](https://robinhoodchain.blockscout.com/token/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074) | Pons Family template |
+| TroyaStake (no owner, admin, pause or upgrade; 3-day unstake wait) | [`0x1C867c13BD950a90aB75158C1C45061837aa02d2`](https://robinhoodchain.blockscout.com/address/0x1C867c13BD950a90aB75158C1C45061837aa02d2) | [`contracts/src/TroyaStake.sol`](contracts/src/TroyaStake.sol) |
+| Troya Holder Pass (soulbound) | [`0x439EBc38c756f4F729c1474ED8DE337cFe3Aa77E`](https://robinhoodchain.blockscout.com/address/0x439EBc38c756f4F729c1474ED8DE337cFe3Aa77E) | [`contracts/src/TroyaPass.sol`](contracts/src/TroyaPass.sol) |
+| TroyaFeeSplitter factory (owner: the team wallet, which can only change where Troya's share goes) | [`0x266323d6ce63E4dfE62cC87bD14cA6C97BB2F525`](https://robinhoodchain.blockscout.com/address/0x266323d6ce63E4dfE62cC87bD14cA6C97BB2F525) | [`contracts/src/TroyaFeeSplitter.sol`](contracts/src/TroyaFeeSplitter.sol) |
+| TroyaOathVault (verified on [Sourcify](https://sourcify.dev/server/v2/contract/4663/0x6Bb959367a71d07F5bBCb91eb41b62949440a4e8)) | [`0x6Bb959367a71d07F5bBCb91eb41b62949440a4e8`](https://robinhoodchain.blockscout.com/address/0x6Bb959367a71d07F5bBCb91eb41b62949440a4e8) | [`contracts/src/TroyaOathVault.sol`](contracts/src/TroyaOathVault.sol) |
+| Uniswap v4 LP position #4293939, owned by `0x…dEaD` | [PositionManager `0x58daec31…04fA7`](https://robinhoodchain.blockscout.com/token/0x58daec3116aae6D93017bAAea7749052E8a04fA7/instance/4293939) | Uniswap v4 |
+
+Wallets the site names: creator wallet [`0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4`](https://robinhoodchain.blockscout.com/address/0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4) (launched $TROYA, signs the flywheel and the burns), team wallet [`0x45611870017682Ec781EDb9F71fA72fA91159350`](https://robinhoodchain.blockscout.com/address/0x45611870017682Ec781EDb9F71fA72fA91159350), test wallet [`0x12a05719851c8375342DE65c9105329c81f57054`](https://robinhoodchain.blockscout.com/address/0x12a05719851c8375342DE65c9105329c81f57054), Arena Agent Wallet [`0xba9e826D5eb02061c3323E7F163F0645073E377d`](https://robinhoodchain.blockscout.com/address/0xba9e826D5eb02061c3323E7F163F0645073E377d), Gate attestor [`0xbEa3056612704eEE964B892862d969D2d4bB5fDE`](https://robinhoodchain.blockscout.com/address/0xbEa3056612704eEE964B892862d969D2d4bB5fDE) (signs results, holds no funds). There is no third-party audit; the Agent Wallet is custodial by design.
 
 ## What it does
 

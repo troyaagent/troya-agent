@@ -8,6 +8,8 @@ import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { initApi, handleApi } from "./server/api.mjs";
 import { handleShare } from "./server/share.mjs";
+// live numbers and proof tables written into the pages as they are served (filled by server/proof.mjs)
+import { liveHtml, liveTag } from "./server/livehtml.mjs";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = join(HERE, "public");
@@ -50,6 +52,7 @@ const ROUTES = {
   "/swap": "/swap.html",
   "/stake": "/stake.html",
   "/safety": "/safety.html",
+  "/proof": "/proof.html",
   "/agent": "/agent/index.html",
 };
 
@@ -150,14 +153,17 @@ async function sendFile(req, res, file, path, st) {
     if (gz?.isFile()) { src = file + ".gz"; st = gz; variant = "-gz"; }
   }
   const ranged = RANGED.has(ext) && !variant;
+  // a page with live numbers (server/livehtml.mjs) carries their version in its tag: a cached copy is not confirmed once they
+  // move, and a date alone (If-Modified-Since, the file's mtime) never confirms it
+  const live = ext === ".html" ? liveTag(path) : "";
   const validators = {
-    "cache-control": cacheControl(path), etag: etagOf(st, variant), "last-modified": new Date(st.mtimeMs).toUTCString(),
+    "cache-control": cacheControl(path), etag: etagOf(st, variant + live), "last-modified": new Date(st.mtimeMs).toUTCString(),
     ...(ext === ".wasm" ? { vary: "accept-encoding" } : {}),
   };
-  if ((get || head) && notModified(req, validators.etag, st)) { res.writeHead(304, validators).end(); return; }
+  if ((get || head) && !(live && !req.headers["if-none-match"]) && notModified(req, validators.etag, st)) { res.writeHead(304, validators).end(); return; }
 
   if (ext === ".html") {                            // pages are small and their CSP hashes the inline scripts: read whole
-    const data = await readFile(file);
+    const data = liveHtml(path, await readFile(file));
     res.writeHead(200, { ...headers(type, path, data), ...validators, "content-length": data.length });
     res.end(head ? undefined : data);
     return;
@@ -184,6 +190,8 @@ await initApi({ dataDir: process.env.DATA_DIR || join(HERE, "data"), root: HERE 
 async function serve(req, res) {
   const url = new URL(req.url, "http://x");
   if (url.pathname === "/.well-known/x402") url.pathname = "/api/gate/x402/well-known";   // x402 discovery (x402scan, Agent402)
+  // every claim on the site with its evidence, live (server/proof.mjs); read by checkers and agents from any origin
+  if (url.pathname === "/proof.json") url.pathname = "/api/proof/claims";
   // V7 F38: the Troya Snap (MetaMask runs it with origin "null") and other bots call these cross-origin; no cookies are involved
   if (url.pathname === "/api/gate/tx" || url.pathname === "/api/gate/feed") {
     res.setHeader("access-control-allow-origin", "*");

@@ -27,6 +27,8 @@
 <link rel="stylesheet" href="/css/site.css">
 <link rel="preload" href="/home/fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/home/pages.css">
+<link rel="stylesheet" href="/home/proof.css">
+<link rel="alternate" type="application/json" href="/proof.json" title="Every Troya claim with its evidence (JSON)">
 <link rel="stylesheet" href="/css/buybar.css">
 <script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
 <script src="/config.js"></script>
@@ -98,9 +100,10 @@
     <div class="eyebrow-line"><span>04 / Burns</span></div>
     <div class="split" style="margin-bottom:28px">
       <h2 id="bn-h" class="h2 words" data-words>Gone for good</h2>
-      <p class="lead rv" data-fw-burnlead>$TROYA burned by the creator wallet.</p>
+      <p class="lead" data-fw-burnlead><b data-live="burn.total">–</b> $TROYA burned so far: 1,000,000,000 minted minus totalSupply() now, read on chain.</p>
     </div>
-    <div class="rec-wrap"><table class="rec-tbl"><thead><tr><th>Block</th><th>Burned</th><th>Transaction</th></tr></thead><tbody data-fw-burns><tr><td colspan="3" class="rec-empty">Loading…</td></tr></tbody></table></div>
+    <div data-frag="burn-note"><!--live:burn-note--><!--/live:burn-note--></div>
+    <div class="rec-wrap"><table class="rec-tbl"><thead><tr><th>Block</th><th>Burned</th><th>Signed by · call</th><th>Transaction</th></tr></thead><tbody data-fw-burns data-frag="burn-rows"><!--live:burn-rows--><tr><td colspan="4" class="rec-empty" data-pf-pending>Loading…</td></tr><!--/live:burn-rows--></tbody></table></div>
     <p class="rec-note" data-fw-contracts></p>
     <p class="rec-note">Sources: the Pons fee escrow (its Credited and Claimed events for the creator wallet), the $TROYA contract (total supply and transfers) and the Uniswap v4 PositionManager. Burns, locked positions and cycles cannot be edited after the fact: they are on chain. Not financial advice.</p>
   </section>
@@ -108,7 +111,7 @@
   <section class="ip" aria-labelledby="no-h">
     <div class="cta-band">
       <h2 id="no-h" class="h2 sm words" data-words>Fees in. Supply out.</h2>
-      <div class="acts rv"><a class="ulink" href="/verify">Verify</a><a class="ulink" href="/record">The Record</a><a class="ulink" href="/agent#/flywheel">Open in the app</a></div>
+      <div class="acts rv"><a class="ulink" href="/proof">Proof</a><a class="ulink" href="/verify">Verify</a><a class="ulink" href="/record">The Record</a><a class="ulink" href="/agent#/flywheel">Open in the app</a></div>
     </div>
   </section>
 </main>

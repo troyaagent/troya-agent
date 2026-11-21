@@ -74,7 +74,7 @@ async function compute() {
   const fw = await store.readJson("flywheel.json", {});
   const burned = (fw.burns || []).reduce((s, b) => s + (Number(b.troya ?? b.amount) || 0), 0);
   let verifySteps = 0;
-  try { verifySteps = ((await readFile(join(root, "public", "verify.html"), "utf8")).match(/<article class="step/g) || []).length; } catch { /* none */ }
+  try { verifySteps = ((await readFile(join(root, "public", "verify.html"), "utf8")).match(/<article class="step[^"]*" data-v="/g) || []).length; } catch { /* none */ }
   const s = await slowNumbers();
   return {
     at: Date.now(),

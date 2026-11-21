@@ -64,7 +64,10 @@ function sinceAfter(amountRaw, sinceSec, add, nowSec = Math.floor(Date.now() / 1
   if (amountRaw === 0n) return nowSec;
   return Number((amountRaw * BigInt(sinceSec) + add * BigInt(nowSec)) / (amountRaw + add));
 }
+const NO_GAS = "You need a little ETH on Robinhood Chain to pay gas. Holders of 1M+ $TROYA can claim free gas: Portfolio → Free gas → Claim, then try again.";
 function reason(e) {
+  const msg = String(e?.shortMessage || e?.message || e || "");
+  if (e?.noGas || /enough funds|insufficient funds|exceeds balance|gas required exceeds/i.test(msg)) return NO_GAS;
   const data = e?.data || e?.info?.error?.data || e?.error?.data || e?.revert?.data;
   if (typeof data === "string" && data.length >= 10) {
     try {
@@ -366,6 +369,11 @@ export async function mount(view) {
   async function step(label, tx, kind, summary) {
     st.busy = label; paint();
     try {
+      // a wallet with $TROYA but no ETH can't pay gas: say so before the wallet shows a vague "not enough funds"
+      try {
+        const bal = await reader("robinhood").getBalance(wallet.address);
+        if (bal < 6_000_000_000_000n) { const err = new Error(NO_GAS); err.noGas = true; throw err; }
+      } catch (e) { if (e?.noGas) throw e; }
       const hash = await sendTx("robinhood", tx);
       st.busy = `${label.replace(/…$/, "")}: waiting for the chain…`; paintAct();
       const rc = await waitReceipt("robinhood", hash, { timeoutMs: 180_000 });

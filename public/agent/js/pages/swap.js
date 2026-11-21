@@ -1,7 +1,7 @@
 // Swap (#/swap?chain=&in=&out=): Robinhood Chain (Pons curves, Uniswap v3 / v4, the other launchpads through KyberSwap),
 // Base and Arbitrum (KyberSwap). The network picker sits above the card; ?chain=base|arbitrum opens on that network.
 // Quotes and the Troya Gate come from the server; every transaction is signed in the user's wallet.
-import { h, clear, pageHead, seg, icon, modal, review, toast, tokenIcon, chainLogo, venueLogo, padLogo, tiny, num, amount, price, usd, pctEl, short, useCss, debounce, infoTip } from "../ui.js";
+import { h, clear, pageHead, seg, icon, modal, review, toast, tokenIcon, chainLogo, venueLogo, padLogo, tiny, num, amount, compact, price, usd, pctEl, short, useCss, debounce, infoTip } from "../ui.js";
 import { wallet, onWallet, openConnect, CHAINS } from "../wallet.js";
 import { api } from "../api.js";
 import { ETH, isNative, balanceOf, toRaw, fromRaw, inputNum, rawInput, sendTx, waitReceipt, errText, journal, addTransfer, updateTransfer } from "../chain.js";
@@ -47,13 +47,40 @@ function gateCount(g) {
   return { passed, failed, notes, skipped, total: cs.length - skipped, tally };
 }
 const GATE_COPY = "Pick a coin and an amount. Troya runs its checks (seven on Robinhood Chain), a simulated swap and a test sell included, before your wallet can sign.";
+// A stand-in sender for cross-chain quotes before a wallet is connected (LI.FI quotes the burn address like any wallet).
+// A quote made for it is a preview only: it is never signed, Review always fetches the route again for the real wallet.
+const PREVIEW_FROM = "0x000000000000000000000000000000000000dEaD";
+const QUOTE_EVERY = 25_000;      // a quote on screen is fetched again this often while the page is visible
+const QUOTE_MAX_AGE = 30_000;    // a cross-chain route older than this is fetched again before its review opens
+const REVIEW_MAX_AGE = 120_000;  // a route whose review stayed open longer is fetched and shown once more before signing
+/* ---------- the picker remembers the last coins picked on each network (this browser only) ---------- */
+const RECENT_KEY = "troya.swap.recent";
+const recentOk = (chain, x) => !!x && typeof x.symbol === "string" && typeof x.address === "string"
+  && (chain === "solana" ? MINT.test(x.address) : /^0x[0-9a-fA-F]{40}$/.test(x.address));
+function recentPicks(chain) {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(v) ? v.filter((x) => x?.chain === chain && recentOk(chain, x)).slice(0, 5) : [];
+  } catch { return []; }
+}
+function rememberPick(chain, t) {
+  if (!t || isNative(t) || !recentOk(chain, t)) return;
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    const was = Array.isArray(v) ? v.filter((x) => recentOk(x?.chain, x) && !(x.chain === chain && akey(x.address) === akey(t.address))) : [];
+    // decimals are not kept: the picker reads them from the chain again, so a stale entry can never size an amount
+    const img = /^(https:|\/)/.test(String(t.image || "")) ? String(t.image).slice(0, 300) : null;
+    was.unshift({ chain, address: t.address, symbol: String(t.symbol).slice(0, 32), name: String(t.name || "").slice(0, 64), image: img });
+    localStorage.setItem(RECENT_KEY, JSON.stringify(was.slice(0, 30)));
+  } catch { /* private mode or storage full: the picker still works, only without Recent */ }
+}
 
 export async function mount(view, ctx) {
   useCss("swap");
   let alive = true;
   const st = {
     sell: ETH, buy: null, amount: "", slip: Math.round((ctx.prefs.get().slippage || 1) * 100),
-    quote: null, quoteErr: null, loading: false, loadAt: 0, gate: null, gateAt: 0, gating: false, bal: null, busy: false, seq: 0, ethUsd: null,
+    quote: null, quoteAt: 0, quoteErr: null, loading: false, refreshing: false, loadAt: 0, gate: null, gateAt: 0, gating: false, bal: null, busy: false, seq: 0, ethUsd: null,
     chain: NETS.some((n) => n.key === ctx.query.chain) ? ctx.query.chain : "robinhood",
   };
   const blocked = () => !!(st.gate && !st.gate.pass);
@@ -146,6 +173,11 @@ export async function mount(view, ctx) {
   // what the page is doing right now (finding a route, running the checks), under the button as well as in the Gate card
   const statusLine = h("p", { class: "sw2-sign sw-status", hidden: true });
   const txBox = h("div", { class: "sw-tx" });
+  // the quote on screen is fetched again every 25 s while the page is visible; this line says when
+  const freshLine = h("p", { class: "sw-fresh", hidden: true });
+  // phones: the Gate card sits far below the button, so a one-line strip of it sits right above the button (CSS shows
+  // it at 760 px and under); a tap scrolls to the full card
+  const gateStrip = h("button", { class: "sw-gstrip", type: "button", hidden: true, onclick: () => gateCard.scrollIntoView({ behavior: "smooth", block: "start" }) });
 
   const card = h("div", { class: "sw-card panel" },
     h("div", { class: "sw-leg" },
@@ -158,9 +190,16 @@ export async function mount(view, ctx) {
       h("div", { class: "sw-leg-main" }, buyOut, buyTok), getUsd),
     h("div", { class: "sw-meta" }, h("span", { class: "muted" }, "Slippage"), slipSeg,
       infoTip("The most the price may move against you between quote and inclusion. If it moves further, the swap reverts and only the network fee is spent.", "Slippage")),
-    warnBox, btn, statusLine,
-    h("p", { class: "sw2-sign" }, "Your wallet signs. Troya never holds your funds. ", h("span", { class: "badge-s", title: "Troya adds no fee of its own to any swap" }, "Troya fee 0%")), rows, txBox);
+    warnBox, gateStrip, btn, statusLine,
+    h("p", { class: "sw2-sign" }, "Your wallet signs. Troya never holds your funds. ", h("span", { class: "badge-s", title: "Troya adds no fee of its own to any swap" }, "Troya fee 0%")), rows, freshLine, txBox);
   const note = h("p", { class: "note sw-note" });
+  // phones: the network note moves under the Gate card, so the card, the Gate strip and the button come first
+  const phoneMq = typeof matchMedia === "function" ? matchMedia("(max-width: 760px)") : null;
+  function placeNote() {
+    if (phoneMq?.matches) { if (note.previousElementSibling !== gateCard) gateCard.after(note); }
+    else if (note.parentNode !== body || body.lastElementChild !== note) body.append(note);
+  }
+  phoneMq?.addEventListener?.("change", placeNote);
   function paintNote() {
     if (isSolNet()) return clear(note, "Solana: Troya routes through Jupiter (pump.fun and every other Solana launchpad and pool) and runs a Solana Troya Gate: who can freeze or mint the coin, Token-2022 traps, the exact swap simulated from your address and a sell route back to SOL. You sign in your own Solana wallet (Phantom, Solflare, Backpack or MetaMask). Troya adds no fee of its own.");
     clear(note, st.chain === "robinhood"
@@ -182,6 +221,7 @@ export async function mount(view, ctx) {
 
   function render() {
     clear(body, card, xcBox, note);
+    placeNote();
     paint();
   }
 
@@ -190,7 +230,8 @@ export async function mount(view, ctx) {
      buys for exactly this amount; the server runs this chain's Troya Gate on the coin first and refuses a route if it fails. */
   const XC_SRC = { robinhood: [{ key: "base", id: 8453, name: "Base" }, { key: "arbitrum", id: 42161, name: "Arbitrum" }], base: [{ key: "robinhood", id: 4663, name: "Robinhood Chain" }], arbitrum: [{ key: "robinhood", id: 4663, name: "Robinhood Chain" }] };
   const XC_GAS = 3n * 10n ** 14n; // 0.0003 ETH left on the source chain for the transaction's own gas
-  const xc = { open: false, src: null, amount: "", bal: null, q: null, qAt: 0, err: null, gate: null, loading: false, seq: 0, busy: false, key: "", status: null, auto: "" };
+  // qFor: the address the route was quoted for (the stand-in PREVIEW_FROM until a wallet is connected)
+  const xc = { open: false, src: null, amount: "", bal: null, q: null, qAt: 0, qFor: "", err: null, gate: null, loading: false, refreshing: false, seq: 0, busy: false, key: "", status: null, auto: "" };
   const xcBox = h("section", { class: "panel sw-xc", hidden: true });
   const xcToggle = h("button", { class: "sw-xc-t", type: "button", "aria-expanded": "false", onclick: () => { xc.open = !xc.open; xcToggle.setAttribute("aria-expanded", String(xc.open)); xcBody.hidden = !xc.open; if (xc.open) { xcBal(); xcQuote(); } xcPaint(); } });
   const xcSrcRow = h("div", { class: "sw-xc-src" });
@@ -240,18 +281,31 @@ export async function mount(view, ctx) {
     xcInput.value = rawInput(raw, 18, 6);
     xcInput.dispatchEvent(new Event("input"));
   }
-  const xcQuote = debounce(async () => {
+  const xcGet = (coin, s, d, raw, from) => api.get(`bridge/cross-buy?${new URLSearchParams({ fromChain: String(s.id), toChain: String(d.id), toToken: coin.address, address: from, amountWei: raw.toString(), slippage: String(Math.max(st.slip, 300) / 10000) })}`);
+  const xcPreview = () => !!xc.q && xc.qFor !== String(wallet.address || "").toLowerCase();
+  // without a wallet the route is quoted for a stand-in address, so the amount, fees and time show before connecting;
+  // quiet: a refresh of the route already on screen (it stays visible while the new one loads)
+  async function xcFetch(quiet = false) {
+    if (xc.busy) return;   // Review is fetching the exact route itself
     const coin = xcCoin(), raw = toRaw(xc.amount, 18);
-    if (!coin || !xc.open || !raw || raw <= 0n || !wallet.address) { xc.loading = false; xcPaint(); return; }
-    const seq = ++xc.seq, s = xcSrc(), d = xcDest();
-    xc.loading = true; xc.err = null; xc.gate = null; xcPaint();
+    if (!coin || !xc.open || !raw || raw <= 0n) { xc.loading = false; xc.refreshing = false; xcPaint(); return; }
+    const seq = ++xc.seq, s = xcSrc(), d = xcDest(), from = wallet.address || PREVIEW_FROM;
+    xc.refreshing = quiet;
+    if (!quiet) { xc.loading = true; xc.err = null; xc.gate = null; }
+    xcPaint();
     try {
-      const q = await api.get(`bridge/cross-buy?${new URLSearchParams({ fromChain: String(s.id), toChain: String(d.id), toToken: coin.address, address: wallet.address, amountWei: raw.toString(), slippage: String(Math.max(st.slip, 300) / 10000) })}`);
+      const q = await xcGet(coin, s, d, raw, from);
       if (seq !== xc.seq || !alive) return;
-      xc.q = q; xc.qAt = Date.now(); xc.gate = q.gate;
-    } catch (e) { if (seq === xc.seq) { xc.err = e.message; xc.gate = e?.data?.gate || null; } }
-    if (seq === xc.seq && alive) { xc.loading = false; xcPaint(); }
-  }, 600);
+      xc.q = q; xc.qAt = Date.now(); xc.qFor = from.toLowerCase(); xc.gate = q.gate; xc.err = null;
+    } catch (e) {
+      if (seq !== xc.seq || !alive) return;
+      // a refresh that misses for a network reason tries once the normal way; a Gate that now blocks the coin shows at once
+      if (quiet && !e?.data?.gate) { xc.refreshing = false; xcFetch(false); return; }
+      xc.q = null; xc.err = e.message; xc.gate = e?.data?.gate || null;
+    }
+    xc.loading = false; xc.refreshing = false; xcPaint();
+  }
+  const xcQuote = debounce(() => xcFetch(false), 600);
   function xcPaint() {
     if (xcBox.hidden || !xc.open) return;
     const coin = xcCoin(), s = xcSrc(), d = xcDest(), q = xc.q, srcs = xcSrcs();
@@ -263,7 +317,9 @@ export async function mount(view, ctx) {
     else { clear(xcBalBtn, wallet.address ? "Balance …" : ""); xcBalBtn.disabled = true; }
     const g = xc.gate;
     const gateRow = g ? h("div", {}, h("span", {}, `Troya Gate on ${d.name}`), h("span", { class: g.verdict === "failed" ? "down" : g.verdict === "caution" ? "warn-t" : "up" }, `${g.verdict === "failed" ? "Blocked" : g.verdict === "caution" ? "Passed with notes" : "Passed"} · ${g.passed}/${g.total}`)) : null;
+    const preview = xcPreview();
     const rows = q ? h("div", { class: "rows sw-rows" },
+      preview ? h("p", { class: "sw-preview" }, icon("info"), "Preview, connect to get your exact route") : null,
       h("div", {}, h("span", {}, "You get (est.)"), h("span", {}, `${amount(Number(fromRaw(q.toAmount, q.toDecimals)))} ${q.toSymbol}`)),
       h("div", {}, h("span", {}, "Minimum"), h("span", {}, `${amount(Number(fromRaw(q.toAmountMin, q.toDecimals)))} ${q.toSymbol}`)),
       h("div", {}, h("span", {}, "Route"), h("span", {}, `${q.tool} via LI.FI`)),
@@ -275,34 +331,63 @@ export async function mount(view, ctx) {
     if (xc.err) notes.push(h("div", { class: "alert error" }, xc.err));
     else if (g?.verdict === "caution" && g.why) notes.push(h("div", { class: "alert warn" }, g.why));
     const raw = toRaw(xc.amount, 18);
+    // the wallet is asked for at Review: before that the route is a preview quoted for a stand-in address
     let label = `Buy $${coin.symbol} with ETH on ${s.name}`, disabled = false;
-    if (!wallet.address) label = "Connect wallet";
-    else if (!raw || raw <= 0n) { label = "Enter an amount"; disabled = true; }
-    else if (xc.bal && raw + XC_GAS > xc.bal.raw) { label = `Not enough ETH on ${s.name}`; disabled = true; }
+    if (!raw || raw <= 0n) { if (wallet.address) { label = "Enter an amount"; disabled = true; } else label = "Connect wallet"; }
+    else if (wallet.address && xc.bal && raw + XC_GAS > xc.bal.raw) { label = `Not enough ETH on ${s.name}`; disabled = true; }
     else if (xc.loading) { label = `Checking $${coin.symbol} and finding a route…`; disabled = true; }
     else if (!q) { label = xc.err ? (g?.verdict === "failed" ? "Blocked by Troya Gate" : "No route") : "Finding a route…"; disabled = true; }
+    else if (!wallet.address) label = "Connect and review";
     if (xc.busy) { label = xc.busy; disabled = true; }
     const btnX = h("button", { class: "btn primary", type: "button", disabled, onclick: () => xcAct() }, label);
-    clear(xcOut, rows, ...notes, btnX, xc.status,
+    const fresh = q && raw && !xc.busy ? h("p", { class: "sw-fresh", "data-xc-fresh": "" }, xcFreshText()) : null;
+    clear(xcOut, rows, ...notes, btnX, fresh, xc.status,
       h("p", { class: "fine muted sw-xc-fine" }, `One transaction on ${s.name}, signed in your wallet. LI.FI moves the ETH and buys $${coin.symbol} on ${d.name} for this amount only, delivered to your same address. Troya adds no fee.`));
   }
   async function xcAct() {
-    if (!wallet.address) { await openConnect(); xcBal(); xcQuote(); return; }
+    if (xc.busy) return;
+    if (!wallet.address) {
+      // the wallet is asked for here, at Review: with one connected, the review below opens on its exact route
+      await openConnect();
+      if (!alive || !wallet.address) return;
+      if (!xc.q) { xcBal(); xcQuote(); return; }
+    }
     const coin = xcCoin(), s = xcSrc(), d = xcDest(), raw = toRaw(xc.amount, 18);
     if (!coin || !raw || raw <= 0n || !xc.q) return;
+    const me = wallet.address.toLowerCase();
     try {
-      // a quote older than 45 s is fetched again: the Gate and the route are checked once more on the coin as it is now
-      if (Date.now() - xc.qAt > 45_000) {
-        xc.busy = "Running Troya Gate again…"; xcPaint();
-        const q2 = await api.get(`bridge/cross-buy?${new URLSearchParams({ fromChain: String(s.id), toChain: String(d.id), toToken: coin.address, address: wallet.address, amountWei: raw.toString(), slippage: String(Math.max(st.slip, 300) / 10000) })}`);
-        xc.q = q2; xc.qAt = Date.now(); xc.gate = q2.gate; xc.busy = false; xcPaint();
+      if (!xc.bal) { xc.busy = "Reading your balance…"; xcPaint(); await xcBal(); }
+      if (xc.bal && raw + XC_GAS > xc.bal.raw) { toast(`Not enough ETH on ${s.name} for this amount and its gas.`, "error", 6000); return; }
+      let q = null;
+      const amt = fromRaw(raw);
+      for (let round = 0; ; round++) {
+        // the route is fetched again for this wallet when it was a preview (a stand-in address) or is older than 30 s:
+        // the Gate and the route are checked once more on the coin as it is now
+        if (!q && (!xc.q || xc.qFor !== me || Date.now() - xc.qAt > QUOTE_MAX_AGE)) {
+          xc.busy = xc.qFor !== me ? "Finding your exact route…" : "Running Troya Gate again…"; xcPaint();
+          xc.seq++;   // a refresh already on its way answers for the old route
+          try {
+            const q2 = await xcGet(coin, s, d, raw, wallet.address);
+            Object.assign(xc, { q: q2, qAt: Date.now(), qFor: me, gate: q2.gate, err: null });
+          } catch (e) { if (e?.data?.gate) Object.assign(xc, { q: null, err: e.message, gate: e.data.gate }); throw e; }
+          if (!alive) return;
+        }
+        q = q || xc.q;
+        // only a route quoted for this wallet is ever signed (a preview delivers to the stand-in address)
+        if (xc.qFor !== me || !q?.tx?.to || String(q.toAddress || me).toLowerCase() !== me) throw new Error("That route was not quoted for your wallet. Nothing was sent. Try again.");
+        const got = Number(fromRaw(q.toAmount, q.toDecimals)), min = Number(fromRaw(q.toAmountMin, q.toDecimals));
+        xc.busy = "Waiting for your review…"; xcPaint();
+        const ok = await review({ title: "Review cross-chain buy", summary: `${tiny(amt)} ETH on ${s.name} → about ${amount(got)} ${q.toSymbol} on ${d.name}`, confirmLabel: `Buy in wallet`,
+          rows: [["You pay", `${tiny(amt)} ETH on ${s.name}`], ["You receive (est.)", `${amount(got)} ${q.toSymbol} on ${d.name}`], ["Minimum", `${amount(min)} ${q.toSymbol}`], ["Troya Gate", `${q.gate.verdict === "caution" ? "Passed with notes" : "Passed"} · ${q.gate.passed}/${q.gate.total} on ${d.name}`],
+            ["Route", `${q.tool} via LI.FI`], ["Time", secText(q.executionSec)], ["Route fees", `$${num(q.feeUsd + q.gasUsd, 2)}`], ["Recipient", `${short(wallet.address)} (you) on ${d.name}`], ["Contract", short(q.tx.to)]],
+          warn: `Sent through a third-party route (LI.FI${q.tool ? `, ${q.tool}` : ""}): Troya cannot reverse it once it is sent.${q.gate.verdict === "caution" && q.gate.why ? ` Gate note: ${q.gate.why}` : ""}` });
+        if (!ok || !alive) return;
+        // a review left open for two minutes: the route and the Gate run again and the review shows once more
+        if (Date.now() - xc.qAt <= REVIEW_MAX_AGE && xc.q === q) break;
+        if (round >= 2) throw new Error("The route kept changing while the review was open. Nothing was sent. Try again.");
+        q = null; xc.qAt = 0;
+        toast("The review stayed open a while, so the route was fetched again. Check it once more.", "", 5000);
       }
-      const q = xc.q, amt = fromRaw(raw), got = Number(fromRaw(q.toAmount, q.toDecimals)), min = Number(fromRaw(q.toAmountMin, q.toDecimals));
-      const ok = await review({ title: "Review cross-chain buy", summary: `${tiny(amt)} ETH on ${s.name} → about ${amount(got)} ${q.toSymbol} on ${d.name}`, confirmLabel: `Buy in wallet`,
-        rows: [["You pay", `${tiny(amt)} ETH on ${s.name}`], ["You receive (est.)", `${amount(got)} ${q.toSymbol} on ${d.name}`], ["Minimum", `${amount(min)} ${q.toSymbol}`], ["Troya Gate", `${q.gate.verdict === "caution" ? "Passed with notes" : "Passed"} · ${q.gate.passed}/${q.gate.total} on ${d.name}`],
-          ["Route", `${q.tool} via LI.FI`], ["Time", secText(q.executionSec)], ["Route fees", `$${num(q.feeUsd + q.gasUsd, 2)}`], ["Recipient", `${short(wallet.address)} (you) on ${d.name}`], ["Contract", short(q.tx.to)]],
-        warn: `Sent through a third-party route (LI.FI${q.tool ? `, ${q.tool}` : ""}): Troya cannot reverse it once it is sent.${q.gate.verdict === "caution" && q.gate.why ? ` Gate note: ${q.gate.why}` : ""}` });
-      if (!ok) return;
       xc.busy = `Confirm in your wallet on ${s.name}…`; xcPaint();
       const hash = await sendTx(s.key, { to: q.tx.to, data: q.tx.data, value: q.tx.value, gasLimit: (BigInt(q.tx.gasLimit) * 13n) / 10n });
       addTransfer({ kind: "lifi", hash, amount: amt, sym: "ETH", from: s.key, fromId: s.id, to: d.key, toId: d.id, at: Date.now(), status: "sent", address: wallet.address, buy: { token: q.toToken, symbol: q.toSymbol } });
@@ -379,12 +464,19 @@ export async function mount(view, ctx) {
     const need = ethShort() + GAS_KEEP, step = 10n ** 12n;
     location.hash = `#/bridge?amount=${rawInput(((need + step - 1n) / step) * step, 18, 6)}`;
   }
-  // a long quote shrinks to fit its box (down to 20px) instead of being cut mid-number
+  // a long quote shrinks to fit its box (down to 22px), then reads in compact notation (5.86M) and may shrink to 16px,
+  // instead of being cut mid-number; the full amount stays in the title
   function fitOut() {
     buyOut.style.fontSize = "";
+    const q = st.quote, v = q ? Number(q.amountOut) : NaN;
+    if (q && !buyOut.querySelector(".sk")) buyOut.textContent = amount(v);
     if (!buyOut.isConnected || !buyOut.clientWidth) return;
-    let fs = parseFloat(getComputedStyle(buyOut).fontSize) || 40;
-    while (buyOut.scrollWidth > buyOut.clientWidth + 1 && fs > 20) { fs -= 2; buyOut.style.fontSize = `${fs}px`; }
+    const over = () => buyOut.scrollWidth > buyOut.clientWidth + 1;
+    const base = parseFloat(getComputedStyle(buyOut).fontSize) || 40;
+    const shrink = (min) => { let fs = parseFloat(buyOut.style.fontSize) || base; while (over() && fs > min) { fs -= 2; buyOut.style.fontSize = `${fs}px`; } };
+    shrink(22);
+    if (over() && q && Math.abs(v) >= 1e4) { buyOut.textContent = compact(v, 2); buyOut.style.fontSize = ""; }
+    shrink(16);
   }
   const fitObs = typeof ResizeObserver === "function" ? new ResizeObserver(() => fitOut()) : null;
   fitObs?.observe(buyOut);
@@ -394,7 +486,7 @@ export async function mount(view, ctx) {
     el.classList.toggle("empty", !t);
   }
 
-  function reset() { st.quote = null; st.quoteErr = null; st.gate = null; st.gateAt = 0; st.gating = false; st.seq++; }
+  function reset() { st.quote = null; st.quoteAt = 0; st.quoteErr = null; st.gate = null; st.gateAt = 0; st.gating = false; st.refreshing = false; st.seq++; }
 
   function paint() {
     tokBtn(sellTok, st.sell);
@@ -464,7 +556,48 @@ export async function mount(view, ctx) {
     if (st.busy) { label = st.busy; disabled = true; }
     btn.textContent = label;
     btn.disabled = disabled;
+    paintStrip();
     tickBusy();
+    tickFresh();
+  }
+  // the Gate in one line above the button (phones): verdict, checks passed and the first reason that failed (or a note)
+  function paintStrip() {
+    const g = st.gate;
+    if (!st.buy || (!g && !st.gating && !st.loading)) { gateStrip.hidden = true; gateStrip.dataset.k = ""; return; }
+    gateStrip.hidden = false;
+    let verdict = "idle", pill = st.gating ? "Checking…" : "Routing…", count = "",
+      why = st.gating ? "Simulating the exact swap and a test sell…" : "Finding a route, then Troya runs its checks.";
+    if (g) {
+      const c = gateCount(g);
+      verdict = g.pass ? (c.notes ? "caution" : "passed") : "failed";
+      pill = g.pass ? (verdict === "caution" ? "Passed with notes" : "Passed") : "Blocked";
+      count = `${c.passed}/${c.total}`;
+      const first = (g.checks || []).find((x) => x.status === "fail") || (g.checks || []).find((x) => x.status === "warn");
+      why = first ? `${first.label}${first.detail ? `: ${first.detail}` : ""}` : c.tally;
+    }
+    const k = `${verdict}|${pill}|${count}|${why}`;
+    if (gateStrip.dataset.k === k) return;
+    gateStrip.dataset.k = k;
+    clear(gateStrip, h("span", { class: `dk-v v-${verdict}` }, pill), count ? h("b", { class: "sw-gs-n" }, count) : null,
+      h("span", { class: "sw-gs-why" }, why), icon("arrowRight", "chev"));
+    gateStrip.title = why;
+    gateStrip.setAttribute("aria-label", `Troya Gate: ${pill}${count ? `, ${count} checks passed` : ""}. ${why}. Show every check`);
+  }
+  /* ---------- fresh quotes: the quote on screen is fetched again every 25 s while the page is visible ----------
+     Only the quote: the Gate keeps its verdict and runs again the moment you press Swap. A refresh never blanks the
+     numbers; a cross-chain route open below the card refreshes the same way (its Gate runs on the server each time). */
+  const secsLeft = (at) => Math.max(0, Math.ceil((at + QUOTE_EVERY - Date.now()) / 1000));
+  function xcFreshText() { return xc.refreshing ? "Refreshing the route…" : `Route refreshes in ${secsLeft(xc.qAt)}s`; }
+  function tickFresh() {
+    const seen = document.visibilityState !== "hidden";
+    const on = !!st.quote && !!st.amount && !st.busy;
+    if (on && seen && !st.loading && !st.gating && !st.refreshing && Date.now() - st.quoteAt >= QUOTE_EVERY) runQuote(true);
+    const t = !on ? "" : st.refreshing ? "Refreshing the quote…" : `Quote refreshes in ${secsLeft(st.quoteAt)}s`;
+    if (freshLine.textContent !== t) freshLine.textContent = t;
+    freshLine.hidden = !t;
+    if (xc.open && !xcBox.hidden && xc.q && toRaw(xc.amount, 18) && !xc.busy && !xc.loading && !xc.refreshing && seen && Date.now() - xc.qAt >= QUOTE_EVERY) xcFetch(true);
+    const el = xcOut.querySelector("[data-xc-fresh]");
+    if (el) { const x = xcFreshText(); if (el.textContent !== x) el.textContent = x; }
   }
   // ≈ dollars on both legs. A side known by address (ETH, WETH, a dollar stablecoin) is priced directly, at the quote's
   // ETH price; the other side follows through the quote's own fees and price impact, so "You get" is what the coins are
@@ -684,7 +817,7 @@ export async function mount(view, ctx) {
     return s < 60 ? `checked ${s}s ago` : `checked ${Math.floor(s / 60)}m ago`;
   }
   // twice a second, so the route timer never skips a second when a tick runs late
-  const ageTick = setInterval(() => { const el = gateCard.querySelector("[data-gate-age]"); if (el && st.gateAt) { const t = gateAge(); if (el.textContent !== t) el.textContent = t; } tickBusy(); }, 500);
+  const ageTick = setInterval(() => { const el = gateCard.querySelector("[data-gate-age]"); if (el && st.gateAt) { const t = gateAge(); if (el.textContent !== t) el.textContent = t; } tickBusy(); tickFresh(); }, 500);
 
   // Troya Gate runs again at the moment of signing: on a new pool, liquidity can move between the quote and the click.
   async function regate(q, label) {
@@ -703,18 +836,23 @@ export async function mount(view, ctx) {
   }
 
   /* ---------- quote + gate ---------- */
-  const requote = debounce(async () => {
+  // quiet: the 25 s refresh of a quote already on screen. The numbers stay up while it loads and the button stays
+  // usable (Swap runs the Gate again and builds from a fresh quote anyway); one miss falls back to a normal requote
+  async function runQuote(quiet = false) {
     const amt = toRaw(st.amount, st.sell?.decimals ?? 18);
-    if (!st.sell || !st.buy || !amt || amt <= 0n) { st.loading = false; paint(); return; }
+    if (!st.sell || !st.buy || !amt || amt <= 0n) { st.loading = false; st.refreshing = false; paint(); return; }
     const seq = ++st.seq;
-    st.loading = true; st.loadAt = Date.now();
+    st.refreshing = quiet;
+    if (!quiet) { st.loading = true; st.loadAt = Date.now(); }
     paint();
     const qs = new URLSearchParams({ tokenIn: tokParam(st.sell), tokenOut: tokParam(st.buy), amountInRaw: amt.toString(), slippageBps: String(st.slip), ...cq() });
     try {
       const q = await api.get(`swap/quote?${qs}`);
       if (!alive || seq !== st.seq) return;
-      st.quote = q; st.quoteErr = null; st.loading = false; st.gating = true;
+      st.quote = q; st.quoteAt = Date.now(); st.quoteErr = null;
       if (q.ethUsd > 0) st.ethUsd = q.ethUsd;
+      if (quiet) { st.refreshing = false; paint(); return; }
+      st.loading = false; st.gating = true;
       paint();
       if (who()) qs.set("from", who());
       // fail closed: if the Gate can't run, the swap stays locked until it can
@@ -725,11 +863,14 @@ export async function mount(view, ctx) {
       tellTroya();
     } catch (e) {
       if (!alive || seq !== st.seq) return;
+      // (called straight away: the 500 ms ticker would keep pushing a debounced call back)
+      if (quiet) { st.refreshing = false; runQuote(false); return; }
       st.quote = null; st.quoteErr = e.message; st.loading = false;
       paint();
       tellTroya();
     }
-  }, 380);
+  }
+  const requote = debounce(() => runQuote(false), 380);
   // the Ask Troya popup reads this, so "why is it blocked?" is answered about this exact swap
   function tellTroya() {
     const q = st.quote, g = st.gate;
@@ -780,24 +921,88 @@ export async function mount(view, ctx) {
     sellInput.dispatchEvent(new Event("input"));
   }
 
-  /* ---------- token picker ---------- */
+  /* ---------- token picker (Picker 2.0) ----------
+     Robinhood Chain, before a search: ETH, USDG and WETH as one-tap chips, then $TROYA (Official), your tokens with their
+     balances (Portfolio, by value), your last five picks, stock tokens and the most traded coins. Every row shows its
+     address. Stock tokens wear Verified; a coin that reuses a bigger coin's ticker wears "Copy?" and the team's own test
+     launches "Team test" (hints from the server: names stay free and no row is hidden for them). A field the server
+     does not send simply shows nothing. Other networks: the native coin, your recent picks, then the popular list. */
   let stocksCache = null;
+  const pfCache = { addr: "", at: 0, p: null };
+  // your Robinhood Chain tokens, read at most every 30 s per wallet (the server keeps them as long)
+  function myTokens() {
+    const a = String(wallet.address || "").toLowerCase();
+    if (!a || st.chain !== "robinhood") return Promise.resolve([]);
+    if (pfCache.addr !== a || !pfCache.p || Date.now() - pfCache.at > 30_000) {
+      Object.assign(pfCache, { addr: a, at: Date.now(), p: api.get(`portfolio/tokens?${new URLSearchParams({ address: a })}`).then((r) => (Array.isArray(r?.tokens) ? r.tokens : [])).catch(() => { pfCache.at = 0; return null; }) });
+    }
+    return pfCache.p;
+  }
+  const officialCa = () => (window.SITE?.ca && /^0x[0-9a-fA-F]{40}$/.test(window.SITE.ca) ? window.SITE.ca : TROYA);
+  const RH_BASE = [[ETH, "Native"], [{ address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", symbol: "USDG", name: "Global Dollar", decimals: 6 }, "Stablecoin"], [{ address: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", symbol: "WETH", name: "Wrapped Ether", decimals: 18 }, "Wrapped"]];
+  /** What a row is: Official ($TROYA), Verified (a Robinhood stock token), Team test, Copy? */
+  function marks(t, stockSet) {
+    const a = akey(t?.address), out = [];
+    const official = !!t?.official || (st.chain === "robinhood" && a === akey(officialCa()));
+    const stock = t?.kind === "stock" || t?.stock === true || !!stockSet?.has(a);
+    if (official) out.push(h("span", { class: "badge-s tp-off", title: "The official $TROYA contract" }, icon("check"), "Official"));
+    else if (stock) out.push(h("span", { class: "badge-s sw-pad tp-ver", title: "A Robinhood stock token" }, padLogo("stocks", 12), "Verified"));
+    if (!official && !stock && t?.teamTest === true) out.push(h("span", { class: "badge-s tp-test", title: "One of the Troya team's own test launches" }, "Team test"));
+    if (!official && !stock && t?.copy === true) out.push(h("span", { class: "badge-s tp-copy", title: "Reuses the ticker of a stock token, a major, $TROYA or a bigger coin. Check the address before you trade it." }, "Copy?"));
+    return out;
+  }
+  // a held balance: the amount, and its value when the coin has a price
+  const balEl = (t) => h("span", { class: "tp-bal" }, h("b", {}, amount(Number(t.amount))), Number(t.valueUsd) > 0 ? h("small", {}, usd(Number(t.valueUsd))) : null);
+  // decimals from a list are not trusted with an amount: null makes the picker read them from the chain
+  const plain = (t) => ({ address: t.address, symbol: t.symbol, name: t.name, decimals: null, image: t.image || null });
   function pick(side) {
     const other = side === "sell" ? st.buy : st.sell;
-    const input = h("input", { class: "input", placeholder: "Search a name, symbol or paste an address", autocomplete: "off", spellcheck: "false" });
+    const input = h("input", { class: "input", placeholder: "Search a name, symbol or paste an address", autocomplete: "off", spellcheck: "false", "aria-label": "Search tokens" });
     const list = h("div", { class: "tp-list" });
     const choose = async (t) => {
       if (t.decimals == null && t.address && t.address !== "native") {
         try { const m2 = await api.get(`token/meta?${new URLSearchParams({ address: t.address, ...cq() })}`); t = { ...t, decimals: m2.decimals, symbol: t.symbol || m2.symbol, name: t.name || m2.name }; }
         catch { toast("Could not read this token from the chain. Try again in a moment.", "error"); return; }
       }
+      rememberPick(st.chain, t);
       if (side === "sell") st.sell = t; else st.buy = t;
       if (other && (isNative(t) ? isNative(other) : !isNative(other) && other.address === t.address)) { if (side === "sell") st.buy = null; else st.sell = nativeOf(); }
       m.close(); reset(); paint(); refreshBal(); requote();
     };
-    const row = (t, extra) => h("button", { class: "tp-row", type: "button", onclick: () => choose(t) }, tokenIcon({ ...t, chain: st.chain }, "sm"),
-      h("span", { class: "tp-name" }, h("b", {}, t.symbol), h("small", {}, t.name || (t.address === "native" ? "Native gas token" : short(t.address)))),
-      extra ? h("span", { class: "tp-extra" }, extra) : null);
+    const row = (t, extra) => h("button", { class: "tp-row", type: "button", title: isNative(t) ? "" : t.address, onclick: () => choose(t) }, tokenIcon({ ...t, chain: st.chain }, ""),
+      h("span", { class: "tp-name" }, h("b", {}, t.symbol),
+        h("small", {}, isNative(t) ? "Native gas token" : [t.name && t.name !== t.symbol ? h("span", { class: "tp-nm" }, t.name) : null, h("span", { class: "tp-addr" }, short(t.address))])),
+      extra && (!Array.isArray(extra) || extra.some(Boolean)) ? h("span", { class: "tp-extra" }, extra) : null);
+    const grp = (label) => h("div", { class: "tp-grp" }, label);
+    const chips = st.chain === "robinhood" ? h("div", { class: "tp-chips", role: "group", "aria-label": "Common tokens" },
+      RH_BASE.map(([t]) => h("button", { class: "chip tp-chip", type: "button", onclick: () => choose(t) }, tokenIcon({ ...t, chain: st.chain }, "xs"), t.symbol))) : null;
+    const liq = (n) => (n >= 1e6 ? `$${num(n / 1e6, 1)}M liq.` : `$${num(n / 1e3, n >= 1e4 ? 0 : 1)}K liq.`);
+    // Robinhood Chain before a search; drawn again as each part arrives (your balances can take a few seconds)
+    function paintHome(my, d) {
+      if (my !== seq) return;
+      const shown = new Set();
+      const take = (t) => { const a = akey(t?.address); if (!a || a === "native" || shown.has(a)) return false; shown.add(a); return true; };
+      const parts = [], off = officialCa();
+      const held = (d.pf || []).filter((t) => t?.address && Number(t.amount) > 0);
+      const mine = new Map(held.map((t) => [akey(t.address), t]));
+      const troya = { address: off, symbol: "TROYA", name: "Troya Agent", decimals: null };
+      take(troya);
+      parts.push(grp("Official"), row(troya, [...marks({ ...troya, official: true }), mine.has(akey(off)) ? balEl(mine.get(akey(off))) : null]));
+      const yours = held.slice().sort((a, b) => (Number(b.valueUsd) || 0) - (Number(a.valueUsd) || 0)).filter(take).slice(0, 12);
+      if (yours.length) parts.push(grp("Your tokens"), ...yours.map((t) => row(plain(t), [...marks(t, d.stockSet), balEl(t)])));
+      else if (wallet.address && d.pf === undefined) parts.push(grp("Your tokens"), h("div", { class: "tp-load muted" }, "Reading your balances…"));
+      const rec = recentPicks(st.chain).filter(take);
+      if (rec.length) parts.push(grp("Recent"), ...rec.map((t) => row(plain(t), marks(t, d.stockSet))));
+      if (!d.mk) parts.push(h("div", { class: "tp-load muted" }, "Loading the market…"));
+      else {
+        const stocks = (d.sk?.stocks || []).filter((t) => t.tradable).filter(take).slice(0, 6);
+        const toks = (d.mk.tokens || d.mk.rows || []).filter((t) => t.address && t.address !== "native").filter(take);
+        if (stocks.length) parts.push(grp("Stock tokens"), ...stocks.map((t) => row({ ...plain(t), decimals: t.decimals ?? null }, marks({ ...t, kind: "stock" }))));
+        if (toks.length) parts.push(grp("Most traded today"), ...toks.map((t) => row(plain(t), [...marks(t, d.stockSet), t.launchpad ? padBadge(t.launchpad) : null])));
+        if (d.mkErr) parts.push(h("div", { class: "tp-load muted" }, "The market list is unavailable right now. Search, or paste a token address."));
+      }
+      clear(list, ...parts);
+    }
     let seq = 0;
     const search = debounce(async () => {
       const q = input.value.trim();
@@ -806,6 +1011,8 @@ export async function mount(view, ctx) {
       if (st.chain !== "robinhood") {
         // Base / Arbitrum: popular tokens, search by name or symbol (GeckoTerminal), or paste an address
         if (!q || nativeOf().symbol.toLowerCase().startsWith(q.toLowerCase())) items.push(row(nativeOf(), "Native"));
+        const rec = q ? [] : recentPicks(st.chain);
+        if (rec.length) items.push(grp("Recent"), ...rec.map((t) => row(plain(t))));
         clear(list, ...items, h("div", { class: "tp-load muted" }, "Searching…"));
         try {
           if (isSolNet() ? MINT.test(q) : /^0x[0-9a-fA-F]{40}$/.test(q)) {
@@ -816,58 +1023,57 @@ export async function mount(view, ctx) {
           }
           const r = await api.get(`swap/tokens?${new URLSearchParams({ q, ...cq() })}`);
           if (my !== seq) return;
-          const toks = r.tokens || [];
-          clear(list, ...items, isSolNet() && r.trending ? h("div", { class: "tp-load muted" }, "Trending on Solana right now") : null,
-            ...toks.map((t) => row(t, t.launchpad ? padBadge(t.launchpad) : t.liquidityUsd ? h("span", { class: "badge-s" }, t.liquidityUsd >= 1e6 ? `$${num(t.liquidityUsd / 1e6, 1)}M liq.` : `$${num(t.liquidityUsd / 1e3, 0)}K liq.`) : null)),
-            toks.length ? null : h("div", { class: "tp-load muted" }, "No match. Paste the token address instead."));
+          const seen = new Set(rec.map((t) => akey(t.address)));
+          const toks = (r.tokens || []).filter((t) => !seen.has(akey(t.address)));
+          const head = isSolNet() && r.trending ? "Trending on Solana right now" : rec.length && toks.length ? "Popular" : null;
+          clear(list, ...items, head ? grp(head) : null,
+            ...toks.map((t) => row(t, t.launchpad ? padBadge(t.launchpad) : t.liquidityUsd ? h("span", { class: "badge-s" }, liq(t.liquidityUsd)) : null)),
+            toks.length || rec.length ? null : h("div", { class: "tp-load muted" }, "No match. Paste the token address instead."));
         } catch { if (my === seq) clear(list, ...items, h("div", { class: "tp-load muted" }, "The token list is unavailable right now. Paste a token address instead.")); }
         return;
       }
-      const base = [[ETH, "Native"], [{ address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", symbol: "USDG", name: "Global Dollar", decimals: 6 }, "Stablecoin"], [{ address: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", symbol: "WETH", name: "Wrapped Ether", decimals: 18 }, "Wrapped"]];
-      for (const [t, tag] of base) if (!q || t.symbol.toLowerCase().startsWith(q.toLowerCase())) items.push(row(t, tag));
+      if (!q) {
+        // nothing typed: draw at once, then fill in your balances and the market as they arrive
+        const d = { pf: wallet.address ? undefined : [], mk: null, mkErr: false, sk: null, stockSet: null };
+        paintHome(my, d);
+        myTokens().then((pf) => { d.pf = pf || []; paintHome(my, d); });
+        Promise.all([api.get(`market/robinhood?${new URLSearchParams({ q: "", limit: "30", sort: "volume", dir: "desc", tradable: "1" })}`).catch(() => null),
+          (stocksCache ||= api.get("market/stocks").catch(() => ({ stocks: [] })))]).then(([r, sk]) => {
+          d.mk = r || { tokens: [] }; d.mkErr = !r; d.sk = sk;
+          d.stockSet = new Set((sk?.stocks || []).map((t) => akey(t.address)));
+          paintHome(my, d);
+        });
+        return;
+      }
+      for (const [t, tag] of RH_BASE) if (t.symbol.toLowerCase().startsWith(q.toLowerCase())) items.push(row(t, tag));
       clear(list, ...items, h("div", { class: "tp-load muted" }, "Searching…"));
       try {
         if (/^0x[0-9a-fA-F]{40}$/.test(q)) {
           const m2 = await api.get(`token/meta?address=${q}`);
           if (my !== seq) return;
-          clear(list, row({ address: m2.address, symbol: m2.symbol, name: m2.name, decimals: m2.decimals }, "By address"));
+          const t = { address: m2.address, symbol: m2.symbol, name: m2.name, decimals: m2.decimals };
+          clear(list, row(t, [...marks(t), h("span", {}, "By address")]));
           return;
         }
-        if (q) {
-          // a symbol, name or ticker: the whole chain (index + stock tokens + DexScreener), real coin first, copies marked
-          const [r, sk] = await Promise.all([
-            api.get(`search/coins?${new URLSearchParams({ q, limit: "24" })}`),
-            (stocksCache ||= api.get("market/stocks").catch(() => ({ stocks: [] }))),
-          ]);
-          if (my !== seq) return;
-          const tradable = new Set((sk.stocks || []).filter((t) => t.tradable).map((t) => String(t.address).toLowerCase()));
-          const hits = (r.coins || []).filter((c) => c.kind !== "major" && (c.kind !== "stock" || tradable.has(c.address)));
-          const liq = (n) => (n >= 1e6 ? `$${num(n / 1e6, 1)}M liq.` : `$${num(n / 1e3, n >= 1e4 ? 0 : 1)}K liq.`);
-          clear(list, ...items,
-            ...hits.map((c) => row({ address: c.address, symbol: c.symbol, name: c.name, decimals: null, image: c.image },
-              c.kind === "stock" ? h("span", { class: "badge-s sw-pad" }, padLogo("stocks", 12), "Stock") : c.launchpad ? padBadge(c.launchpad) : h("span", { class: "badge-s" }, c.liquidityUsd ? liq(c.liquidityUsd) : "Coin"))),
-            hits.length || items.length ? null : h("div", { class: "tp-load muted" }, "No match. Paste the token address instead."));
-          return;
-        }
+        // a symbol, name or ticker: the whole chain (index + stock tokens + DexScreener), real coin first, copies marked
         const [r, sk] = await Promise.all([
-          api.get(`market/robinhood?${new URLSearchParams({ q, limit: "30", sort: "volume", dir: "desc", tradable: "1" })}`),
+          api.get(`search/coins?${new URLSearchParams({ q, limit: "24" })}`),
           (stocksCache ||= api.get("market/stocks").catch(() => ({ stocks: [] }))),
         ]);
         if (my !== seq) return;
-        const ql = q.toLowerCase();
-        const stocks = (sk.stocks || []).filter((t) => t.tradable && (!ql || t.symbol.toLowerCase().includes(ql) || t.name.toLowerCase().includes(ql))).slice(0, q ? 12 : 6);
-        const toks = (r.tokens || r.rows || []).filter((t) => t.address && t.address !== "native");
+        const tradable = new Set((sk.stocks || []).filter((t) => t.tradable).map((t) => String(t.address).toLowerCase()));
+        const hits = (r.coins || []).filter((c) => c.kind !== "major" && (c.kind !== "stock" || tradable.has(c.address)));
         clear(list, ...items,
-          ...stocks.map((t) => row({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals ?? null, image: t.image }, h("span", { class: "badge-s sw-pad" }, padLogo("stocks", 12), "Stock"))),
-          ...toks.map((t) => row({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals ?? null, image: t.image }, t.launchpad ? padBadge(t.launchpad) : null)),
-          toks.length || stocks.length ? null : h("div", { class: "tp-load muted" }, q ? "No match. Paste the token address instead." : "Type to search Robinhood Chain tokens."));
+          ...hits.map((c) => row(plain(c),
+            [...marks(c, tradable), c.kind === "stock" ? null : c.launchpad ? padBadge(c.launchpad) : h("span", { class: "badge-s" }, c.liquidityUsd ? liq(c.liquidityUsd) : "Coin")])),
+          hits.length || items.length ? null : h("div", { class: "tp-load muted" }, "No match. Paste the token address instead."));
       } catch (e) {
         if (my !== seq) return;
         clear(list, ...items, h("div", { class: "tp-load muted" }, "The token list is unavailable right now. Paste a token address instead."));
       }
     }, 250);
     input.addEventListener("input", search);
-    const m = modal({ title: side === "sell" ? "Sell which token?" : "Buy which token?", body: h("div", { class: "tp" }, input, list,
+    const m = modal({ title: side === "sell" ? "Sell which token?" : "Buy which token?", body: h("div", { class: "tp" }, input, chips, list,
       h("p", { class: "note" }, st.chain === "robinhood"
         ? "Troya routes Pons curves and Uniswap v3/v4 pools, and the other Robinhood Chain launchpads through KyberSwap. Paste any Robinhood Chain coin address to find it. A coin still on its Pons curve trades against its curve pair (usually ETH)."
         : isSolNet() ? "Solana coins, routed through Jupiter: pump.fun and every other launchpad. Paste any Solana token address (mint) to find it; Troya Gate checks it before you can buy."
@@ -1068,11 +1274,17 @@ export async function mount(view, ctx) {
     }
   }
 
-  const off = onWallet(() => { if (!isSolNet()) { if (st.chain === "robinhood") readOtherEth(); refreshBal(); paint(); } });
+  const off = onWallet(() => {
+    if (isSolNet()) return;
+    if (st.chain === "robinhood") readOtherEth();
+    refreshBal(); paint();
+    // a cross-chain preview (quoted for a stand-in address) becomes the exact route for the wallet just connected
+    if (xc.open && !xcBox.hidden && xc.amount && !xc.busy && xc.qFor !== String(wallet.address || PREVIEW_FROM).toLowerCase()) { xcBal(); xcQuote(); }
+  });
   if (st.chain === "robinhood") readOtherEth();
   const offSol = onSol(() => { if (isSolNet()) { refreshBal(); paint(); if (st.quote) { reset(); requote(); } } });
   if (isSolNet()) restoreSol().then(() => { refreshBal(); paint(); });
   render();
   if (st.amount) requote();
-  return () => { alive = false; off(); offSol(); clearInterval(ageTick); fitObs?.disconnect(); try { chartObj?.remove(); } catch {} };
+  return () => { alive = false; off(); offSol(); clearInterval(ageTick); fitObs?.disconnect(); phoneMq?.removeEventListener?.("change", placeNote); try { chartObj?.remove(); } catch {} };
 }

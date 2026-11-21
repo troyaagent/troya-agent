@@ -2,7 +2,7 @@
 import { h, clear, icon, pageHead, table, review, toast, modal, num, fixed, usd, compact, pct, pctEl, short, useCss, every, debounce, store, coinIcon } from "../ui.js";
 import { api } from "../api.js";
 import { wallet, onWallet, openConnect, ensureChain } from "../wallet.js";
-import { getTradingKey, tradingKeyStatus, approveTradingKey, revokeTradingKey, placeOrder, cancelOrder, sendToDex } from "../hl.js";
+import { getTradingKey, tradingKeyStatus, approveTradingKey, revokeTradingKey, placeOrder, cancelOrder, sendToDex, roundSz } from "../hl.js";
 import { sendTx } from "../chain.js";
 // F16: trade.xyz markets (stocks, indices, metals) sit beside the Hyperliquid perps; their margin is a separate balance
 const nameOf = (m) => (m?.dex ? `${m.label} · trade.xyz` : `${m?.coin}-PERP`);
@@ -11,6 +11,19 @@ const IVALS = ["1m", "5m", "15m", "1h", "4h", "1d"];
 const prefs = store("troya.perps", { interval: "1h", unit: "USD", lev: {} });
 // local fallback limits when the server policy is unavailable (the server re-checks Agent Wallet actions itself)
 const DEFAULT_LIMITS = { maxLeverage: 20, perTradeUsd: 25000, dailyUsd: null, allowedCoins: null, source: "local defaults" };
+const TAKER_FEE = 0.00045;     // Hyperliquid base taker fee (0.045%): the margin check and the size chips leave room for it
+const SLIP = 0.01;             // a market order goes out as IOC at most 1% through the price (placeOrder's slippage)
+const MIN_ORDER_USD = 10;      // Hyperliquid refuses an order worth less than $10
+
+// the ticket and the book are built once and patched in place: a tick that rebuilt them took the click that started on
+// the old button, moved the caret and stopped a slider drag after one step
+const setText = (el, s) => { s = String(s ?? ""); if (el.textContent !== s) el.textContent = s; };
+const setCls = (el, c) => { if (el.className !== c) el.className = c; };
+const press = (btns, on) => btns.forEach((b) => { const v = String(!!on(b)); if (b.getAttribute("aria-pressed") !== v) b.setAttribute("aria-pressed", v); });
+// a small block with links or buttons is rebuilt only when what it says changes
+const patch = (el, sig, build) => { if (el._sig === sig) return; el._sig = sig; clear(el, build()); };
+const rejected = (e) => e?.code === 4001 || e?.code === "ACTION_REJECTED" || /reject|denied/i.test(e?.message || "");
+const errMsg = (e) => { const s = String(e?.shortMessage || e?.message || "Something went wrong."); return /[.!?…]$/.test(s) ? s : `${s}.`; };
 
 const pxDecimals = (p) => (!p ? 2 : p >= 10000 ? 0 : p >= 1000 ? 1 : p >= 100 ? 2 : p >= 1 ? 4 : p >= 0.01 ? 5 : 7);
 // fixed decimals, so the book, the axis and the header line up digit for digit (383.60 under 383.61)
@@ -41,6 +54,18 @@ function readPolicy(p) {
   };
 }
 
+// resolves once /agent/css/<name>.css has loaded (at once when it already has), or after ms at most
+function cssReady(name, ms) {
+  const link = [...document.querySelectorAll('link[rel="stylesheet"]')].find((l) => (l.getAttribute("href") || "").startsWith(`/agent/css/${name}.css`));
+  if (!link || link.sheet) return Promise.resolve();
+  return new Promise((done) => {
+    const t = setTimeout(done, ms);
+    const fin = () => { clearTimeout(t); done(); };
+    link.addEventListener("load", fin, { once: true });
+    link.addEventListener("error", fin, { once: true });
+  });
+}
+
 // walk the book to estimate the average fill for a given coin size
 function walk(levels, size) {
   let left = size, cost = 0;
@@ -56,12 +81,19 @@ export async function mount(view, ctx) {
   const st = {
     coin: (ctx.parts[0] || "BTC").toUpperCase().replace(/-PERP$/, ""),
     markets: [], m: null, book: { bids: [], asks: [] }, user: null, limits: { ...DEFAULT_LIMITS },
-    side: "long", type: "market", unit: prefs.get().unit || "USD", lev: null, interval: prefs.get().interval || "1h",
+    side: "long", type: "market", unit: prefs.get().unit === "COIN" ? "COIN" : "USD", lev: null, interval: prefs.get().interval || "1h",
     key: { state: "none" }, lastOk: 0,
+    busy: null,      // set while an order or a funding is in flight: the main button shows it, disabled, so nothing goes out twice
+    funding: null,
   };
+  let stage = null;  // where Fund & open is: "fund" | "wait" | "move" | "order", so a cancel says what really happened
 
   /* ---------- layout ---------- */
-  const mktBtn = h("button", { class: "pp-mkt", type: "button", "aria-label": "Choose market", onclick: () => pickMarket() });
+  // the button already holds the asked-for market's name, so the header keeps its height when the list arrives
+  const asked = String(ctx.parts[0] || "BTC").replace(/-PERP$/i, "");
+  const mktBtn = h("button", { class: "pp-mkt", type: "button", "aria-label": "Choose market", onclick: () => pickMarket() },
+    coinIcon(asked, "pp-coin"), asked.includes(":") ? `${asked.split(":")[1]} · trade.xyz` : `${asked.toUpperCase()}-PERP`, icon("arrowRight"));
+  mktBtn.lastChild.style.transform = "rotate(90deg)";
   const pxEl = h("span", { class: "pp-px" }, "–");
   const chgEl = h("span", {});
   const stat = (k) => { const v = h("span", {}, "–"); return [h("div", { class: "pp-stat" }, h("span", { class: "k" }, k), v), v]; };
@@ -73,11 +105,34 @@ export async function mount(view, ctx) {
 
   const ivals = h("div", { class: "pp-ivals", role: "group", "aria-label": "Chart interval" });
   const chartBox = h("div", { class: "pp-chart-box" }, h("div", { class: "pp-chart-msg" }, "Loading chart…"));
-  const bookBids = h("div", {}), bookAsks = h("div", {});
+  // ten rows a side, built once: a tick rewrites their numbers, so a click on a price to use it always lands, and the
+  // book keeps its height while it loads
+  const N_LV = 10;
+  const lvRow = (cls) => {
+    const bar = h("i", {}), p = h("span", { class: "p" }), s = h("span", {});
+    const el = h("div", { class: `pp-lv ${cls}`, title: "Use this price", style: { visibility: "hidden" }, onclick: () => { if (el._px == null) return; limitIn.value = String(el._px); setType("limit"); } }, bar, p, s);
+    el._set = (l, max, fmtSz) => {
+      el._px = l ? l.px : null;
+      el.style.visibility = l ? "" : "hidden";
+      if (!l) return;
+      bar.style.width = `${(l.sz / max) * 100}%`;
+      setText(p, fmtPx(l.px));
+      setText(s, fmtSz(l.sz));
+    };
+    return el;
+  };
+  const bidRows = Array.from({ length: N_LV }, () => lvRow("bid")), askRows = Array.from({ length: N_LV }, () => lvRow("ask"));
+  const bookBids = h("div", {}, bidRows), bookAsks = h("div", {}, askRows);
   const spreadEl = h("span", { class: "muted" }, "");
   const posBox = h("div", {});
 
-  const ticket = h("div", { class: "panel pp-ticket" });
+  const ticket = h("div", { class: "panel pp-ticket" }, h("div", { class: "sk", style: { height: "380px" } }));
+  // perps.css puts the ticket under the chart on a phone; drawn before it arrived, the panels swapped places a moment
+  // later (most of the page's layout shift), so the first paint waits for it, never longer than 1.5 s
+  const hash0 = location.hash;
+  await cssReady("perps", 1500);
+  if (location.hash !== hash0) return null;   // left during the wait: the next page owns the view now
+  renderIvals();     // the interval row is drawn now, not after the markets load, so the chart under it stays put
   clear(view, h("div", { class: "pp" },
     h("div", { class: "pp-head" }, mktBtn, h("div", { class: "row", style: { gap: "10px" } }, pxEl, chgEl), sFund, sVol, sOi, sOr, live),
     h("div", { class: "pp-grid" },
@@ -111,8 +166,8 @@ export async function mount(view, ctx) {
   function renderHead() {
     const m = st.m;
     if (!m) return;
-    clear(mktBtn, coinIcon(m.coin, "pp-coin"), nameOf(m), icon("arrowRight"));
-    mktBtn.lastChild.style.transform = "rotate(90deg)";
+    // rebuilt only when the market changes: every 5 s it reloaded the icon and replaced what a press had landed on
+    if (mktBtn._sig !== m.coin) { patch(mktBtn, m.coin, () => [coinIcon(m.coin, "pp-coin"), nameOf(m), icon("arrowRight")]); mktBtn.lastChild.style.transform = "rotate(90deg)"; }
     pxEl.textContent = fmtPx(m.markPx);
     clear(chgEl, pctEl(m.change24h));
     vFund.textContent = m.funding == null ? "–" : `${m.funding >= 0 ? "+" : ""}${(m.funding * 100).toFixed(4)}%`;
@@ -230,32 +285,30 @@ export async function mount(view, ctx) {
       st.book = b;
       st.lastOk = Date.now();
       renderBook();
-      renderTicket(false);
+      renderTicket();
     } catch {}
   }
   function renderBook() {
-    const N = 10;
-    const bids = st.book.bids.slice(0, N), asks = st.book.asks.slice(0, N);
+    const bids = st.book.bids.slice(0, N_LV), asks = st.book.asks.slice(0, N_LV);
     const max = Math.max(...bids.map((l) => l.sz), ...asks.map((l) => l.sz), 1e-9);
     const sz = (v) => fixed(v, Math.min(st.m?.szDecimals ?? 4, 5));   // the market's own size step, so the column lines up
-    const row = (l, cls) => h("div", { class: `pp-lv ${cls}`, title: "Use this price", onclick: () => { st.type = "limit"; limitIn.value = l.px; renderTicket(); } },
-      h("i", { style: { width: `${(l.sz / max) * 100}%` } }), h("span", { class: "p" }, fmtPx(l.px)), h("span", {}, sz(l.sz)));
-    clear(bookBids, bids.map((l) => row(l, "bid")));
-    clear(bookAsks, asks.map((l) => row(l, "ask")));
-    if (bids[0] && asks[0]) { const s = asks[0].px - bids[0].px; spreadEl.textContent = `Spread ${((s / asks[0].px) * 100).toFixed(3)}%`; }
+    bidRows.forEach((r, i) => r._set(bids[i], max, sz));
+    askRows.forEach((r, i) => r._set(asks[i], max, sz));
+    if (bids[0] && asks[0]) { const s = asks[0].px - bids[0].px; setText(spreadEl, `Spread ${((s / asks[0].px) * 100).toFixed(3)}%`); }
   }
+  const midNow = () => (st.book.bids[0] && st.book.asks[0] ? (st.book.bids[0].px + st.book.asks[0].px) / 2 : st.m?.midPx || st.m?.markPx || null);
 
   /* ---------- account ---------- */
   async function loadUser() {
-    if (!wallet.address) { st.user = null; renderPositions(); renderTicket(false); return; }
+    if (!wallet.address) { st.user = null; renderPositions(); renderTicket(); return; }
     try { st.user = await api.get(`hl/user?address=${wallet.address}`); } catch { st.user = null; }
     if (!alive) return;
     renderPositions();
-    renderTicket(false);
+    renderTicket();
   }
   async function loadKey() {
     st.key = wallet.address ? await tradingKeyStatus(wallet.address) : { state: "none" };
-    if (alive) renderTicket(false);
+    if (alive) renderTicket();
   }
   async function loadPolicy() {
     try { st.limits = wallet.session ? readPolicy(await api.get("policy")) : { ...DEFAULT_LIMITS }; } catch { st.limits = { ...DEFAULT_LIMITS }; }
@@ -264,7 +317,17 @@ export async function mount(view, ctx) {
   }
 
   let posTab = "positions";
+  // the account panel refreshes every few seconds; a refresh waits while a pointer is down on it, so a press on Close,
+  // Cancel or a tab is never lost to a rebuild between press and release
+  let posHold = false, posDue = false, posT = 0;
+  // released on pointerup anywhere, or after 3 s at most (a release outside the window never reaches the page)
+  posBox.addEventListener("pointerdown", () => { posHold = true; clearTimeout(posT); posT = setTimeout(posRelease, 3000); });
+  const posRelease = () => { if (!posHold) return; posHold = false; if (posDue) { posDue = false; setTimeout(() => { if (alive) renderPositions(); }, 0); } };
+  addEventListener("pointerup", posRelease);
+  addEventListener("pointercancel", posRelease);
+  stops.push(() => { clearTimeout(posT); removeEventListener("pointerup", posRelease); removeEventListener("pointercancel", posRelease); });
   function renderPositions() {
+    if (posHold) { posDue = true; return; }
     const tabsEl = h("div", { class: "tabs", role: "tablist" }, [["positions", "Positions"], ["orders", "Open orders"], ["fills", "Fills"]].map(([v, t]) =>
       h("button", { type: "button", role: "tab", "aria-selected": String(posTab === v), onclick: () => { posTab = v; renderPositions(); } }, t,
         st.user && v === "positions" && st.user.positions.length ? ` (${st.user.positions.length})` : st.user && v === "orders" && st.user.openOrders.length ? ` (${st.user.openOrders.length})` : "")));
@@ -314,161 +377,279 @@ export async function mount(view, ctx) {
   }
 
   /* ---------- ticket ---------- */
+  // Built once (buildTicket); renderTicket only patches it: the values in the rows, the Gate list, the main button's
+  // label, action and disabled state. Typing, the caret, a slider drag and a click are never interrupted by a tick.
   const sizeIn = h("input", { class: "input", inputmode: "decimal", placeholder: "0.00", "aria-label": "Order size" });
   const limitIn = h("input", { class: "input", inputmode: "decimal", placeholder: "Limit price", "aria-label": "Limit price" });
   const tpIn = h("input", { class: "input", inputmode: "decimal", placeholder: "Take profit", "aria-label": "Take-profit price" });
   const slIn = h("input", { class: "input", inputmode: "decimal", placeholder: "Stop loss", "aria-label": "Stop-loss price" });
   const reduceIn = h("input", { type: "checkbox" });
   const levIn = h("input", { class: "pp-range", type: "range", min: "1", step: "1", "aria-label": "Leverage" });
-  let advOpen = false;
-  [sizeIn, limitIn, tpIn, slIn].forEach((el) => el.addEventListener("input", debounce(() => renderTicket(false), 120)));
-  reduceIn.addEventListener("change", () => renderTicket(false));
-  levIn.addEventListener("input", () => { st.lev = +levIn.value; const p = prefs.get(); prefs.set({ ...p, lev: { ...(p.lev || {}), [st.coin]: st.lev } }); renderTicket(false); });
+  // what the person typed and in which unit, so $50 → BTC → $ comes back to exactly $50 (not a rounded 49.98)
+  let typed = null;
+  const later = debounce(() => renderTicket(), 120);
+  sizeIn.addEventListener("input", () => { typed = { unit: st.unit, value: sizeIn.value }; later(); });
+  [limitIn, tpIn, slIn].forEach((el) => el.addEventListener("input", later));
+  reduceIn.addEventListener("change", () => renderTicket());
+  // while the slider moves only its label and the numbers follow; the Gate, the button and the saved choice on release
+  levIn.addEventListener("input", () => { st.lev = +levIn.value; setText(levVal, `${st.lev}x`); fillRows(calc()); });
+  levIn.addEventListener("change", () => { st.lev = +levIn.value; const p = prefs.get(); prefs.set({ ...p, lev: { ...(p.lev || {}), [st.coin]: st.lev } }); renderTicket(); });
 
-  // numbers behind the ticket
+  const sideBtns = ["long", "short"].map((v) => h("button", { type: "button", "data-v": v, onclick: () => { st.side = v; renderTicket(); } }, v === "long" ? "Long" : "Short"));
+  const typeBtns = [["market", "Market"], ["limit", "Limit"]].map(([v, t]) => h("button", { type: "button", "data-v": v, onclick: () => setType(v) }, t));
+  const unitBtns = ["USD", "COIN"].map((u) => h("button", { type: "button", "data-v": u, onclick: () => setUnit(u) }, u === "USD" ? "USD" : ""));
+  const pctBtns = [25, 50, 75, 100].map((p) => h("button", { type: "button", onclick: () => sizeFromBalance(p) }, p === 100 ? "Max" : `${p}%`));
+  const limitField = h("label", { class: "field", hidden: true }, h("span", {}, "Limit price (USD)"), limitIn);
+  const sizeHint = h("span", {});
+  const levVal = h("b", {}, "–"), levCap = h("span", {});
+  const rv = { size: h("span", {}, "–"), fillK: h("span", {}, "Est. fill"), fill: h("span", {}, "–"), margin: h("span", {}, "–"), fee: h("span", {}, "–"), liq: h("span", {}, "–") };
+  // the chip alone is the live region: it speaks when the verdict changes, not on every repriced number
+  const gateChip = h("span", { class: "chip-s", role: "status", "aria-live": "polite" }, "Waiting");
+  const gateWait = h("div", { class: "muted" }, "Enter a size and the Gate checks it against your limits and the live book.");
+  const gateList = h("ul", { hidden: true });
+  const gateFoot = h("div", { class: "fine", style: { marginTop: "6px" } });
+  let btnAct = null;
+  const mainBtn = h("button", { class: "btn big", type: "button", onclick: () => btnAct?.() }, "…");
+  const keyNote = h("p", { class: "pp-key", style: { margin: 0 }, hidden: true });
+  const xyzText = h("p", { class: "fine", style: { margin: 0 } });
+  const xyzMove = h("button", { class: "btn sm blue", type: "button", hidden: true, onclick: () => moveUsdc(xyzMove._amt, "", "xyz") });
+  const xyzBack = h("button", { class: "link fine", type: "button", hidden: true, onclick: () => moveUsdc(xyzBack._amt, "xyz", "") });
+  const xyzBox = h("div", { class: "pp-xyz-box", hidden: true }, xyzText, xyzMove, xyzBack);
+  const valRow = (k, v) => h("div", {}, h("span", {}, k), v);
+
+  let built = false;
+  function buildTicket() {
+    built = true;
+    clear(ticket,
+      h("div", { class: "seg long", role: "group", "aria-label": "Direction" }, sideBtns),
+      h("div", { class: "seg", role: "group", "aria-label": "Order type" }, typeBtns),
+      limitField,
+      h("div", {}, h("div", { class: "pp-size-h" }, h("span", {}, "Size"), sizeHint),
+        h("div", { class: "pp-size", style: { marginTop: "6px" } }, sizeIn, h("div", { class: "seg pp-unit", role: "group", "aria-label": "Size unit" }, unitBtns))),
+      h("div", { class: "pp-pcts" }, pctBtns),
+      h("div", {}, h("div", { class: "pp-lev-h" }, h("span", {}, "Leverage"), levVal), levIn, h("div", { class: "pp-lev-f" }, h("span", {}, "1x"), levCap)),
+      h("details", { class: "pp-adv" },
+        h("summary", {}, "Advanced"),
+        h("div", { class: "in" },
+          h("label", { class: "pp-check" }, reduceIn, "Reduce only (never opens or grows a position)"),
+          h("div", { class: "two" }, tpIn, slIn),
+          h("p", { class: "fine", style: { margin: 0 } }, "TP and SL are reduce-only market exits that fire at the trigger price."))),
+      h("div", { class: "pp-rows" }, valRow("Order size", rv.size), h("div", {}, rv.fillK, rv.fill), valRow("Margin", rv.margin), valRow("Est. fee", rv.fee), valRow("Est. liquidation", rv.liq)),
+      xyzBox,
+      h("div", { class: "gate-box" }, h("div", { class: "gh" }, icon("shield"), "Troya Gate", gateChip), gateWait, gateList, gateFoot),
+      mainBtn, keyNote);
+  }
+
+  function setType(v) {
+    st.type = v;
+    if (v === "limit" && !limitIn.value && st.m) limitIn.value = fmtPx(st.m.midPx || st.m.markPx).replace(/,/g, "");
+    renderTicket();
+  }
+  function setUnit(next) {
+    const m = st.m;
+    if (!m || next === st.unit) return;
+    // back to the unit that was typed → the typed text itself; otherwise the size that would really go out
+    if (typed && typed.unit === next) sizeIn.value = typed.value;
+    else {
+      const c = calc();
+      sizeIn.value = c.sz > 0 ? (next === "USD" ? (c.sz * c.refPx).toFixed(2) : String(+c.sz.toFixed(m.szDecimals))) : "";
+    }
+    st.unit = next;
+    prefs.set({ ...prefs.get(), unit: next });
+    renderTicket();
+  }
+  // 25 / 50 / 75 / Max of what the free margin can carry at this leverage, leaving room for the taker fee, a fill up to
+  // 1% worse and 2% spare, so Max never trips the margin check
+  function sizeFromBalance(p) {
+    const m = st.m;
+    if (!m) return;
+    if (!st.user) { toast(wallet.address ? "Still reading your account…" : "Connect a wallet to size from your balance.", ""); return; }
+    const lev = st.lev || 1;
+    const room = (freeOf(m) * lev * 0.98) / ((1 + SLIP) * (1 + lev * TAKER_FEE));
+    const usdAmt = Math.max(0, Math.min(room * p / 100, st.limits.perTradeUsd, st.limits.dailyLeftUsd ?? Infinity));
+    const px = (st.type === "limit" && Number(String(limitIn.value).replace(/,/g, ""))) || m.markPx;
+    sizeIn.value = st.unit === "USD" ? (Math.floor(usdAmt * 100) / 100).toFixed(2) : String(roundSz(usdAmt / px, m.szDecimals));
+    typed = { unit: st.unit, value: sizeIn.value };
+    renderTicket();
+  }
+
+  // numbers behind the ticket, read from the inputs
   function calc() {
     const m = st.m;
     const mark = m?.markPx || 0;
     const raw = Number(String(sizeIn.value).replace(/,/g, "")) || 0;
-    const isBuy = st.side === "long";
-    const limitPx = st.type === "limit" ? Number(limitIn.value) || 0 : null;
+    const limitPx = st.type === "limit" ? Number(String(limitIn.value).replace(/,/g, "")) || 0 : null;
     const refPx = limitPx || mark;
-    const coinSize = st.unit === "USD" ? (refPx ? raw / refPx : 0) : raw;
-    const usdSize = st.unit === "USD" ? raw : raw * refPx;
+    // sz = the coin size rounded down to the market's step: exactly what is sent, and every dollar figure is sz × price
+    const sz = raw > 0 && m ? roundSz(st.unit === "USD" ? (refPx ? raw / refPx : 0) : raw, m.szDecimals) : 0;
+    return orderCalc({ m, raw, sz, refPx, isBuy: st.side === "long", type: st.type, limitPx, lev: st.lev || 1, tp: Number(tpIn.value) || null, sl: Number(slIn.value) || null, reduce: reduceIn.checked });
+  }
+  // the same numbers for any order (placeAfter works out a saved order again with the live book)
+  function orderCalc({ m, raw = 0, sz, refPx, isBuy, type, limitPx = null, lev, tp = null, sl = null, reduce = false }) {
+    const mark = m?.markPx || 0;
     const levels = isBuy ? st.book.asks : st.book.bids;
-    const w = coinSize > 0 && levels.length ? walk(levels, coinSize) : { avg: null, complete: true };
-    const fill = st.type === "limit" ? limitPx : w.avg;
-    const impact = st.type === "market" && w.avg && mark ? Math.abs(w.avg - mark) / mark * 100 : 0;
-    const lev = st.lev || 1;
-    const margin = usdSize / lev;
+    const w = sz > 0 && levels.length ? walk(levels, sz) : { avg: null, complete: true };
+    const fill = type === "limit" ? limitPx : w.avg;
+    const px = fill || refPx || mark;
+    const usdSize = sz * px;
+    const impact = type === "market" && w.avg && mark ? Math.abs(w.avg - mark) / mark * 100 : 0;
+    const margin = usdSize / lev, fee = usdSize * TAKER_FEE;
+    // Hyperliquid's $10 minimum, at the lower of the mark and the order's own price (a market sell goes out 1% under)
+    const orderPx = type === "market" ? (w.avg || mark) * (isBuy ? 1 + SLIP : 1 - SLIP) : limitPx || 0;
+    const minValue = sz * Math.min(orderPx || mark, mark || orderPx);
     const mmr = m ? 1 / (2 * m.maxLeverage) : 0.0125;
     const liq = fill ? (isBuy ? fill * (1 - (1 / lev - mmr)) : fill * (1 + (1 / lev - mmr))) : null;
     const liqDist = liq && mark ? Math.abs(mark - liq) / mark * 100 : null;
-    return { mark, coinSize, usdSize, fill, impact, complete: w.complete, margin, liq, liqDist, isBuy, limitPx, lev, tp: Number(tpIn.value) || null, sl: Number(slIn.value) || null };
+    return { m, raw, sz, refPx: refPx || mark, mark, usdSize, fill, impact, complete: w.complete, margin, fee, need: margin + fee, minValue, liq, liqDist, isBuy, type, limitPx, lev, tp, sl, reduce };
   }
 
   function gateChecks(c) {
-    const L = st.limits, m = st.m;
-    if (!(c.usdSize > 0)) return { state: "wait", items: [] };
+    const L = st.limits, m = c.m;
+    if (!(c.raw > 0) && !(c.sz > 0)) return { state: "wait", items: [] };
     const items = [];
     const add = (label, state, value) => items.push({ label, state, value });
     if (L.paused) add("Agent", "fail", "paused in your policy");
-    add("Market", !L.allowedCoins || L.allowedCoins.includes(m.coin) ? "pass" : "fail", L.allowedCoins ? (L.allowedCoins.includes(m.coin) ? "allowed" : "not in your allowlist") : "any market");
+    const listed = !L.allowedCoins || L.allowedCoins.includes(m.coin.toUpperCase());   // the policy keeps markets upper case
+    add("Market", listed ? "pass" : "fail", L.allowedCoins ? (listed ? "allowed" : "not in your allowlist") : "any market");
+    // checked before anything is funded or signed: Hyperliquid refuses a smaller order (a reduce-only one may still close)
+    const small = !(c.minValue >= MIN_ORDER_USD);
+    add("Minimum", small ? (c.reduce ? "warn" : "fail") : "pass", small ? `$10 per order · this is ${usd(c.minValue)}` : "$10 per order");
     add("Size", c.usdSize <= L.perTradeUsd ? "pass" : "fail", `${usd(c.usdSize)} of ${usd(L.perTradeUsd, { compact: true })} max`);
     if (L.dailyLeftUsd != null) add("Daily cap", c.usdSize <= L.dailyLeftUsd ? "pass" : "fail", `${usd(L.dailyLeftUsd, { compact: true })} left today`);
     add("Leverage", c.lev <= Math.min(L.maxLeverage, m.maxLeverage) ? "pass" : "fail", `${c.lev}x of ${Math.min(L.maxLeverage, m.maxLeverage)}x cap`);
     if (st.user) {
-      const reduce = reduceIn.checked, free = freeOf(m);
-      add("Margin", reduce || c.margin <= free ? "pass" : "fail", `${usd(c.margin)} needed · ${usd(free)} free${m.dex ? " in trade.xyz" : ""}`);
+      const free = freeOf(m);
+      add("Margin", c.reduce || c.need <= free ? "pass" : "fail", c.reduce ? "none needed (reduce only)" : `${usd(c.need)} needed incl. fee · ${usd(free)} free${m.dex ? " in trade.xyz" : ""}`);
     }
-    if (st.type === "market") add("Price impact", !c.complete ? "fail" : c.impact > 3 ? "fail" : c.impact > 0.5 ? "warn" : "pass", c.complete ? `${c.impact.toFixed(3)}%` : "book too thin");
-    if (c.liqDist != null && !reduceIn.checked) add("Liquidation", c.liqDist < 3 ? "warn" : "pass", `~${c.liqDist.toFixed(1)}% away`);
+    if (c.type === "market") add("Price impact", !c.complete ? "fail" : c.impact > 3 ? "fail" : c.impact > 0.5 ? "warn" : "pass", c.complete ? `${c.impact.toFixed(3)}%` : "book too thin");
+    if (c.liqDist != null && !c.reduce) add("Liquidation", c.liqDist < 3 ? "warn" : "pass", `~${c.liqDist.toFixed(1)}% away`);
     if (c.tp && c.fill) add("Take profit", (c.isBuy ? c.tp > c.fill : c.tp < c.fill) ? "pass" : "fail", fmtPx(c.tp));
     if (c.sl && c.fill) add("Stop loss", (c.isBuy ? c.sl < c.fill : c.sl > c.fill) ? "pass" : "fail", fmtPx(c.sl));
-    if (st.type === "limit" && !(c.limitPx > 0)) add("Limit price", "fail", "enter a price");
+    if (c.type === "limit" && !(c.limitPx > 0)) add("Limit price", "fail", "enter a price");
     const state = items.some((i) => i.state === "fail") ? "fail" : items.some((i) => i.state === "warn") ? "warn" : "pass";
     return { state, items };
   }
 
-  function renderTicket(full = true) {
+  // what an order does to the market's leverage: a reduce-only order leaves it alone; an open position keeps its margin
+  // type (isolated stays isolated) and is not touched when it already runs at this leverage
+  function levPlan(m, lev, reduce) {
+    if (reduce) return { set: false, isCross: undefined, type: "unchanged" };
+    const p = st.user?.positions?.find((x) => x.coin === m.coin);
+    const isCross = m.onlyIsolated ? false : p?.leverageType ? p.leverageType !== "isolated" : true;
+    const type = isCross ? "cross" : "isolated";
+    const same = !!p && Number(p.leverage) === lev && (p.leverageType || "cross") === type;
+    return { set: !same, isCross, type };
+  }
+
+  function renderTicket() {
     const m = st.m;
-    if (!m) { clear(ticket, h("div", { class: "sk", style: { height: "380px" } })); return; }
-    const active = document.activeElement;
-    const keep = [sizeIn, limitIn, tpIn, slIn].includes(active) ? active : null;
+    if (!m) return;
+    if (!built) buildTicket();
     const cap = Math.max(1, Math.min(m.maxLeverage, st.limits.maxLeverage));
     st.lev = Math.min(Math.max(1, st.lev || 1), cap);
-    levIn.max = String(cap);
-    levIn.value = String(st.lev);
+    if (levIn.max !== String(cap)) levIn.max = String(cap);
+    if (levIn.value !== String(st.lev)) levIn.value = String(st.lev);
+    setText(levVal, `${st.lev}x`);
+    setText(levCap, `${cap}x cap`);
+    press(sideBtns, (b) => b.dataset.v === st.side);
+    press(typeBtns, (b) => b.dataset.v === st.type);
+    press(unitBtns, (b) => b.dataset.v === st.unit);
+    setText(unitBtns[1], (m.label || m.coin).slice(0, 5));
+    limitField.hidden = st.type !== "limit";
+    const leftToday = st.limits.dailyLeftUsd != null ? `Left today ${usd(st.limits.dailyLeftUsd, { compact: true })} · ` : "";
+    setText(sizeHint, `${leftToday}max ${capUsd(st.limits.perTradeUsd)} per order`);
     const c = calc();
     const g = gateChecks(c);
+    fillRows(c);
+    fillXyz(m, c);
+    fillGate(g);
+    fillButton(m, c, g);
+  }
 
-    const sideSeg = h("div", { class: "seg long", role: "group", "aria-label": "Direction" }, ["long", "short"].map((v) =>
-      h("button", { type: "button", "data-v": v, "aria-pressed": String(st.side === v), onclick: () => { st.side = v; renderTicket(); } }, v === "long" ? "Long" : "Short")));
-    const typeSeg = h("div", { class: "seg", role: "group", "aria-label": "Order type" }, [["market", "Market"], ["limit", "Limit"]].map(([v, t]) =>
-      h("button", { type: "button", "aria-pressed": String(st.type === v), onclick: () => { st.type = v; if (v === "limit" && !limitIn.value) limitIn.value = fmtPx(m.midPx || m.markPx).replace(/,/g, ""); renderTicket(); } }, t)));
-    const unit = h("div", { class: "pp-unit" }, ["USD", m.coin].map((u, i) =>
-      h("button", { type: "button", "aria-pressed": String((i === 0 ? "USD" : "COIN") === st.unit || (i === 1 && st.unit !== "USD")), onclick: () => {
-        const next = i === 0 ? "USD" : "COIN";
-        if (next !== st.unit) { const cc = calc(); sizeIn.value = cc.usdSize > 0 ? (next === "USD" ? cc.usdSize.toFixed(2) : String(+cc.coinSize.toFixed(m.szDecimals))) : ""; }
-        st.unit = next; prefs.set({ ...prefs.get(), unit: next }); renderTicket();
-      } }, i === 0 ? "USD" : (m.label || m.coin).slice(0, 5))));
-    const free = st.user ? freeOf(m) * st.lev : null;
-    const pcts = h("div", { class: "pp-pcts" }, [25, 50, 75, 100].map((p) => h("button", { type: "button", onclick: () => {
-      if (free == null) { toast(wallet.address ? "Still reading your account…" : "Connect a wallet to size from your balance.", ""); return; }
-      const usdAmt = Math.min(free * p / 100, st.limits.perTradeUsd);
-      sizeIn.value = st.unit === "USD" ? usdAmt.toFixed(2) : String(+(usdAmt / (c.fill || m.markPx)).toFixed(m.szDecimals));
-      renderTicket(false);
-    } }, p === 100 ? "Max" : `${p}%`)));
+  function fillRows(c) {
+    const m = st.m, has = c.sz > 0;
+    setText(rv.size, has ? `${usd(c.usdSize)} · ${num(c.sz, m.szDecimals)} ${tagOf(m)}` : "–");
+    setText(rv.fillK, st.type === "market" ? "Est. fill" : "Limit price");
+    setText(rv.fill, c.fill ? fmtPx(c.fill) : "–");
+    setText(rv.margin, has ? usd(c.margin) : "–");
+    setText(rv.fee, has ? usd(c.fee) : "–");
+    setText(rv.liq, has && !c.reduce && c.liq ? fmtPx(c.liq) : "–");
+  }
 
-    const adv = h("details", { class: "pp-adv", ...(advOpen ? { open: true } : {}), ontoggle: (e) => { advOpen = e.target.open; } },
-      h("summary", {}, "Advanced"),
-      h("div", { class: "in" },
-        h("label", { class: "pp-check" }, reduceIn, "Reduce only (never opens or grows a position)"),
-        h("div", { class: "two" }, tpIn, slIn),
-        h("p", { class: "fine", style: { margin: 0 } }, "TP and SL are reduce-only market exits that fire at the trigger price.")));
+  function fillGate(g) {
+    setCls(gateChip, `chip-s${g.state === "wait" ? "" : ` ${g.state}`}`);
+    setText(gateChip, g.state === "wait" ? "Waiting" : g.state === "pass" ? "Clear" : g.state === "warn" ? "Check" : "Blocked");
+    gateWait.hidden = g.state !== "wait";
+    gateList.hidden = g.state === "wait";
+    // the same checks in the same order → their values are patched in place; another set → the list is rebuilt
+    const lis = gateList.children;
+    if (lis.length !== g.items.length || g.items.some((it, i) => lis[i].firstChild.textContent !== it.label)) clear(gateList, g.items.map((it) => h("li", {}, h("span", {}, it.label), h("b", {}))));
+    g.items.forEach((it, i) => { setCls(lis[i], it.state); setText(lis[i].lastChild, it.value); });
+    setText(gateFoot, `${st.limits.source === "your policy" ? "Your limits" : "Default limits"}: ${capUsd(st.limits.perTradeUsd)} per order, up to ${st.limits.maxLeverage}x.`);
+  }
 
-    const rows = h("div", { class: "pp-rows" },
-      h("div", {}, h("span", {}, "Order size"), h("span", {}, c.usdSize > 0 ? `${usd(c.usdSize)} · ${num(c.coinSize, m.szDecimals)} ${m.coin}` : "–")),
-      h("div", {}, h("span", {}, st.type === "market" ? "Est. fill" : "Limit price"), h("span", {}, c.fill ? fmtPx(c.fill) : "–")),
-      h("div", {}, h("span", {}, "Margin"), h("span", {}, c.usdSize > 0 ? usd(c.margin) : "–")),
-      h("div", {}, h("span", {}, "Est. liquidation"), h("span", {}, c.usdSize > 0 && !reduceIn.checked && c.liq ? fmtPx(c.liq) : "–")));
+  function fillXyz(m, c) {
+    xyzBox.hidden = !(m.dex && st.user);
+    if (xyzBox.hidden) return;
+    const free = freeOf(m);
+    if (st.user.unified) {
+      setText(xyzText, `Unified account: one USDC balance (${usd(free)} free) backs Hyperliquid perps, trade.xyz and spot, so nothing needs moving. Stock perps trade around the clock; outside market hours the price is held inside a band.`);
+      xyzMove.hidden = xyzBack.hidden = true;
+      return;
+    }
+    const need = c.need || 0, main = st.user.withdrawable || 0;
+    const short_ = need > free ? Math.ceil((need - free) * 1.05 * 100) / 100 + 0.5 : 0;
+    setText(xyzText, `trade.xyz margin is its own balance: ${usd(free)} there, ${usd(main)} in your Hyperliquid perps. Stock perps trade around the clock; outside market hours the price is held inside a band.`);
+    xyzMove._amt = Math.min(short_, main);
+    xyzMove.hidden = !(short_ > 0 && main > 0);
+    setText(xyzMove, `Move ${usd(xyzMove._amt)} USDC to trade.xyz`);
+    xyzBack._amt = free;
+    xyzBack.hidden = !(free > 0.5);
+    setText(xyzBack, `Move ${usd(free)} back to perps`);
+  }
 
-    const gateBox = h("div", { class: "gate-box", "aria-live": "polite" },
-      h("div", { class: "gh" }, icon("shield"), "Troya Gate", h("span", { class: `chip-s ${g.state === "wait" ? "" : g.state}` }, g.state === "wait" ? "Waiting" : g.state === "pass" ? "Clear" : g.state === "warn" ? "Check" : "Blocked")),
-      g.state === "wait" ? h("div", { class: "muted" }, "Enter a size and the Gate checks it against your limits and the live book.")
-        : h("ul", {}, g.items.map((i) => h("li", { class: i.state }, h("span", {}, i.label), h("b", {}, i.value)))),
-      h("div", { class: "fine", style: { marginTop: "6px" } }, st.limits.source === "your policy"
-        ? `Your limits: ${capUsd(st.limits.perTradeUsd)} per order, up to ${st.limits.maxLeverage}x.`
-        : `Default limits: ${capUsd(st.limits.perTradeUsd)} per order, up to ${st.limits.maxLeverage}x.`));
-
-    // main button state machine
-    let btn, keyNote = null;
-    if (!wallet.address) btn = h("button", { class: "btn big primary", type: "button", onclick: () => openConnect() }, "Connect wallet");
+  // main button state machine: one button, its label, look, action and disabled state change in place
+  function fillButton(m, c, g) {
+    const sideCls = st.side === "long" ? "blue" : "danger";
+    let label, cls = "btn big", act = null, note = null;   // note = [signature, build]
+    if (!wallet.address) { label = "Connect wallet"; cls += " primary"; act = () => openConnect(); }
     else if (st.key.state !== "approved") {
-      btn = h("button", { class: "btn big blue", type: "button", onclick: enableTrading }, st.key.state === "expired" ? "Re-enable trading" : "Enable trading");
-      keyNote = h("p", { class: "pp-key", style: { margin: 0 } }, "One wallet signature approves a ", h("b", {}, "trade-only key"), " kept in this browser. It can place and cancel Hyperliquid orders but ", h("b", {}, "cannot withdraw"), ". You can revoke it any time.");
-    } else if (st.funding) {
-      btn = h("button", { class: "btn big", type: "button", disabled: true }, "Waiting for the USDC on Hyperliquid…");
-      keyNote = h("p", { class: "pp-key", style: { margin: 0 } }, "Funding sent ", h("a", { class: "mono link", href: `https://robinhoodchain.blockscout.com/tx/${st.funding.hash}`, target: "_blank", rel: "noopener" }, short(st.funding.hash, 6)), ". The order goes out from this page the moment it lands, usually within a minute or two. Keep the page open.");
+      label = st.key.state === "expired" ? "Re-enable trading" : "Enable trading"; cls += " blue"; act = enableTrading;
+      note = ["key", () => ["One wallet signature approves a ", h("b", {}, "trade-only key"), " kept in this browser. It can place and cancel Hyperliquid orders but ", h("b", {}, "cannot withdraw"), ". You can revoke it any time."]];
     } else {
       const ready = g.state === "pass" || g.state === "warn";
       // end to end: margin is the only check in the way → fund the missing USDC from Robinhood Chain (for a trade.xyz
       // market, then move it into that balance), then open
-      const onlyMargin = g.state === "fail" && !reduceIn.checked && !!st.user && g.items.filter((i) => i.state === "fail").every((i) => i.label === "Margin");
-      const plan = onlyMargin ? fundPlan(m, c) : null;
-      btn = onlyMargin
-        ? h("button", { class: `btn big ${st.side === "long" ? "blue" : "danger"}`, type: "button", onclick: fundAndOpen }, `${plan.bridge ? "Fund" : "Move"} & ${st.side === "long" ? "long" : "short"} ${tagOf(m)}`)
-        : h("button", { class: `btn big ${st.side === "long" ? "blue" : "danger"}`, type: "button", ...(ready ? {} : { disabled: true }), onclick: submit },
-          g.state === "wait" ? "Enter a size" : ready ? `${st.side === "long" ? "Long" : "Short"} ${m.coin}` : "Blocked by Troya Gate");
-      keyNote = onlyMargin
-        ? h("p", { class: "pp-key", style: { margin: 0 } }, !plan.xyz
-          ? `Your Hyperliquid account has ${usd(freeOf(m))} free and this order needs about ${usd(c.margin)}. One transaction on Robinhood Chain sends the missing USDC (at least 6), then the order opens by itself when it lands.`
+      const onlyMargin = g.state === "fail" && !c.reduce && !!st.user && g.items.filter((i) => i.state === "fail").every((i) => i.label === "Margin");
+      cls += ` ${sideCls}`;
+      if (onlyMargin) {
+        const plan = fundPlan(m, c);
+        label = `${plan.bridge ? "Fund" : "Move"} & ${st.side === "long" ? "long" : "short"} ${tagOf(m)}`;
+        act = fundAndOpen;
+        const text = !plan.xyz
+          ? `Your Hyperliquid account has ${usd(freeOf(m))} free and this order needs about ${usd(c.need)}. One transaction on Robinhood Chain sends the missing USDC (at least 6), then the order opens by itself when it lands.`
           : plan.bridge
-            ? `Your trade.xyz balance has ${usd(freeOf(m))} free and this order needs about ${usd(c.margin)}. One transaction on Robinhood Chain sends USDC to your Hyperliquid account (at least 6), one signature moves ${usd(plan.move)} into trade.xyz, then the order opens.`
-            : `Your trade.xyz balance has ${usd(freeOf(m))} free; your Hyperliquid perps balance has ${usd(plan.main)}. One signature moves ${usd(plan.move)} into trade.xyz, then the order opens.`)
-        : h("p", { class: "pp-key", style: { margin: 0 } }, `Trading key ${short(st.key.key.address)} active. `, h("button", { class: "link", type: "button", onclick: revoke }, "Revoke"));
+            ? `Your trade.xyz balance has ${usd(freeOf(m))} free and this order needs about ${usd(c.need)}. One transaction on Robinhood Chain sends USDC to your Hyperliquid account (at least 6), one signature moves ${usd(plan.move)} into trade.xyz, then the order opens.`
+            : `Your trade.xyz balance has ${usd(freeOf(m))} free; your Hyperliquid perps balance has ${usd(plan.main)}. One signature moves ${usd(plan.move)} into trade.xyz, then the order opens.`;
+        note = [text, () => text];
+      } else {
+        label = g.state === "wait" ? "Enter a size" : ready ? `${st.side === "long" ? "Long" : "Short"} ${tagOf(m)}` : "Blocked by Troya Gate";
+        act = ready ? submit : null;
+        const k = st.key.key?.address;
+        note = [`key:${k}`, () => [`Trading key ${short(k)} active. `, h("button", { class: "link", type: "button", onclick: revoke }, "Revoke")]];
+      }
     }
-    const leftToday = st.limits.dailyLeftUsd != null ? `Left today ${usd(st.limits.dailyLeftUsd, { compact: true })} · ` : "";
-    let xyzBox = null;
-    if (m.dex && st.user?.unified) {
-      xyzBox = h("div", { class: "pp-xyz-box" }, h("p", { class: "fine", style: { margin: 0 } }, `Unified account: one USDC balance (${usd(freeOf(m))} free) backs Hyperliquid perps, trade.xyz and spot, so nothing needs moving. Stock perps trade around the clock; outside market hours the price is held inside a band.`));
-    } else if (m.dex && st.user) {
-      const free = freeOf(m), need = c.margin || 0, main = st.user.withdrawable || 0;
-      const short_ = need > free ? Math.ceil((need - free) * 1.05 * 100) / 100 + 0.5 : 0;
-      xyzBox = h("div", { class: "pp-xyz-box" },
-        h("p", { class: "fine", style: { margin: 0 } }, `trade.xyz margin is its own balance: ${usd(free)} there, ${usd(main)} in your Hyperliquid perps. Stock perps trade around the clock; outside market hours the price is held inside a band.`),
-        short_ > 0 && main > 0 ? h("button", { class: "btn sm blue", type: "button", onclick: () => moveUsdc(Math.min(short_, main), "", "xyz") }, `Move ${usd(Math.min(short_, main))} USDC to trade.xyz`) : null,
-        free > 0.5 ? h("button", { class: "link fine", type: "button", onclick: () => moveUsdc(free, "xyz", "") }, `Move ${usd(free)} back to perps`) : null);
-    }
-
-    clear(ticket, sideSeg, typeSeg,
-      st.type === "limit" ? h("label", { class: "field" }, h("span", {}, "Limit price (USD)"), limitIn) : null,
-      h("div", {}, h("div", { class: "pp-size-h" }, h("span", {}, "Size"), h("span", {}, `${leftToday}max ${capUsd(st.limits.perTradeUsd)} per order`)),
-        h("div", { class: "pp-size", style: { marginTop: "6px" } }, sizeIn, unit)),
-      pcts,
-      h("div", {}, h("div", { class: "pp-lev-h" }, h("span", {}, "Leverage"), h("b", {}, `${st.lev}x`)), levIn, h("div", { class: "pp-lev-f" }, h("span", {}, "1x"), h("span", {}, `${cap}x cap`))),
-      adv, rows, xyzBox, gateBox, btn, keyNote);
-    if (keep) { keep.focus(); try { const n = keep.value.length; keep.setSelectionRange(n, n); } catch {} }
+    if (st.funding) {
+      const hash = st.funding.hash;
+      label = "Waiting for the USDC on Hyperliquid…"; act = null;
+      note = [`fund:${hash}`, () => ["Funding sent ", h("a", { class: "mono link", href: `https://robinhoodchain.blockscout.com/tx/${hash}`, target: "_blank", rel: "noopener" }, short(hash, 6)), ". The order goes out from this page the moment it lands, usually within a minute or two. Keep the page open."]];
+    } else if (st.busy) { label = st.busy; act = null; }
+    setCls(mainBtn, cls);
+    setText(mainBtn, label);
+    mainBtn.disabled = !act;
+    btnAct = act;
+    keyNote.hidden = !note;
+    if (note) patch(keyNote, note[0], note[1]);
   }
 
   function freeOf(m) { return m?.dex ? +(st.user?.dexes?.[m.dex]?.withdrawable || 0) : +(st.user?.withdrawable || 0); }
@@ -477,21 +658,28 @@ export async function mount(view, ctx) {
   // unless the account is unified) a move from the Hyperliquid perps balance into trade.xyz
   function fundPlan(m, c) {
     const xyz = !!m.dex && !st.user?.unified;
-    const missing = Math.max(0, c.margin * 1.05 + 0.5 - freeOf(m));
+    const missing = Math.max(0, c.need * 1.05 + 0.5 - freeOf(m));      // margin plus the taker fee, 5% and $0.50 spare
     if (!xyz) return { xyz, missing, bridge: missing > 0, bridgeUsd: missing, move: 0, main: 0 };
     const main = +(st.user?.withdrawable || 0), move = Math.ceil(missing * 100) / 100;
     const short_ = Math.max(0, move - main);
     return { xyz, missing, main, move, bridge: short_ > 0, bridgeUsd: short_ > 0 ? short_ + 0.5 : 0 };
   }
   async function moveUsdc(amount, from, to) {
+    if (st.busy || !(amount > 0)) return;
+    st.busy = "Sign the move in your wallet…";
+    renderTicket();
     try {
       await ensureChain("arbitrum");
       await sendToDex(wallet.address, wallet.eip, amount, from, to);
       toast(`Moved ${usd(amount)} USDC ${to === "xyz" ? "to trade.xyz" : "back to perps"}`, "ok");
-      await loadUser(); renderTicket();
-    } catch (e) { toast(e.shortMessage || e.message, "error", 6000); }
+      await loadUser();
+    } catch (e) { toast(rejected(e) ? "Cancelled. Nothing was moved." : errMsg(e), "error", 6000); }
+    finally { st.busy = null; if (alive) renderTicket(); }
   }
   async function enableTrading() {
+    if (st.busy) return;
+    st.busy = "Confirm in your wallet…";
+    renderTicket();
     try {
       const ok = await review({ title: "Enable trading on Hyperliquid", summary: "Approve a trade-only key for this browser.", confirmLabel: "Approve in wallet", rows: [
         ["Account", short(wallet.address, 6)], ["Key name", "Troya"], ["Can", "place and cancel perp orders, change leverage"], ["Cannot", "withdraw or transfer funds"], ["Stored", "in this browser only"], ["Signature network", "Arbitrum (EIP-712 typed data, no gas)"],
@@ -502,7 +690,8 @@ export async function mount(view, ctx) {
       toast("Trading key approved", "ok");
       api.post("journal", { kind: "perp_key", summary: "Approved a trade-only Hyperliquid key for this browser", data: { key: getTradingKey(wallet.address)?.address } }).catch(() => {});
       await loadKey();
-    } catch (e) { toast(e?.code === 4001 || /reject|denied/i.test(e?.message || "") ? "Request cancelled in the wallet." : e.message, "error", 6000); }
+    } catch (e) { toast(rejected(e) ? "Request cancelled in the wallet." : errMsg(e), "error", 6000); }
+    finally { st.busy = null; if (alive) renderTicket(); }
   }
   async function revoke() {
     const ok = await review({ title: "Revoke trading key", summary: "Remove the trading key from this browser?", confirmLabel: "Revoke", danger: true, rows: [["Key", short(st.key.key?.address, 6)]],
@@ -514,114 +703,177 @@ export async function mount(view, ctx) {
   }
 
   async function submit() {
+    if (st.busy) return;
     const m = st.m, c = calc();
     const g = gateChecks(c);
     if (g.state === "fail" || g.state === "wait") return;
-    const ok = await review({
-      title: `${st.side === "long" ? "Long" : "Short"} ${m.coin}-PERP`, confirmLabel: "Place order", danger: st.side === "short",
-      rows: [
-        ["Type", st.type === "market" ? "Market (IOC, 1% max slippage)" : "Limit (good till cancelled)"],
-        ["Size", `${num(c.coinSize, m.szDecimals)} ${m.coin} · ${usd(c.usdSize)}`],
-        [st.type === "market" ? "Est. fill" : "Limit price", fmtPx(c.fill)],
-        ["Leverage", `${c.lev}x ${m.onlyIsolated ? "isolated" : "cross"}`],
-        ["Margin", usd(c.margin)],
-        ["Est. liquidation", reduceIn.checked ? "–" : fmtPx(c.liq)],
-        c.tp ? ["Take profit", fmtPx(c.tp)] : null,
-        c.sl ? ["Stop loss", fmtPx(c.sl)] : null,
-        reduceIn.checked ? ["Reduce only", "yes"] : null,
-      ],
-      warn: g.state === "warn" ? g.items.filter((i) => i.state === "warn").map((i) => `${i.label}: ${i.value}`).join(" · ") : null,
-    });
-    if (!ok) return;
+    const lp = levPlan(m, c.lev, c.reduce);
+    // in flight from the first click: the button is disabled with this label, so a second click cannot send it again
+    st.busy = "Confirm the order…";
+    renderTicket();
     try {
-      const r = await placeOrder({ owner: wallet.address, market: m, isBuy: c.isBuy, size: c.coinSize, limitPx: st.type === "limit" ? c.limitPx : null, reduceOnly: reduceIn.checked, leverage: c.lev, tp: c.tp, sl: c.sl, refPx: c.fill || undefined });
-      const failed = /error/.test(r.text) && !/filled|resting/.test(r.text);
-      toast(`${m.coin}: ${r.text || "sent"}`, failed ? "error" : "ok", 6000);
-      api.post("journal", { kind: "perp_order", summary: `${st.side === "long" ? "Long" : "Short"} ${num(r.size, m.szDecimals)} ${m.coin} @ ${st.type === "market" ? "market" : fmtPx(r.px)} · ${r.text}`,
-        data: { coin: m.coin, side: st.side, type: st.type, size: r.size, px: r.px, leverage: c.lev, tp: c.tp, sl: c.sl, reduceOnly: reduceIn.checked, result: r.text, via: "own wallet trading key" } }).catch(() => {});
-      if (!failed) sizeIn.value = "";
-      setTimeout(loadUser, 800);
+      const ok = await review({
+        title: `${st.side === "long" ? "Long" : "Short"} ${nameOf(m)}`, confirmLabel: "Place order", danger: st.side === "short",
+        rows: [
+          ["Type", c.type === "market" ? "Market (IOC, 1% max slippage)" : "Limit (good till cancelled)"],
+          ["Size", `${num(c.sz, m.szDecimals)} ${tagOf(m)} · ${usd(c.usdSize)}`],
+          [c.type === "market" ? "Est. fill" : "Limit price", fmtPx(c.fill)],
+          ["Leverage", c.reduce ? "unchanged (reduce only)" : `${c.lev}x ${lp.type}${lp.set ? "" : " (already set)"}`],
+          ["Margin", c.reduce ? "none (reduce only)" : `${usd(c.margin)} + ${usd(c.fee)} est. fee`],
+          ["Est. liquidation", c.reduce ? "–" : fmtPx(c.liq)],
+          c.tp ? ["Take profit", fmtPx(c.tp)] : null,
+          c.sl ? ["Stop loss", fmtPx(c.sl)] : null,
+          c.reduce ? ["Reduce only", "yes"] : null,
+        ],
+        warn: g.state === "warn" ? g.items.filter((i) => i.state === "warn").map((i) => `${i.label}: ${i.value}`).join(" · ") : null,
+      });
+      if (!ok) return;
+      st.busy = "Placing the order…";
       renderTicket();
-    } catch (e) { toast(e.message, "error", 7000); }
+      const r = await placeOrder({ owner: wallet.address, market: m, isBuy: c.isBuy, size: c.sz, limitPx: c.type === "limit" ? c.limitPx : null, reduceOnly: c.reduce, leverage: lp.set ? c.lev : null, isCross: lp.isCross, tp: c.tp, sl: c.sl, refPx: c.fill || undefined });
+      const failed = /error/.test(r.text) && !/filled|resting/.test(r.text);
+      toast(`${tagOf(m)}: ${r.text || "sent"}`, failed ? "error" : "ok", 6000);
+      api.post("journal", { kind: "perp_order", summary: `${st.side === "long" ? "Long" : "Short"} ${num(r.size, m.szDecimals)} ${m.coin} @ ${c.type === "market" ? "market" : fmtPx(r.px)} · ${r.text}`,
+        data: { coin: m.coin, side: st.side, type: c.type, size: r.size, px: r.px, leverage: c.lev, leverageSet: lp.set, tp: c.tp, sl: c.sl, reduceOnly: c.reduce, result: r.text, via: "own wallet trading key" } }).catch(() => {});
+      if (!failed) { sizeIn.value = ""; typed = null; }
+      setTimeout(loadUser, 800);
+    } catch (e) { toast(errMsg(e), "error", 7000); }
+    finally { st.busy = null; if (alive) renderTicket(); }
   }
 
   // Fund & open: ETH on Robinhood Chain → USDC on this address on Hyperliquid (one LI.FI transaction), then the order.
   // trade.xyz markets (e.g. Anthropic, xyz:ANT): the USDC lands in the perps balance, so one signature moves it into
   // trade.xyz before the order; when the perps balance already covers it, only the move and the order.
   async function fundAndOpen() {
-    const m = st.m, c = calc(), plan = fundPlan(m, c);
+    if (st.busy) return;
+    const m = st.m, c = calc(), g = gateChecks(c);
+    // only the margin may be missing: the $10 minimum, the caps and the book must already pass before anything is funded
+    if (g.state === "wait" || g.items.some((i) => i.state === "fail" && i.label !== "Margin")) return;
+    const plan = fundPlan(m, c);
     if (!(plan.missing > 0)) return submit();
-    const what = `${st.side === "long" ? "Long" : "Short"} ${num(c.coinSize, m.szDecimals)} ${tagOf(m)} · ${usd(c.usdSize)} at ${c.lev}x`;
-    const order = { coin: m.coin, isBuy: c.isBuy, size: c.coinSize, limitPx: st.type === "limit" ? c.limitPx : null, lev: c.lev, tp: c.tp, sl: c.sl, need: c.margin, side: st.side, type: st.type, usdSize: c.usdSize };
-    const typeRow = st.type === "limit" ? ["Limit price", fmtPx(c.limitPx)] : ["Type", "Market (IOC, 1% max slippage)"];
+    st.busy = "Confirm in your wallet…";
+    stage = null;
+    renderTicket();
+    try { await fundFlow(m, c, plan); }
+    catch (e) {
+      const no = rejected(e);
+      // what the cancel or error really left behind, by stage: nothing sent yet, or USDC already on Hyperliquid
+      const msg = stage === "move" ? (no ? "Cancelled. Your USDC is safe on Hyperliquid; move it to trade.xyz and place the order when ready." : `The move to trade.xyz failed: ${errMsg(e)} Your USDC is safe on Hyperliquid.`)
+        : stage === "wait" || stage === "order" ? `${errMsg(e)} Your USDC is on Hyperliquid; place the order when ready.`
+        : no ? "Cancelled. Nothing was sent." : errMsg(e);
+      toast(msg, "error", 8000);
+    } finally {
+      st.funding = null;
+      st.busy = null;
+      stage = null;
+      if (alive) renderTicket();
+    }
+  }
+  async function fundFlow(m, c, plan) {
+    const what = `${st.side === "long" ? "Long" : "Short"} ${num(c.sz, m.szDecimals)} ${tagOf(m)} · ${usd(c.usdSize)} at ${c.lev}x`;
+    // the order as reviewed; placeAfter works it out again with the live book before it goes out
+    const order = { coin: m.coin, isBuy: c.isBuy, sz: c.sz, limitPx: c.type === "limit" ? c.limitPx : null, lev: c.lev, tp: c.tp, sl: c.sl, need: c.need, side: st.side, type: c.type, usdSize: c.usdSize, fill: c.fill, mid: midNow(), what };
+    const typeRow = c.type === "limit" ? ["Limit price", fmtPx(c.limitPx)] : ["Type", "Market (IOC, 1% max slippage)"];
+    const marginRow = ["Margin", `${usd(c.margin)} + ${usd(c.fee)} est. fee`];
     if (!plan.bridge) {           // trade.xyz, the perps balance covers it: move, then open
       const ok = await review({ title: `Move USDC to trade.xyz, then ${st.side} ${tagOf(m)}`, confirmLabel: "Sign the move", danger: st.side === "short",
         summary: `One signature (no gas) moves ${usd(plan.move)} from your Hyperliquid perps balance into trade.xyz, then the order is placed.`,
-        rows: [["Move", `${usd(plan.move)} USDC · perps → trade.xyz`], ["Then", what], ["Margin", usd(c.margin)], typeRow] });
+        rows: [["Move", `${usd(plan.move)} USDC · perps → trade.xyz`], ["Then", what], marginRow, typeRow] });
       if (!ok) return;
-      try {
-        await ensureChain("arbitrum");
-        await sendToDex(wallet.address, wallet.eip, plan.move, "", m.dex);
-        await loadUser().catch(() => {});
-        return placeAfter(order, null);
-      } catch (e) { toast(e?.code === 4001 || /reject|denied/i.test(e?.message || "") ? "Request cancelled in the wallet." : (e.shortMessage || e.message), "error", 7000); return; }
+      stage = "move";
+      st.busy = "Sign the move in your wallet…";
+      renderTicket();
+      await ensureChain("arbitrum");
+      await sendToDex(wallet.address, wallet.eip, plan.move, "", m.dex);
+      await loadUser();
+      return placeAfter(order, null);
     }
     let q;
     try { q = await api.get(`hl/fund-quote?${new URLSearchParams({ address: wallet.address, usd: plan.bridgeUsd.toFixed(2) })}`); }
     catch (e) { toast(`No funding route right now: ${e.message}`, "error", 6000); return; }
+    if (!alive) return;
     const usdc = Number(q.toAmount) / 10 ** q.toDecimals, usdcMin = Number(q.toAmountMin) / 10 ** q.toDecimals;
     const ok = await review({ title: `Fund Hyperliquid, then ${st.side} ${plan.xyz ? tagOf(m) : `${m.coin}-PERP`}`, confirmLabel: "Fund in wallet", danger: st.side === "short",
       summary: plan.xyz
         ? `One transaction on Robinhood Chain sends about ${usd(usdc)} USDC to your Hyperliquid account. When it lands, one signature (no gas) moves ${usd(plan.move)} into trade.xyz and the order is placed from this page.`
         : `One transaction on Robinhood Chain sends about ${usd(usdc)} USDC to your Hyperliquid account. The order is placed from this page the moment it lands.`,
       rows: [["You send", `${q.amountEth} ETH on Robinhood Chain`], ["Lands on Hyperliquid (est.)", `${usdc.toFixed(2)} USDC (min ${usdcMin.toFixed(2)})`], ["Route", `${q.tool} via LI.FI`], ["Route fees", usd(q.feeUsd + q.gasUsd)],
-        plan.xyz ? ["Then", `move ${usd(plan.move)} USDC into trade.xyz (one signature)`] : null, ["Then", what], ["Margin", usd(c.margin)], typeRow],
+        plan.xyz ? ["Then", `move ${usd(plan.move)} USDC into trade.xyz (one signature)`] : null, ["Then", what], marginRow, typeRow],
       warn: "The funding goes through a third-party route and cannot be reversed. Keep this page open until the order is placed; if you leave, the USDC still lands on your Hyperliquid account and you can place the order later." });
     if (!ok) return;
-    try {
-      const hash = await sendTx("robinhood", { to: q.tx.to, data: q.tx.data, value: q.tx.value, gasLimit: (BigInt(q.tx.gasLimit) * 13n) / 10n });
-      api.post("journal", { kind: "bridge", summary: `Fund Hyperliquid for a ${tagOf(m)} order: ${q.amountEth} ETH → about ${usdc.toFixed(2)} USDC`, data: { hash, route: q.tool, via: "Perps · Fund & open" } }).catch(() => {});
-      st.funding = { hash, at: Date.now() };
-      toast("Funding sent. The order goes out as soon as the USDC lands.", "ok", 6000);
-      renderTicket();
-      const mainNow = () => +(st.user?.withdrawable || 0);
-      const landedNow = () => (plan.xyz ? mainNow() >= plan.move * 0.98 || freeOf(st.markets.find((x) => x.coin === order.coin) || m) + mainNow() >= order.need * 1.01 : freeOf(st.markets.find((x) => x.coin === order.coin) || st.m) >= order.need * 1.01);
-      while (alive && Date.now() - st.funding.at < 10 * 60_000) {
-        await new Promise((r) => setTimeout(r, 5000));
-        await loadUser().catch(() => {});
-        if (landedNow()) break;
-      }
-      const landed = landedNow();
-      st.funding = null;
-      if (!alive) return;
-      if (!landed) { toast(`The USDC has not landed yet. It will reach your Hyperliquid account; ${plan.xyz ? "move it to trade.xyz and " : ""}place the order once it shows.`, "", 9000); renderTicket(); return; }
-      if (plan.xyz) {
-        const mk = st.markets.find((x) => x.coin === order.coin) || m;
-        const need = Math.max(0, order.need * 1.05 + 0.5 - freeOf(mk)), amt = Math.min(Math.ceil(need * 100) / 100, Math.floor(mainNow() * 100) / 100);
-        if (amt > 0) {
-          toast("USDC landed. Sign the move into trade.xyz to place the order.", "ok", 7000);
-          await ensureChain("arbitrum");
-          await sendToDex(wallet.address, wallet.eip, amt, "", m.dex);
-          await loadUser().catch(() => {});
-        }
-      }
-      return placeAfter(order, hash);
-    } catch (e) { st.funding = null; toast(e?.code === 4001 || /reject|denied/i.test(e?.message || "") ? "Request cancelled in the wallet. Your USDC is safe on Hyperliquid; place the order when ready." : (e.shortMessage || e.message), "error", 8000); if (alive) renderTicket(); }
-  }
-  // the order after funding or a move: placed straight away with the trading key (the review already covered it)
-  async function placeAfter(order, fundTx) {
-    const mk = st.markets.find((x) => x.coin === order.coin) || st.m;
-    if (freeOf(mk) < order.need * 1.0) { toast("The margin is not there yet. Place the order once it shows as free.", "", 8000); renderTicket(); return; }
-    try {
-      const r = await placeOrder({ owner: wallet.address, market: mk, isBuy: order.isBuy, size: order.size, limitPx: order.limitPx, leverage: order.lev, tp: order.tp, sl: order.sl });
-      const failed = /error/.test(r.text) && !/filled|resting/.test(r.text);
-      toast(`${tagOf(mk)}: ${r.text || "sent"}`, failed ? "error" : "ok", 7000);
-      api.post("journal", { kind: "perp_order", summary: `${order.side === "long" ? "Long" : "Short"} ${num(r.size, mk.szDecimals)} ${tagOf(mk)} @ ${order.type === "market" ? "market" : fmtPx(r.px)} · ${r.text} (${fundTx ? "after funding" : "after a move to trade.xyz"})`,
-        data: { coin: order.coin, side: order.side, type: order.type, size: r.size, px: r.px, leverage: order.lev, tp: order.tp, sl: order.sl, result: r.text, via: `own wallet trading key · ${fundTx ? "Fund & open" : "Move & open"}`, fundTx } }).catch(() => {});
-      if (!failed) sizeIn.value = "";
-    } catch (e) { toast(e.message, "error", 7000); }
-    setTimeout(loadUser, 800);
+    stage = "fund";
+    const hash = await sendTx("robinhood", { to: q.tx.to, data: q.tx.data, value: q.tx.value, gasLimit: (BigInt(q.tx.gasLimit) * 13n) / 10n });
+    stage = "wait";
+    api.post("journal", { kind: "bridge", summary: `Fund Hyperliquid for a ${tagOf(m)} order: ${q.amountEth} ETH → about ${usdc.toFixed(2)} USDC`, data: { hash, route: q.tool, via: "Perps · Fund & open" } }).catch(() => {});
+    st.funding = { hash, at: Date.now() };
+    toast("Funding sent. The order goes out as soon as the USDC lands.", "ok", 6000);
     renderTicket();
+    const mainNow = () => +(st.user?.withdrawable || 0);
+    const mkNow = () => st.markets.find((x) => x.coin === order.coin) || m;
+    const landedNow = () => (plan.xyz ? mainNow() >= plan.move * 0.98 || freeOf(mkNow()) + mainNow() >= order.need * 1.01 : freeOf(mkNow()) >= order.need * 1.01);
+    while (alive && Date.now() - st.funding.at < 10 * 60_000) {
+      await new Promise((r) => setTimeout(r, 5000));
+      await loadUser();
+      if (landedNow()) break;
+    }
+    const landed = landedNow();
+    st.funding = null;
+    if (!alive) return;
+    if (!landed) { toast(`The USDC has not landed yet. It will reach your Hyperliquid account; ${plan.xyz ? "move it to trade.xyz and " : ""}place the order once it shows.`, "", 9000); return; }
+    if (plan.xyz) {
+      const need = Math.max(0, order.need * 1.05 + 0.5 - freeOf(mkNow())), amt = Math.min(Math.ceil(need * 100) / 100, Math.floor(mainNow() * 100) / 100);
+      if (amt > 0) {
+        stage = "move";
+        st.busy = "Sign the move in your wallet…";
+        renderTicket();
+        toast("USDC landed. Sign the move into trade.xyz to place the order.", "ok", 7000);
+        await ensureChain("arbitrum");
+        await sendToDex(wallet.address, wallet.eip, amt, "", m.dex);
+        await loadUser();
+      }
+    }
+    return placeAfter(order, hash);
+  }
+  // the order after funding or a move, placed with the trading key. Minutes can pass while the USDC lands, so it is
+  // worked out again with the live book first: a Gate failure stops it, and a price more than 1% away from the reviewed
+  // one (or a Gate warning) asks once more instead of firing
+  async function placeAfter(order, fundTx) {
+    stage = "order";
+    const mk = () => st.markets.find((x) => x.coin === order.coin) || st.m;
+    const again = () => { const c = orderCalc({ m: mk(), sz: order.sz, refPx: order.limitPx || mk().markPx, isBuy: order.isBuy, type: order.type, limitPx: order.limitPx, lev: order.lev, tp: order.tp, sl: order.sl }); return { c, g: gateChecks(c) }; };
+    const stopped = (g) => toast(`Not placed: ${g.items.filter((i) => i.state === "fail").map((i) => `${i.label} ${i.value}`).join(" · ")}. Your USDC is safe on Hyperliquid; place the order from the ticket when ready.`, "error", 10000);
+    let { c, g } = again();
+    // a balance read right after a move can still be the old one: give the margin a few seconds to show before stopping
+    const marginOnly = () => g.state === "fail" && g.items.filter((i) => i.state === "fail").every((i) => i.label === "Margin");
+    for (let i = 0; i < 4 && alive && marginOnly(); i++) { await new Promise((r) => setTimeout(r, 1500)); await loadUser(); ({ c, g } = again()); }
+    if (!alive) return;
+    if (g.state === "fail") { stopped(g); return; }
+    const nowPx = order.type === "market" ? c.fill || midNow() : midNow();
+    const thenPx = order.type === "market" ? order.fill || order.mid : order.mid;
+    const moved = nowPx && thenPx ? Math.abs(nowPx - thenPx) / thenPx : 0;
+    if (moved > 0.01 || g.state === "warn") {
+      st.busy = "Confirm the order…";
+      renderTicket();
+      const ok = await review({ title: `Place the ${tagOf(mk())} order?`, confirmLabel: "Place anyway", danger: order.side === "short",
+        summary: moved > 0.01 ? `Price moved from ${fmtPx(thenPx)} to ${fmtPx(nowPx)} — place anyway?` : "The Troya Gate flagged this order after you reviewed it. Place anyway?",
+        rows: [["Order", order.what], [order.type === "market" ? "Est. fill now" : "Limit price", fmtPx(c.fill)], ["Margin", `${usd(c.margin)} + ${usd(c.fee)} est. fee`]],
+        warn: g.items.filter((i) => i.state === "warn").map((i) => `${i.label}: ${i.value}`).join(" · ") || null });
+      if (!ok) { toast("Not placed. Your USDC is safe on Hyperliquid; place the order from the ticket when ready.", "", 8000); return; }
+      ({ c, g } = again());
+      if (g.state === "fail") { stopped(g); return; }
+    }
+    const m = mk(), lp = levPlan(m, order.lev, false);
+    st.busy = "Placing the order…";
+    renderTicket();
+    try {
+      const r = await placeOrder({ owner: wallet.address, market: m, isBuy: order.isBuy, size: order.sz, limitPx: order.limitPx, reduceOnly: false, leverage: lp.set ? order.lev : null, isCross: lp.isCross, tp: order.tp, sl: order.sl, refPx: c.fill || undefined });
+      const failed = /error/.test(r.text) && !/filled|resting/.test(r.text);
+      toast(`${tagOf(m)}: ${r.text || "sent"}`, failed ? "error" : "ok", 7000);
+      api.post("journal", { kind: "perp_order", summary: `${order.side === "long" ? "Long" : "Short"} ${num(r.size, m.szDecimals)} ${tagOf(m)} @ ${order.type === "market" ? "market" : fmtPx(r.px)} · ${r.text} (${fundTx ? "after funding" : "after a move to trade.xyz"})`,
+        data: { coin: order.coin, side: order.side, type: order.type, size: r.size, px: r.px, leverage: order.lev, leverageSet: lp.set, tp: order.tp, sl: order.sl, result: r.text, via: `own wallet trading key · ${fundTx ? "Fund & open" : "Move & open"}`, fundTx } }).catch(() => {});
+      if (!failed) { sizeIn.value = ""; typed = null; }
+    } catch (e) { toast(`${errMsg(e)} Your USDC is on Hyperliquid; place the order when ready.`, "error", 8000); }
+    setTimeout(loadUser, 800);
   }
 
   async function closePosition(p) {
@@ -631,7 +883,11 @@ export async function mount(view, ctx) {
     const ok = await review({ title: `Close ${p.coin} position`, confirmLabel: "Close at market", danger: true, rows: [["Side", p.size > 0 ? "Long" : "Short"], ["Size", num(Math.abs(p.size), 5)], ["Mark", fmtPx(m.markPx)], ["Unrealised PnL", usd(p.unrealizedPnl)]] });
     if (!ok) return;
     try {
-      const r = await placeOrder({ owner: wallet.address, market: m, isBuy: p.size < 0, size: Math.abs(p.size), reduceOnly: true });
+      // the 1% cap is set from the live book, not the market list: /api/hl/meta may answer from a copy up to a minute old
+      // while it refreshes (server/hl.mjs), and a cap off an old mid either misses the fill or lets it sweep further
+      const b = await api.get(`hl/book?coin=${encodeURIComponent(p.coin)}`).catch(() => null);
+      const live = b?.bids?.[0] && b?.asks?.[0] ? (b.bids[0].px + b.asks[0].px) / 2 : undefined;
+      const r = await placeOrder({ owner: wallet.address, market: m, isBuy: p.size < 0, size: Math.abs(p.size), reduceOnly: true, refPx: live });
       toast(`${p.coin}: ${r.text}`, /error/.test(r.text) ? "error" : "ok", 6000);
       api.post("journal", { kind: "perp_order", summary: `Closed ${p.coin} ${p.size > 0 ? "long" : "short"} at market · ${r.text}`, data: { coin: p.coin, reduceOnly: true, size: Math.abs(p.size), result: r.text } }).catch(() => {});
       setTimeout(loadUser, 800);
@@ -655,7 +911,6 @@ export async function mount(view, ctx) {
     for (let i = 0; i < 2 && fellBack && alive; i++) { await new Promise((r) => setTimeout(r, 1500)); st.m = null; fellBack = false; await loadMeta(); }
   } catch (e) { clear(view, h("div", { class: "empty", style: { padding: "100px 0" } }, h("b", {}, "Hyperliquid markets could not be loaded."), h("div", {}, e.message), h("button", { class: "btn", type: "button", onclick: () => ctx.go(location.hash) }, "Try again"))); return; }
   if (fellBack) toast(want.includes(":") ? `${ctx.parts[0]} (trade.xyz) has not loaded yet; showing ${st.m.coin} and switching the moment it does.` : `No perp called ${ctx.parts[0]}; showing ${st.m.coin}.`, "", 7000);
-  renderIvals();
   renderTicket();
   renderPositions();
   initChart();

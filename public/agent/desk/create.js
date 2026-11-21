@@ -13,7 +13,8 @@ export async function mount(view) {
   useCss("perps");
   let alive = true;
   const grid = h("div", { class: "cc-grid" });
-  clear(view, h("div", { class: "dk cc" },
+  // 72 px of room at the bottom: the floating Ask Troya orb never sits on the last card's button
+  clear(view, h("div", { class: "dk cc", style: { paddingBottom: "72px" } },
     pageHead("Create coin", "Three ways to launch a coin on Robinhood Chain through Troya. Each one lands on the Pons curve, gets checked by the Gate, and shows up in Troya Launches."),
     grid,
     h("p", { class: "cc-foot" }, "Every coin born through Troya: ", h("a", { class: "ulink", href: "#/troya-launches" }, "Troya Launches"), " · Fees from your coins: ", h("a", { class: "ulink", href: "#/creator" }, "Creator desk"), " · Every new coin on Robinhood Chain: ", h("a", { class: "ulink", href: "#/launch" }, "All launches"))));
@@ -23,8 +24,10 @@ export async function mount(view) {
       h("div", { class: "cc-top" }, svg(ic), h("span", { class: `cc-status ${tone}` }, status)),
       h("h2", {}, title), h("p", { class: "cc-sub" }, sub),
       h("ul", { class: "cc-points" }, points.map((p) => h("li", {}, p))),
-      off ? h("span", { class: "btn cc-cta", "aria-disabled": "true" }, cta) : h("a", { class: "btn primary cc-cta", href, ...(/^https?:/.test(href) ? { target: "_blank", rel: "noopener" } : {}) }, cta),
-      guide ? h("a", { class: "cc-guide ulink", href: guide, target: "_blank", rel: "noopener" }, "Read the full guide") : null);
+      // every card ends in the same two lines (button, guide link), pushed to the bottom, so the three buttons line up
+      off ? h("span", { class: "btn cc-cta", "aria-disabled": "true", style: { marginTop: "auto" } }, cta) : h("a", { class: "btn primary cc-cta", style: { marginTop: "auto" }, href, ...(/^https?:/.test(href) ? { target: "_blank", rel: "noopener" } : {}) }, cta),
+      // in-app guides (#/docs) open in place; the Launch on X page opens beside the app
+      h("a", { class: "cc-guide ulink", href: guide, ...(guide.startsWith("#") ? {} : { target: "_blank", rel: "noopener" }) }, "Read the full guide"));
   }
 
   function paint(r) {
@@ -33,7 +36,7 @@ export async function mount(view) {
     clear(grid,
       card({ ic: WEB_ICON, title: "On troya.codes", sub: "Fill in the form and sign with your own wallet.", status: "Open to everyone", tone: "ok",
         points: ["Free to launch through Troya: you pay the Pons launch fee and gas.", fee, `Creator tax 0–4%, all yours. Up to ${r?.limits?.perDay ?? 3} launches a day; holders of ${min} $TROYA have no limit.`],
-        cta: "Create on troya.codes", href: "#/launch/create" }),
+        cta: "Create on troya.codes", href: "#/launch/create", guide: "#/docs?s=launch" }),
       card({ ic: X_ICON, title: "From X", sub: "Post to @Troyaagent and your Agent Wallet launches it.", status: !r ? "Checking…" : r.failed ? "Status unavailable" : r.xLaunch ? "Open to everyone" : "In its real-money test", tone: r?.xLaunch ? "ok" : "test",
         points: [`One launch a day, or as many as you like with ${min} $TROYA.`, fee, "Write \"launch Name $TICKER\", or in your own words; add \"tax 2%\" and \"buy 0.01\".",
           "Attach the coin's image: square (1:1) works best, PNG or JPEG; other shapes get cropped to the middle. Without one, the coin launches with no image, for good.", "Troya replies in seconds with the address and market cap, or with what to fix."],
@@ -43,10 +46,10 @@ export async function mount(view) {
           points: ["Answer step by step: name, ticker, image, creator tax, initial buy. Or send the image with the caption \"/launch Wooden Horse $HORSE tax 2% buy 0.01\".",
             fee, "Your Agent Wallet pays the Pons launch fee and the buy; Troya pays the gas. Link the chat once in Settings → Telegram alerts.",
             "A preview with a Confirm button comes before anything is sent."],
-          cta: "Open the Troya bot", href: `https://t.me/${r.tgBot}?start=launch` })
+          cta: "Open the Troya bot", href: `https://t.me/${r.tgBot}?start=launch`, guide: "/launch-on-x#telegram" })
         : card({ ic: TG_ICON, title: "In Telegram", sub: "Launch from a private chat with the Troya bot.", status: !r ? "Checking…" : r.failed ? "Status unavailable" : "In its real-money test", tone: "test", off: true,
           points: ["Same rules and fees as X and troya.codes once it opens.", "Step by step in the chat, or one photo with a caption, then a preview and a Confirm button.", "Opens after its real-money test."],
-          cta: "Opening soon" }));
+          cta: "Opening soon", guide: "/launch-on-x#telegram" }));
   }
 
   // the status says "Checking…" until the rules arrive, and never claims a test or an opening it could not read

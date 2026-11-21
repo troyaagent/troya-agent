@@ -1,9 +1,25 @@
 // V8 F41 War Table: the coin page as a trading terminal, on Watchfire's live board (/api/watchfire/:token/board):
 // trades labelled dev, insider, sniper, bundler, ring, whale and bot, with filters; early buyers and what they did since;
 // tags on holders; instant buys and sells that always pass the Gate; marks on the chart for dev trades and Watchfire fires.
-import { h, clear, icon, toast, short, compact } from "../ui.js";
+import { h, clear, icon, toast, short, compact, usd, tiny } from "../ui.js";
 import { api } from "../api.js";
 import { wallet } from "../wallet.js";
+
+// panel titles in plain words, the feature's myth name as a small eyebrow above ("Who is behind it", eyebrow Watchfire):
+// a first-time visitor reads what the panel does, a regular still finds the name they know
+const EYEBROW = { display: "block", fontSize: "10.5px", letterSpacing: ".14em", textTransform: "uppercase", color: "var(--muted)", fontWeight: "600", marginBottom: "3px" };
+export const panelTitle = (plain, myth) => h("div", { style: { minWidth: 0 } }, myth ? h("small", { style: EYEBROW }, myth) : null, h("h2", {}, plain));
+
+// a time (seconds) to the chart bar it falls in: the last bar at or before its interval start (quiet hours have no bar),
+// or the first bar when it is less than one interval before it; null off the chart. The chart only places marks and
+// avatars at a bar's own time: timeToCoordinate() answers null for any second between two bars (lightweight-charts 4.2)
+export function snapTime(times, ts, ivSecs) {
+  if (!times?.length || !(ts > 0)) return null;
+  const iv = ivSecs > 0 ? ivSecs : 3600, want = Math.floor(ts / iv) * iv;
+  let best = null;
+  for (const x of times) { if (x <= want) best = x; else break; }
+  return best ?? (times[0] - ts < iv ? times[0] : null);
+}
 
 export const TAGS = {
   dev: ["Dev", "The wallet that deployed the coin"],
@@ -49,7 +65,7 @@ export function watchfirePanel() {
     catch (e) { toast(e.message, "error"); }
   } }, icon("bell"), "Pin");
   const el = h("section", { class: "panel wt-wf" },
-    h("div", { class: "panel-h" }, h("h2", {}, "Watchfire"), live),
+    h("div", { class: "panel-h" }, panelTitle("Who is behind it", "Watchfire"), live),
     h("div", { class: "wt-wf-b" }, badge, sub), why, met, note,
     h("p", { class: "fine muted wt-foot" }, "Reads every transfer of this coin: coins gathered into one wallet, a 5%+ sale, fast selling, weight in few hands. Patterns, not proof; nobody can sell ahead of a dump inside one block."),
     h("div", { class: "wt-foot" }, pin, h("a", { class: "link fine", href: "#/treasury" }, "Pins by tier")));
@@ -87,7 +103,7 @@ export function tributePanel(address) {
   const sub = h("p", { class: "fine muted wt-sub" }, TV.loading[1]);
   const why = h("ul", { class: "wt-why" });
   const el = h("section", { class: "panel wt-wf wt-tr" },
-    h("div", { class: "panel-h" }, h("h2", {}, "Tribute"), h("span", { class: "fine muted" }, "Is the revenue real?")),
+    h("div", { class: "panel-h" }, panelTitle("Revenue check", "Tribute")),
     h("div", { class: "wt-wf-b" }, badge, sub), why,
     h("p", { class: "fine muted wt-foot" }, "Traces who paid the holders in the last 12 days and with whose money, what real ETH or USDG backs the market cap, and whether the volume is scripted. Asked for by the community."));
   const map = { clear: "clear", caution: "amber", fake: "fire", unknown: "loading" };
@@ -161,26 +177,42 @@ export function tradePanel(t, address) {
 }
 
 /* ---------- tabs: trades with filters, early buyers ---------- */
-export function renderTrades(box, b, filter, setFilter, symbol) {
-  const counts = b?.counts || {};
+// no board at all: Watchfire reads coins from launchpads and their pools, not stock tokens or core tokens, so an empty
+// table here would read as "nobody trades NVDA" next to 59K trades in the stats
+const NO_BOARD = "Watchfire reads launchpad coins only. Recent trades of this token are in the Trades (USD) tab.";
+// a trade's size in USD and ETH: size(x) gives { usd, eth, est } (est = coins × the chart's price in that bar, shown ≈)
+const sizeCell = (v, kind, est) => {
+  if (v == null || !isFinite(v)) return h("td", { class: "muted" }, "–");
+  const txt = kind === "usd" ? (v > 0 && v < 0.01 ? "<$0.01" : usd(v, { compact: v >= 1e4 })) : v > 0 && v < 0.0001 ? "<0.0001" : v >= 1 ? v.toFixed(3) : tiny(v, 3);
+  return h("td", est ? { title: "Estimated: the coins times the chart's price in that bar" } : {}, est ? h("span", { class: "muted" }, "≈ ") : null, txt);
+};
+export function renderTrades(box, b, filter, setFilter, symbol, size) {
+  if (!b) { clear(box, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, NO_BOARD))); return; }
+  const counts = b.counts || {};
   const chips = h("div", { class: "wt-chips" },
     h("button", { class: `wt-chip${filter === "all" ? " on" : ""}`, type: "button", onclick: () => setFilter("all") }, "All"),
     Object.keys(TAGS).map((k) => h("button", { class: `wt-chip${filter === k ? " on" : ""}`, type: "button", title: TAGS[k][1], onclick: () => setFilter(k) }, TAGS[k][0], counts[k] ? h("small", {}, String(counts[k])) : null)));
-  const list = (b?.trades || []).filter((x) => filter === "all" || x.tags.includes(filter));
+  const list = (b.trades || []).filter((x) => filter === "all" || x.tags.includes(filter));
   clear(box, h("div", { class: "panel mk-panel wt-panel" }, chips,
     list.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl wt-tbl" },
-      h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Age"), h("th", { class: "l" }, "Side"), h("th", {}, "% supply"), h("th", {}, symbol), h("th", { class: "l" }, "Trader"))),
-      h("tbody", {}, list.slice(0, 120).map((x) => h("tr", {},
-        h("td", { class: "l muted" }, h("a", { class: "link", href: `${SCAN}/tx/${x.tx}`, target: "_blank", rel: "noopener" }, secs(x.secsAgo))),
-        h("td", { class: `l ${x.kind === "buy" ? "tk-trade-buy" : "tk-trade-sell"}` }, x.kind === "buy" ? "Buy" : "Sell"),
-        h("td", {}, pctTxt(x.pct)), h("td", {}, compact(x.tokens, 2)),
-        h("td", { class: "l" }, h("a", { class: "link mono", href: `${SCAN}/address/${x.wallet}`, target: "_blank", rel: "noopener" }, short(x.wallet, 4)), " ", x.tags.map(tagEl))))))) :
-      h("div", { class: "empty" }, filter === "all" ? (b?.level === "loading" ? "Reading this coin's transfers…" : "No trades in the window Watchfire reads yet.") : `No ${TAGS[filter][0].toLowerCase()} trades in this window.`),
-    h("p", { class: "fine" }, `Every buy and sell of the coin, read live from the chain by Watchfire${b && !b.fullHistory ? " (this coin is older than 6 hours: the last 6 hours)" : ""}. Tags are patterns, not accusations.`)));
+      h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Age"), h("th", { class: "l" }, "Side"), h("th", {}, "USD"), h("th", {}, "ETH"), h("th", {}, "% supply"), h("th", {}, symbol), h("th", { class: "l" }, "Trader"))),
+      h("tbody", {}, list.slice(0, 120).map((x) => {
+        const s = size?.(x) || null;
+        return h("tr", {},
+          h("td", { class: "l muted" }, h("a", { class: "link", href: `${SCAN}/tx/${x.tx}`, target: "_blank", rel: "noopener" }, secs(x.secsAgo))),
+          h("td", { class: `l ${x.kind === "buy" ? "tk-trade-buy" : "tk-trade-sell"}` }, x.kind === "buy" ? "Buy" : "Sell"),
+          sizeCell(s?.usd, "usd", s?.est), sizeCell(s?.eth, "eth", s?.est),
+          h("td", {}, pctTxt(x.pct)), h("td", {}, compact(x.tokens, 2)),
+          h("td", { class: "l" }, h("a", { class: "link mono", href: `${SCAN}/address/${x.wallet}`, target: "_blank", rel: "noopener" }, short(x.wallet, 4)), " ", x.tags.map(tagEl)));
+      })))) :
+      h("div", { class: "empty" }, filter === "all" ? (b.level === "loading" ? "Reading this coin's transfers…" : "No trades in the window Watchfire reads yet.") : `No ${TAGS[filter][0].toLowerCase()} trades in this window.`),
+    h("p", { class: "fine" }, `Every buy and sell of the coin, read live from the chain by Watchfire${b.fullHistory === false ? " (this coin is older than 6 hours: the last 6 hours)" : ""}. USD and ETH come from GeckoTerminal for the same transaction, or are estimated (≈) from the chart. Tags are patterns, not accusations.`)));
 }
 export function renderEarly(box, b) {
-  const list = b?.early || [];
-  if (b && !b.fullHistory) { clear(box, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "This coin is older than 6 hours, so Watchfire did not see its first buyers."))); return; }
+  if (!b) { clear(box, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, NO_BOARD))); return; }
+  if (b.level === "loading") { clear(box, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "Reading this coin's transfers…"))); return; }
+  const list = b.early || [];
+  if (!b.fullHistory) { clear(box, h("div", { class: "panel mk-panel" }, h("div", { class: "empty" }, "This coin is older than 6 hours, so Watchfire did not see its first buyers."))); return; }
   clear(box, h("div", { class: "panel mk-panel wt-panel" },
     list.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl wt-tbl" },
       h("thead", {}, h("tr", {}, h("th", { class: "l" }, "#"), h("th", { class: "l" }, "Wallet"), h("th", {}, "In after"), h("th", {}, "Bought"), h("th", {}, "Holds now"), h("th", { class: "l" }, "Since"))),
@@ -196,7 +228,7 @@ export function renderEarly(box, b) {
 export function chartMarks(b, times, ivSecs) {
   if (!b || !times?.length) return [];
   const now = Date.now() / 1000;
-  const snap = (ts) => { let best = null; for (const x of times) { if (x <= ts) best = x; else break; } return best ?? (ts - times[0] < ivSecs ? times[0] : null); };
+  const snap = (ts) => snapTime(times, ts, ivSecs);
   const marks = [];
   for (const x of b.trades || []) {
     if (!x.tags.includes("dev")) continue;
@@ -246,24 +278,45 @@ export function renderCallouts(box, data, address, symbol, reload) {
           } }, "Track") : null)))) : h("div", { class: "empty" }, "No posts on X mention this contract lately.")),
     h("p", { class: "fine" }, "Posts on X are written by their authors, not by Troya. Check a coin with the Gate before you act on anyone's call.")));
 }
-// the callers' avatars on the chart, at the time and price of each call (an HTML layer over the chart)
-export function calloutLayer(chartBox, chart, series, getCalls) {
+// the callers' avatars on the chart, at the bar and price of each call (an HTML layer over the chart). opts: ivSecs (the
+// bar length), times() (the bars' times, which grow while the page is open) and scale() (1 for price, the supply when the
+// chart shows market cap). The avatars are made once per list of calls and only moved on scroll, zoom, resize and
+// crosshair moves (a drag of the price scale fires no time-range event). place.stop() ends the resize watch.
+export function calloutLayer(chartBox, chart, series, getCalls, opts = {}) {
   const layer = h("div", { class: "wt-av-layer", "aria-hidden": "true" });
   chartBox.style.position = "relative";
   chartBox.append(layer);
+  let made = [], key = "";
   const place = () => {
-    const calls = getCalls() || [];
-    clear(layer, calls.slice(0, 30).map((c) => {
-      const x = chart.timeScale().timeToCoordinate(Math.floor(c.at / 1000));
-      const y = series.priceToCoordinate(c.priceUsd);
-      if (x == null || y == null || x < 0 || y < 0) return null;
-      const el = c.caller.avatar ? h("img", { class: "wt-av sm", src: c.caller.avatar, alt: "", referrerpolicy: "no-referrer", title: `${c.caller.handle ? "@" + c.caller.handle : short(c.caller.address, 4)}: ${c.text}` }) : h("span", { class: "wt-av sm", title: c.text }, initials(c));
-      el.style.left = `${x}px`; el.style.top = `${y}px`;
-      return el;
-    }).filter(Boolean));
+    const calls = (getCalls() || []).slice(0, 30);
+    const k = calls.map((c) => `${c.id || ""}${c.at}${c.caller?.address || ""}`).join("|");
+    if (k !== key) {
+      key = k;
+      made = calls.map((c) => ({ c, el: c.caller.avatar ? h("img", { class: "wt-av sm", src: c.caller.avatar, alt: "", referrerpolicy: "no-referrer", title: `${c.caller.handle ? "@" + c.caller.handle : short(c.caller.address, 4)}: ${c.text}` }) : h("span", { class: "wt-av sm", title: c.text }, initials(c)) }));
+      clear(layer, made.map((m) => m.el));
+    }
+    const ts = chart.timeScale(), times = opts.times?.() || [], k2 = opts.scale?.() || 1;
+    const w = layer.clientWidth || chartBox.clientWidth, hgt = layer.clientHeight || chartBox.clientHeight;
+    for (const { c, el } of made) {
+      let x = null, y = null;
+      try {
+        const bar = snapTime(times, c.at / 1000, opts.ivSecs);
+        x = bar == null ? null : ts.timeToCoordinate(bar);
+        y = c.priceUsd > 0 ? series.priceToCoordinate(c.priceUsd * k2) : null;
+      } catch { /* chart gone */ }
+      const ok = x != null && y != null && x >= 0 && y >= 0 && (!w || x <= w) && (!hgt || y <= hgt);
+      el.style.display = ok ? "" : "none";
+      if (ok) { el.style.left = `${x}px`; el.style.top = `${y}px`; }
+    }
   };
-  chart.timeScale().subscribeVisibleTimeRangeChange(place);
+  let raf = 0;
+  const soon = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(place); };
+  chart.timeScale().subscribeVisibleLogicalRangeChange(soon);
+  chart.subscribeCrosshairMove(soon);
+  const ro = typeof ResizeObserver === "function" ? new ResizeObserver(soon) : null;
+  ro?.observe(chartBox);
   place();
+  place.stop = () => { cancelAnimationFrame(raf); ro?.disconnect(); try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(soon); chart.unsubscribeCrosshairMove(soon); } catch { /* chart removed */ } };
   return place;
 }
 

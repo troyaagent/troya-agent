@@ -8,6 +8,7 @@ import { writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { AbiCoder, Interface, keccak256, toBeHex } from "ethers";
 import { KYBER_ON } from "./kyber.mjs";
+import { hlCtxs, perpName } from "./hl.mjs";
 import { noteV4, ponsState, ponsPublic, ponsProfile, STOCKS, ADDR as RH, rpc as rhRpc, CHAINS as RH_CHAINS, iface as RHI } from "./robinhood.mjs";
 
 const UA = { "user-agent": "troya-agent/0.2 (+market-reader)", accept: "application/json" };
@@ -138,30 +139,34 @@ async function pumpGecko() {
   } finally { gq.busy = false; }
 }
 
-const cache = new Map(); // key → { t, value, p }
-async function memo(key, ttl, fn) {
-  const hit = cache.get(key);
+// Stale-while-revalidate: a value past its ttl but younger than swr × ttl (12 by default, and never more than 10 minutes
+// past the ttl) is answered at once while ONE background refresh runs; only a cold or very old key makes its reader
+// wait (one user paid 0.7-1.8 s each time an entry expired). swr: 0 keeps the strict ttl for reads that stamp a price
+// "now" or feed one that is recorded (DexScreener pairs, a coin's page read, which The Record and the oracle price
+// from). Either way, when a refresh fails the last good value is served with stale: true (and the next reader, or the
+// one after a short pause, tries again).
+const cache = new Map(); // key → { t, value, p, err, retryAt }
+const STALE_X = 12;
+const staleFor = (ttl, swr) => (swr > 0 ? Math.min(ttl * swr, ttl + 10 * 60_000) : 0);
+const asStale = (v, why) => (v && typeof v === "object" && !Array.isArray(v) ? { ...v, stale: true, staleReason: why } : v);
+async function memo(key, ttl, fn, { swr = STALE_X } = {}) {
   const now = Date.now();
-  if (hit?.value !== undefined && now - hit.t < ttl) return hit.value;
-  if (hit?.p) return hit.p;
-  const p = (async () => {
-    try {
-      const value = await fn();
-      cache.set(key, { t: Date.now(), value });
-      return value;
-    } catch (e) {
-      if (hit?.value !== undefined) {
-        cache.set(key, { t: hit.t, value: hit.value });
-        const v = hit.value;
-        return v && typeof v === "object" && !Array.isArray(v) ? { ...v, stale: true, staleReason: e.message } : v;
-      }
-      cache.delete(key);
-      throw e;
-    }
-  })();
-  cache.set(key, { ...(hit || {}), p });
-  if (cache.size > 2000) for (const [k, v] of cache) if (now - v.t > 600_000) cache.delete(k);
-  return p;
+  let e = cache.get(key);
+  if (!e) { e = { t: 0, value: undefined, p: null, err: null, retryAt: 0 }; cache.set(key, e); }
+  const has = e.value !== undefined, age = has ? now - e.t : Infinity;
+  if (age < ttl) return e.value;
+  // a failing source is asked again at most every few seconds while there is a value to serve meanwhile
+  if (!e.p && (!has || now >= e.retryAt)) {
+    const p = Promise.resolve().then(fn).then(
+      (value) => { if (e.p === p) e.p = null; Object.assign(e, { t: Date.now(), value, err: null, retryAt: 0 }); return value; },
+      (err) => { if (e.p === p) e.p = null; Object.assign(e, { err: err?.message || String(err), retryAt: Date.now() + Math.min(ttl, 5_000) }); throw err; });
+    e.p = p;
+    p.catch(() => {});                      // a background refresh may have nobody waiting on it
+  }
+  if (cache.size > 2000) for (const [k, v] of cache) if (!v.p && now - v.t > 30 * 60_000) cache.delete(k);
+  if (has && (age < staleFor(ttl, swr) || !e.p)) return e.err ? asStale(e.value, e.err) : e.value;
+  try { return await e.p; }
+  catch (err) { if (has) return asStale(e.value, err.message); throw err; }
 }
 // token address → logo URL, filled as listings are normalized (read by icons.mjs)
 const IMAGES = new Map();
@@ -181,7 +186,7 @@ export async function dsPairs(addrs) {
   const out = [];
   for (let i = 0; i < list.length; i += 30) {
     const part = list.slice(i, i + 30);
-    const d = await memo(`ds:${part.join(",")}`, 60_000, () => getJson(DS + part.join(","), { timeout: 12000 }));
+    const d = await memo(`ds:${part.join(",")}`, 60_000, () => getJson(DS + part.join(","), { timeout: 12000 }), { swr: 0 });   // callers stamp these prices "now"
     if (Array.isArray(d)) out.push(...d);
   }
   return out;
@@ -189,7 +194,7 @@ export async function dsPairs(addrs) {
 export async function dsTokenPairs(address) {
   const a = lc(address);
   if (!ADDR_RE.test(a)) return [];
-  const d = await memo(`dsp:${a}`, 60_000, () => getJson(DSP + a, { timeout: 12000 }));
+  const d = await memo(`dsp:${a}`, 60_000, () => getJson(DSP + a, { timeout: 12000 }), { swr: 0 });
   return Array.isArray(d) ? d : [];
 }
 // best DexScreener pair per base token (deepest liquidity) → board-style row
@@ -255,7 +260,9 @@ export async function getEthUsd() {
       if (!v) throw new Error("No ETH price available");
       return (ETH_LAST = v);
     }
-  });
+    // at most 30 s old while a refresh runs (not the display default of 12 x the ttl): this price also turns the Agent
+    // Wallet's dollar caps into ETH and sizes payouts (agentwallet.mjs, payouts.mjs); the 15 s warm-up keeps it fresher
+  }, { swr: 3 });
 }
 export async function getHypeUsd() {
   return memo("hypeUsd", 10_000, async () => {
@@ -1018,7 +1025,8 @@ async function hubToken(a) {
 export async function getRobinhoodToken(address) {
   if (!ADDR_RE.test(String(address || ""))) throw httpErr(400, "That is not a valid token address.");
   const a = lc(address);
-  if (a === lc(RH.usdg) || a === lc(RH.weth)) return memo(`rh:hub:${a}`, 60_000, () => hubToken(a));
+  // strict ttl: The Record, the registry and the oracle take a coin's price from here at the moment they record it
+  if (a === lc(RH.usdg) || a === lc(RH.weth)) return memo(`rh:hub:${a}`, 60_000, () => hubToken(a), { swr: 0 });
   return memo(`rh:token:${a}`, 30_000, async () => {
     const ethUsd = await getEthUsd().catch(() => null);
     // every pool of the coin (token-pairs); the one-pair batch endpoint only when that list is unavailable
@@ -1103,7 +1111,7 @@ export async function getRobinhoodToken(address) {
         pons ? "Pons factory (on chain)" : null, / on chain$/.test(token.priceSource || "") ? "Robinhood Chain RPC (price, supply)" : null].filter(Boolean))],
       updatedAt: Date.now(),
     };
-  });
+  }, { swr: 0 });
 }
 // recent trades of a token's main pool (GeckoTerminal), loaded after the token page renders
 export async function getRobinhoodTrades(address) {
@@ -1306,7 +1314,7 @@ export async function getStocks() {
 function normPerp(u, c, dex) {
   const mark = fnum(c.markPx), prev = fnum(c.prevDayPx), oracle = fnum(c.oraclePx), funding = fnum(c.funding), oi = fnum(c.openInterest);
   return {
-    coin: u.name, dex: dex || null, mark, mid: fnum(c.midPx), oracle,
+    coin: u.name, displayName: perpName(u.name), dex: dex || null, mark, mid: fnum(c.midPx), oracle,
     change24h: mark && prev ? (mark / prev - 1) * 100 : null,
     fundingHr: funding, fundingHrPct: funding != null ? funding * 100 : null, fundingApr: funding != null ? funding * 24 * 365 * 100 : null,
     oiUsd: oi != null && oracle ? oi * oracle : null, volumeUsd: fnum(c.dayNtlVlm),
@@ -1314,16 +1322,25 @@ function normPerp(u, c, dex) {
   };
 }
 // getHlMarkets() → {markets:[...], updatedAt}
+// The same metaAndAssetCtxs reads as /api/hl/meta (hl.mjs hlCtxs: one Hyperliquid call serves both, stale-while-
+// revalidate, warmed every 20 s), so a visitor is answered from memory; one list is built per pair of reads.
+let hlmBuilt = null, hlmGood = null;
 export async function getHlMarkets() {
-  return memo("hl:markets", 8_000, async () => {
-    const [main, xyz] = await Promise.allSettled([hl({ type: "metaAndAssetCtxs" }), hl({ type: "metaAndAssetCtxs", dex: "xyz" })]);
-    if (main.status !== "fulfilled") throw new Error(`Hyperliquid unavailable: ${main.reason?.message}`);
-    const out = [];
-    const add = ([meta, ctxs], dex) => meta.universe.forEach((u, i) => { if (ctxs[i]) out.push(normPerp(u, ctxs[i], dex)); });
-    add(main.value, null);
-    if (xyz.status === "fulfilled") add(xyz.value, "xyz");
-    return { markets: out.filter((m) => !m.delisted), updatedAt: Date.now(), dexes: xyz.status === "fulfilled" ? ["main", "xyz"] : ["main"] };
-  });
+  const [main, xyz] = await Promise.allSettled([hlCtxs(""), hlCtxs("xyz")]);
+  if (main.status !== "fulfilled") {
+    if (hlmGood) return { ...hlmGood, stale: true, staleReason: main.reason?.message || "Hyperliquid unavailable" };
+    throw new Error(`Hyperliquid unavailable: ${main.reason?.message}`);
+  }
+  const m = main.value, x = xyz.status === "fulfilled" ? xyz.value : null;
+  if (hlmBuilt && hlmBuilt.m === m && hlmBuilt.x === x) return hlmBuilt.v;
+  const out = [];
+  const add = ({ meta, ctxs }, dex) => meta.universe.forEach((u, i) => { if (ctxs[i]) out.push(normPerp(u, ctxs[i], dex)); });
+  add(m, null);
+  if (x) add(x, "xyz");
+  const v = { markets: out.filter((p) => !p.delisted), updatedAt: Math.min(m.at, x?.at ?? m.at), dexes: x ? ["main", "xyz"] : ["main"] };
+  hlmBuilt = { m, x, v };
+  hlmGood = v;
+  return v;
 }
 // Hyperliquid's circulatingSupply for bridged / wrapped / scaled spot tokens (Unit UBTC, UETH, USOL; ONEAR; kPEPE; XMR1)
 // is the underlying coin's supply, not what exists on Hyperliquid: their market cap reads $1.3T for UBTC. Shown as "–".
@@ -1454,22 +1471,124 @@ export async function getSignals() {
 /* ---------------- one coin search: symbol, name or ticker, every source, a logo for each ---------------- */
 // The board holds only the busiest coins, so a name search there misses most of the chain. This merges the majors,
 // Robinhood's stock tokens, the board and DexScreener's search (every pool on Robinhood Chain by symbol and name),
-// keeps one row per contract, puts the real one first (exact match, then official, then liquidity) and marks tiny
-// copies that borrow a bigger coin's ticker.
+// keeps one row per contract and says what each row is, so every caller can tell the real coin from the rest:
+//   verified  a major (ETH, WETH, USDG, cbBTC), a Robinhood stock token or the official $TROYA (SITE.ca)
+//   official  the official $TROYA
+//   teamTest  one of the team's own test launches (launch.mjs isTeamTest: $TGtestTROYA carries the name "Troya Agent")
+//   copy      reuses the ticker of a stock token, a major or the official coin, or of a bigger coin by volume or holders,
+//             or mixes look-alike letters (sentry.mjs lookAlike). A hint for a "Copy?" marker: names stay free and no
+//             row is ever dropped for it.
+// Order: the match (exact ticker, then prefix, then name), then official and verified, then real backing (the money
+// side of the pools: ETH, WETH, USDG, cbBTC or a stock token) with the 24h volume, then holders. Liquidity above
+// 1000 x the day's volume is suspect (one ANT showed $417.8M of liquidity on $0.35 of volume) and goes last.
+// Perps on Hyperliquid and trade.xyz that match by ticker or name come back beside the coins (perps: [...]).
 const COIN_SEARCH = new Map();
 const kindRank = (c) => (c.kind === "major" ? 0 : c.kind === "stock" ? 1 : 2);
+// SITE.ca, the official $TROYA, as public/config.js has it
+const SITE_CA = (() => { try { return lc((readFileSync(new URL("../public/config.js", import.meta.url), "utf8").match(/\bca:\s*"(0x[0-9a-fA-F]{40})"/) || [])[1]); } catch { return ""; } })();
+const OFFICIAL_TICKER = "TROYA";
+// the majors on Robinhood Chain, with the words people type for them ("btc" finds cbBTC, "ethereum" finds ETH)
+const MAJORS = [
+  ["native", "ETH", "Ether", ["eth", "ether", "ethereum"]],
+  [lc(RH.weth), "WETH", "Wrapped Ether", ["weth", "eth", "ether", "ethereum"]],
+  [lc(RH.usdg), "USDG", "Global Dollar", ["usdg"]],
+  [CBBTC, "cbBTC", "Coinbase Wrapped BTC", ["cbbtc", "btc", "bitcoin"]],
+];
+// tickers that belong to a major (SOL has no Robinhood Chain token: a $SOL there borrows Solana's)
+const MAJOR_TICKERS = { eth: "native", weth: lc(RH.weth), usdg: lc(RH.usdg), cbbtc: CBBTC, btc: CBBTC, sol: null };
+// launch.mjs and sentry.mjs import this module, so they are loaded on first use; the fallbacks keep search answering
+let flagMods = null;
+const flagHelpers = () => (flagMods ||= Promise.all([import("./launch.mjs").catch(() => null), import("./sentry.mjs").catch(() => null)])
+  .then(([l, s]) => ({
+    isTeamTest: l?.isTeamTest || ((r) => [r?.symbol, r?.name].some((x) => /test/i.test(String(x || "")))),
+    lookAlike: s?.lookAlike || ((r) => [r?.symbol, r?.name].some((x) => x && /[A-Za-z]/.test(x) && /[Ͱ-ϿЀ-ԯ]/.test(x))),
+    tickerKey: s?.tickerKey || ((sym) => String(sym || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "")),
+  })));
+// liquidity no trading explains: suspect, ranked last (never hidden)
+const suspectLiq = (c) => !c.verified && (Number(c.liquidityUsd) || 0) > 1000 * Math.max(Number(c.volume24hUsd) || 0, 1);
+// real backing with the day's trading: the money a seller could take out, and whether anyone trades it
+const backing = (c) => Math.log10(1 + Math.max(0, Number(c.realLiquidityUsd) || 0)) + Math.log10(1 + Math.max(0, Number(c.volume24hUsd) || 0));
+/** Marks rows in place: verified, official, teamTest, copy (see above). `extra`: other rows (the board, none of `rows`)
+ *  that can own a ticker; only those under a ticker found in `rows` are looked at. */
+async function flagCoins(rows, extra = []) {
+  const H = await flagHelpers();
+  const key = (s) => { try { return H.tickerKey(s); } catch { return String(s || "").toLowerCase(); } };
+  const owner = new Map();                  // ticker → address that owns it outright (a stock token, a major, $TROYA)
+  for (const [k, a] of Object.entries(MAJOR_TICKERS)) owner.set(k, a);
+  for (const s of STOCKS) { const k = key(s.symbol); if (k && !owner.has(k)) owner.set(k, lc(s.address)); }
+  if (SITE_CA) owner.set(key(OFFICIAL_TICKER), SITE_CA);
+  for (const c of rows) {
+    c.official = !!SITE_CA && c.address === SITE_CA;
+    c.verified = c.official || c.kind === "major" || c.kind === "stock" || STOCK_SET.has(c.address);
+    let tt = false;
+    if (!c.verified) { try { tt = !!H.isTeamTest({ symbol: c.symbol, name: c.name }); } catch { tt = false; } }
+    c.teamTest = tt;
+  }
+  // the biggest coin under each ticker (by 24h volume, then holders) among these rows and the board; suspect rows and
+  // the team's tests never own a ticker
+  const want = new Set(rows.map((c) => key(c.symbol)).filter(Boolean));
+  const lead = new Map();
+  const vol = (c) => Number(c.volume24hUsd) || 0, hold = (c) => Number(c.holders ?? holdersOf(c.address)?.count) || 0;
+  const testOf = (c) => { if (c.teamTest != null) return c.teamTest; try { return !!H.isTeamTest({ symbol: c.symbol, name: c.name }); } catch { return false; } };
+  for (const c of [...rows, ...extra]) {
+    const k = key(c.symbol);
+    if (!want.has(k) || owner.has(k) || suspectLiq(c) || testOf(c)) continue;
+    const L = lead.get(k);
+    if (!L || vol(c) > vol(L) || (vol(c) === vol(L) && hold(c) > hold(L))) lead.set(k, c);
+  }
+  for (const c of rows) {
+    let copy = false;
+    if (!c.verified) {
+      let look = false; try { look = !!H.lookAlike({ symbol: c.symbol, name: c.name }); } catch {}
+      const k = key(c.symbol), L = lead.get(k);
+      copy = look || (owner.has(k) && owner.get(k) !== c.address)
+        || (!!L && L.address !== c.address && (vol(L) > vol(c) || hold(L) > hold(c)));
+    }
+    c.copy = copy;
+  }
+  return rows;
+}
+// perps that match by ticker (without "xyz:") or by name: exact first, then prefix, then a word of the name
+async function searchPerps(q, max = 5) {
+  const ql = String(q || "").toLowerCase().replace(/^xyz:/, "").trim();
+  if (ql.length < 2) return [];
+  const d = await getHlMarkets().catch(() => null);
+  const hitsOf = [];
+  for (const m of d?.markets || []) {
+    const label = String(m.coin).replace(/^xyz:/i, "").toLowerCase(), name = String(m.displayName || "").toLowerCase();
+    const r = label === ql || name === ql ? 0 : label.startsWith(ql) ? 1 : name.startsWith(ql) ? 2 : name.split(/[\s&(),./-]+/).some((w) => w && w.startsWith(ql)) ? 3 : -1;
+    if (r >= 0) hitsOf.push({ m, r });
+  }
+  hitsOf.sort((a, b) => a.r - b.r || (b.m.volumeUsd || 0) - (a.m.volumeUsd || 0));
+  return hitsOf.slice(0, max).map(({ m }) => ({
+    coin: m.coin, label: String(m.coin).replace(/^xyz:/i, ""), displayName: m.displayName || m.coin, dex: m.dex || null,
+    venue: m.dex === "xyz" ? "trade.xyz" : "Hyperliquid", priceUsd: m.mark ?? null, change24h: m.change24h ?? null,
+    maxLeverage: m.maxLeverage ?? null, volume24hUsd: m.volumeUsd ?? null, href: `#/perps/${m.coin}`,
+  }));
+}
+const MAJOR_Q = /^(btc|bitcoin|cbbtc|eth|ether|ethereum|weth|sol|solana)$/;
+// a side read that may not hold the search up: both are warm in memory; a cold start during an outage answers without
+const within = (p, ms, fallback) => Promise.race([p.catch(() => fallback), new Promise((r) => setTimeout(() => r(fallback), ms).unref?.())]);
 export async function searchCoins(q, limit = 12) {
   const raw = String(q || "").trim().replace(/^\$/, "").slice(0, 42);   // 42: a full 0x address must fit (it was cut to 40 and found nothing)
   limit = Math.max(1, Math.min(30, Number(limit) || 12));
-  if (!raw) return { q: "", coins: [] };
+  if (!raw) return { q: "", coins: [], perps: [] };
   if (ADDR_RE.test(raw)) {
-    const r = await getRobinhoodToken(raw).catch(() => null), t = r?.token;
-    return { q: raw, coins: t ? [{ address: lc(t.address), symbol: t.symbol, name: t.name, kind: STOCK_SET.has(lc(t.address)) ? "stock" : "coin", image: t.image || null, priceUsd: t.priceUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, realLiquidityUsd: t.realLiquidityUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, change24h: t.change24h ?? null, launchpad: t.launchpad || null }] : [] };
+    const a = lc(raw), major = MAJORS.find((m) => m[0] === a);
+    const r = major ? null : await getRobinhoodToken(raw).catch(() => null), t = r?.token;
+    const row = major ? { address: a, symbol: major[1], name: major[2], kind: "major", image: null, priceUsd: a === lc(RH.weth) ? await getEthUsd().catch(() => null) : null }
+      : t ? { address: lc(t.address), symbol: t.symbol, name: t.name, kind: STOCK_SET.has(lc(t.address)) ? "stock" : "coin", image: t.image || null, priceUsd: t.priceUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, realLiquidityUsd: t.realLiquidityUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, change24h: t.change24h ?? null, launchpad: t.launchpad || null, holders: t.holders ?? holdersOf(lc(t.address))?.count ?? null }
+      : null;
+    if (row?.kind === "stock") row.image = `/api/stocks/logo/${row.address}?v=4`;
+    return { q: raw, coins: row ? await flagCoins([row], [...board.rows.values()].filter((x) => x.address !== row.address)) : [], perps: [] };
   }
   const ql = raw.toLowerCase();
+  const perpsP = within(searchPerps(raw), 1500, []);
   const hit = COIN_SEARCH.get(ql);
-  if (hit && Date.now() - hit.t < 60_000) return { ...hit.v, coins: hit.v.coins.slice(0, limit) };
+  if (hit && Date.now() - hit.t < 60_000) return { ...hit.v, coins: hit.v.coins.slice(0, limit), perps: await perpsP };
+  const ethUsd = await within(getEthUsd(), 1500, ETH_LAST);
   const out = new Map();
+  const dsReal = new Map();                 // address → the money side summed over its DexScreener pairs
   // one row per coin, numbers from the best source: the board and the stock list win; DexScreener only fills gaps, and
   // among its pairs the deepest one gives price and change while volumes add up (a thin pair used to overwrite
   // $TROYA's numbers with $3.74 of volume, and the palette disagreed with the token page)
@@ -1485,8 +1604,8 @@ export async function searchCoins(q, limit = 12) {
   };
   const stockRows = new Map(((await getStocks().catch(() => null))?.stocks || []).map((x) => [lc(x.address), x]));
   const hits = (sym, name) => { const s = String(sym || "").toLowerCase(), n = String(name || "").toLowerCase(); if (s.length > 20 || n.length > 60) return false; return s.startsWith(ql) || n.includes(ql); };
-  for (const [address, symbol, name] of [["native", "ETH", "Ether"], [RH.weth, "WETH", "Wrapped Ether"], [RH.usdg, "USDG", "Global Dollar"], [CBBTC, "cbBTC", "Coinbase Wrapped BTC"]])
-    if (hits(symbol, name)) add({ address, symbol, name, kind: "major" });
+  for (const [address, symbol, name, words] of MAJORS)
+    if (hits(symbol, name) || words.some((w) => w.startsWith(ql))) add({ address, symbol, name, kind: "major", _words: words, priceUsd: address === "native" || address === lc(RH.weth) ? ethUsd : null });
   for (const s of STOCKS) if (hits(s.symbol, s.name)) { const r = stockRows.get(lc(s.address)) || {}; add({ address: s.address, symbol: s.symbol, name: String(s.name || "").replace(/\s•\s*Robinhood Token$/, ""), kind: "stock", image: IMAGES.get(lc(s.address)) || null,
     priceUsd: r.priceUsd ?? null, liquidityUsd: r.liquidityUsd ?? null, volume24hUsd: r.volume24hUsd ?? null, change24h: r.change24h ?? null, tradable: r.tradable ?? true }); }
   for (const t0 of board.rows.values()) if (hits(t0.symbol, t0.name)) {
@@ -1494,27 +1613,44 @@ export async function searchCoins(q, limit = 12) {
     add({ address: t.address, symbol: t.symbol, name: t.name, kind: t.stock ? "stock" : "coin", image: t.image || null, priceUsd: t.priceUsd ?? null, liquidityUsd: t.liquidityUsd ?? null, realLiquidityUsd: t.realLiquidityUsd ?? null, volume24hUsd: t.volume24hUsd ?? null, change24h: t.change24h ?? null, launchpad: t.launchpad || null });
   }
   try {
-    const d = await memo(`ds:search:${ql}`, 60_000, () => getJson(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(raw)}`, { timeout: 8000 }));
+    const d = await memo(`ds:search:${ql}`, 60_000, () => getJson(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(raw)}`, { timeout: 8000 }), { swr: 3 });
     for (const p of d?.pairs || []) {
       if (p.chainId !== "robinhood" || !p.baseToken?.address) continue;
       const b = p.baseToken, sym = String(b.symbol || "").replace(/\s•.*$/, ""), name = String(b.name || "").replace(/\s•\s*Robinhood Token$/, "");
       if (!hits(sym, name)) continue;                       // DexScreener also matches on the quote token
       const a = lc(b.address);
       if (/^0x0{40}$/.test(a)) continue;                    // native ETH in v4 pools: the ETH row above covers it
+      // the money side of this pair: 0 when its other side is not money (another memecoin)
+      const real = realFromPairs([p], a, ethUsd);
+      if (real != null) dsReal.set(a, (dsReal.get(a) || 0) + real);
       add({ address: a, symbol: sym, name, kind: STOCK_SET.has(a) ? "stock" : "coin", image: goodImg(p.info?.imageUrl), priceUsd: fnum(p.priceUsd), liquidityUsd: fnum(p.liquidity?.usd),
         volume24hUsd: fnum(p.volume?.h24), change24h: fnum(p.priceChange?.h24), launchpad: padOfDex(`${p.dexId || "other"}${p.labels?.[0] ? "-" + p.labels[0] : ""}`) || null,
         tradable: /^uniswap/.test(String(p.dexId || "")) || KYBER_ON || null }, "ds");
     }
   } catch { /* the local sources still answer */ }
-  // a stock whose company name is the query ("tesla" → Tesla, TSLA) ranks with exact ticker matches
+  for (const c of out.values()) {
+    if (c.realLiquidityUsd == null && dsReal.has(c.address)) c.realLiquidityUsd = dsReal.get(c.address);
+    if (c.holders == null) c.holders = holdersOf(c.address)?.count ?? null;
+  }
+  // the board's rows can own a ticker found here too (a bigger coin the query did not match by name)
+  await flagCoins([...out.values()], [...board.rows.values()].filter((t) => !out.has(t.address)));
+  // a stock whose company name is the query ("tesla" → Tesla, TSLA) and a major by the word people use ("btc" → cbBTC)
+  // rank with exact ticker matches
   const firstWord = (n) => String(n || "").replace(/\s•.*$/, "").toLowerCase().split(/[\s,.]+/)[0];
-  const rank = (c) => { const s = String(c.symbol).toLowerCase(), n = String(c.name || "").toLowerCase(); if (c.kind === "stock" && (n === ql || firstWord(n) === ql)) return 0; return s === ql ? 0 : s.startsWith(ql) ? 1 : n === ql || n.startsWith(ql) ? 2 : 3; };
-  let coins = [...out.values()].sort((x, y) => rank(x) - rank(y) || kindRank(x) - kindRank(y) || (y.liquidityUsd || 0) - (x.liquidityUsd || 0));
-  coins = coins.map(({ _src, _dsLiq, _dsVol, ...c }) => ({ ...c, image: c.kind === "stock" ? `/api/stocks/logo/${c.address}?v=4` : c.image || null }));
-  const v = { q: raw, coins, sources: ["Troya index", "Robinhood stock tokens", "DexScreener"], updatedAt: Date.now() };
+  const rank = (c) => {
+    const s = String(c.symbol).toLowerCase(), n = String(c.name || "").toLowerCase();
+    if (c.kind === "stock" && (n === ql || firstWord(n) === ql)) return 0;
+    if (c.kind === "major" && c._words?.includes(ql)) return 0;
+    return s === ql ? 0 : s.startsWith(ql) ? 1 : n === ql || n.startsWith(ql) ? 2 : 3;
+  };
+  for (const c of out.values()) { c._rank = rank(c); c._sus = suspectLiq(c) ? 1 : 0; c._score = backing(c); }
+  let coins = [...out.values()].sort((x, y) => x._sus - y._sus || x._rank - y._rank || y.official - x.official || y.verified - x.verified || kindRank(x) - kindRank(y)
+    || x.teamTest - y.teamTest || x.copy - y.copy || y._score - x._score || (y.holders || 0) - (x.holders || 0) || (y.liquidityUsd || 0) - (x.liquidityUsd || 0));
+  coins = coins.map(({ _src, _dsLiq, _dsVol, _words, _rank, _sus, _score, ...c }) => ({ ...c, image: c.kind === "stock" ? `/api/stocks/logo/${c.address}?v=4` : c.image || null }));
+  const v = { q: raw, coins, majorQuery: MAJOR_Q.test(ql), sources: ["Troya index", "Robinhood stock tokens", "DexScreener", "Hyperliquid"], updatedAt: Date.now() };
   COIN_SEARCH.set(ql, { t: Date.now(), v });
   if (COIN_SEARCH.size > 500) COIN_SEARCH.delete(COIN_SEARCH.keys().next().value);
-  return { ...v, coins: coins.slice(0, limit) };
+  return { ...v, coins: coins.slice(0, limit), perps: await perpsP };
 }
 
 export async function register(r) {
@@ -1563,5 +1699,12 @@ export async function register(r) {
   r.get("/api/price/eth", async () => ({ symbol: "ETH", usd: await getEthUsd(), source: "Hyperliquid mid", at: Date.now() }));
   r.get("/api/brief", () => getBrief());
   r.get("/api/signals", () => getSignals());
-  if (process.env.TROYA_BOARD !== "0") { startBoard(); setTimeout(() => getStocks().catch(() => {}), 3000).unref?.(); }
+  if (process.env.TROYA_BOARD !== "0") {
+    startBoard(); setTimeout(() => getStocks().catch(() => {}), 3000).unref?.();
+    // keep warm what every page and search reads, so no visitor pays the source's 0.7-1.8 s when an entry expires: the
+    // ETH price (one allMids read, weight 2), the Hyperliquid perps lists (the same reads as /api/hl/meta), spot, and the
+    // stock tokens (seven DexScreener calls). Each tick refreshes only an entry past its ttl.
+    const warm = (fn, ms) => { setTimeout(() => fn().catch(() => {}), 5000).unref?.(); setInterval(() => fn().catch(() => {}), ms).unref?.(); };
+    warm(getEthUsd, 15_000); warm(getHlMarkets, 20_000); warm(getHlSpot, 60_000); warm(getStocks, 2 * 60_000);
+  }
 }

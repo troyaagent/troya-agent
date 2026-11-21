@@ -277,6 +277,8 @@ export function watchfireState(token) {
   const st = W.get(lc(token));
   return st?.ready ? { level: st.level, why: st.why, lastFire: st.lastFire } : null;
 }
+/** The coins read live right now (read-only): Aegis's public feed counts them as coins watched. */
+export const watchedTokens = () => [...W.values()].filter((s) => s.ready).map((s) => ({ token: s.token, symbol: s.symbol }));
 const MAX_WATCH = 150;
 let pinned = new Map();                                 // token → owners who pinned it (Treasury)
 async function syncArena() {

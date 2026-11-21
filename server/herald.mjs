@@ -39,6 +39,10 @@ const refDays = () => { const v = Math.round(Number(process.env.HERALD_REF_DAYS)
 const feeCapPct = () => { const v = Number(process.env.HERALD_FEE_CAP_PCT); return v > 0 && v <= 100 ? v : 0; };
 const inWindow = (join, t) => Number(t) >= join && (!refDays() || Number(t) < join + refDays() * 86_400_000);
 const linkOf = (code) => `${SITE}/agent?ref=${code}`;
+// What the public API says while HERALD_REF_BPS or HERALD_CUP_PRIZE is unset: plain words for visitors, never who has to
+// switch it on (display text only; the reward and payout figures above and in payouts.mjs do not read these)
+const REWARDS_OFF = "Rewards are not live yet. We will announce them on X and Telegram.";
+const PRIZES_OFF = "Prizes open soon.";
 
 /* ---------- the contributor board: seeded with work the project needs; amounts are set by the team later ---------- */
 const KINDS = { code: "Code", guide: "Guide", video: "Video", translation: "Translation", bug: "Bug report" };
@@ -158,7 +162,7 @@ async function activity() {
 
 function rewards(s) {
   const bps = refBps();
-  if (!bps) return { on: false, text: "Rewards switch on after the owner sets them." };
+  if (!bps) return { on: false, text: REWARDS_OFF };
   const days = refDays(), cap = feeCapPct();
   return { on: true, bps, days: days || null, capPct: cap || null, pendingUsd: +(((s?.gateUsd || 0) * bps) / 10_000).toFixed(4), paidIn: "ETH",
     text: `${bps / 100}% of what Troya earns from the wallets you brought${days ? `, for ${days} days after each one joins` : ""}, paid in ETH from Troya's fees.${cap ? ` All rewards together are capped at ${cap}% of the week's creator-fee income, so payouts scale down when fees are lower.` : ""} Shown as pending until the team pays it.`,
@@ -205,7 +209,7 @@ async function cup(offset, me) {
   const ranked = base.ranked.map(pub);
   return { name: "Arena Cup", season: w.label, start: w.start, end: w.end, final: offset > 0, endsIn: offset ? 0 : Math.max(0, w.end - Date.now()),
     rule: "User strategies on paper, ranked by PnL % over the week (profit divided by the ETH put in), not by volume. At least 3 closed trades. Trades count in the week they close.",
-    prize: cupPrize() || "Prizes switch on after the owner sets them.", prizeOn: !!cupPrize(),
+    prize: cupPrize() || PRIZES_OFF, prizeOn: !!cupPrize(),
     ranked: ranked.slice(0, 50), running: base.running.slice(0, 20).map(pub), ai: base.ai.map(pub), mine: ranked.find((r) => r.mine) || base.running.map(pub).find((r) => r.mine) || null,
     note: "Paper money at real prices, quoted on chain the moment a trade opens and closes. AI traders are shown for reference and are not in the Cup." };
 }
@@ -283,7 +287,7 @@ export async function register(r, ctx) {
       .map(([a, s], i) => ({ rank: i + 1, referrer: short(a), active: s.active, referred: s.referred, launches: s.launches, trades: s.trades, gateCalls: s.gateCalls }));
     return { rows, totals: { referred: total, referrers: by.size, active: [...by.values()].reduce((n, s) => n + s.active, 0) },
       rule: "Ranked by referred wallets that did something on Troya after joining (a launch, an Agent Wallet trade or a Gate call), then by wallets referred.",
-      rewards: refBps() ? `Referral rewards: ${refBps() / 100}% of what Troya earns from referred wallets, paid in ETH from fees.` : "Rewards switch on after the owner sets them.", updatedAt: memo?.at || Date.now() };
+      rewards: refBps() ? `Referral rewards: ${refBps() / 100}% of what Troya earns from referred wallets, paid in ETH from fees.` : REWARDS_OFF, updatedAt: memo?.at || Date.now() };
   }, { weight: 1, perMin: 60 });
 
   r.get("/api/herald/cup", async ({ req, query }) => {

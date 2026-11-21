@@ -5,8 +5,11 @@
 // and say so. Nothing here is a forecast or advice: it is what the price did after the call.
 // V6 F30 "Born at the gate": every coin launched through Troya gets a place here too (kind "born", keyed born:<token>),
 // its price at birth recorded and graded the same way, in a list of its own; Sentry's stats count Sentry's calls only.
-//   GET /api/record → { stats, calls, born: { stats, coins }, rules, updatedAt }
+// Tokenized stocks are not launches and are not graded (audit, 20 Nov 2026: a post on $ANT, the Anthropic stock token, sat
+// among the calls). A post on one stays on the ledger, filed apart as kind "stock", and is left out of the score.
+//   GET /api/record → { stats, calls, born: { stats, coins }, stocks: { calls, note }, rules, updatedAt }
 import { getRobinhoodToken, getRobinhoodCandles, getEthUsd } from "./market.mjs";
+import { isStock, refreshStocks } from "./sentry.mjs";
 
 const FILE = "record.json";
 const SENTRY = "sentry.json";
@@ -17,6 +20,9 @@ let store, timer, busy = false;
 
 const lc = (s) => String(s || "").toLowerCase();
 const num = (x) => (Number.isFinite(x) && x > 0 ? x : null);
+// a stock call is filed once and stays filed, so a stock list that cannot be read after a restart never puts it back in the score
+const STOCK = { kind: "stock", status: "excluded" };
+const stockCall = (c) => c.kind === "stock" || (c.kind !== "born" && isStock(c.token));
 
 /* ---------- price now ---------- */
 async function priceNow(token) {
@@ -99,10 +105,10 @@ export async function noteCall({ token, symbol, at = Date.now(), post = null, so
   const d = await state();
   const k = lc(token);
   if (d.calls[k]) return;
-  const c = { token: k, symbol: symbol || null, at, post, source, status: "watching", via: Date.now() - at < LIVE_LAG ? "live" : "pending-candles" };
+  const c = { token: k, symbol: symbol || null, at, post, source, status: "watching", via: Date.now() - at < LIVE_LAG ? "live" : "pending-candles", ...(isStock(k) ? STOCK : {}) };
   d.calls[k] = c;
   import("./seal.mjs").then((m) => m.seal("record-call", k, c, source)).catch(() => {});
-  if (c.via === "live") await sample(c).catch(() => {});
+  if (c.via === "live" && c.status === "watching") await sample(c).catch(() => {});
   await save();
 }
 
@@ -114,15 +120,18 @@ async function tick() {
     const d = await state();
     const s = await store.readJson(SENTRY, {});
     const now = Date.now();
+    await refreshStocks().catch(() => {});
     const add = (tok, at, extra = {}) => {
       const k = lc(tok);
       if (!tok || !at || d.calls[k]) return;
-      d.calls[k] = { token: k, symbol: null, at, post: null, source: null, status: "watching", via: now - at > LIVE_LAG ? "pending-candles" : "live", ...extra };
+      d.calls[k] = { token: k, symbol: null, at, post: null, source: null, status: "watching", via: now - at > LIVE_LAG ? "pending-candles" : "live", ...extra, ...(isStock(k) ? STOCK : {}) };
       import("./seal.mjs").then((m) => m.seal("record-call", k, d.calls[k], "sentry")).catch(() => {});
     };
     for (const r of s.recent || []) if (r.posted) add(r.token, r.at || now, { symbol: r.symbol || null, post: r.post || null, source: r.source || null });
     // older posts Sentry still remembers (token → time posted), beyond the last 200 results it keeps in full
     for (const [tok, at] of Object.entries(s.posted || {})) add(tok, Number(at));
+    // a call on a token that a stock list learned about later: filed apart, no longer sampled or graded
+    for (const c of Object.values(d.calls)) if (c.kind !== "stock" && stockCall(c)) Object.assign(c, STOCK);
     for (const c of Object.values(d.calls)) {
       if (c.status !== "watching" || c.via === "pending-candles" || !c.p0 && now - c.at > LIVE_LAG) continue;
       if (now - (c.last || 0) >= TICK - 5000) await sample(c).catch(() => {});
@@ -167,7 +176,10 @@ function view(c) {
 function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 export async function recordView({ limit = 100 } = {}) {
   const d = await state();
-  const every = Object.values(d.calls).sort((a, b) => b.at - a.at).map(view);
+  const sorted = Object.values(d.calls).sort((a, b) => b.at - a.at);
+  // stocks are split off by the same test the live loop files them with, so the score is right before the next tick
+  const stockList = sorted.filter(stockCall).map((c) => ({ ...view(c), ...STOCK, changeNow: null, result: null }));
+  const every = sorted.filter((c) => !stockCall(c)).map(view);
   const calls = every.filter((c) => c.kind !== "born"), bornList = every.filter((c) => c.kind === "born");
   const bGraded = bornList.filter((c) => c.result);
   const bPeaks = bornList.filter((c) => c.peakX != null && (c.status === "graded" || Date.now() - c.at >= DAY)).map((c) => c.peakX);
@@ -187,7 +199,8 @@ export async function recordView({ limit = 100 } = {}) {
   };
   return {
     stats, calls: calls.slice(0, Math.min(500, Math.max(1, Number(limit) || 100))), born, updatedAt: Date.now(),
-    rules: "A call is the moment Troya Sentry posts a coin. Its price is recorded then (Pons curve price read on chain while the coin is on the curve, the pool price after), sampled every 5 minutes for a day, and graded 24 hours later: a win if the price is higher than at the call, a miss if not. Peak is the highest price seen in that day. Calls noticed late are filled from GeckoTerminal candles and marked. Past calls do not predict future ones; this is a record, not advice.",
+    stocks: { calls: stockList.slice(0, 100), note: "Tokenized stocks are not launches and are not graded. A Sentry post on one is kept here for the record and left out of the score." },
+    rules: "A call is the moment Troya Sentry posts a coin. Its price is recorded then (Pons curve price read on chain while the coin is on the curve, the pool price after), sampled every 5 minutes for a day, and graded 24 hours later: a win if the price is higher than at the call, a miss if not. Peak is the highest price seen in that day. Calls noticed late are filled from GeckoTerminal candles and marked. Tokenized stocks are not launches and are not graded. Past calls do not predict future ones; this is a record, not advice.",
   };
 }
 

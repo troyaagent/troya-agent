@@ -1,14 +1,14 @@
 // Desk (#/): one calm page that answers "where am I, what's moving, what is my agent doing, what next".
-// Everything the old Home had (ask box, the four start steps, live stats, brief, signals, movers) plus
+// Everything the old Home had (ask box, the Get started steps, live stats, brief, signals, movers) plus
 // the Gate, the agent's status, Sentry's latest results and shortcuts to every tool.
 import { h, clear, icon, useCss, every, sparkline, pctEl, usd, tiny, toast, store, infoTip, tokenIcon, coinIcon, short, ago, greeting } from "/agent/js/ui.js";
 import { api, cached } from "/agent/js/api.js";
-import { wallet, onWallet, openConnect, reader, signIn } from "/agent/js/wallet.js";
-import { tokenCell, priceCell, usdCell, perpPrice, fmtApr } from "/agent/js/marketlib.js";
+import { wallet, onWallet, openConnect, signIn } from "/agent/js/wallet.js";
+import { getStarted } from "/agent/js/pages/start.js";
+import { tokenCell, priceCell, usdCell, perpPrice, fmtApr, perpName, cleanPerpText } from "/agent/js/marketlib.js";
 import { gatePanel } from "./gate.js";
 import { chromeIcon } from "./chrome-icons.js";
 
-const onboard = store("troya.onboard", {});
 const hideSteps = store("troya.home.hideSteps", false);
 const autoPref = store("troya.autopilot", { on: false, playbooks: true, chat: false });
 
@@ -37,44 +37,9 @@ export async function mount(view, { go, ask: askDrawer }) {
          ["How Troya works", "How does Troya work, and what can it do without my signature?"]]
           .map(([t, q]) => h("button", { class: "chip", type: "button", onclick: () => ask(q) }, t)))));
 
-  /* ---------- start in four steps (same steps and storage as before) ---------- */
-  const steps = h("section", { class: "dk-steps" });
-  let agentWallet = false, funded = false;
-  function renderSteps() {
-    if (hideSteps.get()) { steps.hidden = true; return; }
-    const o = onboard.get();
-    const list = [
-      { t: "Connect", tip: "Link a browser wallet. Troya never sees its key.", done: !!wallet.address, act: () => openConnect(), label: "Connect wallet" },
-      { t: "Agent Wallet", tip: "Optional small wallet the agent can use inside your caps.", done: agentWallet || !!o.agentWallet, href: "#/agent/wallet", label: "Create" },
-      { t: "Fund it", tip: "Bring ETH onto Robinhood Chain through the bridge.", done: funded || !!o.funded, href: "#/bridge", label: "Bridge" },
-      { t: "First swap", tip: "Try a small swap on Robinhood Chain. The Gate runs before you sign.", done: !!o.swap, href: "#/swap", label: "Try it" },
-    ];
-    const n = list.filter((s) => s.done).length;
-    const next = list.findIndex((s) => !s.done);
-    steps.hidden = n === 4;
-    clear(steps,
-      h("div", { class: "dk-steps-h" },
-        h("div", {}, h("b", {}, "Start in four steps"), h("span", { class: "fine" }, ` ${n} of 4 done`)),
-        h("div", { class: "dk-bar", style: { "--p": `${(n / 4) * 100}%` } }, h("i")),
-        h("a", { class: "link fine", href: "#/start" }, "Full setup"),
-        h("button", { class: "link fine", type: "button", onclick: () => { hideSteps.set(true); renderSteps(); } }, "Hide")),
-      h("ol", { class: "dk-steps-list" }, list.map((s, i) => h("li", { class: s.done ? "done" : i === next ? "next" : "" },
-        h("span", { class: "sn" }, s.done ? icon("check") : String(i + 1)),
-        h("div", { class: "st" }, h("b", {}, s.t), h("p", {}, s.tip)),
-        s.done ? h("span", { class: "fine" }, "Done")
-          : s.href ? h("a", { class: `btn sm ${i === next ? "primary" : ""}`, href: s.href }, s.label)
-          : h("button", { class: `btn sm ${i === next ? "primary" : ""}`, type: "button", onclick: s.act }, s.label)))));
-  }
-  async function checkSteps() {
-    agentWallet = false; funded = false;
-    if (wallet.address) {
-      try { const b = await reader("robinhood").getBalance(wallet.address); funded = b > 0n; } catch {}
-      if (wallet.session) { try { const aw = await api.get("agent-wallet"); agentWallet = !!(aw?.address || aw?.wallet?.address || aw?.exists); } catch {} }
-    }
-    renderSteps();
-  }
-  renderSteps();
-  stops.push(onWallet(() => { renderSteps(); checkSteps(); }));
+  /* ---------- Get started: the same three steps (then the optional Level up) as Portfolio and #/start ---------- */
+  const setup = getStarted({ layout: "card", hide: hideSteps });
+  stops.push(setup.stop);
 
   /* ---------- live stats ---------- */
   const statEth = h("div", { class: "v" }, "–"), statEthS = h("div", { class: "s" }, "Hyperliquid mid");
@@ -287,7 +252,7 @@ export async function mount(view, { go, ask: askDrawer }) {
 
   // two columns: the left one is for looking (Gate, brief, markets), the right one for your agent and what it watches
   clear(view, h("div", { class: "dk" },
-    hero, quick, steps,
+    hero, quick, setup.el,
     h("div", { class: "dk-cols" },
       h("div", { class: "dk-col" }, chart, gate.el, brief, hlTable),
       h("div", { class: "dk-col" }, agent, sentry, sigs, rhTable, shortcuts))));
@@ -301,11 +266,12 @@ export async function mount(view, { go, ask: askDrawer }) {
       const d = await cached("market/hl", 8000);
       const liquid = d.markets.filter((m) => (m.volumeUsd || 0) >= 1e6 && m.change24h != null);
       const movers = [...liquid].sort((a, b) => Math.abs(b.change24h) - Math.abs(a.change24h)).slice(0, 7);
-      if (movers[0]) { clear(statTop, h("span", { class: "tok-link" }, coinIcon(movers[0].coin, "k-big"), movers[0].coin)); clear(statTopS, h("span", { class: movers[0].change24h >= 0 ? "up" : "down" }, `${movers[0].change24h >= 0 ? "+" : ""}${movers[0].change24h.toFixed(2)}%`), " · 24h"); }
+      // perps by what they are ("Anthropic", "SK hynix"): trade.xyz's "xyz:" prefix is an id, not a label
+      if (movers[0]) { clear(statTop, h("span", { class: "tok-link" }, coinIcon(movers[0].coin, "k-big"), perpName(movers[0]))); clear(statTopS, h("span", { class: movers[0].change24h >= 0 ? "up" : "down" }, `${movers[0].change24h >= 0 ? "+" : ""}${movers[0].change24h.toFixed(2)}%`), " · 24h"); }
       let sparks = {};
       try { sparks = (await cached(`market/hl/sparks?coins=${movers.map((m) => encodeURIComponent(m.coin)).join(",")}`, 120000)).sparks || {}; } catch {}
       clear(hlBody, movers.map((m) => h("tr", { class: "click", onclick: () => go(`#/perps/${encodeURIComponent(m.coin)}`) },
-        h("td", { class: "l" }, h("div", { class: "tok" }, coinIcon(m.coin), h("div", {}, h("b", {}, m.coin), h("small", {}, `OI ${usd(m.oiUsd, { compact: true })}`)))),
+        h("td", { class: "l" }, h("div", { class: "tok" }, coinIcon(m.coin), h("div", {}, h("b", {}, perpName(m)), h("small", {}, `OI ${usd(m.oiUsd, { compact: true })}`)))),
         h("td", { class: "hide-s" }, sparkline(sparks[m.coin])),
         h("td", {}, perpPrice(m.mark)), h("td", {}, pctEl(m.change24h)),
         h("td", { class: `hide-s ${Math.abs(m.fundingApr) >= 100 ? (m.fundingApr > 0 ? "warnc" : "down") : "muted"}` }, fmtApr(m.fundingApr)),
@@ -326,7 +292,7 @@ export async function mount(view, { go, ask: askDrawer }) {
     try {
       const b = await api.get("brief");
       briefTime.textContent = b.stale ? "last good copy" : "live";
-      clear(briefBody, h("ul", { class: "brief-list" }, b.items.map((it) => h("li", {}, it.text))),
+      clear(briefBody, h("ul", { class: "brief-list" }, b.items.map((it) => h("li", {}, cleanPerpText(it.text)))),
         h("button", { class: "link", type: "button", onclick: () => ask("Walk me through today's brief: what stands out and what should I watch?") }, "Ask about the brief →"),
         b.stale ? h("p", { class: "note" }, "A source is slow right now, so this is the last good copy.") : null);
     } catch (e) { clear(briefBody, h("p", { class: "muted" }, `The brief could not be built right now (${e.message}).`)); }

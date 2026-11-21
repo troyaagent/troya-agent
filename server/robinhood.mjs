@@ -1221,10 +1221,25 @@ export async function crossBuyQuote({ fromChain, toChain, toToken, address, amou
 /* Pons launch                                                         */
 /* ------------------------------------------------------------------ */
 
+/**
+ * What a Pons curve means in market cap (the whole supply at the curve's price), in ETH. The curve is constant product on
+ * (phantom quote + real quote) × tokens, and the whole supply starts in it. At launch the price is phantom / supply, so
+ * the market cap is the phantom quote itself; at graduation the real quote has reached the threshold, the quote side is
+ * phantom + threshold and the token side supply × phantom / (phantom + threshold), so the market cap is
+ * (phantom + threshold)² / phantom. Checked on 20 Nov 2026 against live ETH curves (1.68 ETH phantom, 4.2 ETH threshold:
+ * 1.68 ETH at launch, 20.58 ETH at graduation; a curve 35% full priced exactly on the formula).
+ */
+export function curveMcapEth({ phantomQuoteEth: p, graduationEth: g } = {}) {
+  if (!(p > 0) || !(g >= 0)) return { startMcapEth: null, gradMcapEth: null };
+  return { startMcapEth: p, gradMcapEth: (p + g) ** 2 / p };
+}
+// the ETH price for the USD figures: never holds the menu up for more than 2.5 s (null then, and the page shows ETH)
+const ethUsdSoon = () => new Promise((ok) => { const t = setTimeout(() => ok(null), 2500); ethUsdNow().then((v) => { clearTimeout(t); ok(Number(v) > 0 ? Number(v) : null); }, () => { clearTimeout(t); ok(null); }); });
 let menuCache = null;
 export async function launchMenu(fresh = false) {
   if (!fresh && menuCache && Date.now() - menuCache.at < 60_000) return menuCache.v;
   const F = ADDR.ponsFactory;
+  const ethP = ethUsdSoon();   // read alongside the factory, not after it
   const head = await readMany([C(F, iface.ponsFactory, "launchFee"), C(F, iface.ponsFactory, "launchEnabled"), C(F, iface.ponsFactory, "launchConfigCount"),
     C(F, iface.ponsFactory, "maxCreatorTaxBps"), C(F, iface.ponsFactory, "snipeTaxStartBps"), C(F, iface.ponsFactory, "snipeTaxSeconds")]);
   if (head.slice(0, 3).some((x) => x == null)) throw new HttpError(502, "The Pons factory did not answer. Try again in a moment.");
@@ -1233,11 +1248,16 @@ export async function launchMenu(fresh = false) {
   const configs = cfg.map((x, id) => (x ? {
     id, supply: fmt(x[0].supply, 18), curveFeeBps: Number(x[0].curveFeeBps), phantomQuoteEth: Number(fmt(x[0].phantomQuote, 18)),
     graduationEth: Number(fmt(x[0].graduationThreshold, 18)), poolFee: Number(x[0].poolFee), tickSpacing: Number(x[0].tickSpacing), enabled: Boolean(x[0].enabled),
-  } : null)).filter((c) => c && c.enabled);
+  } : null)).filter((c) => c && c.enabled).map((c) => ({ ...c, ...curveMcapEth(c) }));
+  const launchFeeEth = Number(fmt(head[0][0], 18));
+  // the create form explains the curve in dollars: where the first config (the one a launch uses) starts and graduates
+  const ethUsd = await ethP, c0 = configs[0];
+  const inUsd = (eth) => (ethUsd && eth != null ? Math.round(eth * ethUsd * 100) / 100 : null);
   const v = {
-    factory: F, launchFeeWei: String(head[0][0]), launchFeeEth: Number(fmt(head[0][0], 18)), launchEnabled: Boolean(head[1][0]),
+    factory: F, launchFeeWei: String(head[0][0]), launchFeeEth, launchEnabled: Boolean(head[1][0]),
     maxCreatorTaxBps: Number(head[3]?.[0] ?? 1000), snipeTaxStartBps: Number(head[4]?.[0] ?? 0), snipeTaxSeconds: Number(head[5]?.[0] ?? 0),
     configs, creatorShareOfCurveFee: 0.7,
+    ethUsd, launchFeeUsd: inUsd(launchFeeEth), startMcapUsd: inUsd(c0?.startMcapEth), gradMcapUsd: inUsd(c0?.gradMcapEth),
   };
   menuCache = { at: Date.now(), v };
   return v;

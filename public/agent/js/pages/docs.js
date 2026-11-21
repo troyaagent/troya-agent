@@ -10,7 +10,7 @@ const P = (...kids) => h("p", {}, ...kids);
 const UL = (items) => h("ul", {}, items.map((x) => h("li", {}, x)));
 const L = (href, text) => h("a", { href, ...(/^https?:/.test(href) ? { target: "_blank", rel: "noopener" } : {}) }, text);
 
-export async function mount(view) {
+export async function mount(view, ctx = {}) {
   useCss("docs");
   const base = location.origin;
   const sections = [
@@ -207,6 +207,14 @@ export async function mount(view) {
   clear(view, h("div", { class: "dc-wrap" },
     h("header", { class: "page-head" }, h("h1", {}, "Docs"), h("p", {}, "How Troya works, what it checks, and how to plug your own agent in.")),
     h("div", { class: "dc-grid" }, toc, content)));
+  // #/docs?s=launch opens at that section (the guide links on Create coin point here); on a first visit it waits for
+  // docs.css, which moves the contents list beside the text and so moves every section
+  const at = /^[a-z0-9-]{1,40}$/.test(ctx.query?.s || "") ? document.getElementById(`dc-${ctx.query.s}`) : null;
+  if (at) {
+    const jump = () => requestAnimationFrame(() => at.scrollIntoView({ block: "start" }));
+    const css = document.querySelector('link[href^="/agent/css/docs.css"]');
+    if (css && !css.sheet) css.addEventListener("load", jump, { once: true }); else jump();
+  }
 
   // tools table from the live registry
   const box = content.querySelector("[data-tools]");

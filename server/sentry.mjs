@@ -53,10 +53,28 @@ const coder = AbiCoder.defaultAbiCoder();
 let marketIsStock = null;
 import("./market.mjs").then((m) => { marketIsStock = m.isStock || null; }).catch(() => {});
 const STOCKS = (() => { try { return new Set(JSON.parse(readFileSync(new URL("./data/robinhood-stocks.json", import.meta.url), "utf8")).stocks.map((x) => x.address.toLowerCase())); } catch { return new Set(); } })();
+// Tokenized stocks are not launches: Sentry never posts one and The Record never grades one. Audit, 20 Nov 2026: $ANT, the
+// Anthropic stock token, got a new Uniswap v4 pool and was posted as a call, because Robinhood listed it after the market's
+// last 6-hourly merge of its stocks desk. So the desk itself is read again (at most every 5 minutes; stocks.mjs caches it for
+// 10) before a pool is checked. Any one of the three lists is enough. A desk that cannot be read leaves the other two.
+const DESK_STOCKS = new Set();
+let deskAt = 0, deskRead = null;
+// one read at a time: a pool check that lands while The Record's loop is reading the desk waits for that read
+export function refreshStocks() {
+  if (deskRead) return deskRead;
+  if (Date.now() - deskAt < 5 * 60e3) return Promise.resolve();
+  deskAt = Date.now();
+  return (deskRead = import("./stocks.mjs").then((m) => m.stockDesk()).catch(() => null).then((d) => {
+    for (const x of d?.assets || []) { const a = String(x.address || "").toLowerCase(); if (/^0x[0-9a-f]{40}$/.test(a)) DESK_STOCKS.add(a); }
+  }).finally(() => { deskRead = null; }));
+}
+export const isStock = (a) => { const t = String(a || "").toLowerCase(); return STOCKS.has(t) || DESK_STOCKS.has(t) || !!marketIsStock?.(t); };
+const STOCK_NOTE = "Tokenized stock: not a launch, not graded on The Record";
 
 let store, busy = false, lastPost = 0, lastWalletSave = 0;
 const recent = [];                        // newest first, for /api/sentry/recent
-export const recentResults = (n = 5) => recent.slice(0, n);   // for the bot's /sentry
+// for the bot's /sentry and the brief: a stock posted before the rule above is history, not a launch to show again
+export const recentResults = (n = 5) => recent.filter((r) => !isStock(r.token)).slice(0, n);
 
 /* ---------- text ---------- */
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -371,7 +389,7 @@ async function scan(s) {
 // queued above) and tokenized stocks are skipped; a v4 pool's key is registered so the Gate can route through it at once.
 function notePool(s, token, item) {
   const t = token.toLowerCase();
-  if (s.seen[t] || STOCKS.has(t) || QUOTES.has(t) || marketIsStock?.(t)) return;
+  if (s.seen[t] || QUOTES.has(t) || isStock(t)) return;
   s.seen[t] = Date.now();
   s.queue.push({ token: t, due: Date.now() + POOL_FIRST_S * 1000, tries: 0, kind: "pool", ...item });
   bump(s, "pools");
@@ -441,6 +459,11 @@ async function work(s) {
   const now = Date.now();
   const due = s.queue.filter((q) => q.due <= now).slice(0, 4);
   for (const q of due) {
+    // a pool queued before its token showed up on any stock list: looked up again here, and dropped quietly if it is one
+    if (q.kind === "pool") {
+      await refreshStocks().catch(() => {});
+      if (isStock(q.token)) { s.queue = s.queue.filter((x) => x !== q); continue; }
+    }
     let r;
     try { r = await checkLaunch(q.token); }
     catch (e) { q.due = now + 60000; q.err = (q.err || 0) + 1; if (q.err >= 3) s.queue = s.queue.filter((x) => x !== q); console.warn("[sentry]", q.token, e.message); continue; }
@@ -551,7 +574,9 @@ export async function register(r, ctx) {
   const wf = await store.readJson(WALLETS, { coins: {} });
   for (const [k, v] of Object.entries(wf.coins || {})) if (v.t > Date.now() - 86400e3) remember(k, v.w, v.t);
   walletsDirty = false;
-  r.get("/api/sentry/recent", ({ query }) => ({ items: recent.slice(0, Math.min(100, Number(query.limit) || 30)), channel: `https://t.me/${CHANNEL.replace(/^@/, "")}`, live: !!MODE }));
+  // the record keeps every result, a stock posted before the stock rule included; it is marked so nobody reads it as a launch
+  r.get("/api/sentry/recent", ({ query }) => ({ items: recent.slice(0, Math.min(100, Number(query.limit) || 30)).map((x) => (isStock(x.token) ? { ...x, stock: true, note: STOCK_NOTE } : x)), channel: `https://t.me/${CHANNEL.replace(/^@/, "")}`, live: !!MODE }));
+  setTimeout(() => refreshStocks().catch(() => {}), 25_000).unref?.();   // after the market's own first read of the desk
   if (!MODE || (MODE !== "dry" && !TG)) return;
   console.log(`[sentry] watching Pons launches${POOLS ? ", new pools and the other launchpads" : ""} → ${MODE === "dry" ? "data/sentry-preview.jsonl (dry)" : CHANNEL}`);
   setTimeout(() => store.readJson(STATE, {}).then(warmUp).catch((e) => console.warn("[sentry] warm-up:", e.message)), 3000).unref();

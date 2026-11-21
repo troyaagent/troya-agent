@@ -6,7 +6,7 @@
 import { Interface, parseUnits } from "ethers";
 import { h, clear, useCss, toast, tiny, usd, price, compact, num, pctEl, pageHead, seg, review, short, tokenIcon, icon } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
-import { wallet, onWallet, openConnect } from "/agent/js/wallet.js";
+import { wallet, onWallet, openConnect, signIn } from "/agent/js/wallet.js";
 import { balanceOf, sendTx, waitReceipt, errText } from "/agent/js/chain.js";
 
 const MORPHO = "0x9D53d5E3bd5E8d4Cbfa6DB1ca238AEA02E651010";
@@ -32,6 +32,9 @@ const fmtDate = (d) => { const t = d ? Date.parse(`${d}T00:00:00Z`) : NaN; retur
 // one compact money format for every amount in the market picker: $17.6K, $1.1K, $290
 const money = (v) => (v == null || !isFinite(v) ? "–" : v >= 1000 ? `$${compact(v, 1)}` : `$${num(v, v < 10 ? 2 : 0)}`);
 const stockIcon = (a, size = "sm") => tokenIcon({ symbol: a.symbol, address: a.address || "" }, size);
+// the one sign-in path the app uses everywhere (as the Agent page's needSignIn): connect first if needed, then one free signature
+async function signInNow() { try { if (!wallet.address) await openConnect(); if (wallet.address) await signIn(); } catch (e) { toast(errText(e), "error"); } }
+const signInBtn = (title) => h("button", { class: "btn sm", type: "button", onclick: signInNow, title }, icon("key"), wallet.address ? "Sign in" : "Connect wallet");
 
 export async function mount(view, ctx) {
   useCss("perps"); useCss("swap");
@@ -49,13 +52,17 @@ export async function mount(view, ctx) {
 
   const opts = (xs) => xs.map(([value, label]) => ({ value, label }));
   const paintTabs = () => clear(tabs, seg(opts([["stocks", "Stocks"], ["gaps", "Vs real share"], ["actions", "Dividends & splits"], ["baskets", "Baskets"], ["borrow", "Borrow"]]), st.tab, (v) => { st.tab = v; history.replaceState(null, "", `#/stocks/${v}`); paint(); }));
-  async function load() {
+  // someone is typing in this desk: a repaint now would take the focus and the half-typed amount's caret
+  const typing = () => { const a = document.activeElement; return !!a && view.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); };
+  async function load(timed = false) {
     // the desk and the loans load side by side (the loans read Morpho on chain and are the slower of the two)
     const [d, l] = await Promise.allSettled([api.get("stocks/desk"), api.get(`stocks/loans${wallet.address ? `?address=${wallet.address}` : ""}`)]);
     if (d.status === "fulfilled") st.desk = d.value; else st.err = d.reason?.message || "The stock desk is not answering.";
     if (l.status === "fulfilled") st.loans = l.value;
     if (wallet.session) { const w = await api.get("watches").catch(() => null); if (w) st.alerts = new Set(w.items.filter((x) => x.type === "loan_guard" && x.status !== "done").map((x) => x.params.marketId)); }
-    if (alive) paint();
+    // a load that lands mid-typing keeps the new numbers and paints them on the next quiet tick; that includes the second
+    // of the two loads at mount (onWallet calls back at once), which can land seconds later while the loans read Morpho
+    if (alive && !typing() && !(timed && st.busy)) paint();
   }
   const bySym = (s) => st.desk?.assets.find((a) => a.symbol === s);
 
@@ -145,19 +152,25 @@ export async function mount(view, ctx) {
     const [name, syms] = BASKETS[st.basket];
     const legs = syms.map(bySym).filter((a) => a?.priceUsd && (a.liquidityUsd || 0) > 2000);
     const amtIn = h("input", { class: "input", inputmode: "decimal", placeholder: "ETH to spend", value: st.basketEth, "aria-label": "ETH to spend" });
-    amtIn.addEventListener("input", () => { st.basketEth = amtIn.value; });
-    const each = Number(st.basketEth) / (legs.length || 1);
+    // the split follows the amount as it is typed (no repaint, so the field keeps the focus)
+    const hint = h("p", { class: "fine" });
+    // rounded the way the buy rounds each leg, so 0.7 ETH over 7 reads 0.1, not 0.09999
+    const sayEach = () => { const v = Number(st.basketEth); hint.hidden = !(v > 0 && legs.length); hint.textContent = hint.hidden ? "" : `About ${tiny(+(v / legs.length).toFixed(8))} ETH into each of ${legs.length} stocks.`; };
+    amtIn.addEventListener("input", () => { st.basketEth = amtIn.value; sayEach(); });
+    sayEach();
     clear(body, h("div", { class: "panel sd-panel" },
       seg(BASKETS.map(([n], i) => ({ value: String(i), label: n })), String(st.basket), (v) => { st.basket = +v; paint(); }),
       h("p", { class: "fine" }, `${name}: equal parts, one swap per stock. Each leg is quoted and checked by Troya Gate before your wallet signs it; a leg that fails the Gate is skipped, the rest go on. Stocks without a deep enough pool are left out.`),
       h("div", { class: "sd-legs" }, legs.map((a) => h("span", { class: "chip-s" }, stockIcon(a, "xs"), h("b", {}, a.symbol), h("small", {}, `$${price(a.priceUsd)}`)))),
       h("div", { class: "lt-row" }, amtIn, h("button", { class: "btn primary", type: "button", disabled: !!st.busy, onclick: () => buyBasket(legs) }, st.busy || `Buy ${legs.length} stocks`)),
-      Number(st.basketEth) > 0 ? h("p", { class: "fine" }, `About ${tiny(each)} ETH into each of ${legs.length} stocks.`) : null,
-      h("div", { class: "lt-row" }, h("button", { class: "btn sm", type: "button", onclick: () => keepBalanced(name, legs) }, "Keep it balanced"),
-        h("span", { class: "fine" }, "A playbook watches this basket in your Agent Wallet and rebalances to equal weights when one stock drifts 5% away (checked daily)."))));
+      hint,
+      // the playbook belongs to your account: without a session the same spot offers the sign-in instead of an error
+      h("div", { class: "lt-row" }, wallet.session ? h("button", { class: "btn sm", type: "button", onclick: () => keepBalanced(name, legs) }, "Keep it balanced")
+        : signInBtn("Sign in once (a free signature, no gas): the playbook belongs to your account"),
+        h("span", { class: "fine" }, `${wallet.session ? "" : "Sign in to keep it balanced. "}A playbook watches this basket in your Agent Wallet and rebalances to equal weights when one stock drifts 5% away (checked daily).`))));
   }
   async function keepBalanced(name, legs) {
-    if (!wallet.session) return toast("Sign in first (Agent → Chat): the playbook belongs to your account.", "error", 6000);
+    if (!wallet.session) return signInNow();
     try {
       const r = await api.post("watches", { type: "rebalance", params: { name, driftPct: 5, everyHours: 24, tokens: legs.map((a) => ({ token: a.address, symbol: a.symbol, weight: 1 })) } });
       toast(`Playbook on: ${r.item.title}`, "ok", 6000);
@@ -226,7 +239,10 @@ export async function mount(view, ctx) {
           h("button", { class: "btn primary", type: "button", onclick: openConnect }, "Connect wallet"))
           : mine.length ? mine.map((x) => h("div", { class: "sd-row" }, h("b", {}, x.symbol), h("span", {}, `${tiny(x.collateral)} posted`), h("span", {}, `${tiny(x.borrowUsdg)} USDG owed`),
             h("span", { class: x.health < SAFE_HEALTH ? "down" : "up" }, `health ${x.health ? x.health.toFixed(2) : "–"}`), h("span", { class: "muted" }, x.liquidationPriceUsd ? `liq $${price(x.liquidationPriceUsd)}` : ""),
-            st.alerts?.has(x.marketId) ? h("button", { class: "btn sm", type: "button", disabled: true }, icon("check"), "Alert on") : h("button", { class: "btn sm", type: "button", disabled: st.guarding === x.marketId, onclick: () => guard(x) }, st.guarding === x.marketId ? "Saving…" : "Alert me")))
+            st.alerts?.has(x.marketId) ? h("button", { class: "btn sm", type: "button", disabled: true }, icon("check"), "Alert on")
+              // the alert writes to your inbox, so it needs a session: sign in right here, the button turns into Alert me
+              : !wallet.session ? signInBtn("Sign in once (a free signature, no gas) so the alert can reach your inbox")
+              : h("button", { class: "btn sm", type: "button", disabled: st.guarding === x.marketId, onclick: () => guard(x) }, st.guarding === x.marketId ? "Saving…" : "Alert me")))
           : h("p", { class: "muted" }, "No Morpho loans on stock tokens from this wallet.")),
       h("div", { class: "panel sd-panel" },
         h("div", { class: "sd-mk-h" }, h("h3", {}, "Borrow USDG"), h("span", { class: "fine" }, `${shown.length} of ${ms.length} Morpho markets`)),
@@ -300,7 +316,7 @@ export async function mount(view, ctx) {
     st.busy = null; await load();
   }
   async function guard(x) {
-    if (!wallet.session) return toast("Sign in first (Social → Sign in) so the alert can reach your inbox.", "error", 6000);
+    if (!wallet.session) return signInNow();
     if (st.guarding || st.alerts?.has(x.marketId)) return;
     st.guarding = x.marketId; paint();
     try {
@@ -314,6 +330,8 @@ export async function mount(view, ctx) {
 
   const off = onWallet(() => load());
   await load();
-  const t = setInterval(load, 60000);
+  // refresh once a minute, but never while someone is typing in Borrow, Baskets or the search, never in a background tab
+  // and never in the middle of a wallet step
+  const t = setInterval(() => { if (document.hidden || st.busy || typing()) return; load(true); }, 60_000);
   return () => { alive = false; off(); clearInterval(t); };
 }

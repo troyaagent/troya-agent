@@ -1,6 +1,7 @@
 // F20 · Agent factory: anyone with a wallet builds a named agent from Troya's own parts and gives it a public page.
 //   POST   /api/agents {name, slug, bio, template, params} → the agent and its playbooks, on your own Agent Wallet
-//   GET    /api/agents                → public directory          GET /api/agents/:slug → public page of one agent
+//   GET    /api/agents                → public directory (not retired, not finished with 0 actions)
+//   GET    /api/agents/:slug          → public page of one agent
 //   GET    /api/agents/mine           → your agents
 //   POST   /api/agents/:slug/toggle   → yours: pause or resume all its playbooks
 //   DELETE /api/agents/:slug          → yours: retire it (its playbooks stop, the page shows it as retired)
@@ -109,7 +110,10 @@ export async function register(r, ctx) {
   r.get("/api/agents/templates", () => ({ templates: TEMPLATES, baskets: Object.fromEntries(Object.entries(BASKETS).map(([k, v]) => [k, { label: v[0], symbols: v[1] }])) }));
   r.get("/api/agents", async () => {
     const all = (await store.readJson("agents.json", [])).filter((a) => !a.retired);
-    const list = await Promise.all(all.slice(-200).map((a) => view(a)));
+    const list = (await Promise.all(all.slice(-200).map((a) => view(a))))
+      // an agent whose playbooks all ended without a single action has nothing to show in the public directory; its own
+      // page (/api/agents/:slug) and its owner's list (/api/agents/mine) still show it
+      .filter((a) => !(a.status === "finished" && !a.actions));
     return { agents: list.sort((p, q) => (q.lastAction || q.createdAt) - (p.lastAction || p.createdAt)).slice(0, 60) };
   }, { weight: 2 });
   r.get("/api/agents/mine", async ({ req }) => {

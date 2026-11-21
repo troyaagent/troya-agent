@@ -26,8 +26,13 @@ const ago = (t) => { if (!t) return "never"; const m = Math.round((Date.now() - 
 export async function mount(view, ctx) {
   useCss("perps"); useCss("swap");
   let alive = true;
-  const st = { tab: ["x", "pass", "votes", "agents", "reports"].includes(ctx.parts[0]) ? ctx.parts[0] : "x", reports: null, rFilter: "open", isAdmin: false, agentSlug: ctx.parts[0] === "agents" ? ctx.parts[1] || null : null, agents: null, mineA: null, agent: null, tpl: null, form: { template: "accumulator" }, me: undefined, status: null, log: null, pass: null, votes: null, busy: null };
+  // form: the agent factory's fields, draft: the admin forms (new vote, pass minimum). Typed values live here, not only in
+  // the inputs, so a repaint (a tab switch, the refresh below) puts them back.
+  const st = { tab: ["x", "pass", "votes", "agents", "reports"].includes(ctx.parts[0]) ? ctx.parts[0] : "x", reports: null, rFilter: "open", isAdmin: false, agentSlug: ctx.parts[0] === "agents" ? ctx.parts[1] || null : null, agents: null, mineA: null, agent: null, tpl: null, form: { template: "accumulator" }, draft: { title: "", options: "", days: "3", minHold: null }, me: undefined, status: null, log: null, pass: null, votes: null, busy: null };
   const body = h("div", { class: "so-body" }), tabs = h("div", { class: "sd-tabs" });
+  // the 60-second refresh repaints the open tab, so it waits while someone is typing in it: the caret (and an open coin
+  // suggestion list) would be lost
+  const typing = () => { const a = document.activeElement; return !!a && body.contains(a) && a.matches("input, textarea, select"); };
   clear(view, h("div", { class: "dk so" },
     pageHead("Social", "Your X account on Troya, Troya answering on X, the Holder Pass, holder votes and the agent factory."),
     tabs, body));
@@ -116,7 +121,8 @@ export async function mount(view, ctx) {
     if (!p.deployed) {
       card.append(h("p", { class: "fine" }, "The pass contract is not deployed yet."));
       if (st.votes?.admin) {
-        const minIn = h("input", { class: "input", inputmode: "decimal", value: String(p.minHold), "aria-label": "Minimum $TROYA" });
+        const minIn = h("input", { class: "input", inputmode: "decimal", value: String(st.draft.minHold ?? p.minHold), "aria-label": "Minimum $TROYA" });
+        minIn.addEventListener("input", () => { st.draft.minHold = minIn.value; });
         card.append(h("div", { class: "fw-row" }, h("span", { class: "fine" }, "Admin · minimum $TROYA (fixed forever)"), minIn,
           h("button", { class: "btn blue", type: "button", disabled: !!st.busy, onclick: () => deploy(Number(minIn.value)) }, st.busy || "Deploy the pass")));
       }
@@ -165,11 +171,16 @@ export async function mount(view, ctx) {
     if (!v || !p) return clear(body, h("div", { class: "sk", style: { height: "240px" } }));
     const items = [];
     if (v.admin && p.deployed) {
-      const t = h("input", { class: "input", placeholder: "Question, for example: Next flywheel split?", maxlength: "140" });
+      const dr = st.draft;
+      const t = h("input", { class: "input", placeholder: "Question, for example: Next flywheel split?", maxlength: "140", value: dr.title });
       const o = h("textarea", { class: "input", rows: "3", placeholder: "One option per line (2 to 5)" });
-      const d = h("input", { class: "input", inputmode: "numeric", value: "3", "aria-label": "Days" });
+      o.value = dr.options;
+      const d = h("input", { class: "input", inputmode: "numeric", value: dr.days, "aria-label": "Days" });
+      t.addEventListener("input", () => { dr.title = t.value; });
+      o.addEventListener("input", () => { dr.options = o.value; });
+      d.addEventListener("input", () => { dr.days = d.value; });
       items.push(h("div", { class: "panel sd-panel so-card" }, h("h3", {}, "New proposal (admins)"), t, o, h("div", { class: "fw-row" }, h("span", { class: "fine" }, "Open for days"), d,
-        h("button", { class: "btn blue", type: "button", disabled: !!st.busy, onclick: () => run("Opening…", async () => { await api.post("votes", { title: t.value, options: o.value.split("\n"), days: Number(d.value) }); toast("Proposal open.", "ok"); }) }, "Open the vote"))));
+        h("button", { class: "btn blue", type: "button", disabled: !!st.busy, onclick: () => run("Opening…", async () => { await api.post("votes", { title: t.value, options: o.value.split("\n"), days: Number(d.value) }); Object.assign(dr, { title: "", options: "", days: "3" }); toast("Proposal open.", "ok"); }) }, "Open the vote"))));
     }
     if (!p.deployed) items.push(h("div", { class: "panel sd-panel so-card" }, h("p", { class: "muted" }, "Votes start once the Holder Pass is deployed.")));
     else if (!v.proposals.length) items.push(h("div", { class: "panel sd-panel so-card" }, h("p", { class: "muted" }, "No proposals yet.")));
@@ -313,8 +324,12 @@ export async function mount(view, ctx) {
           h("p", { class: "so-q" }, x.text), x.reply ? h("p", { class: "so-a" }, x.reply) : h("p", { class: "fine" }, x.why || "")))));
   }
 
-  const off = onWallet(() => load());
+  // reload when who is looking changes (wallet or sign-in), not on a network switch. onWallet calls back once at once with
+  // the same key, so the load below is the first and only one.
+  const whoKey = () => `${wallet.address || ""}|${wallet.session?.address || ""}`;
+  let who = whoKey();
+  const off = onWallet(() => { const k = whoKey(); if (k === who) return; who = k; load(); });
   await load();
-  const t = setInterval(() => { if (!document.hidden) load(); }, 60_000);
+  const t = setInterval(() => { if (!document.hidden && !typing() && !st.busy) load(); }, 60_000);
   return () => { alive = false; off(); clearInterval(t); };
 }

@@ -121,3 +121,73 @@
 .sw-xc-st svg { width: 14px; height: 14px; }
 .sw-xc-fine { margin: 0; font-size: 11.5px; line-height: 1.5; }
 @media (max-width: 420px) { .sw-xc-unit small { display: none; } .sw-xc-in { font-size: 21px; } }
+
+/* ---------- Picker 2.0: common chips, groups, an address on every row, Official / Verified / Copy? / Team test ---------- */
+.tp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tp-chip { height: 34px; padding: 0 12px 0 7px; gap: 7px; font-size: 12.5px; font-weight: 500; color: var(--fg); }
+.tp-chip .tok-ico.xs { width: 18px; height: 18px; }
+.tp-grp { padding: 12px 8px 4px; font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; font-weight: 650; color: var(--muted); }
+.tp-list > .tp-grp:first-child { padding-top: 4px; }
+.tp-row { width: 100%; min-width: 0; }
+.tp-name { flex: 1 1 auto; }
+.tp-name small { display: flex; align-items: baseline; gap: 6px; min-width: 0; max-width: none; }
+.tp-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-addr { flex: none; font-family: var(--mono); font-size: 10.5px; color: var(--faint); letter-spacing: 0; }
+.tp-extra { display: inline-flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 5px; flex: 0 1 auto; max-width: 58%; }
+.tp-bal { display: grid; justify-items: end; gap: 1px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.tp-bal b { font-weight: 500; font-size: 12.5px; color: var(--fg); }
+.tp-bal small { font-size: 10.5px; color: var(--muted); }
+.badge-s.tp-off { gap: 4px; border-color: rgba(142, 223, 245, .45); color: var(--blue-3); background: rgba(142, 223, 245, .08); }
+.badge-s.tp-off svg { width: 11px; height: 11px; }
+.badge-s.tp-ver { border-color: rgba(142, 223, 245, .35); color: var(--fg-2); }
+/* a hint, never a verdict: amber like the Gate's notes */
+.badge-s.tp-copy { border-color: rgba(240, 196, 110, .45); color: var(--warn); background: var(--warn-bg); }
+.badge-s.tp-test { border-color: var(--line-2); color: var(--muted); background: transparent; }
+
+/* ---------- fresh quotes and the stand-in preview ---------- */
+.sw-fresh { margin: 8px 4px 0; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.sw-fresh[hidden] { display: none; }
+.sw-xc-out .sw-fresh { margin: 0; text-align: center; }
+.sw-preview { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; padding: 6px 0; font-size: 12px; color: var(--warn); border-bottom: 1px solid var(--line); }
+.sw-preview svg { width: 13px; height: 13px; flex: none; }
+
+/* ---------- the Gate in one line above the button (phones only) ---------- */
+.sw-gstrip { display: none; align-items: center; gap: 8px; width: 100%; min-width: 0; margin-top: 12px; padding: 8px 10px 8px 8px; border-radius: 14px;
+  border: 1px solid var(--line); background: rgba(0, 0, 0, .18); text-align: left; font-size: 12px; color: var(--fg-2); }
+.sw-gstrip .dk-v { flex: none; height: 22px; font-size: 11px; white-space: nowrap; }
+.sw-gs-n { flex: none; font-weight: 650; color: var(--fg); font-variant-numeric: tabular-nums; }
+.sw-gs-why { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.sw-gstrip .chev { width: 12px; height: 12px; flex: none; opacity: .6; transform: rotate(90deg); }
+html[data-theme="light"] .sw-gstrip { background: var(--bg-2); }
+
+@media (max-width: 760px) {
+  .sw-gstrip:not([hidden]) { display: flex; }
+  /* the network note, moved under the Gate card by swap.js */
+  .sw2-r > .sw-note { width: auto; margin: 0 4px; text-align: left; font-size: 12px; }
+  /* a long ticker shortens instead of pushing the amount out of its box */
+  .sw2-l .sw-tok { flex: 0 1 auto; max-width: 46%; min-width: 0; }
+  .sw2-l .sw-tok b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sw2-l .sw-tok > .tok-ico, .sw2-l .sw-tok > .tok-wrap, .sw2-l .sw-tok > .chev { flex: none; }
+}
+
+/* the Ask Troya nudge on a phone's Swap page: one compact row right on the bottom bar, so it covers as little as
+   possible, and the page gains room to scroll the Rate and Minimum rows clear of it */
+@media (max-width: 860px) {
+  body:has(.sw2) .g-nudge { bottom: calc(66px + env(safe-area-inset-bottom)); grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px 10px; padding: 9px 9px 9px 12px; border-radius: 16px; }
+  body:has(.sw2) .g-nudge img { width: 26px; height: 26px; }
+  body:has(.sw2) .g-nudge p { font-size: 12.5px; line-height: 1.35; }
+  body:has(.sw2) .g-nudge-a { grid-column: auto; gap: 6px; }
+  body:has(.sw2) .g-nudge-a .btn { height: 34px; padding: 0 14px; }
+  body:has(.sw2) .g-nudge-a .g-x { width: 34px; height: 34px; }
+  /* the Ask Troya button would sit under it: the nudge's own Explain button stands in while it shows */
+  body:has(.sw2):has(.g-nudge:not([hidden])) .g-orb { opacity: 0; pointer-events: none; }
+  body:has(.g-nudge:not([hidden])) .sw2 { padding-bottom: 96px; }
+}
+
+/* touch screens: every chip and segment on Swap is at least 40 px tall */
+@media (pointer: coarse) {
+  .sw-meta .seg button, .sw2-ch-h .seg button, .sw-nets button, .sw-xc-seg button { min-height: 40px; }
+  .sw-quick .chip, .sw2-l .sw-quick .chip, .tp-chip { min-height: 40px; }
+  .tp-row { min-height: 48px; }
+  .sw-gstrip { min-height: 44px; }
+}

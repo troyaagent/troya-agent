@@ -1,30 +1,51 @@
 // Phase 4 · the Troya Gate badge for Pons devs: a live SVG for any Robinhood Chain coin, and the page it links to.
 //   GET /api/badge/:address.svg   SVG, re-checked at most every 10 minutes per coin
-//   GET /api/badge/:address       the same result as JSON (checks, verdict, time)
+//   GET /api/badge/:address       the same result as JSON (checks, verdict, time, the buy size checked, cached or not)
+//   GET /api/badge/:address?fresh=1   JSON from a new check now (the Gate page's "Run the Gate"), six a minute per IP
 // The verdict is Sentry's: route, simulation, test sell, transfer tax and fees decide; a thin young curve is reported,
 // not failed. The badge says what was checked and when. It never says "safe", and a coin can change after a check.
 import { checkLaunch } from "./sentry.mjs";
 
 const TTL = 10 * 60_000;
-const memo = new Map();                       // address → { at, p }
+const memo = new Map();                       // address → { at, done, p }
 const ADDR = /^(0x[0-9a-fA-F]{40})(\.svg)?$/;
+// the test buy checkLaunch runs (Sentry's TEST_ETH): price impact on the badge is for this size, and the page says so
+const CHECK_ETH = "0.01";
+// ?fresh=1 skips the memo for a whole new check (quote, simulation, test sell), so each IP gets a few a minute; past that
+// the page is answered from the memo and told so, never refused
+const FRESH_PER_MIN = 6;
+const freshHits = new Map();                  // ip → { t, n }
 const xml = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-async function result(a) {
+function freshOk(ip) {
+  const now = Date.now();
+  let b = freshHits.get(ip);
+  if (!b || now - b.t > 60_000) { b = { t: now, n: 0 }; freshHits.set(ip, b); }
+  if (freshHits.size > 5000) for (const [k, v] of freshHits) if (now - v.t > 60_000) freshHits.delete(k);
+  return ++b.n <= FRESH_PER_MIN;
+}
+
+// → { p, cached }: cached is true when the answer is a finished check from the memo
+function lookup(a, fresh = false) {
   const k = a.toLowerCase(), hit = memo.get(k);
-  if (hit && Date.now() - hit.at < TTL) return hit.p;
-  const p = checkLaunch(a).then((r) => ({
+  // a fresh run joins a check already under way: nothing is fresher, and the chain is not asked twice
+  if (hit && (!hit.done || (!fresh && Date.now() - hit.at < TTL))) return { p: hit.p, cached: hit.done };
+  const e = { at: Date.now(), done: false, p: null };
+  e.p = checkLaunch(a).then((r) => ({
     token: r.token, symbol: r.symbol, name: r.name, verdict: r.v === "nobuys" ? "untested" : r.v,
     reason: r.why ? `${r.why.label}: ${r.why.detail}` : null,
     checks: r.checks.map((c) => ({ key: c.key, label: c.label, status: c.status, detail: c.detail })),
     curve: r.pons && !r.pons.graduated ? { raised: r.pons.raised, pair: r.pons.pair?.symbol || "ETH", progressPct: r.pons.progressPct } : null,
     checkedAt: r.at,
   }));
-  memo.set(k, { at: Date.now(), p });
-  p.catch(() => memo.delete(k));
+  // errors are never kept; a failed fresh run only drops its own entry
+  e.p.then(() => { e.done = true; }, () => { if (memo.get(k) === e) memo.delete(k); });
+  memo.delete(k);                             // re-inserted at the end, so the size cap below drops the oldest check first
+  memo.set(k, e);
   if (memo.size > 5000) memo.delete(memo.keys().next().value);
-  return p;
+  return { p: e.p, cached: false };
 }
+const result = (a) => lookup(a).p;
 
 export const badgeResult = result;           // for the bot's /badge
 
@@ -58,11 +79,14 @@ export function svg(r) {
 }
 
 export async function register(r) {
-  r.get("/api/badge/:address", async ({ params, res }) => {
+  r.get("/api/badge/:address", async ({ params, query, ip, res }) => {
     const m = ADDR.exec(String(params.address || ""));
     if (!m) { res.writeHead(400, { "content-type": "application/json" }); return res.end(JSON.stringify({ error: "Not a token address" })); }
-    let data = null;
-    try { data = await result(m[1]); } catch (e) { data = { verdict: "error", error: String(e.message).slice(0, 200) }; }
+    // JSON only: a badge embedded on someone's site never forces a new check
+    const wantFresh = !m[2] && query?.fresh === "1";
+    const fresh = wantFresh && freshOk(ip || "?");
+    let data = null, cached = false;
+    try { const l = lookup(m[1], fresh); cached = l.cached; data = await l.p; } catch (e) { data = { verdict: "error", error: String(e.message).slice(0, 200) }; }
     if (m[2]) {
       res.writeHead(200, {
         "content-type": "image/svg+xml; charset=utf-8",
@@ -72,7 +96,10 @@ export async function register(r) {
       });
       return res.end(svg(data));
     }
-    res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=120" });
-    return res.end(JSON.stringify({ ...data, page: `https://troya.codes/badge?ca=${m[1]}`, svg: `https://troya.codes/api/badge/${m[1]}.svg`, ttlSeconds: TTL / 1000 }));
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": wantFresh ? "no-store" : "public, max-age=120" });
+    return res.end(JSON.stringify({
+      ...data, chain: "robinhood", amountEth: CHECK_ETH, cached, ...(wantFresh && !fresh ? { freshLimited: true } : {}),
+      page: `https://troya.codes/badge?ca=${m[1]}`, svg: `https://troya.codes/api/badge/${m[1]}.svg`, ttlSeconds: TTL / 1000,
+    }));
   }, { weight: 1, perMin: 120 });
 }

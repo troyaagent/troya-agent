@@ -37,6 +37,21 @@ function needSignIn(box, text) {
     h("button", { class: "btn primary", type: "button", onclick: async () => { try { if (!wallet.address) await openConnect(); if (wallet.address) await signIn(); } catch (e) { toast(e.message, "error"); } } }, icon("key"), wallet.address ? "Sign in" : "Connect wallet"));
 }
 
+// a tab repaints only when who is looking changes (wallet or sign-in). onWallet also fires on every network switch, and a
+// switch in the middle of a signature (Add ETH, Buy checks, Follow) must not rebuild the page under the user or wipe a field.
+// onWallet calls back once at once, so this is also the tab's first paint: no separate render() before it.
+const whoKey = () => `${wallet.address || ""}|${wallet.session?.address || ""}`;
+function onWho(fn) { let key = null; return onWallet(() => { const k = whoKey(); if (k === key) return; key = k; fn(); }); }
+// repaint without losing the keyboard: the control that had focus (marked data-k) gets it back in the new markup
+function keepFocus(root, paint) {
+  const k = root.contains(document.activeElement) ? document.activeElement.dataset?.k : null;
+  paint();
+  if (k) root.querySelector(`[data-k="${k}"]`)?.focus();
+}
+// a timed refresh leaves alone a part with a field being typed in: a repaint would drop the caret (and an unsaved value)
+const inUse = (el) => { const a = document.activeElement; return !!a && el.contains(a) && a.matches("input, textarea, select"); };
+const show = (el, on) => { el.style.display = on ? "" : "none"; };
+
 const CHAIN_NAME = { 1: "Ethereum", 42161: "Arbitrum", 8453: "Base", 4663: "Robinhood Chain" };
 const CHAIN_KEY = { 1: "ethereum", 42161: "arbitrum", 8453: "base" };
 
@@ -63,15 +78,33 @@ const SUGGEST = [
   ["pool", "Show the newest Robinhood Chain pools"],
   ["loop", "Set up a weekly DCA into a tokenized stock"],
 ];
+// a guest gets starters the guest chat answers in full (Gate checks, markets, how Troya works); the signed-in set reaches
+// into the wallet (positions, tickets), which a guest would only meet as "connect a wallet"
+const SUGGEST_GUEST = [
+  ["shield", "Is $TROYA safe to buy?"],
+  ["spark", "What is moving on Robinhood Chain?"],
+  ["bolt", "What does Sentry Autopilot do?"],
+  ["eye", "Show the ANT perp"],
+];
+// the server counts a guest's questions per network address and UTC day (10 a day). This browser keeps the last count the
+// server gave, so the composer shows what is left before the first question; every answer replaces it with the server's.
+const guestUse = store("troya.guestUse", null);
+const utcDay = () => new Date().toISOString().slice(0, 10);
+function guestLeft() {
+  const u = guestUse.get(), limit = Number(u?.limit) || 10;
+  return { limit, left: u?.day === utcDay() ? Math.max(0, limit - (Number(u.used) || 0)) : limit };
+}
 
 function mountChat(box, ctx) {
   let busy = false;
   let abort = null;
   const proposals = new Map();
+  const suggest = h("div", { class: "ag-suggest" });
+  const paintSuggest = () => clear(suggest, (wallet.session ? SUGGEST : SUGGEST_GUEST).map(([ic, t]) => h("button", { type: "button", class: "ag-card", onclick: () => send(t) }, h("span", { class: "ag-ic" }, icon(ic)), h("span", {}, t))));
   const hero = h("div", { class: "ag-hero" },
     h("h1", {}, `${greeting()}.`),
     h("p", {}, "You ask. Troya checks. You sign."),
-    h("div", { class: "ag-suggest" }, SUGGEST.map(([ic, t]) => h("button", { type: "button", class: "ag-card", onclick: () => send(t) }, h("span", { class: "ag-ic" }, icon(ic)), h("span", {}, t)))));
+    suggest);
   const log = h("div", { class: "ag-log", "aria-live": "polite" });
   const input = h("textarea", { class: "ag-input", rows: "1", placeholder: "Ask Troya anything…", "aria-label": "Message", maxlength: "1000" });
   const sendBtn = h("button", { class: "ag-send", type: "button", "aria-label": "Send", onclick: () => send(input.value) }, icon("arrowUp"));
@@ -120,10 +153,13 @@ function mountChat(box, ctx) {
     clear(gateBar, signed ? null : h("div", { class: "ag-signbar" }, h("span", {}, h("span", { class: "ag-sb-long" }, wallet.address ? "Asking as a guest: answers and Gate checks. Sign in for tickets and your balances." : "Asking as a guest: answers and Gate checks, no wallet needed. Connect and sign in for tickets and your balances."), h("span", { class: "ag-sb-short" }, "Guest mode: answers and Gate checks. Sign in for tickets."), h("i", { class: "info", title: "Signing a message proves the wallet is yours. It costs nothing and sends nothing." }, "i")),
       h("button", { class: "btn sm primary", type: "button", onclick: async () => { try { if (!wallet.address) await openConnect(); if (wallet.address) await signIn(); } catch (e) { toast(e.message, "error"); } } }, icon("wallet"), "Sign in")));
     if (signed && !usage) { try { usage = await api.get("assistant/usage"); } catch {} }
+    const g = guestLeft();
+    // tickets (and their 10-minute expiry) are for a signed-in wallet only, so a guest sees the questions left instead
     clear(meta,
       h("span", { class: "ag-chip" }, icon("wallet"), wallet.address ? short(wallet.address) : "No wallet"),
-      usage && signed ? h("span", { class: "faint" }, `${usage.used}/${usage.limit} free messages today`) : usage?.guest ? h("span", { class: "faint" }, `Guest: ${usage.used}/${usage.limit} questions today`) : null,
-      h("span", { class: "faint grow", style: { textAlign: "right" } }, "Proposals expire after 10 minutes"));
+      signed ? (usage ? h("span", { class: "faint" }, `${usage.used}/${usage.limit} free messages today`) : null)
+        : h("span", { class: "faint" }, `${g.left} of ${g.limit} guest questions left`),
+      signed ? h("span", { class: "faint grow", style: { textAlign: "right" } }, "Proposals expire after 10 minutes") : null);
     input.disabled = false;
     sendBtn.disabled = false;
   }
@@ -160,8 +196,16 @@ function mountChat(box, ctx) {
         else if (type === "tool") tools.append(h("span", { class: `ag-tool ${data.ok ? "" : "bad"}` }, icon(data.ok ? "check" : "close"), data.name));
         else if (type === "text") { acc += data.delta; body.innerHTML = md(acc); el.scrollIntoView({ block: "end" }); }
         else if (type === "proposal") el.querySelector(".ag-bubble").append(ticket(data.proposal));
-        else if (type === "done") { usage = data.usage ? { ...usage, ...data.usage } : usage; if (guest && acc) guestLog.set([...guestLog.get(), { role: "user", text }, { role: "assistant", text: acc }]); }
-        else if (type === "error") body.innerHTML = md(`**${data.error}**`);
+        else if (type === "done") {
+          if (data.usage?.guest) guestUse.set({ day: utcDay(), used: Number(data.usage.used) || 0, limit: Number(data.usage.limit) || 10 });
+          else if (data.usage) usage = { ...usage, ...data.usage };
+          if (guest && acc) guestLog.set([...guestLog.get(), { role: "user", text }, { role: "assistant", text: acc }]);
+        }
+        else if (type === "error") {
+          body.innerHTML = md(`**${data.error}**`);
+          // the server's guest limit answers "Guests get 10 questions a day…" or "Guest questions are used up…"
+          if (guest && /^guest/i.test(String(data.error || ""))) { const l = guestLeft().limit; guestUse.set({ day: utcDay(), used: l, limit: l }); }
+        }
       }, abort.signal);
     } catch (e) {
       if (e.name !== "AbortError") body.innerHTML = md(`**${e.message}**`);
@@ -235,7 +279,10 @@ function mountChat(box, ctx) {
         if (!m) throw new Error(`${pr.coin} is not available.`);
         const ok = await review({ title: "Place order", summary: p.summary, rows: [["Market", `${pr.coin}-PERP`], ["Side", pr.side], ["Size", usd(pr.sizeUsd)], ["Leverage", `${pr.leverage}x`], ["Mid now", m.midPx]], confirmLabel: "Place order" });
         if (!ok) return;
-        const r = await hl.placeOrder({ owner: wallet.address, market: m, isBuy: pr.side !== "short", size: pr.sizeUsd / (m.midPx || m.markPx), leverage: pr.leverage, tp: pr.tpPx || undefined, sl: pr.slPx || undefined });
+        // sized and capped from the live book: /api/hl/meta may answer from a copy up to a minute old while it refreshes
+        const b = await api.get(`hl/book?coin=${encodeURIComponent(m.coin)}`).catch(() => null);
+        const mid = (b?.bids?.[0] && b?.asks?.[0] ? (b.bids[0].px + b.asks[0].px) / 2 : null) || m.midPx || m.markPx;
+        const r = await hl.placeOrder({ owner: wallet.address, market: m, isBuy: pr.side !== "short", size: pr.sizeUsd / mid, leverage: pr.leverage, tp: pr.tpPx || undefined, sl: pr.slPx || undefined, refPx: mid });
         await api.post("inbox/proposal-done", { id: p.id, status: "done", note: r.text }).catch(() => {});
         done("done", `Order sent: ${r.text || "ok"}`);
       } catch (e) { toast(e.message || "Order failed", "error"); }
@@ -255,14 +302,18 @@ function mountChat(box, ctx) {
     } catch (e) { toast(e.message, "error", 6000); }
   }
 
+  let histSeq = 0;
   async function loadHistory(force = false) {
     if (!wallet.session) {
       if (!log.children.length) for (const m of guestLog.get().slice(-16)) addMsg(m.role, m.text);
       return;
     }
     if (log.children.length && !force) return;
+    const seq = ++histSeq;
     try {
       const [hist, props] = await Promise.all([api.get("assistant/history"), api.get("inbox/proposals")]);
+      // two loads can overlap (a sign-in switch, a network switch): only the newest one writes, so no message shows twice
+      if (seq !== histSeq) return;
       const pm = new Map((props.items || []).map((p) => [p.id, p]));
       for (const m of (hist.messages || []).slice(-16)) {
         const { el } = addMsg(m.role, m.text);
@@ -272,13 +323,14 @@ function mountChat(box, ctx) {
   }
 
   // signing in or out swaps between the guest chat (this browser) and the wallet's saved chat
+  // (onWallet calls back once right away: that call is the first load, so nothing loads twice)
   let mode = wallet.session ? "signed" : "guest";
+  paintSuggest();
   const off = onWallet(() => {
     const now = wallet.session ? "signed" : "guest";
-    if (now !== mode) { mode = now; resetView(); loadHistory(true); } else loadHistory();
+    if (now !== mode) { mode = now; usage = null; resetView(); paintSuggest(); loadHistory(true); } else loadHistory();
     refreshMeta(); paintHead();
   });
-  loadHistory(); paintHead();
   if (ctx.query.q) {
     const q = ctx.query.q;
     history.replaceState(null, "", "#/agent");
@@ -549,7 +601,7 @@ function mountWallet(box) {
     return panel;
   }
 
-  const off = onWallet(render);
+  const off = onWho(render);
   return () => { off(); stopBal?.(); };
 }
 
@@ -629,7 +681,7 @@ function mountAutopilot(box) {
       h("div", { class: "panel ag-panel" }, h("h3", {}, "This tab's Autopilot log"), logBox));
     main._cleanup = () => removeEventListener("troya:autopilot", drawLog);
   }
-  const off = onWallet(() => { main._cleanup?.(); render(); });
+  const off = onWho(() => { main._cleanup?.(); render(); });
   return () => { off(); main._cleanup?.(); };
 }
 
@@ -637,6 +689,8 @@ function mountAutopilot(box) {
    PLAYBOOKS
    ===================================================================================== */
 const TYPES = [["stop_loss", "Stop-loss guard"], ["take_profit", "Take-profit ladder"], ["dca", "DCA into a token"], ["twap", "TWAP (big order)"], ["alert", "Price alert"]];
+const PB_INTRO = "Rules the server watches for you: stop-loss guards, take-profit ladders, DCA (plain or smart), TWAP for big orders and price alerts.";
+const PB_HINT = "stop loss ETH at 3000";
 
 function mountPlaybooks(box) {
   const main = h("div", { class: "ag-col" });
@@ -644,7 +698,18 @@ function mountPlaybooks(box) {
   let stop = null;
   async function render() {
     stop?.();
-    if (!wallet.session) { clear(main, h("div", { class: "ag-intro" }, h("h2", {}, "Playbooks")), needSignIn(main, "Playbooks belong to the wallet you sign in with.")); return; }
+    // a guest sees what a playbook does before the sign-in, and the one-line way to make one from chat
+    if (!wallet.session) {
+      clear(main, h("div", { class: "ag-intro" }, h("h2", {}, "Playbooks"), h("p", {}, PB_INTRO)),
+        needSignIn(main, "Playbooks belong to the wallet you sign in with."),
+        h("div", { class: "panel ag-panel" }, h("h3", {}, "What you get"),
+          h("ul", { class: "ag-points" },
+            h("li", {}, "Stop-loss guards and take-profit ladders on your Hyperliquid perps"),
+            h("li", {}, "DCA and TWAP into Robinhood Chain coins and tokenized stocks, plus price alerts"),
+            h("li", {}, "Checked on the server every 20 seconds: a trigger runs inside your Agent Wallet caps, or comes to your inbox as a ticket to approve")),
+          h("p", { class: "note", style: { margin: 0 } }, "Ask in chat: ", h("a", { class: "link", href: `#/agent?q=${encodeURIComponent(PB_HINT)}` }, `“${PB_HINT}”`))));
+      return;
+    }
     const listBox = h("div", { class: "ag-pb-list" });
     const journalBox = h("div", {});
     const form = h("div", { class: "panel ag-panel" });
@@ -702,7 +767,7 @@ function mountPlaybooks(box) {
           render();
         } catch (e) { toast(e.message, "error", 5000); }
       } }, icon("plus"), "Create playbook"));
-    clear(main, h("div", { class: "ag-intro" }, h("h2", {}, "Playbooks"), h("p", {}, "Rules the server watches for you: stop-loss guards, take-profit ladders, DCA (plain or smart), TWAP for big orders and price alerts.")),
+    clear(main, h("div", { class: "ag-intro" }, h("h2", {}, "Playbooks"), h("p", {}, PB_INTRO)),
       h("div", { class: "panel ag-panel" }, h("h3", {}, "Your playbooks"), listBox), form,
       h("div", { class: "panel ag-panel" }, h("h3", {}, "Trigger journal"), journalBox));
     const load = async () => {
@@ -713,24 +778,35 @@ function mountPlaybooks(box) {
           h("div", { class: "grow" }, h("b", {}, it.title), it.type === "twap" ? h("div", { class: "faint" }, `${it.params.done}/${it.params.slices} slices · ${it.params.filled} of ${it.params.total} ${it.params.side === "buy" ? "ETH" : it.params.symbol}${it.params.lastNote ? ` · ${it.params.lastNote}` : ""}`) : it.params?.smart ? h("div", { class: "faint" }, `${it.params.done}/${it.params.runs} buys · ${it.params.spent || 0} of ${it.params.budget} ETH budget${it.params.lastMult ? ` · last ${it.params.lastMult.toFixed(2)}×` : ""}`) : null, h("div", { class: "faint" }, `${TYPES.find(([v]) => v === it.type)?.[1] || it.type} · ${it.lastCheck ? `checked ${ago(it.lastCheck)} ago` : "waiting for first check"}${it.lastPrice != null ? ` · last ${num(it.lastPrice, it.lastPrice < 1 ? 8 : 4)}` : ""}${it.fires?.length ? ` · fired ${it.fires.length}×` : ""}${it.lastError ? ` · ${it.lastError}` : ""}`)),
           it.status !== "done" ? h("button", { class: "btn ghost sm", type: "button", onclick: async () => { try { await api.post(`watches/${it.id}/toggle`); load(); } catch (e) { toast(e.message, "error"); } } }, it.status === "active" ? "Pause" : "Resume") : null,
           h("button", { class: "btn ghost sm", type: "button", "aria-label": "Delete", onclick: async () => { try { await api.del(`watches/${it.id}`); load(); } catch (e) { toast(e.message, "error"); } } }, icon("trash"))))
-          : h("p", { class: "faint" }, "No playbooks yet. Create one below, or ask in chat: “stop loss ETH at 3000”."));
+          : h("p", { class: "faint" }, `No playbooks yet. Create one below, or ask in chat: “${PB_HINT}”.`));
         clear(journalBox, journalList(j.items, "Nothing has fired yet."));
       } catch (e) { clear(listBox, h("p", { class: "faint" }, e.message)); }
     };
     stop = every(20000, load);
   }
-  const off = onWallet(render);
+  const off = onWho(render);
   return () => { off(); stop?.(); };
 }
 
 /* =====================================================================================
    ARENA (V7 F34): a strategy in plain words → rules → replay on The Record → 7 days on paper; AI traders side by side
    ===================================================================================== */
+// each AI trader shows its model maker's mark (self-hosted SVGs in /img/logos/ai). Some marks are near-black, so they sit on
+// a light tile (.ag-ar-logo) in both themes; the small one inside a line of text is the same tile, scaled down.
+const AI_LOGOS = { "ai-claude": "claude", "ai-gpt": "gpt", "ai-gemini": "gemini", "ai-deepseek": "deepseek", "ai-qwen": "qwen" };
+const aiMark = (id, size = 22, style = null) => AI_LOGOS[id] ? h("img", { class: "ag-ar-logo", src: `/img/logos/ai/${AI_LOGOS[id]}.svg`, alt: "", width: size, height: size,
+  style: size < 22 ? { width: `${size}px`, height: `${size}px`, padding: "3px", borderRadius: "6px", verticalAlign: "middle", ...style } : style }) : null;
+
 function mountArena(box) {
   const main = h("div", { class: "ag-col" });
   clear(box, main);
   const ethf = (v) => (v == null || !isFinite(v) ? "–" : `${v >= 0 ? "+" : ""}${Number(v).toFixed(4)} ETH`);
-  let draft = null;
+  const cls = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
+  const SCAN = "https://robinhoodchain.blockscout.com";
+  const TRADES_SHOWN = 8;
+  let draft = null, mine = null, agents = [], showAll = false, gen = 0;
+  const champAmt = {};   // "ETH a trade" typed into Champions, kept across the 60-second refresh until it is saved
+  const nameOf = (id) => agents.find((a) => a.id === id)?.name || String(id || "").replace(/^ai-/, "");
   const intro = h("div", { class: "ag-intro" }, h("h2", {}, "Arena"), h("p", {}, "Write a strategy in plain words. Troya turns it into rules, replays them on every coin The Record has graded, then runs them for seven days on paper at real prices on every launch Sentry passes. Five AI models trade their own strategies here too, side by side: on paper, and with a small real budget (0.01 ETH each, through the Gate). Your strategy runs on paper."));
   const text = h("textarea", { class: "input", rows: "3", placeholder: "e.g. Buy 0.01 ETH of new Pons coins once the curve raised 1 ETH, skip anything Ring Radar flags, take profit at 2.5x, cut at -25%, never hold more than 12 hours." });
   const out = h("div", {});
@@ -741,6 +817,7 @@ function mountArena(box) {
     try {
       draft = await api.post("arena/strategy", { text: text.value });
       const x = draft.replay;
+      const prove = h("button", { class: "btn primary", type: "button", onclick: () => proveIt(prove) }, mine ? "Replace my strategy" : "Prove it: 7 days on paper");
       clear(out,
         h("p", {}, h("b", {}, "Rules: "), draft.rulesText), draft.thesis ? h("p", { class: "faint" }, draft.thesis) : null,
         h("div", { class: "rows" },
@@ -751,40 +828,83 @@ function mountArena(box) {
           h("div", {}, h("span", {}, "Worst drawdown"), h("span", {}, ethf(x.maxDrawdownEth))),
           h("div", {}, h("span", {}, "Exits"), h("span", {}, `${x.byExit.takeProfit} take-profit · ${x.byExit.stop} stop · ${x.byExit.time} time`))),
         h("p", { class: "note" }, x.caveats),
-        h("button", { class: "btn primary", type: "button", onclick: async () => { try { await api.post("arena/prove", { text: text.value, rules: draft.rules }); toast("Proving for 7 days on paper", "ok"); render(); } catch (e) { toast(e.message, "error"); } } }, "Prove it: 7 days on paper"));
+        prove);
     } catch (e) { clear(out, h("div", { class: "alert error" }, e.message)); }
     readBtn.disabled = false;
   });
-  async function render() {
-    const [board, me, champs, myChamps] = await Promise.all([api.get("arena").catch(() => null), wallet.session ? api.get("arena/me").catch(() => null) : null,
-      api.get("champions").catch(() => null), wallet.session ? api.get("champions/me").catch(() => null) : null]);
-    const mine = me?.agent;
-    const SCAN = "https://robinhoodchain.blockscout.com";
-    const agents = board?.agents || [], recent = board?.recent || [], live = board?.live || null;
-    const nameOf = (id) => agents.find((a) => a.id === id)?.name || String(id || "").replace(/^ai-/, "");
-    const cls = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
+
+  // proving again restarts the run, and the server drops the strategy's open paper trades, so a strategy already running is
+  // never replaced without a look at what goes (asked fresh, so a refresh that has not landed yet cannot hide it)
+  async function proveIt(btn) {
+    if (!draft) return;
+    btn.disabled = true;
+    const fresh = await api.get("arena/me").catch(() => null);
+    const cur = fresh ? fresh.agent || null : mine;
+    if (cur) {
+      const n = cur.stats?.open || 0, trades = `${n} open paper trade${n === 1 ? "" : "s"}`;
+      const summary = (cur.status === "proving" ? "This restarts your 7 days" : `This replaces your ${cur.status === "proven" ? "proven " : ""}strategy and starts a fresh 7 days on paper`)
+        + (n ? ` and closes ${trades}. They are paper: nothing is sold, and they do not count in your results.` : ".")
+        + (cur.status === "proven" ? " It stops counting as proven, so anyone following it copies nothing until the new rules prove themselves." : "");
+      const ok = await review({ title: "Replace my strategy", summary, rows: [["Now", cur.rulesText], ["New", draft.rulesText]], confirmLabel: "Replace my strategy", danger: true });
+      if (!ok) { btn.disabled = false; return; }
+    }
+    try {
+      await api.post("arena/prove", { text: text.value, rules: draft.rules });
+      toast(cur ? "Replaced: your new strategy proves for 7 days on paper" : "Proving for 7 days on paper", "ok");
+      draft = null; clear(out);
+      load();
+    } catch (e) { toast(e.message, "error"); btn.disabled = false; }
+  }
+
+  // one panel per part, each repainted on its own. The strategy card sits right under the intro, so the main action is on
+  // the first screen; then the board, the Anthropic Round, Champions and the latest trades.
+  const stratP = h("div", { class: "panel ag-panel" }), stratH = h("h3", {}, "Write a strategy"), mineBox = h("div", {});
+  const boardP = h("div", { class: "panel ag-panel" }, h("div", { class: "sk", style: { height: "220px" } }));
+  const antP = h("div", { class: "panel ag-panel" }), champP = h("div", { class: "panel ag-panel ch-panel" }), tradesP = h("div", { class: "panel ag-panel" }), howP = h("p", { class: "note" });
+  for (const el of [mineBox, antP, champP, tradesP, howP]) show(el, false);
+  clear(main, intro, stratP, boardP, antP, champP, tradesP, howP);
+
+  function buildStrategy() {
+    if (!wallet.session) {
+      clear(stratP, h("h3", {}, "Write a strategy"),
+        h("p", { class: "faint", style: { margin: 0 } }, "Describe it in plain words. Troya turns it into rules, replays them on The Record, then proves them for 7 days on paper at real prices."),
+        needSignIn(main, "Sign in to write and prove a strategy."));
+      return;
+    }
+    clear(stratP, stratH, mineBox, text, h("div", { class: "row" }, readBtn), out);
+  }
+  function paintMine() {
+    stratH.textContent = mine ? "Your strategy" : "Write a strategy";
+    show(mineBox, !!mine);
+    if (!mine) return clear(mineBox);
+    clear(mineBox,
+      h("p", { style: { margin: "0 0 6px" } }, h("b", {}, `${mine.status === "proving" ? `Proving until ${new Date(mine.provingUntil).toUTCString().slice(5, 22)} UTC` : mine.status}`), ` · ${mine.rulesText}`),
+      h("p", { class: "faint", style: { margin: 0 } }, `${mine.stats.closed} closed · ${ethf(mine.stats.pnlEth)}${mine.stats.open ? ` · ${mine.stats.open} open` : ""}. Proven = 5+ closed trades and a profit after 7 days. To change it, write a new one below.`));
+  }
+
+  function paintBoard(board) {
+    if (!board) return clear(boardP, h("h3", {}, "The board"), h("p", { class: "faint", style: { margin: 0 } }, "The board is unavailable right now. It comes back on the next refresh."));
+    const recent = board.recent || [], live = board.live || null;
     const sum = (f) => agents.reduce((t, a) => t + (f(a) || 0), 0);
     const paperClosed = sum((a) => a.stats.pnlEth), paperTrades = sum((a) => a.stats.closed);
     const wins = recent.filter((p) => p.mode !== "live" && p.status === "closed" && p.pnlEth > 0).length, closedRecent = recent.filter((p) => p.mode !== "live" && p.status === "closed").length;
+    const ais = agents.filter((a) => a.kind === "ai");
     const liveAgents = agents.filter((a) => a.live);
     const liveResult = liveAgents.length ? sum((a) => (a.live ? a.live.pnlEth + a.live.openPnlEth : 0)) : null;
-    const liveBudget = live ? live.budgetPerTraderEth * agents.filter((a) => a.kind === "ai").length : null;
-    const liveLeft = live ? agents.filter((a) => a.kind === "ai").reduce((t, a) => t + (a.live ? Number(a.live.equityEth) : live.budgetPerTraderEth), 0) : null;
+    const liveBudget = live ? live.budgetPerTraderEth * ais.length : null;
+    const liveLeft = live ? ais.reduce((t, a) => t + (a.live ? Number(a.live.equityEth) : live.budgetPerTraderEth), 0) : null;
     const stat = (k, v, sub, c = "") => h("div", { class: "stat" }, h("div", { class: "k" }, k), h("div", { class: `v ${c}` }, v), sub ? h("div", { class: "faint" }, sub) : null);
     const summary = h("div", { class: "stats ag-ar-sum" },
       stat("Live money", live ? `${liveLeft.toFixed(4)} ETH` : "Paper only", live ? `of ${liveBudget.toFixed(2)} ETH · ${live.budgetPerTraderEth} per AI trader` : "Live trading is off"),
       stat("Live result", liveResult == null ? "No trade yet" : ethf(liveResult), liveResult == null ? "Waits for a launch that fits a trader's rules and passes the Gate" : `${sum((a) => a.live?.closed)} closed · ${sum((a) => a.live?.open)} open`, cls(liveResult)),
       stat("Paper result", ethf(paperClosed), `${paperTrades} closed trades${closedRecent ? ` · ${Math.round((wins / closedRecent) * 100)}% wins lately` : ""}`, cls(paperClosed)),
-      stat("Traders", String(agents.length), `${agents.filter((a) => a.kind === "ai").length} AI models${agents.length > agents.filter((a) => a.kind === "ai").length ? " + strategies" : ""}`));
+      stat("Traders", String(agents.length), `${ais.length} AI models${agents.length > ais.length ? " + strategies" : ""}`));
     const walletLine = live?.wallet ? h("p", { class: "ag-ar-wallet" }, "Live trades come from the Arena's own Agent Wallet ", h("a", { class: "mono link", href: `${SCAN}/address/${live.wallet}`, target: "_blank", rel: "noopener" }, short(live.wallet, 4)),
       ". Every buy and sell is a real transaction you can open on Blockscout.") : null;
-
-    // each AI trader shows its model maker's mark (self-hosted SVGs in /img/logos/ai)
-    const AI_LOGOS = { "ai-claude": "claude", "ai-gpt": "gpt", "ai-gemini": "gemini", "ai-deepseek": "deepseek", "ai-qwen": "qwen" };
     const card = (a, i) => {
       const open = recent.filter((p) => p.agent === a.id && p.status === "open");
       return h("div", { class: "ag-ar-card" },
-        h("div", { class: "ag-ar-head" }, h("span", { class: "ag-ar-rank" }, String(i + 1)), AI_LOGOS[a.id] ? h("img", { class: "ag-ar-logo", src: `/img/logos/ai/${AI_LOGOS[a.id]}.svg`, alt: a.name, width: 22, height: 22 }) : null, h("div", { class: "grow" }, h("b", {}, a.name), h("div", { class: "faint mono" }, a.kind === "ai" ? a.model : "strategy")),
+        h("div", { class: "ag-ar-head" }, h("span", { class: "ag-ar-rank" }, String(i + 1)), aiMark(a.id), h("div", { class: "grow" }, h("b", {}, a.name), h("div", { class: "faint mono" }, a.kind === "ai" ? a.model : "strategy")),
           h("span", { class: `ag-ar-status ${a.status}` }, a.status)),
         h("div", { class: "ag-ar-books" },
           h("div", { class: "ag-ar-book" }, h("div", { class: "k" }, h("span", { class: "ag-ar-tag" }, "Paper")), h("div", { class: `v ${cls(a.stats.pnlEth)}` }, ethf(a.stats.pnlEth)),
@@ -796,40 +916,60 @@ function mountArena(box) {
         a.thesis ? h("details", { class: "ag-ar-why" }, h("summary", {}, "Why these rules"), h("p", {}, a.thesis)) : null,
         open.length ? h("div", { class: "ag-ar-open" }, h("div", { class: "faint" }, "Holding now"), open.map((p) => h("a", { class: "chip", href: `#/token/${p.token}` }, p.mode === "live" ? h("span", { class: "ag-ar-dot" }) : null, `$${p.symbol}`, h("span", { class: cls(p.valueEth != null ? p.valueEth - p.amountEth : null) }, p.valueEth != null ? ethf(p.valueEth - p.amountEth) : "")))) : null);
     };
+    clear(boardP, h("div", { class: "ag-ar-top" }, h("h3", {}, "The board"), h("a", { class: "link", href: "/arena", target: "_self" }, "Full Arena page")), summary, walletLine,
+      agents.length ? h("div", { class: "ag-ar-grid" }, agents.map(card)) : h("p", { class: "faint", style: { margin: 0 } }, "The AI traders write their first rules within minutes of the Arena opening."));
+  }
 
-    const link = (href, text) => h("a", { class: "ag-ar-l", href, target: "_blank", rel: "noopener" }, text);
-    const tr = (p) => h("div", { class: `ag-ar-tr ${p.mode}` },
-      h("span", { class: `ag-ar-tag ${p.mode === "live" ? "live" : ""}` }, p.mode === "live" ? "Live" : "Paper"),
-      h("div", { class: "grow" },
-        h("div", {}, h("a", { class: "link", href: `#/token/${p.token}` }, h("b", {}, `$${p.symbol}`)), h("span", { class: "faint" }, ` · ${nameOf(p.agent)} · ${p.status === "open" ? `bought ${ago(p.openedAt)} ago` : `${p.reason} ${ago(p.closedAt)} ago`}`)),
-        h("div", { class: "ag-ar-links" },
-          p.txBuy ? link(`${SCAN}/tx/${p.txBuy}`, "Buy tx") : null,
-          p.txSell ? link(`${SCAN}/tx/${p.txSell}`, "Sell tx") : null,
-          p.seal ? link(`/api/seal/r/${p.seal}`, "Receipt") : null,
-          link(`${SCAN}/token/${p.token}`, "Coin"))),
-      h("span", { class: `ag-ar-pnl ${p.status === "open" ? "" : cls(p.pnlEth)}` }, p.status === "open" ? (p.valueEth != null ? `${ethf(p.valueEth - p.amountEth)} so far` : "open") : ethf(p.pnlEth)));
+  // Anthropic Round: the same five AI traders, one call each on xyz:ANT (the trade.xyz perp that tracks the Nasdaq share)
+  function paintAnt(a) {
+    const traders = a?.traders || [];
+    show(antP, traders.length > 0);
+    if (!traders.length) return;
+    const last = new Map();
+    for (const c of a.recent || []) if (!last.has(c.agent)) last.set(c.agent, c);
+    const m = Number(a.mark?.mark);
+    clear(antP,
+      h("div", { class: "ag-ar-top" }, h("h3", {}, "Anthropic Round"),
+        h("span", { class: "row", style: { gap: "14px" } }, h("a", { class: "link", href: "#/perps/xyz:ANT" }, "Trade ANT"), h("a", { class: "link", href: "/arena#anthropic", target: "_self" }, "Full round"))),
+      h("p", { class: "faint", style: { margin: 0 } }, `${m > 0 ? `ANT at $${m.toFixed(2)} on the trade.xyz perp` : "ANT on the trade.xyz perp"} · ${a.live ? "live money" : "paper"} · each AI trader goes long, short or flat on a $${a.stake} stake.`),
+      h("div", { class: "ag-ar-open" }, traders.map((t) => {
+        const c = t.open || last.get(t.agent);
+        const now = c && c.side !== "flat" ? (c.status === "open" ? c.nowPct : c.pnlPct) : null;
+        const side = !c ? "no call yet" : c.side === "flat" ? "flat" : `${c.side === "long" ? "long" : "short"} ${c.lev}x`;
+        return h("span", { class: "chip", title: c?.thesis || "" }, aiMark(t.agent, 14), h("b", {}, t.name || nameOf(t.agent)), side,
+          now != null && isFinite(now) ? h("span", { class: cls(now) }, `${now >= 0 ? "+" : ""}${Number(now).toFixed(1)}%`) : null);
+      })));
+  }
 
-    // V8 F43 Champions: follow a proven trader into your own capped Agent Wallet. Traders that do not qualify (paused by
-    // Troya, fewer than 5 live trades in profit, a loss on paper) are listed greyed out with the reason and Follow off;
-    // a follow you already saved on one stays saved but buys nothing, and Unfollow stays open so you can drop it.
+  // V8 F43 Champions: follow a proven trader into your own capped Agent Wallet. Traders that do not qualify (paused by
+  // Troya, fewer than 5 live trades in profit, a loss on paper) are listed greyed out with the reason and Follow off;
+  // a follow you already saved on one stays saved but buys nothing, and Unfollow stays open so you can drop it.
+  function paintChamps(champs, myChamps) {
+    show(champP, !!champs);
+    if (!champs) return;
     const follows = myChamps?.follows || {};
-    const champOk = (champs?.champions || []).filter((c) => c.followable !== false);
-    const champOff = [...(champs?.champions || []).filter((c) => c.followable === false), ...(champs?.others || [])];
+    const champOk = (champs.champions || []).filter((c) => c.followable !== false);
+    const champOff = [...(champs.champions || []).filter((c) => c.followable === false), ...(champs.others || [])];
     const champRow = (c) => {
       const f = follows[c.id], can = c.followable !== false;
-      const amt = h("input", { class: "sc-in", type: "text", inputmode: "decimal", value: String(f?.buyEth ?? champs.buy?.def ?? 0.002), "aria-label": `ETH a trade when following ${c.name}` });
+      const amt = h("input", { class: "sc-in", type: "text", inputmode: "decimal", value: String(champAmt[c.id] ?? f?.buyEth ?? champs.buy?.def ?? 0.002), "aria-label": `ETH a trade when following ${c.name}` });
+      amt.addEventListener("input", () => { champAmt[c.id] = amt.value; });
       const rec = [c.live ? `Live ${ethf(c.live.pnlEth + (c.live.openPnlEth || 0))} · ${c.live.closed} closed` : null, `Paper ${ethf(c.paper?.pnlEth)} · ${c.paper?.closed || 0} closed`].filter(Boolean).join(" · ");
       return h("div", { class: `ch-row${f?.on && can ? " on" : ""}` },
-        h("div", { class: "ch-who", style: can ? null : { opacity: ".55" } }, AI_LOGOS[c.id] ? h("img", { class: "ag-ar-logo", src: `/img/logos/ai/${AI_LOGOS[c.id]}.svg`, alt: "", width: 22, height: 22 }) : null,
+        h("div", { class: "ch-who", style: can ? null : { opacity: ".55" } }, aiMark(c.id),
           h("div", {}, h("b", {}, c.name), h("div", { class: "faint" }, `${rec} · ${c.followers} following`),
             can ? null : h("div", { class: "faint" }, f?.on ? `${c.reason}. Your follow is saved but buys nothing until it qualifies again.` : c.reason))),
         wallet.session ? h("div", { class: "ch-act" }, can ? [amt, h("span", { class: "faint" }, "ETH a trade")] : null,
-          h("button", { class: `btn sm ${f?.on || !can ? "" : "primary"}`, type: "button", disabled: !can && !f?.on, title: can ? null : c.reason, onclick: async () => {
-            try { await api.post("champions/follow", { agentId: c.id, buyEth: Number(amt.value), on: !f?.on }); toast(f?.on ? `Stopped following ${c.name}.` : `Following ${c.name}. Each trade passes the Gate, your caps and your trust ladder (Agent → Scepter).`, "ok"); render(); }
-            catch (e) { toast(e.message, "error"); }
+          h("button", { class: `btn sm ${f?.on || !can ? "" : "primary"}`, type: "button", "data-k": `follow-${c.id}`, disabled: !can && !f?.on, title: can ? null : c.reason, onclick: async () => {
+            try {
+              await api.post("champions/follow", { agentId: c.id, buyEth: Number(amt.value), on: !f?.on });
+              delete champAmt[c.id];
+              toast(f?.on ? `Stopped following ${c.name}.` : `Following ${c.name}. Each trade passes the Gate, your caps and your trust ladder (Agent → Scepter).`, "ok");
+              load();
+            } catch (e) { toast(e.message, "error"); }
           } }, f?.on ? "Unfollow" : "Follow")) : null);
     };
-    const champPanel = champs ? h("div", { class: "panel ag-panel ch-panel" },
+    clear(champP,
       h("div", { class: "ag-ar-top" }, h("h3", {}, "Champions"), h("span", { class: "faint" }, "Follow a proven trader")),
       h("p", { class: "faint", style: { margin: "0 0 10px" } }, champs.rule),
       champOk.length ? h("div", { class: "ch-list" }, champOk.map(champRow))
@@ -837,23 +977,54 @@ function mountArena(box) {
       champOff.length ? h("div", { class: "ch-list", style: champOk.length ? { marginTop: "8px" } : null }, champOff.map(champRow)) : null,
       (myChamps?.trades || []).length ? h("div", { class: "ch-mine" }, h("h4", {}, "Your follow trades"), h("ul", { class: "sc-list" }, myChamps.trades.slice(0, 8).map((t) => h("li", {},
         h("div", {}, h("b", {}, `$${t.symbol}`), h("div", { class: "faint" }, `${nameOf(t.agent)} · ${t.result || ""}${t.exit ? ` · ${t.exit}` : ""}`)), h("span", { class: `sc-st s-${t.status === "open" ? "executed" : t.status === "skipped" ? "blocked" : "closed"}` }, t.status))))) : null,
-      !wallet.session ? needSignIn(main, "Sign in to follow a champion.") : null) : null;
-    clear(main, intro,
-      champPanel,
-      h("div", { class: "panel ag-panel" }, h("div", { class: "ag-ar-top" }, h("h3", {}, "The board"), h("a", { class: "link", href: "/arena", target: "_self" }, "Full Arena page")), summary, walletLine,
-        agents.length ? h("div", { class: "ag-ar-grid" }, agents.map(card)) : h("p", { class: "faint", style: { margin: 0 } }, "The AI traders write their first rules within minutes of the Arena opening.")),
-      recent.length ? h("div", { class: "panel ag-panel" }, h("h3", {}, "Latest trades"),
-        h("p", { class: "faint", style: { margin: "0 0 6px" } }, "Live rows are real transactions: open them on Blockscout. Paper rows send nothing; each has a signed receipt instead."),
-        h("div", { class: "ag-ar-trades" }, recent.slice(0, 24).map(tr))) : null,
-      h("div", { class: "panel ag-panel" }, h("h3", {}, mine ? "Your strategy" : "Write a strategy"),
-        mine ? h("div", {}, h("p", {}, h("b", {}, `${mine.status === "proving" ? `Proving until ${new Date(mine.provingUntil).toUTCString().slice(5, 22)} UTC` : mine.status}`), ` · ${mine.rulesText}`),
-          h("p", { class: "faint" }, `${mine.stats.closed} closed · ${ethf(mine.stats.pnlEth)}${mine.stats.open ? ` · ${mine.stats.open} open` : ""}. Proven = 5+ closed trades and a profit after 7 days.`)) : null,
-        wallet.session ? [text, h("div", { class: "row", style: { marginTop: "8px" } }, readBtn), out] : needSignIn(main, "Sign in to write and prove a strategy.")),
-      board?.how ? h("p", { class: "note" }, board.how) : null);
+      !wallet.session ? needSignIn(main, "Sign in to follow a champion.") : null);
   }
-  render();
-  const off = onWallet(() => render());
-  const t = setInterval(() => { if (!document.hidden && !document.activeElement?.matches("textarea")) render(); }, 60000);
+
+  const link = (href, label) => h("a", { class: "ag-ar-l", href, target: "_blank", rel: "noopener" }, label);
+  const tr = (p) => h("div", { class: `ag-ar-tr ${p.mode}` },
+    h("span", { class: `ag-ar-tag ${p.mode === "live" ? "live" : ""}` }, p.mode === "live" ? "Live" : "Paper"),
+    h("div", { class: "grow" },
+      h("div", {}, h("a", { class: "link", href: `#/token/${p.token}` }, h("b", {}, `$${p.symbol}`)),
+        h("span", { class: "faint" }, " · ", aiMark(p.agent, 14, { margin: "-2px 5px 0 0" }), `${nameOf(p.agent)} · ${p.status === "open" ? `bought ${ago(p.openedAt)} ago` : `${p.reason} ${ago(p.closedAt)} ago`}`)),
+      h("div", { class: "ag-ar-links" },
+        p.txBuy ? link(`${SCAN}/tx/${p.txBuy}`, "Buy tx") : null,
+        p.txSell ? link(`${SCAN}/tx/${p.txSell}`, "Sell tx") : null,
+        p.seal ? link(`/api/seal/r/${p.seal}`, "Receipt") : null,
+        link(`${SCAN}/token/${p.token}`, "Coin"))),
+    h("span", { class: `ag-ar-pnl ${p.status === "open" ? "" : cls(p.pnlEth)}` }, p.status === "open" ? (p.valueEth != null ? `${ethf(p.valueEth - p.amountEth)} so far` : "open") : ethf(p.pnlEth)));
+  let lastRecent = [];
+  function paintTrades(recent = lastRecent) {
+    lastRecent = recent;
+    show(tradesP, recent.length > 0);
+    if (!recent.length) return;
+    const more = recent.length > TRADES_SHOWN;
+    clear(tradesP,
+      h("div", { class: "ag-ar-top" }, h("h3", {}, "Latest trades"),
+        more ? h("button", { class: "link", type: "button", "data-k": "trades-all", onclick: () => { showAll = !showAll; keepFocus(tradesP, () => paintTrades()); } }, showAll ? "Show fewer" : `Show all ${recent.length}`) : null),
+      h("p", { class: "faint", style: { margin: "0 0 6px" } }, "Live rows are real transactions: open them on Blockscout. Paper rows send nothing; each has a signed receipt instead."),
+      h("div", { class: "ag-ar-trades" }, (showAll ? recent : recent.slice(0, TRADES_SHOWN)).map(tr)));
+  }
+
+  // timed: the 60-second refresh, which leaves Champions alone while an amount is being typed there; a pressed button keeps
+  // its focus through the repaint (data-k)
+  async function load(timed = false) {
+    const g = gen;
+    const [board, me, champs, myChamps, ant] = await Promise.all([api.get("arena").catch(() => null), wallet.session ? api.get("arena/me").catch(() => null) : null,
+      api.get("champions").catch(() => null), wallet.session ? api.get("champions/me").catch(() => null) : null, api.get("arena/anthropic").catch(() => null)]);
+    if (g !== gen || !main.isConnected) return;
+    mine = me?.agent || null;
+    agents = board?.agents || [];
+    if (wallet.session) paintMine();
+    paintBoard(board);
+    paintAnt(ant);
+    if (!(timed && inUse(champP))) keepFocus(champP, () => paintChamps(champs, myChamps));
+    keepFocus(tradesP, () => paintTrades(board?.recent || []));
+    howP.textContent = board?.how || "";
+    show(howP, !!board?.how);
+  }
+  // a new wallet or sign-in: the strategy card changes shape and the old replay no longer belongs to anyone
+  const off = onWho(() => { gen++; mine = null; draft = null; clear(out); buildStrategy(); load(); });
+  const t = setInterval(() => { if (!document.hidden) load(true); }, 60000);
   return () => { off(); clearInterval(t); };
 }
 
@@ -868,35 +1039,57 @@ function mountAegis(box) {
     h("div", { class: "grow" }, (() => { const b = h("b", { class: e.level === "red" ? "down" : "" }, `${e.level === "red" ? "RED" : "Amber"} · ${AEGIS_KIND[e.kind] || e.kind}`); return e.token ? h("a", { class: "link", href: `#/gate/${e.token}`, title: "Open this coin on the Gate: its Oath, Aegis and verdict" }, b) : b; })(), h("span", { class: "faint" }, ` · $${e.symbol || "?"} · ${ago(e.at)} ago`), h("div", { class: "faint" }, e.text)),
     e.token ? h("a", { class: "link", href: `#/gate/${e.token}` }, "Gate") : null,
     e.tx ? h("a", { class: "link", href: `https://robinhoodchain.blockscout.com/tx/${e.tx}`, target: "_blank", rel: "noopener" }, "Tx") : null);
-  async function render() {
-    const f = await api.get("aegis/feed").catch(() => null);
+  const intro = h("div", { class: "ag-intro" }, h("h2", {}, "Aegis"), h("p", {}, "A guard on every coin you hold on Robinhood Chain. Once a minute Aegis reads what the dev, the wallets it disclosed and the top holders do, and test-sells your coin every five minutes. When the dev dumps, a whale sells, the sell tax jumps, the coin stops selling or the dev breaks its Oath, you get an alert in your inbox and on Telegram. In exit mode a red alert also prepares the sell to ETH for you to approve."));
+  // d: this wallet's settings and guarded coins, f: the public feed. A tap changes d at once and paints; the save and the
+  // refresh run behind it, so a second tap reads the new state instead of the old one.
+  let d = null, f = null, gen = 0, saveSeq = 0, pending = 0, later = null;
+
+  function paint() {
     const caught = h("div", { class: "panel ag-panel" }, h("h3", {}, "What Aegis caught lately"), f?.events?.length ? h("div", { class: "ap-list" }, f.events.slice(0, 15).map(evRow)) : h("p", { class: "faint", style: { margin: 0 } }, "Nothing raised yet on the coins people guard."));
-    const intro = h("div", { class: "ag-intro" }, h("h2", {}, "Aegis"), h("p", {}, "A guard on every coin you hold on Robinhood Chain. Once a minute Aegis reads what the dev, the wallets it disclosed and the top holders do, and test-sells your coin every five minutes. When the dev dumps, a whale sells, the sell tax jumps, the coin stops selling or the dev breaks its Oath, you get an alert in your inbox and on Telegram. In exit mode a red alert also prepares the sell to ETH for you to approve."));
     if (!wallet.session) { clear(main, intro, needSignIn(main, "Sign in to guard your coins."), caught); return; }
-    let d;
-    try { d = await api.get("aegis/me"); } catch (e) { clear(main, intro, h("div", { class: "alert error" }, e.message)); return; }
-    const save = async (patch) => { try { await api.post("aegis/me", { on: d.on, mode: d.mode, minUsd: d.minUsd, ...patch }); toast("Saved", "ok"); setTimeout(render, 2500); } catch (e) { toast(e.message, "error"); } };
-    const sw = h("button", { class: `ag-switch ${d.on ? "on" : ""}`, type: "button", role: "switch", "aria-checked": String(d.on), "aria-label": "Aegis on or off", onclick: () => save({ on: !d.on }) }, h("i"));
+    if (!d) { clear(main, intro, h("div", { class: "sk", style: { height: "160px" } })); return; }
+    if (d.error) { clear(main, intro, h("div", { class: "alert error" }, d.error)); return; }
+    const sw = h("button", { class: `ag-switch ${d.on ? "on" : ""}`, type: "button", role: "switch", "aria-checked": String(d.on), "aria-label": "Aegis on or off", "data-k": "sw", onclick: () => save({ on: !d.on }) }, h("i"));
     const mode = h("div", { class: "seg" },
-      h("button", { type: "button", "aria-pressed": String(d.mode === "alert"), onclick: () => save({ mode: "alert" }) }, "Alert"),
-      h("button", { type: "button", "aria-pressed": String(d.mode === "exit"), onclick: () => save({ mode: "exit" }) }, "Exit"));
+      h("button", { type: "button", "aria-pressed": String(d.mode === "alert"), "data-k": "alert", onclick: () => save({ mode: "alert" }) }, "Alert"),
+      h("button", { type: "button", "aria-pressed": String(d.mode === "exit"), "data-k": "exit", onclick: () => save({ mode: "exit" }) }, "Exit"));
     const coin = (c) => h("div", { class: "ap-row" },
       h("div", { class: "grow" }, h("b", {}, `$${c.symbol}`), h("span", { class: "faint" }, `${c.usd != null ? ` · ${usd(c.usd)}` : ""}${c.inAgentWallet ? " · Agent Wallet" : ""}`),
         c.events?.length ? h("div", { class: c.events[0].level === "red" ? "down" : "faint" }, `${AEGIS_KIND[c.events[0].kind] || c.events[0].kind}: ${c.events[0].text}`) : h("div", { class: "faint" }, "Quiet so far.")),
       h("span", { class: "faint" }, c.sellTest ? (c.sellTest.ok ? `sells · tax ${Number(c.sellTest.tax || 0).toFixed(1)}%` : "sell test failed") : "sell test pending"));
+    const coins = d.coins || [];
     clear(main, intro,
       h("div", { class: "panel ag-panel" },
         h("div", { class: "ag-auto-h" }, h("div", {}, h("b", {}, d.on ? `On · ${d.mode === "exit" ? "exit tickets on red" : "alerts only"}` : "Off"),
           h("div", { class: "faint" }, d.mode === "exit" ? (d.autoExit ? "A red alert sells coins held in your Agent Wallet through the Gate and its caps; coins in your own wallet get a ticket to approve." : "A red alert prepares a sell to ETH for you to approve in Portfolio, Inbox.") : "You decide every exit; Aegis only tells you.")),
           h("div", { class: "row" }, mode, sw)),
         h("p", { class: "note", style: { margin: "10px 0 0" } }, `Guards up to ${d.limit} coins${d.limit < 10 ? " (Holder Pass: up to 50)" : ""}, largest first${d.capped ? `; ${d.capped} more not guarded` : ""}. Link Telegram in Settings to get the alerts there.`)),
-      h("div", { class: "panel ag-panel" }, h("h3", {}, `Guarded coins (${d.coins.length})`), d.coins.length ? h("div", { class: "ap-list" }, d.coins.map(coin)) : h("p", { class: "faint", style: { margin: 0 } }, d.on ? "Reading your wallet. Coins show up here within a minute." : "Switch it on and every coin in your wallet and Agent Wallet is guarded.")),
+      h("div", { class: "panel ag-panel" }, h("h3", {}, `Guarded coins (${coins.length})`), coins.length ? h("div", { class: "ap-list" }, coins.map(coin)) : h("p", { class: "faint", style: { margin: 0 } }, d.on ? "Reading your wallet. Coins show up here within a minute." : "Switch it on and every coin in your wallet and Agent Wallet is guarded.")),
       caught);
   }
-  render();
-  const off = onWallet(() => render());
-  const t = setInterval(() => { if (!document.hidden) render(); }, 30000);
-  return () => { off(); clearInterval(t); };
+  async function load() {
+    const g = gen, s0 = saveSeq;
+    const [feed, me] = await Promise.all([api.get("aegis/feed").catch(() => null), wallet.session ? api.get("aegis/me").catch((e) => ({ error: e.message })) : null]);
+    // a newer sign-in, or a tap since this started (or still saving): that tap's own refresh paints instead
+    if (g !== gen || s0 !== saveSeq || pending || !main.isConnected) return;
+    f = feed; d = me;
+    keepFocus(main, paint);
+  }
+  async function save(patch) {
+    if (!d || d.error) return;
+    const before = { on: d.on, mode: d.mode }, seq = ++saveSeq;
+    Object.assign(d, patch);
+    keepFocus(main, paint);
+    pending++;
+    try { await api.post("aegis/me", { on: d.on, mode: d.mode, minUsd: d.minUsd }); if (seq === saveSeq) toast("Saved", "ok"); }
+    catch (e) { if (seq === saveSeq) { Object.assign(d, before); keepFocus(main, paint); } toast(e.message, "error"); return; }
+    finally { pending--; }
+    // the guarded list follows in the background: Aegis reads the wallet a moment after it is switched on
+    clearTimeout(later); later = setTimeout(load, 2500);
+  }
+  const off = onWho(() => { gen++; d = null; paint(); load(); });
+  const t = setInterval(() => { if (!document.hidden) load(); }, 30000);
+  return () => { off(); clearInterval(t); clearTimeout(later); };
 }
 
 /* =====================================================================================
@@ -906,41 +1099,80 @@ function mountSentryAuto(box) {
   const main = h("div", { class: "ag-col" });
   clear(box, main);
   const ethf = (v, d = 4) => (v == null || !isFinite(v) ? "–" : `${Number(v).toFixed(d)} ETH`);
-  async function render() {
-    if (!wallet.session) { clear(main, h("div", { class: "ag-intro" }, h("h2", {}, "Sentry Autopilot"), h("p", {}, "Give the agent your rules and it buys Pons launches that pass Troya Gate, then sells at your take-profit or stop. It runs on the server around the clock.")), needSignIn(main, "Sign in to set your rules.")); return; }
-    let d;
-    try { d = await api.get("autopilot"); } catch (e) { clear(main, h("div", { class: "alert error" }, e.message)); return; }
+  // the rules form is built once per sign-in and again only after its own save: the 30-second refresh repaints the switch,
+  // the results and the positions, never a field someone is typing in
+  let d = null, gen = 0;
+  const head = h("div", { class: "ag-auto-h" }), formBox = h("div", { style: { display: "grid", gap: "12px" } });
+  const resultsP = h("div", { class: "panel ag-panel" }), openP = h("div", { class: "panel ag-panel" }), closedP = h("div", { class: "panel ag-panel" });
+  // returns whether it saved; a failed save leaves typed rules as they are, and the refresh puts the switches back
+  const save = async (patch, rules = false) => {
+    let ok = true;
+    try { await api.post("autopilot/settings", patch); toast("Saved", "ok"); } catch (e) { ok = false; toast(e.message, "error"); }
+    await refresh({ rules: rules && ok });
+    return ok;
+  };
+
+  function paintForm() {
     const s = d.settings, r = s.rules;
-    const save = async (patch) => { try { await api.post("autopilot/settings", patch); toast("Saved", "ok"); render(); } catch (e) { toast(e.message, "error"); } };
-    const sw = h("button", { class: `ag-switch ${s.on ? "on" : ""}`, type: "button", role: "switch", "aria-checked": String(s.on), onclick: () => save({ on: !s.on }) }, h("i"));
-    const mode = h("div", { class: "seg" },
-      h("button", { type: "button", "aria-pressed": String(s.mode === "practice"), onclick: () => save({ mode: "practice" }) }, "Practice"),
-      h("button", { type: "button", "aria-pressed": String(s.mode === "live"), disabled: !s.liveAvailable, title: s.liveAvailable ? "" : "Live mode opens after it passes real-money tests", onclick: () => save({ mode: "live" }) }, "Live"));
     const f = (key, label, step, suffix) => h("label", { class: "field" }, h("span", {}, label), h("div", { class: "row" }, h("input", { class: "input", type: "number", step, min: d.limits[key][0], max: d.limits[key][1], value: r[key], name: key }), suffix ? h("span", { class: "faint" }, suffix) : null));
     const form = h("div", { class: "ag-grid3" }, f("minRaisedEth", "Curve raised at least", "0.1", "ETH"), f("buyEth", "Buy per coin", "0.001", "ETH"), f("takeProfitX", "Take profit at", "0.1", "x"), f("stopPct", "Stop at", "1", "% down"), f("maxOpen", "Open at once", "1", ""), f("maxBuysPerDay", "Buys a day", "1", ""));
-    const saveRules = h("button", { class: "btn primary", type: "button", onclick: () => save({ rules: Object.fromEntries([...form.querySelectorAll("input")].map((i) => [i.name, Number(i.value)])) }) }, "Save rules");
-    const pub = h("label", { class: "row" }, h("input", { type: "checkbox", checked: s.public, onchange: (e) => save({ public: e.target.checked }) }), "Show my results on the leaderboard (address shortened)");
-    const st = d.stats;
+    const saveRules = h("button", { class: "btn primary", type: "button", onclick: () => save({ rules: Object.fromEntries([...form.querySelectorAll("input")].map((i) => [i.name, Number(i.value)])) }, true) }, "Save rules");
+    const pub = h("label", { class: "row" }, h("input", { type: "checkbox", checked: s.public, onchange: async (e) => { const want = e.target.checked; if (!(await save({ public: want }))) e.target.checked = !want; } }), "Show my results on the leaderboard (address shortened)");
+    clear(formBox, form, h("div", { class: "row", style: { justifyContent: "space-between", flexWrap: "wrap", gap: "10px" } }, pub, saveRules));
+  }
+  // a pressed control (the switch, a Close button) keeps its focus through the repaint (data-k)
+  function paintLive() {
+    const s = d.settings, st = d.stats;
+    keepFocus(head, () => {
+      const sw = h("button", { class: `ag-switch ${s.on ? "on" : ""}`, type: "button", role: "switch", "aria-checked": String(s.on), "aria-label": "Sentry Autopilot on or off", "data-k": "sw", onclick: () => save({ on: !s.on }) }, h("i"));
+      const mode = h("div", { class: "seg" },
+        h("button", { type: "button", "aria-pressed": String(s.mode === "practice"), "data-k": "practice", onclick: () => save({ mode: "practice" }) }, "Practice"),
+        h("button", { type: "button", "aria-pressed": String(s.mode === "live"), "data-k": "live", disabled: !s.liveAvailable, title: s.liveAvailable ? "" : "Live mode opens after it passes real-money tests", onclick: () => save({ mode: "live" }) }, "Live"));
+      clear(head, h("div", {}, h("b", {}, s.on ? `On · ${s.mode === "live" ? "live, Agent Wallet" : "practice, play money"}` : "Off"), h("div", { class: "faint" }, s.liveAvailable ? "Live mode buys and sells from your Agent Wallet." : "Live mode opens after it passes real-money tests. Practice runs at real prices meanwhile.")), h("div", { class: "row" }, mode, sw));
+    });
     const line = (x) => `${x.closed} closed · ${x.pnlEth >= 0 ? "+" : ""}${ethf(x.pnlEth)}${x.winRate != null ? ` · ${(x.winRate * 100).toFixed(0)}% won` : ""}`;
     const open = d.positions.filter((p) => p.status === "open"), closed = d.positions.filter((p) => p.status === "closed");
     const row = (p) => h("div", { class: "ap-row" },
       h("div", { class: "grow" }, h("b", {}, `$${p.symbol}`), h("span", { class: "faint" }, ` · ${p.mode} · in ${ethf(p.amountEth)} at ${p.raisedAtEntry != null ? Number(p.raisedAtEntry).toFixed(2) : "–"} ETH raised · ${ago(p.openedAt)} ago`)),
       p.status === "open"
-        ? h("div", { class: "row" }, h("span", {}, p.lastValueEth != null ? `${ethf(p.lastValueEth)} (${((p.lastValueEth / p.amountEth - 1) * 100).toFixed(1)}%)` : "checking…"), h("button", { class: "btn sm", type: "button", onclick: async () => { try { await api.post("autopilot/close", { id: p.id }); toast("Closed", "ok"); render(); } catch (e) { toast(e.message, "error"); } } }, "Close"))
+        ? h("div", { class: "row" }, h("span", {}, p.lastValueEth != null ? `${ethf(p.lastValueEth)} (${((p.lastValueEth / p.amountEth - 1) * 100).toFixed(1)}%)` : "checking…"), h("button", { class: "btn sm", type: "button", "data-k": `close-${p.id}`, onclick: async (e) => { e.currentTarget.disabled = true; try { await api.post("autopilot/close", { id: p.id }); toast("Closed", "ok"); } catch (er) { toast(er.message, "error"); } refresh(); } }, "Close"))
         : h("span", { class: (p.pnlEth || 0) >= 0 ? "up" : "down" }, `${(p.pnlEth || 0) >= 0 ? "+" : ""}${ethf(p.pnlEth)} · ${p.reason}`));
+    clear(resultsP, h("h3", {}, "Results"), h("div", { class: "rows" }, h("div", {}, h("span", {}, "Practice"), h("span", {}, line(st.practice))), h("div", {}, h("span", {}, "Live"), h("span", {}, line(st.live))), h("div", {}, h("span", {}, "Open now"), h("span", {}, String(st.open)))),
+      h("a", { class: "link", href: "#/leaderboard" }, "See the leaderboard"));
+    keepFocus(openP, () => clear(openP, h("h3", {}, `Open (${open.length})`), open.length ? h("div", { class: "ap-list" }, open.map(row)) : h("p", { class: "faint", style: { margin: 0 } }, s.on ? "Waiting for the next launch that passes your rules." : "Switch it on to start.")));
+    show(closedP, closed.length > 0);
+    clear(closedP, closed.length ? [h("h3", {}, "Closed"), h("div", { class: "ap-list" }, closed.slice(0, 30).map(row))] : null);
+  }
+
+  async function build() {
+    const g = ++gen;
+    d = null;
+    if (!wallet.session) { clear(main, h("div", { class: "ag-intro" }, h("h2", {}, "Sentry Autopilot"), h("p", {}, "Give the agent your rules and it buys Pons launches that pass Troya Gate, then sells at your take-profit or stop. It runs on the server around the clock.")), needSignIn(main, "Sign in to set your rules.")); return; }
+    let x;
+    try { x = await api.get("autopilot"); } catch (e) { if (g === gen) clear(main, h("div", { class: "alert error" }, e.message)); return; }
+    if (g !== gen || !main.isConnected) return;
+    d = x;
     clear(main,
       h("div", { class: "ag-intro" }, h("h2", {}, "Sentry Autopilot"), h("p", {}, "Every Pons launch goes through Troya Gate about 90 seconds in, and again at 5, 15 and 60 minutes while it is quiet. When one passes and its curve has raised what you set, Autopilot buys, then sells at your take-profit or stop, or after 7 days. Practice mode uses play money at real prices; live mode trades from your Agent Wallet inside its caps.")),
-      h("div", { class: "panel ag-panel" },
-        h("div", { class: "ag-auto-h" }, h("div", {}, h("b", {}, s.on ? `On · ${s.mode === "live" ? "live, Agent Wallet" : "practice, play money"}` : "Off"), h("div", { class: "faint" }, s.liveAvailable ? "Live mode buys and sells from your Agent Wallet." : "Live mode opens after it passes real-money tests. Practice runs at real prices meanwhile.")), h("div", { class: "row" }, mode, sw)),
-        h("hr", { class: "hr" }), h("h3", {}, "Your rules"), form, h("div", { class: "row", style: { justifyContent: "space-between", flexWrap: "wrap", gap: "10px" } }, pub, saveRules),
+      h("div", { class: "panel ag-panel" }, head, h("hr", { class: "hr" }), h("h3", {}, "Your rules"), formBox,
         h("p", { class: "note", style: { margin: 0 } }, "Same rules in Telegram: /autopilot set min 1 buy 0.01 tp 2 sl 30 max 3")),
-      h("div", { class: "panel ag-panel" }, h("h3", {}, "Results"), h("div", { class: "rows" }, h("div", {}, h("span", {}, "Practice"), h("span", {}, line(st.practice))), h("div", {}, h("span", {}, "Live"), h("span", {}, line(st.live))), h("div", {}, h("span", {}, "Open now"), h("span", {}, String(st.open)))),
-        h("a", { class: "link", href: "#/leaderboard" }, "See the leaderboard")),
-      h("div", { class: "panel ag-panel" }, h("h3", {}, `Open (${open.length})`), open.length ? h("div", { class: "ap-list" }, open.map(row)) : h("p", { class: "faint", style: { margin: 0 } }, s.on ? "Waiting for the next launch that passes your rules." : "Switch it on to start.")),
-      closed.length ? h("div", { class: "panel ag-panel" }, h("h3", {}, "Closed"), h("div", { class: "ap-list" }, closed.slice(0, 30).map(row))) : null);
+      resultsP, openP, closedP);
+    paintForm();
+    paintLive();
   }
-  render();
-  const off = onWallet(() => render());
-  const t = setInterval(() => { if (!document.hidden) render(); }, 30000);
+  // rules: also rebuild the rules form from what the server saved (only after its own successful save)
+  async function refresh({ rules = false } = {}) {
+    if (!d) return;
+    const g = gen;
+    let x;
+    try { x = await api.get("autopilot"); } catch { return; }
+    if (g !== gen || !main.isConnected) return;
+    d = x;
+    if (rules) paintForm();
+    paintLive();
+  }
+  const off = onWho(build);
+  // a page that failed to load tries again on the next tick; a loaded one only refreshes its live parts
+  const t = setInterval(() => { if (!document.hidden && wallet.session) (d ? refresh() : build()); }, 30000);
   return () => { off(); clearInterval(t); };
 }

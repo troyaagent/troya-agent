@@ -8,7 +8,7 @@ import { Interface, parseUnits } from "ethers";
 import { h, clear, useCss, toast, tiny, usd, pageHead, seg, review, short, tokenIcon, icon } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
 import { coinSuggest } from "/agent/js/coinsearch.js";
-import { wallet, onWallet, openConnect } from "/agent/js/wallet.js";
+import { wallet, onWallet, openConnect, signIn, reader } from "/agent/js/wallet.js";
 import { balanceOf, sendTx, waitReceipt, errText } from "/agent/js/chain.js";
 
 const NPM = "0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3";
@@ -28,6 +28,7 @@ const NP = new Interface([
   "function unwrapWETH9(uint256 amountMinimum,address recipient) payable",
   "function sweepToken(address token,uint256 amountMinimum,address recipient) payable",
 ]);
+const POOL = new Interface(["function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint32 feeProtocol, bool unlocked)"]);
 const lc = (s) => String(s || "").toLowerCase();
 const isEth = (t) => lc(t?.address) === WETH;
 const fx = (n) => (n == null || !isFinite(n) ? "–" : tiny(n));
@@ -89,6 +90,70 @@ function pairOf(p, tl, tu, side, val) {
 }
 const sidesOf = (p, tl, tu) => { const sp = sqrtX96(p.sqrtPriceX96); return [sp < sqrtTick(tu), sp > sqrtTick(tl)]; };
 
+/* ---------- exact v3 math for the 1% price guard ----------
+   BigInt, in the same integer steps as Uniswap's TickMath, LiquidityAmounts and SqrtPriceMath: a minimum has to sit at
+   or under what the contract itself computes, so the float helpers above are not good enough here. */
+const Q96 = 1n << 96n;
+const TICK_MUL = [0xfff97272373d413259a46990580e213an, 0xfff2e50f5f656932ef12357cf3c7fdccn, 0xffe5caca7e10e4e61c3624eaa0941cd0n,
+  0xffcb9843d60f6159c9db58835c926644n, 0xff973b41fa98c081472e6896dfb254c0n, 0xff2ea16466c96a3843ec78b326b52861n, 0xfe5dee046a99a2a811c461f1969c3053n,
+  0xfcbe86c7900a88aedcffc83b479aa3a4n, 0xf987a7253ac413176f2b074cf7815e54n, 0xf3392b0822b70005940c7a398e4b70f3n, 0xe7159475a2c29b7443b29c7fa6e889d9n,
+  0xd097f3bdfd2022b8845ad8f792aa5825n, 0xa9f746462d870fdf8a65dc1f90e061e5n, 0x70d869a156d2a1b890bb3df62baf32f7n, 0x31be135f97d08fd981231505542fcfa6n,
+  0x9aa508b5b7a84e1c677de54f3e99bc9n, 0x5d6af8dedb81196699c329225ee604n, 0x2216e584f5fa1ea926041bedfe98n, 0x48a170391f7dc42444e8fa2n];
+function sqrtAtTick(tick) {                        // TickMath.getSqrtRatioAtTick
+  const a = BigInt(Math.abs(tick));
+  let r = a & 1n ? 0xfffcb933bd6fad37aa2d162d1a594001n : 1n << 128n;
+  TICK_MUL.forEach((m, i) => { if (a & (2n << BigInt(i))) r = (r * m) >> 128n; });
+  if (tick > 0) r = ((1n << 256n) - 1n) / r;
+  return (r >> 32n) + (r % (1n << 32n) ? 1n : 0n);
+}
+function isqrt(n) {                                // floor(√n), Newton's method from above
+  if (n < 2n) return n;
+  let x = 1n << BigInt(Math.ceil(n.toString(2).length / 2));
+  for (;;) { const y = (x + n / x) >> 1n; if (y >= x) return x; x = y; }
+}
+const divUp = (a, b) => (a + b - 1n) / b;
+const liq0 = (sa, sb, a) => a * (sa * sb / Q96) / (sb - sa);
+const liq1 = (sa, sb, a) => a * Q96 / (sb - sa);
+// the liquidity the position manager mints from two budgets at a price (LiquidityAmounts.getLiquidityForAmounts)
+function liquidityFor(sp, sa, sb, a0, a1) {
+  if (sp <= sa) return liq0(sa, sb, a0);
+  if (sp < sb) { const x = liq0(sp, sb, a0), y = liq1(sa, sp, a1); return x < y ? x : y; }
+  return liq1(sa, sb, a1);
+}
+// what that liquidity holds at a price; up = the pool's rounding when it takes tokens in (mint), else when it pays out
+function amountsAt(sp, sa, sb, L, up = false) {
+  const d0 = (x, y) => { const n = (L << 96n) * (y - x); return up ? divUp(divUp(n, y), x) : n / y / x; };
+  const d1 = (x, y) => (up ? divUp(L * (y - x), Q96) : L * (y - x) / Q96);
+  if (sp < sa) return [d0(sa, sb), 0n];
+  if (sp < sb) return [d0(sp, sb), d1(sa, sp)];
+  return [0n, d1(sa, sb)];
+}
+// the price 1% up or down, as a square root (pct = 101n or 99n)
+const shifted = (sp, pct) => isqrt(sp * sp * pct / 100n);
+// A true 1% price band. Token0 is scarcest when the price has risen 1%, token1 when it has fallen 1%: the minimums are
+// what the mint (or a removal) takes at those two edges, so it lands anywhere inside and reverts past either one.
+// Desired × 99% is not that: in a tight range a 0.1% move already leaves 2% of one side unused, and the mint reverts.
+function mintMins(sp, sa, sb, a0, a1) {
+  const up = shifted(sp, 101n), dn = shifted(sp, 99n);
+  return [amountsAt(up, sa, sb, liquidityFor(up, sa, sb, a0, a1))[0], amountsAt(dn, sa, sb, liquidityFor(dn, sa, sb, a0, a1))[1]];
+}
+const mintTakes = (sp, sa, sb, a0, a1) => amountsAt(sp, sa, sb, liquidityFor(sp, sa, sb, a0, a1), true);
+const burnMins = (sp, sa, sb, L) => [amountsAt(shifted(sp, 101n), sa, sb, L)[0], amountsAt(shifted(sp, 99n), sa, sb, L)[1]];
+
+// the pool's price read on chain at this moment (the suggestion on screen can be minutes old)
+async function readPrice(pool) {
+  const r = POOL.decodeFunctionResult("slot0", await reader("robinhood").call({ to: pool, data: POOL.encodeFunctionData("slot0") }));
+  return { sqrtPriceX96: BigInt(r[0]), tick: Number(r[1]) };
+}
+// put a fresh price into the pool on screen: the tick and the display price follow it
+function setPrice(p, s) {
+  p.sqrtPriceX96 = s.sqrtPriceX96.toString(); p.tick = s.tick;
+  p.price = sqrtX96(p.sqrtPriceX96) ** 2 * 10 ** (p.token0.decimals - p.token1.decimals);
+  p.display = p.invert ? 1 / p.price : p.price;
+}
+// the one sign-in path the app uses everywhere (as the Agent page's needSignIn): connect first if needed, then one free signature
+async function signInNow() { try { if (!wallet.address) await openConnect(); if (wallet.address) await signIn(); } catch (e) { toast(errText(e), "error"); } }
+
 function rangeBar(lo, hi, now) {
   const a = Math.min(lo, now), b = Math.max(hi, now);
   const pad = (Math.log(b) - Math.log(a)) * 0.3 || 0.05;
@@ -124,14 +189,17 @@ export async function mount(view, ctx) {
     if (!st.pool && st.pools[0]) st.pool = st.pools[0].address;
     if (alive) { paintList(); if (st.pool && !st.sug) { if (st.tab === "new") paintCard(); loadSug(); } }
   }
-  async function loadSug() {
+  async function loadSug(timed = false) {
     const pool = st.pool;
     if (!pool) return;
     st.sugErr = null;
     try {
       const s = await api.get(`lp/suggest?pool=${pool}&days=${st.days}`);
       if (st.pool !== pool) return;
-      st.sug = s;
+      // a timed refresh that lands while someone types in the ticket waits for the next one (a repaint takes the focus)
+      if (timed && card.contains(document.activeElement)) return;
+      // new price, new ranges: the side you did not type follows them
+      st.sug = s; repair();
       checkTokens(s.pool);
       loadBalances(s.pool);
     } catch (e) { st.sugErr = e.message; }
@@ -329,19 +397,32 @@ export async function mount(view, ctx) {
     const raw = await reader("robinhood").call({ to: token, data: ERC.encodeFunctionData("allowance", [wallet.address, NPM]) });
     if (BigInt(raw) < amount) await step(label, { to: token, data: ERC.encodeFunctionData("approve", [NPM, amount]), value: "0" });
   }
-  const said = (e) => { const m = errText(e); return /Price slippage check/i.test(m) ? "The price moved while this was being added. Refresh and try again." : m; };
+  // errText turns any "slippage" into the swap wording, so the pool's own revert reason is read from the raw error first
+  const said = (e) => /Price slippage check/i.test(String(e?.shortMessage || e?.info?.error?.message || e?.message || ""))
+    ? "The price moved more than 1% before this landed, so the price guard stopped it and nothing changed. Check the amounts and try again." : errText(e);
+  const pct = (x) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(2)}%`;
 
   async function doMint() { return guarded(_doMint); }
   async function _doMint() {
     if (!wallet.address) return openConnect();
+    if (!need()) return toast("Enter an amount.", "error");
+    // the pairing on screen can be minutes old (the refresh waits while you type): read the pool now and pair again
+    const sug = st.sug;
+    try { setPrice(sug.pool, await readPrice(sug.pool.address)); } catch (e) { return toast(`Could not read the pool's price: ${errText(e)}`, "error"); }
+    if (!alive || st.sug !== sug) return;
+    repair(); paintCard();
     const g = gate(), n = need();
     if (!n) return toast("Enter an amount.", "error");
     if (!(g.state === "pass" || g.state === "warn")) return toast(g.state === "wait" ? "Wait for the checks to finish." : "Blocked by the Liquidity Gate.", "error");
-    const p = g.p, r = g.r;
+    const p = g.p, r = g.r, ref = BigInt(p.sqrtPriceX96), sa = sqrtAtTick(r.tl), sb = sqrtAtTick(r.tu);
+    // the band is anchored to the price in this review, so "1%" means 1% from the number you agreed to
+    const [min0, min1] = mintMins(ref, sa, sb, n[0], n[1]);
     const amt = [0, 1].filter((i) => n[i] > 0n).map((i) => { const t = i ? p.token1 : p.token0; return `${fx(Number(n[i]) / 10 ** t.decimals)} ${t.label}`; }).join(" + ");
     const ok = await review({ title: `Add liquidity · ${p.name} ${p.feePct}%`, summary: `Deposit ${amt}`,
       rows: [["Range", `${fx(r.lo)} to ${fx(r.hi)} ${p.quote} per ${p.base}`], ["Stays inside", `${r.stayPct.toFixed(0)}% chance over ${st.sug.days} day${st.sug.days > 1 ? "s" : ""}`],
-        ["Fees (estimate)", r.feesPer1kDay > 0 ? `${usd(r.feesPer1kDay)} a day per $1,000 while inside` : "none until the price enters"], ["Contract", `Uniswap v3 positions ${short(NPM)}`], ["Position NFT to", `${short(wallet.address)} (you)`]],
+        ["Fees (estimate)", r.feesPer1kDay > 0 ? `${usd(r.feesPer1kDay)} a day per $1,000 while inside` : "none until the price enters"],
+        ["Price guard", `lands only within 1% of ${fx(p.display)} ${p.quote} per ${p.base}`],
+        ["Contract", `Uniswap v3 positions ${short(NPM)}`], ["Position NFT to", `${short(wallet.address)} (you)`]],
       confirmLabel: "Continue in wallet" });
     if (!ok) return;
     try {
@@ -350,8 +431,17 @@ export async function mount(view, ctx) {
         if (n[i] === 0n) continue;
         if (isEth(t)) value = n[i]; else await ensureAllowance(t.address, n[i], `Approve ${t.label}…`);
       }
+      // right before the mint, the price once more: past the band the mint would only revert, so stop before it costs gas
+      st.busy = "Checking the price…"; paintLive();
+      const now = await readPrice(p.address), took = mintTakes(now.sqrtPriceX96, sa, sb, n[0], n[1]);
+      if (took[0] < min0 || took[1] < min1) {
+        const moved = (Number(now.sqrtPriceX96) / Number(ref)) ** 2 - 1;
+        setPrice(p, now); repair(); st.busy = null;
+        if (alive && st.tab === "new") paintCard();
+        return toast(`The price moved ${pct(p.invert ? 1 / (1 + moved) - 1 : moved)} since your review, past the 1% guard. Nothing was deposited: the amounts now follow the new price. Check them and add again.`, "error", 10000);
+      }
       const params = { token0: p.token0.address, token1: p.token1.address, fee: p.fee, tickLower: r.tl, tickUpper: r.tu, amount0Desired: n[0], amount1Desired: n[1],
-        amount0Min: n[0] * 99n / 100n, amount1Min: n[1] * 99n / 100n, recipient: wallet.address, deadline: dl() };
+        amount0Min: min0, amount1Min: min1, recipient: wallet.address, deadline: dl() };
       const calls = [NP.encodeFunctionData("mint", [params])];
       if (value > 0n) calls.push(NP.encodeFunctionData("refundETH"));
       const { rc } = await step("Adding liquidity…", { to: NPM, data: calls.length > 1 ? NP.encodeFunctionData("multicall", [calls]) : calls[0], value: value.toString() });
@@ -361,7 +451,12 @@ export async function mount(view, ctx) {
       st.a = ["", ""]; ins.forEach((x) => { x.value = ""; });
       st.busy = null; st.tab = "positions"; history.replaceState(null, "", "#/liquidity/positions");
       await loadPositions(); loadBalances(p);
-    } catch (e) { toast(said(e), "error", 8000); }
+    } catch (e) {
+      // a mint that reverted on chain (status 0) has no reason attached: the guard is the usual one
+      toast(/^Adding liquidity failed/.test(e?.message || "") ? "The deposit was reverted on chain, so your tokens stayed in your wallet (only the network fee was spent). The usual cause is the price moving more than 1% before it landed: check the amounts and try again." : said(e), "error", 9000);
+      // and the ticket follows today's price for the next try
+      readPrice(p.address).then((s) => { setPrice(p, s); repair(); if (alive && st.tab === "new") paintCard(); }).catch(() => {});
+    }
     st.busy = null; st.tab === "new" ? paintLive() : paint();
   }
 
@@ -396,7 +491,9 @@ export async function mount(view, ctx) {
       st.busy = "Reading the position…"; paint();
       const now = (await api.get(`lp/positions?address=${wallet.address}`)).positions.find((y) => y.tokenId === x.tokenId);
       if (!now || now.closed) throw new Error("That position is already empty.");
-      const min0 = toRaw(now.amount0 * 0.99, now.token0.decimals), min1 = toRaw(now.amount1 * 0.99, now.token1.decimals);
+      // the same 1% price band as a mint, around the pool's price on chain now (amount × 99% reverts on a tiny move in a tight range)
+      const s0 = await readPrice(now.pool);
+      const [min0, min1] = burnMins(s0.sqrtPriceX96, sqrtAtTick(now.tickLower), sqrtAtTick(now.tickUpper), BigInt(now.liquidity));
       await step("Removing…", { to: NPM, data: exitData(now, BigInt(now.liquidity), min0, min1), value: "0" });
       x = now;
       toast(`#${x.tokenId} removed: the tokens are back in your wallet.`, "ok", 7000);
@@ -404,28 +501,34 @@ export async function mount(view, ctx) {
         st.busy = null; st.tab = "new"; st.pool = x.pool; st.sug = null; st.preset = "balanced"; st.custom = null; st.a = ["", ""];
         st.prefill = { have: [x.amount0 + x.fees0, x.amount1 + x.fees1] };
         history.replaceState(null, "", `#/liquidity/${x.pool}`);
-        paint(); await loadSug(); prefill();
+        paint(); await loadSug(); await prefill();
         loadPositions();
         return;
       }
     } catch (e) { toast(said(e), "error", 8000); }
     st.busy = null; await loadPositions();
   }
-  // after a rebalance: the largest deposit the new range takes from what came back
-  function prefill() {
+  // after a rebalance: the largest deposit the new range takes from what came back, paired the way the mint pairs it
+  // (the pool's price read on chain now, the exact liquidity math), with 0.5% kept back for the price moving before you sign
+  async function prefill() {
     const f = st.prefill, s = st.sug, r = sel();
     st.prefill = null;
     if (!f || !s || !r) return;
-    const [u0, u1] = sidesOf(s.pool, r.tl, r.tu);
-    const have = [f.have[0] * 0.995, f.have[1] * 0.995];
-    let a0 = u0 ? have[0] : 0, a1 = u0 ? pairOf(s.pool, r.tl, r.tu, 0, a0) || 0 : have[1];
-    if (u0 && u1 && a1 > have[1]) { a1 = have[1]; a0 = pairOf(s.pool, r.tl, r.tu, 1, a1) || 0; }
-    st.a = [a0 > 0 ? String(+a0.toPrecision(10)) : "", a1 > 0 ? String(+a1.toPrecision(10)) : ""]; st.edit = u0 ? 0 : 1;
+    const p = s.pool;
+    try { setPrice(p, await readPrice(p.address)); } catch {}
+    if (!alive || st.sug !== s) return;
+    const sp = BigInt(p.sqrtPriceX96), sa = sqrtAtTick(r.tl), sb = sqrtAtTick(r.tu);
+    const have = [toRaw(f.have[0] * 0.995, p.token0.decimals), toRaw(f.have[1] * 0.995, p.token1.decimals)];
+    const [a0, a1] = amountsAt(sp, sa, sb, liquidityFor(sp, sa, sb, have[0], have[1]));
+    const out = (raw, d) => (raw > 0n ? String(+(Number(raw) / 10 ** d).toPrecision(10)) : "");
+    st.a = [out(a0, p.token0.decimals), out(a1, p.token1.decimals)];
+    // the side that ran out first stays fixed when the ticket pairs again at the click, so it never asks for more than came back
+    st.edit = sp <= sa ? 0 : sp >= sb ? 1 : liq0(sp, sb, have[0]) <= liq1(sa, sp, have[1]) ? 0 : 1;
     paintCard();
     toast("Step 2: check the new range and sign Add liquidity.", "", 7000);
   }
   async function doWatch(x) {
-    if (!wallet.session) return toast("Sign in first (Social → Sign in) so the watch can reach your inbox and Telegram.", "error", 6000);
+    if (!wallet.session) return signInNow();
     if (st.watching || st.watched.has(x.tokenId)) return;
     st.watching = x.tokenId; paint();
     try {
@@ -461,7 +564,9 @@ export async function mount(view, ctx) {
           h("button", { class: "btn sm", type: "button", disabled: !!st.busy || !(x.fees0 > 0 || x.fees1 > 0), onclick: () => doCollect(x) }, "Collect fees"),
           x.closed ? null : h("button", { class: "btn sm", type: "button", disabled: !!st.busy, onclick: () => doRemove(x) }, "Remove all"),
           x.closed ? null : h("button", { class: "btn sm blue", type: "button", disabled: !!st.busy, onclick: () => doRemove(x, true), title: "Remove it, then open a new balanced range around today's price" }, "Rebalance"),
-          x.closed ? null : st.watched.has(x.tokenId) ? h("button", { class: "btn sm", type: "button", disabled: true, title: "Range watch on: inbox and Telegram" }, "Watching ✓")
+          x.closed ? null : st.watched.has(x.tokenId) ? h("button", { class: "btn sm", type: "button", disabled: true, title: "Range watch on: inbox and Telegram" }, icon("check"), "Watching")
+            // the watch writes to your inbox, so it needs a session: sign in right here, the button turns into Watch it
+            : !wallet.session ? h("button", { class: "btn sm", type: "button", onclick: signInNow, title: "Sign in once (a free signature, no gas) so the range watch can write to your inbox and Telegram" }, icon("key"), "Sign in to watch")
             : h("button", { class: "btn sm", type: "button", disabled: st.watching === x.tokenId, onclick: () => doWatch(x), title: "A note in your inbox and Telegram when the price leaves the range or comes within 5% of an edge" }, st.watching === x.tokenId ? "Saving…" : "Watch it")));
     })), st.busy ? h("p", { class: "fine" }, st.busy) : null);
   }
@@ -470,6 +575,6 @@ export async function mount(view, ctx) {
   paint();
   loadPools(); loadPositions();
   // refresh once a minute, but never while someone is typing in the ticket
-  const t = setInterval(() => { if (document.hidden || st.busy || card.contains(document.activeElement)) return; if (st.tab === "positions") loadPositions(); else if (st.pool) loadSug(); }, 60_000);
+  const t = setInterval(() => { if (document.hidden || st.busy || card.contains(document.activeElement)) return; if (st.tab === "positions") loadPositions(); else if (st.pool) loadSug(true); }, 60_000);
   return () => { alive = false; off(); clearInterval(t); };
 }

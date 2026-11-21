@@ -63,3 +63,41 @@ export function perpPrice(v) {
   const a = Math.abs(v);
   return "$" + (a >= 1000 ? v.toLocaleString("en-US", { maximumFractionDigits: 1 }) : a >= 1 ? v.toLocaleString("en-US", { maximumFractionDigits: 4 }) : tiny(v, 5));
 }
+
+/* ---------- perps: names, venue line, shelves ---------- */
+// "xyz:SKHX" → "SKHX": the dex prefix is Hyperliquid's id for a builder market, never a label people should read
+export const perpTicker = (coin) => String(coin || "").replace(/^[a-z0-9]+:/i, "");
+// what the market is ("SK hynix", "S&P 500", "Bitcoin"), from the server's displayName; the bare ticker until it has one
+export const perpName = (m) => String(m?.displayName || "").trim() || perpTicker(m?.coin);
+// the line under the name: "SKHX · trade.xyz · up to 10x" (the ticker only when the name says something else)
+export function perpSub(m) {
+  const tk = perpTicker(m?.coin), parts = [];
+  if (tk && tk.toLowerCase() !== perpName(m).toLowerCase()) parts.push(tk);
+  if (m?.dex) parts.push(m.dex === "xyz" ? "trade.xyz" : m.dex);
+  if (m?.maxLeverage) parts.push(`up to ${m.maxLeverage}x`);
+  if (m?.onlyIsolated) parts.push("isolated");
+  return parts.join(" · ");
+}
+// server text that names perps by id ("Largest 24h moves: xyz:ANT −12%") reads with the bare ticker
+export const cleanPerpText = (s) => String(s ?? "").replace(/\bxyz:(?=[A-Za-z0-9])/g, "");
+// shelves for the Perps list: Hyperliquid's own markets are crypto; trade.xyz lists stocks and sector ETFs, indices
+// (with the MSCI country funds), commodities and currencies under bare tickers, so the index, commodity and currency
+// ones are named here and every other trade.xyz ticker counts as a stock. A category sent by the server wins.
+export const PERP_CATS = [["all", "All"], ["crypto", "Crypto"], ["stocks", "Stocks"], ["indices", "Indices"], ["commodities", "Commodities"], ["fx", "FX"]];
+const PERP_SHELF = {
+  indices: "XYZ100 SP500 JP225 KR200 NIFTY IBOV DXY VIX DAX FTSE HSI CAC40 STOXX50 ASX200 EWY EWJ EWZ EWT",
+  commodities: "GOLD SILVER PLATINUM PALLADIUM COPPER ALUMINIUM ALUMINUM URANIUM CL WTI BRENTOIL NATGAS HO TTF CORN WHEAT SOYBEAN COFFEE COCOA SUGAR COTTON",
+  fx: "JPY EUR GBP KRW CNH CHF AUD CAD MXN INR BRL TRY",
+};
+const SHELF_OF = new Map(Object.entries(PERP_SHELF).flatMap(([k, list]) => list.split(" ").map((t) => [t, k])));
+export function perpCategory(m) {
+  if (m?.category && PERP_CATS.some(([k]) => k !== "all" && k === m.category)) return m.category;
+  if (!m?.dex) return "crypto";
+  return SHELF_OF.get(perpTicker(m.coin).toUpperCase()) || "stocks";
+}
+
+/* ---------- Buy from a list ---------- */
+// a Buy link on a market row opens Troya Swap with the coin and this much ETH filled in: the size the Gate checks by
+// default. Nothing is sent from here: Swap runs the Gate, shows the review and the user signs in their own wallet.
+export const BUY_ETH = "0.01";
+export const buyHref = (address) => `#/swap?out=${address}&amount=${BUY_ETH}`;

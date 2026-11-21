@@ -8,6 +8,7 @@ import { Interface } from "ethers";
 import { rpc, ADDR } from "./robinhood.mjs";
 import { dsPairs, dsRows, getEthUsd } from "./market.mjs";
 import { HttpError } from "./api.mjs";
+import { monogramSvg } from "./icons.mjs";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -144,30 +145,54 @@ export async function stockLoans(address) {
   return out;
 }
 
+// Logos the vetted PNG set cannot give. Anthropic (ANT) has no ticker logo upstream and the token indexes answer the Robinhood
+// feather for it, so it wears the mark the Hyperliquid xyz:ANT perp uses (the same vector, 20 Nov 2026). Read by
+// /api/stocks/logo here and by /api/icon/token and /api/icon/coin in icons.mjs, so every page shows the same mark.
+const ANTHROPIC_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180"><title>Anthropic icon</title>` +
+  `<rect width="180" height="180" fill="#fafaf7"/><g transform="translate(31.5 49.236702127659576) scale(0.12446808510638298)">` +
+  `<path fill="#191919" d="m536.5 1.3l260 653.6h142.5l-260-653.6z"/>` +
+  `<path fill-rule="evenodd" fill="#191919" d="m259.7 0.5h149.1l259.7 653.6h-145.3l-53.1-137.2h-271.7l-53.2 137.2h-145.2zm-14.4 394.9h178l-89-229.7z"/></g></svg>`;
+const LOGO_BY_ADDRESS = { "0xbbb6c29bcc3a1028a2b54310df73f4f7a3bcb373": "ANT" };
+const LOGO_BY_TICKER = { ANT: { type: "image/svg+xml", body: Buffer.from(ANTHROPIC_SVG) } };
+/** The override logo for a stock token address or ticker ({ type, body }), or null. */
+export function logoOverride(address, ticker) {
+  return LOGO_BY_TICKER[LOGO_BY_ADDRESS[lc(address)] || String(ticker || "").toUpperCase()] || null;
+}
+
 const logos = new Map();
 let logoDir = null;
 async function logo(addr) {
   const a = lc(addr);
   if (!/^0x[0-9a-f]{40}$/.test(a)) throw new HttpError(400, "Bad address.");
   if (logos.has(a)) return logos.get(a);
+  const fixed = logoOverride(a);
+  if (fixed) return fixed;
   // the vetted company logo shipped with the site (/img/logos/stocks/<TICKER>.png) wins, so every page shows the same one
   // only the vetted logos: Robinhood's CDN returns the same feather for most stock tokens, which is worse than a letter
   const rh = await import("./robinhood.mjs").catch(() => null);
   const desk = await stockDesk().catch(() => null);
   const tk = rh?.STOCKS?.find((x) => lc(x.address) === a)?.symbol || desk?.assets?.find((x) => lc(x.address) === a)?.symbol;
+  const over = logoOverride(a, tk);
+  if (over) return over;
   const own = tk ? await readFile(new URL(`../public/img/logos/stocks/${String(tk).replace(/[^A-Za-z0-9.]/g, "")}.png`, import.meta.url)).catch(() => null) : null;
-  if (!own) throw new HttpError(404, "No logo.");
-  logos.set(a, own);
-  return own;
+  // no vetted logo: the letter tile the app draws, as an image (200, not 404), kept 6 h and not memoized (a logo may ship)
+  if (!own) return { type: "image/svg+xml", body: monogramSvg(tk || "", a, 2), mono: true };
+  const v = { type: "image/png", body: own };
+  logos.set(a, v);
+  return v;
 }
 
 export async function register(r, ctx) {
   logoDir = join(ctx.dataDir, "stock-logos");
   await mkdir(logoDir, { recursive: true }).catch(() => { logoDir = null; });
   r.get("/api/stocks/logo/:address", async ({ params, res }) => {
-    const buf = await logo(params.address);
-    res.writeHead(200, { "content-type": "image/png", "cache-control": "public, max-age=604800", "x-content-type-options": "nosniff" });
-    res.end(buf);
+    const x = await logo(params.address);
+    res.writeHead(200, {
+      "content-type": x.type, "cache-control": `public, max-age=${x.mono ? 21600 : 604800}`, "x-content-type-options": "nosniff", ...(x.mono ? { "x-icon": "monogram" } : {}),
+      // an SVG opened directly must not run anything
+      ...(x.type === "image/svg+xml" ? { "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox" } : {}),
+    });
+    res.end(x.body);
     return undefined;
   }, { weight: 1 });
   r.get("/api/stocks/desk", () => stockDesk(), { weight: 1 });

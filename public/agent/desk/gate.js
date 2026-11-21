@@ -1,18 +1,37 @@
-// Troya Gate: paste any Robinhood Chain coin and see the seven checks, the same result the badge and Sentry use.
-// gatePanel() is the Desk card; mount() is the full page at #/gate and #/gate/0x…
-import { h, clear, icon, useCss, short, ago, tokenIcon, toast } from "/agent/js/ui.js";
+// Troya Gate: paste any coin and see its checks, the same result the badge, Swap and Sentry use. Robinhood Chain is home;
+// Base, Arbitrum and Solana run their own Gate through /api/swap/gate. gatePanel() is the Desk card; mount() is the full
+// page at #/gate and #/gate/<address>?chain=&amount=
+import { h, clear, icon, useCss, short, ago, tokenIcon, toast, chainLogo } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
 import { coinSuggest, findCoin } from "/agent/js/coinsearch.js";
 
-// token age on the Gate (community request, 20 Nov 2026): how long ago the coin was created, from its creation block
-const gateIdLine = (r, a) => {
+// token age on the Gate (community request, 20 Nov 2026): how long ago the coin was created, from its creation block.
+// /api/token-age reads Robinhood Chain only, so a coin checked on Base, Arbitrum or Solana shows no age rather than the
+// age of whatever sits at that address on Robinhood Chain
+const gateIdLine = (r, a, chain = "robinhood") => {
   const s = h("span", {}, [r.name, short(a)].filter(Boolean).join(" · "));
+  if (chain !== "robinhood") return s;
   api.get(`/api/token-age/${a}`).then((x) => { if (x?.bornAt) { s.append(` · age ${ago(x.bornAt)}`); s.title = `Created ${new Date(x.bornAt).toUTCString().replace(" GMT", " UTC")}`; } }).catch(() => {});
   return s;
 };
 
 const ADDR = /0x[0-9a-fA-F]{40}/;
+const MINT = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;                    // a Solana token (mint) address: base58, never 0x
 const EXAMPLE = "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC";   // NVDA (Robinhood stock token)
+// the buy size the Gate checks. The badge and Sentry check 0.01 ETH; price impact grows with size, so a bigger buy is
+// checked live through /api/swap/gate
+const SIZES = ["0.01", "0.1", "1"], BADGE_SIZE = "0.01";
+// one tap into Swap with the amount filled in; Swap runs the Gate again at that exact amount before anything is signed
+const BUYS = ["0.005", "0.01", "0.05"];
+const NETS = [
+  { key: "robinhood", label: "Robinhood", name: "Robinhood Chain" },
+  { key: "base", label: "Base", name: "Base" },
+  { key: "arbitrum", label: "Arbitrum", name: "Arbitrum One" },
+  { key: "solana", label: "Solana", name: "Solana" },
+];
+const netOf = (k) => NETS.find((n) => n.key === k) || NETS[0];
+const nativeOf = (k) => (k === "solana" ? "SOL" : "ETH");
+const sameAddr = (x, y) => !!x && !!y && (/^0x/i.test(x) ? x.toLowerCase() === String(y).toLowerCase() : x === y);
 const WORD = { passed: "Passed", caution: "Caution", failed: "Failed", untested: "No buyers yet", error: "Unavailable" };
 const NOTE = {
   passed: "Every check passed at this moment. A snapshot, never a safe stamp: a coin can change after a check.",
@@ -20,6 +39,41 @@ const NOTE = {
   failed: "At least one check failed, so Troya will not offer a buy. Read the line in red.",
   untested: "Nobody has bought on the curve yet, so the test sell waits for the first buy.",
 };
+
+// A live /api/swap/gate answer, read the way the badge reads Sentry's (sentry.mjs verdict()): pool depth informs and never
+// decides the word, a test sell skipped for want of buyers (or a curve holding dust) is "no buyers yet", any other
+// warning is caution. A fail is wherever Swap itself would refuse (g.pass), so the page never offers a buy Swap blocks.
+export function fromGate(g, a, chain, size, curve = null) {
+  const checks = (g?.checks || []).map(({ key, label, status, detail }) => ({ key, label, status, detail }));
+  const t = g?.quote?.tokenOut || {};
+  const fail = g?.pass ? null : checks.find((c) => c.status === "fail") || { label: "Troya Gate", detail: "The checks did not pass" };
+  const sell = checks.find((c) => c.key === "sell");
+  const warn = checks.find((c) => c.status === "warn" && c.key !== "depth");
+  const liq = g?.quote?.venue === "pons-curve" ? g.quote.poolLiquidity?.eth : null;
+  const empty = (sell?.status === "skip" && /holds no buyers|too little/i.test(sell.detail || "")) || (liq != null && liq < 0.002);
+  const verdict = fail ? "failed" : empty ? "untested" : warn ? "caution" : "passed";
+  const why = fail || (verdict === "caution" ? warn : null);
+  return {
+    token: a, symbol: String(t.symbol || "").slice(0, 24), name: String(t.name || "").slice(0, 48), image: t.image || null,
+    verdict, reason: why ? `${why.label}: ${why.detail}` : null, checks, curve, checkedAt: g?.checkedAt || Date.now(),
+    chain, amount: size, live: true,
+  };
+}
+// a 0x address the Robinhood Chain route could not even read as a token (maybe it lives on Base or Arbitrum)
+export const notToken = (r) => r?.checks?.length === 1 && r.checks[0].key === "route" && r.checks[0].status === "fail" && !r.symbol;
+export const swapHref = (a, chain, amount) => `#/swap?${new URLSearchParams({ ...(chain && chain !== "robinhood" ? { chain } : {}), out: a, amount })}`;
+
+// a small segmented choice in the .seg look; set(v) repaints it. Tight buttons, so the four networks fit one line on a
+// 390 px phone (it wraps only on narrower screens)
+function choice(label, opts, value, onPick) {
+  const box = h("div", { class: "seg", role: "group", "aria-label": label, style: { flexWrap: "wrap", maxWidth: "100%" } });
+  box.set = (v) => {
+    box.value = v;
+    clear(box, opts.map((o) => h("button", { type: "button", "aria-pressed": String(o.value === v), style: { display: "inline-flex", alignItems: "center", gap: "4px", padding: "0 7px", fontSize: "12px" }, onclick: () => onPick(o.value) }, o.label)));
+  };
+  box.set(value);
+  return box;
+}
 
 /* ---------- The Assay (F14): dev, holders, bundles, clusters, wash trades, funders ---------- */
 const pc = (x) => (x == null ? "–" : `${x < 0.1 && x > 0 ? x.toFixed(2) : x.toFixed(1)}%`);
@@ -93,44 +147,163 @@ function athenaBox(addr) {
   return box;
 }
 
-export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
-  const SITE = window.SITE || {};
+export function gatePanel({ go, ask, compact = false, start = "", chain: startChain = "", amount: startAmount = "" } = {}) {
   const input = h("input", { class: "input dk-gate-in", type: "text", spellcheck: "false", autocomplete: "off", placeholder: "Search a coin (TROYA, NVDA…) or paste its address", "aria-label": "Coin name, ticker or address", maxlength: "80" });
-  const inputBox = coinSuggest(input, (c) => { input.value = c.address; run(c.address); }, { majors: false });
+  // a pick from the dropdown is a Robinhood Chain coin: that is what the search covers
+  const inputBox = coinSuggest(input, (c) => { input.value = c.address; run(c.address, { net: "robinhood" }); }, { majors: false });
   const runBtn = h("button", { class: "btn primary", type: "button" }, icon("shield"), "Run the Gate");
   const out = h("div", { class: "dk-gate-out", "aria-live": "polite" });
-  let alive = true, seq = 0;
+  const st = {
+    chain: NETS.some((n) => n.key === startChain) ? startChain : "robinhood",
+    size: SIZES.includes(String(startAmount)) ? String(startAmount) : BADGE_SIZE,
+    picked: NETS.some((n) => n.key === startChain),   // a network chosen on purpose (a chip or ?chain=) carries over to the next coin
+  };
+  let alive = true, seq = 0, last = null, extras = null;
+  const kept = new Map();   // the newest badge answer per coin (the browser may keep an older copy of the same URL for two minutes)
 
-  async function run(raw, { example = false } = {}) {
-    let m = ADDR.exec(String(raw || ""));
-    if (!m && String(raw || "").trim()) {
-      // a name or a ticker: take the top match (the real coin ranks first; copies are marked in the dropdown)
-      const c = await findCoin(raw).catch(() => null);
-      if (c?.address) m = [c.address];
-      else { toast(`No Robinhood Chain coin matches "${String(raw).trim()}". Paste its address instead.`, "error"); input.focus(); return; }
-    }
-    if (!m) { input.focus(); return; }
-    const a = m[0], id = ++seq;
-    if (!example) input.value = a;
-    runBtn.disabled = true;
-    clear(out, h("div", { class: "dk-gate-wait" }, h("span", { class: "ag-spin" }), h("span", {}, "Reading the route, the pool, fees and a test sell…")));
-    let r;
-    try { r = await api.get(`/api/badge/${a}`); } catch (e) { r = { verdict: "error", error: e.message }; }
-    if (!alive || id !== seq) return;
-    runBtn.disabled = false;
-    if (!compact && !example && location.hash !== `#/gate/${a}`) history.replaceState(null, "", `#/gate/${a}`);
-    render(a, r, example);
+  // the size and network to check (full page): picking one runs the Gate again on the coin on screen
+  // reads as one line: "Check a [0.01 | 0.1 | 1] ETH buy on [Robinhood | Base | Arbitrum | Solana]"
+  const unit = h("span", { class: "fine" }, `${nativeOf(st.chain)} buy on`);
+  const sizeSeg = choice("Buy size to check", SIZES.map((v) => ({ value: v, label: v })), st.size, (v) => {
+    if (v === st.size) return;
+    st.size = v; sizeSeg.set(v);
+    if (last?.token) run(last.token, { example: last.example, net: st.chain });
+  });
+  const netSeg = choice("Network", NETS.map((n) => ({ value: n.key, label: [chainLogo(n.key, 14), n.label] })), st.chain, pickNet);
+  const row = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" };
+  const opts = compact ? null : h("div", { class: "dk-gate-opts", style: { ...row, gap: "8px 10px", marginTop: "12px" } },
+    h("div", { style: row }, h("span", { class: "fine" }, "Check a"), sizeSeg, unit), netSeg);
+  const setNet = (k) => { st.chain = k; netSeg.set(k); unit.textContent = `${nativeOf(k)} buy on`; };
+  const fits = (a, k) => (k === "solana" ? MINT.test(a || "") : /^0x[0-9a-fA-F]{40}$/.test(a || ""));
+
+  function pickNet(k) {
+    if (k === st.chain) return;
+    st.picked = true;
+    const a = [last && !last.example ? last.token : null, input.value.trim()].find((x) => fits(x, k));
+    setNet(k);
+    if (a) run(a, { net: k, auto: false });
+    else { toast(`Paste a ${netOf(k).name} coin's address to check it there.`, "", 4500); input.focus(); }
   }
 
-  function render(a, r, example) {
+  // the coin on screen stays, dimmed, while the same coin is checked again at a new size or network (render() replaces
+  // the dimmed nodes; busy(false) clears the flag)
+  function busy(on, text = "") {
+    for (const el of out.querySelectorAll(".dk-gate-h, .dk-gate-buy, .dk-checks")) { el.style.opacity = on ? ".5" : ""; el.style.pointerEvents = on ? "none" : ""; }
+    if (on) out.setAttribute("aria-busy", "true"); else out.removeAttribute("aria-busy");
+    const m = out.querySelector(".dk-gate-meta");
+    if (on && m) clear(m, h("span", { class: "ag-spin", style: { width: "12px", height: "12px", marginRight: "8px", verticalAlign: "-2px" } }), text);
+  }
+
+  // one check: the badge's answer for the default 0.01 ETH on Robinhood Chain (memoized, ?fresh=1 for a new run), and the
+  // live /api/swap/gate for any other size or network (the same call Swap makes before it lets anyone sign)
+  async function check(a, chain, size, fresh) {
+    try {
+      if (chain === "robinhood" && size === BADGE_SIZE) {
+        const r = await api.get(`/api/badge/${a}${fresh ? "?fresh=1" : ""}`);
+        const k = a.toLowerCase(), prev = kept.get(k);
+        if (r?.freshLimited) toast("Fresh runs are limited to six a minute. This is the latest check.", "", 4500);
+        if (prev && r?.checkedAt && prev.checkedAt > r.checkedAt) return { ...prev, live: false, cached: true };
+        // "just now" only when the server says it ran the check for this request
+        const v = { ...r, chain, amount: BADGE_SIZE, live: !!fresh && r?.cached === false };
+        if (r?.checks) { kept.set(k, v); if (kept.size > 30) kept.delete(kept.keys().next().value); }
+        return v;
+      }
+      const g = await api.get(`swap/gate?${new URLSearchParams({ in: nativeOf(chain), out: a, amount: size, ...(chain === "robinhood" ? {} : { chain }) })}`);
+      return fromGate(g, a, chain, size, chain === "robinhood" ? kept.get(a.toLowerCase())?.curve || null : null);
+    } catch (e) { return { verdict: "error", error: e.message, chain, amount: size }; }
+  }
+
+  // a 0x address that is no token on this network: look it up on the other EVM networks (read-only token lookups)
+  async function elsewhere(a, here) {
+    const keys = ["robinhood", "base", "arbitrum"];
+    const found = await Promise.all(keys.map((k) => api.get(`token/meta?${new URLSearchParams({ address: a, ...(k === "robinhood" ? {} : { chain: k }) })}`).then((m) => !!m?.address, () => false)));
+    if (found[keys.indexOf(here)]) return null;       // a real token here with no route: that fail stands
+    return keys.find((k, i) => k !== here && found[i]) || null;
+  }
+
+  async function run(raw, { example = false, fresh = false, net = null, auto = true } = {}) {
+    const text = String(raw || "").trim();
+    let a = ADDR.exec(text)?.[0] || (MINT.test(text) ? text : null);
+    let chain = net || st.chain;
+    // a new coin starts on Robinhood Chain unless a network was picked on purpose
+    if (!net && a && !st.picked && !(last && sameAddr(last.token, a))) chain = "robinhood";
+    if (a && !/^0x/i.test(a)) chain = "solana";              // base58: only a Solana coin looks like this
+    else if (a && chain === "solana") chain = "robinhood";   // a 0x address is never a Solana coin
+    if (!a && text) {
+      // a name or a ticker: the search covers Robinhood Chain coins (the real coin ranks first; copies are marked in the
+      // dropdown). Elsewhere an address is needed, so a copy is never gated, and offered, by mistake.
+      if (chain !== "robinhood") { toast(`Paste the coin's address to check it on ${netOf(chain).name}.`, "error"); input.focus(); return; }
+      const c = await findCoin(text).catch(() => null);
+      if (!alive) return;
+      if (c?.address) a = c.address;
+      else { toast(`No Robinhood Chain coin matches "${text}". Paste its address instead.`, "error"); input.focus(); return; }
+    }
+    if (!a) { input.focus(); return; }
+    setNet(chain);
+    const id = ++seq, size = st.size;
+    if (!example) input.value = a;
+    runBtn.disabled = true;
+    if (last && sameAddr(last.token, a) && out.querySelector(".dk-gate-meta")) busy(true, `Checking a ${size} ${nativeOf(chain)} buy on ${netOf(chain).name}…`);
+    else clear(out, h("div", { class: "dk-gate-wait" }, h("span", { class: "ag-spin" }), h("span", {}, chain === "solana" ? "Reading the route, liquidity, the mint's powers and a sell route…" : "Reading the route, the pool, fees and a test sell…")));
+    let r = await check(a, chain, size, fresh);
+    if (!alive || id !== seq) return;
+    let moved = null;
+    if (auto && chain !== "solana" && notToken(r)) {
+      const k = await elsewhere(a, chain);
+      if (!alive || id !== seq) return;
+      if (k) {
+        moved = { from: chain, to: k };
+        setNet(k);
+        r = await check(a, k, size, false);
+        if (!alive || id !== seq) return;
+      }
+    }
+    runBtn.disabled = false;
+    busy(false);
+    last = { token: a, example };
+    if (!compact && !example) {
+      const p = new URLSearchParams();
+      if (st.chain !== "robinhood") p.set("chain", st.chain);
+      if (size !== BADGE_SIZE) p.set("amount", size);
+      const want = `#/gate/${a}${String(p) ? `?${p}` : ""}`;
+      if (location.hash !== want) history.replaceState(null, "", want);
+    }
+    render(a, r, example, moved);
+  }
+
+  // "Checked for a 0.01 ETH buy · cached 2m ago · Run fresh": what the verdict is for, and how old it is
+  function meta(a, r, example, moved) {
+    const chain = r.chain || "robinhood";
+    const age = r.checkedAt ? Date.now() - r.checkedAt : null;
+    const cached = !r.live && (r.cached === true || (age != null && age > 60_000));
+    const when = age == null ? "" : !cached && age < 60_000 ? "just now" : `${ago(r.checkedAt)} ago`;
+    return h("p", { class: "fine dk-gate-meta", style: { margin: "12px 0 0" } },
+      moved ? `Not a token on ${netOf(moved.from).name}, so the Gate ran on ${netOf(moved.to).name}. ` : null,
+      `Checked for a ${r.amount || BADGE_SIZE} ${nativeOf(chain)} buy${chain === "robinhood" ? "" : ` on ${netOf(chain).name}`}`,
+      when ? ` · ${cached ? "cached " : ""}${when}` : null,
+      cached ? [" · ", h("button", { class: "link", type: "button", onclick: () => run(a, { example, fresh: true, net: chain, auto: false }) }, "Run fresh")] : null);
+  }
+
+  // the Assay and Athena read Robinhood Chain history; they are kept while the same coin is checked at another size
+  function extrasFor(a, example) {
+    const key = `${a.toLowerCase()}|${example ? "ex" : ""}`;
+    if (extras?.key !== key) extras = { key, nodes: [assayBox(a, compact), compact || example ? null : athenaBox(a)] };
+    return extras.nodes;
+  }
+
+  function render(a, r, example, moved) {
+    const chain = r.chain || "robinhood", rh = chain === "robinhood", nat = nativeOf(chain), net = netOf(chain);
+    const size = r.amount || BADGE_SIZE;
     if (r?.checks) {
       const sum = r.checks.map((c) => `${c.label}: ${c.status}${c.detail ? ` (${c.detail})` : ""}`).join("; ");
-      dispatchEvent(new CustomEvent("troya:ctx", { detail: { text: `Troya Gate result for ${r.symbol ? "$" + r.symbol : a} (${a}): ${r.verdict}. ${sum}` } }));
+      dispatchEvent(new CustomEvent("troya:ctx", { detail: { text: `Troya Gate result for ${r.symbol ? "$" + r.symbol : a} (${a}) on ${net.name}, checked for a ${size} ${nat} buy: ${r.verdict}. ${sum}` } }));
       const failedOne = r.checks.some((c) => c.status === "fail");
-      if (!example && (r.verdict === "failed" || r.verdict === "caution" || failedOne)) dispatchEvent(new CustomEvent("troya:nudge", { detail: { key: `gate-${a}-${r.verdict}`, text: `${r.symbol ? "$" + r.symbol : "This coin"} ${r.verdict === "caution" && !failedOne ? "needs a look at" : "failed a check at"} the Gate. Want me to explain?`, q: `Explain this Gate result for ${r.symbol ? "$" + r.symbol : a} in plain words: what failed or needs a look, and what it means for me.` } }));
+      // a bigger test size that only fails on price impact says more about the size than the coin: no nudge for that
+      const sizeOnly = size !== BADGE_SIZE && r.checks.every((c) => c.status !== "fail" || c.key === "impact");
+      if (!example && !sizeOnly && (r.verdict === "failed" || r.verdict === "caution" || failedOne)) dispatchEvent(new CustomEvent("troya:nudge", { detail: { key: `gate-${a}-${chain}-${r.verdict}`, text: `${r.symbol ? "$" + r.symbol : "This coin"} ${r.verdict === "caution" && !failedOne ? "needs a look at" : "failed a check at"} the Gate. Want me to explain?`, q: `Explain this Gate result for ${r.symbol ? "$" + r.symbol : a} on ${net.name} in plain words: what failed or needs a look, and what it means for me.` } }));
     }
     if (r.verdict === "error" || !r.checks) {
-      clear(out, h("div", { class: "dk-empty" }, h("b", {}, "The Gate could not read this coin right now."), h("p", {}, r.error || r.reason || "Try again in a minute."), h("button", { class: "btn sm", type: "button", onclick: () => run(a) }, icon("refresh"), "Try again")));
+      clear(out, h("div", { class: "dk-empty" }, h("b", {}, `The Gate could not read this coin on ${net.name} right now.`), h("p", {}, r.error || r.reason || "Try again in a minute."), h("button", { class: "btn sm", type: "button", onclick: () => run(a, { example, net: chain, auto: false }) }, icon("refresh"), "Try again")), opts);
       return;
     }
     const failed = r.checks.filter((c) => c.status === "fail").length;
@@ -142,35 +315,49 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
     const ringEl = h("span", { class: `dk-ring v-${r.verdict}`, role: "img", "aria-label": `${passed} of ${total} checks passed` });
     ringEl.innerHTML = `<svg viewBox="0 0 120 120"><circle class="ra" cx="60" cy="60" r="50"/><circle class="rb" cx="60" cy="60" r="50" style="stroke-dasharray:0 ${C}"/></svg><b>${passed}/${total}</b>`;
     requestAnimationFrame(() => requestAnimationFrame(() => { const c = ringEl.querySelector(".rb"); if (c) c.style.strokeDasharray = `${frac * C} ${C}`; }));
+    // a buy is offered only where Swap would allow one: no check failed at this size
+    const buyable = !failed && r.verdict !== "failed";
+    const sym = r.symbol ? `$${r.symbol}` : "this coin";
+    // price impact is measured at the size checked, so a fail at 1 ETH can be a pass at 0.01
+    const impactFail = r.checks.some((c) => c.key === "impact" && c.status === "fail");
+    const hint = impactFail && Number(size) > Number(SIZES[0]) ? `That is for a ${size} ${nat} buy; a smaller one may pass.` : "";
+    const note = r.reason && r.verdict !== "passed" ? r.reason : NOTE[r.verdict] || "";
     clear(out,
       h("div", { class: "dk-gate-h" },
         ringEl,
-        tokenIcon({ symbol: r.symbol, address: a, chain: "robinhood" }, ""),
+        tokenIcon({ symbol: r.symbol, address: a, chain, image: r.image }, ""),
         h("div", { class: "dk-gate-id" },
-          h("b", {}, r.symbol ? `$${r.symbol}` : short(a)), gateIdLine(r, a)),
+          h("b", {}, r.symbol ? `$${r.symbol}` : short(a)), gateIdLine(r, a, chain)),
         h("div", { class: "dk-gate-v" },
           h("span", { class: `dk-v v-${r.verdict}` }, WORD[r.verdict] || r.verdict),
-          h("span", { class: "fine" }, `${tally}${r.checkedAt ? ` · checked ${Date.now() - r.checkedAt < 60_000 ? "just now" : `${ago(r.checkedAt)} ago`}` : ""}`))),
+          h("span", { class: "fine" }, tally))),
+      // the buy sits right under the verdict, not past the checks, the Assay and Athena; Swap re-runs the Gate at the
+      // exact amount before anything is signed
+      buyable ? h("div", { class: "dk-gate-a dk-gate-buy" },
+        h("a", { class: `btn primary${compact ? " sm" : ""}`, href: swapHref(a, chain, size), title: `Opens Swap with ${size} ${nat}. Swap runs the Gate again before you sign.` }, icon("swap"), `Buy ${sym}`),
+        h("div", { class: "chips", role: "group", "aria-label": `Buy ${sym} with`, style: { alignItems: "center" } },
+          BUYS.map((v, i) => h("a", { class: "chip", href: swapHref(a, chain, v), "aria-label": `Buy ${sym} with ${v} ${nat}`, style: { height: compact ? "28px" : "32px", padding: "0 10px", fontVariantNumeric: "tabular-nums" } }, i === BUYS.length - 1 ? `${v} ${nat}` : v)))) : null,
+      meta(a, r, example, moved),
+      opts,
       example ? h("p", { class: "fine dk-gate-ex" }, "Live example: NVDA, a Robinhood stock token. Paste any coin above to check it.") : null,
       h("ol", { class: "dk-checks" }, r.checks.map((c) => h("li", { class: `c-${c.status}` },
         h("span", { class: "dk-ck" }, c.status === "pass" ? icon("check") : c.status === "fail" ? icon("close") : h("b", {}, c.status === "warn" ? "!" : "–")),
         h("span", { class: "dk-ck-l" }, c.label),
         h("span", { class: "dk-ck-d" }, c.detail || "")))),
       r.curve && r.curve.progressPct != null ? h("div", { class: "dk-curve" }, h("span", {}, `Pons curve · ${Number(r.curve.raised || 0).toFixed(2)} ${r.curve.pair || "ETH"} raised`), h("div", { class: "dk-bar", style: { "--p": `${Math.min(100, r.curve.progressPct)}%` } }, h("i")), h("span", { class: "fine" }, `${r.curve.progressPct.toFixed(1)}% to graduation`)) : null,
-      h("p", { class: `note dk-gate-note v-${r.verdict}` }, r.reason && r.verdict !== "passed" ? r.reason : NOTE[r.verdict] || ""),
-      assayBox(a, compact),
-      compact || example ? null : athenaBox(a),
+      h("p", { class: `note dk-gate-note v-${r.verdict}` }, hint ? `${note.replace(/[.\s]+$/, "")}. ${hint}` : note),
+      rh ? extrasFor(a, example) : compact ? null : h("p", { class: "fine" }, "The Assay and Athena read Robinhood Chain coins, so they are not shown here."),
       h("div", { class: "dk-gate-a" },
-        failed ? null : h("a", { class: "btn primary sm", href: `#/swap?out=${a}` }, icon("swap"), "Swap"),
-        failed ? null : h("a", { class: "btn sm dk-fomo", href: `https://fomo.family/tokens/robinhood/${a}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/fomo.png", alt: "", width: 18, height: 18 }), "Buy on Fomo"),
-        h("a", { class: "btn sm", href: `#/token/${a}` }, "Token page"),
-        ask ? h("button", { class: "btn sm", type: "button", onclick: () => ask(`Is this token safe? ${a}`) }, icon("spark"), "Ask Troya") : null,
-        h("a", { class: "btn sm", href: `/badge?ca=${a}`, target: "_blank", rel: "noopener" }, icon("shield"), "Get the badge")));
+        rh && buyable ? h("a", { class: "btn sm dk-fomo", href: `https://fomo.family/tokens/robinhood/${a}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/fomo.png", alt: "", width: 18, height: 18 }), "Buy on Fomo") : null,
+        rh ? h("a", { class: "btn sm", href: `#/token/${a}` }, "Token page") : null,
+        ask ? h("button", { class: "btn sm", type: "button", onclick: () => ask(`Is this token safe? ${a}${rh ? "" : ` (on ${net.name})`}`) }, icon("spark"), "Ask Troya") : null,
+        rh ? h("a", { class: "btn sm", href: `/badge?ca=${a}`, target: "_blank", rel: "noopener" }, icon("shield"), "Get the badge") : null));
   }
 
-  runBtn.addEventListener("click", () => run(input.value));
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter") run(input.value); });
-  input.addEventListener("paste", () => setTimeout(() => { if (ADDR.test(input.value)) run(input.value); }, 0));
+  // pressing Run the Gate (or Enter) asks for a new check, not the badge's memo
+  runBtn.addEventListener("click", () => run(input.value, { fresh: true }));
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") run(input.value, { fresh: true }); });
+  input.addEventListener("paste", () => setTimeout(() => { const v = input.value.trim(); if (ADDR.test(v) || MINT.test(v)) run(v); }, 0));
 
   const el = h("section", { class: `panel dk-gate ${compact ? "compact" : ""}` },
     h("div", { class: "panel-h" }, h("h2", {}, "Troya Gate"), compact ? h("a", { class: "link fine", href: "#/gate" }, "Open the Gate") : h("a", { class: "link fine", href: "/risk-controls" }, "How the checks work")),
@@ -178,17 +365,18 @@ export function gatePanel({ go, ask, compact = false, start = "" } = {}) {
     h("div", { class: "dk-gate-form" }, inputBox, runBtn),
     out);
 
-  if (ADDR.test(start)) run(start);
-  else run(EXAMPLE, { example: true });                 // the Desk's live example: a Robinhood stock token
+  const s = String(start || "").trim();
+  if (ADDR.test(s) || MINT.test(s)) run(s);
+  else run(EXAMPLE, { example: true, net: "robinhood" });   // the Desk's live example: a Robinhood stock token
   return { el, run, stop: () => { alive = false; } };
 }
 
 export async function mount(view, ctx) {
   useCss("home");
-  const g = gatePanel({ go: ctx.go, ask: ctx.ask, start: ctx.parts[0] || ctx.query.ca || "" });
+  const g = gatePanel({ go: ctx.go, ask: ctx.ask, start: ctx.parts[0] || ctx.query.ca || "", chain: ctx.query.chain, amount: ctx.query.amount });
   const how = [
     ["Route", "There is a real path from ETH to the coin: a Pons curve or a Uniswap pool."],
-    ["Price impact", "How far your own buy moves the price at the size you typed."],
+    ["Price impact", "How far your own buy moves the price, at the size checked: 0.01 ETH unless you pick 0.1 or 1."],
     ["Pool depth", "How much ETH sits behind the price, so you can get back out."],
     ["Fees and taxes", "Every fee on the way in, named and counted."],
     ["Simulation", "The exact swap is run against the pool as it is now."],
@@ -203,6 +391,7 @@ export async function mount(view, ctx) {
     h("div", { class: "dk-row r75" }, g.el,
       h("section", { class: "panel dk-how" }, h("div", { class: "panel-h" }, h("h2", {}, "What each check reads")),
         h("ol", {}, how.map(([t, d], i) => h("li", {}, h("span", { class: "dk-how-n" }, String(i + 1)), h("div", {}, h("b", {}, t), h("p", {}, d))))),
+        h("p", { class: "note" }, "On Base and Arbitrum the same seven checks run; on Solana the Gate also reads the coin's mint and freeze authority."),
         h("p", { class: "note" }, "Results are checks, never endorsements. ", h("a", { class: "link", href: "/risk-controls" }, "Risk controls"), " · ", h("a", { class: "link", href: "/badge" }, "Gate badge for your site"))))));
   return () => g.stop();
 }

@@ -9,6 +9,8 @@
 .lc-sec .lc-sub { margin-top: 6px; }
 .lc-id { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 14px; align-items: start; }
 .lc-id-f { display: grid; gap: 12px; }
+.lc-drop-w { display: grid; gap: 6px; justify-items: center; align-content: start; }
+.lc-drop-w > .fine { text-align: center; line-height: 1.35; }
 .lc-drop { width: 132px; height: 132px; border-radius: 12px; border: 1px dashed var(--line-3); background: var(--bg-2); display: grid; place-items: center; cursor: pointer; overflow: hidden; transition: border-color .2s, background .2s; }
 .lc-drop:hover, .lc-drop.over { border-color: var(--blue); background: var(--bg-3); }
 .lc-drop img { width: 100%; height: 100%; object-fit: cover; }
@@ -21,6 +23,37 @@
 .lc-fb .input { flex: 1; height: 40px; font-size: 16px; }
 .lc-sym { height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-3); background: var(--bg-3); display: inline-flex; align-items: center; font-size: 13px; font-weight: 500; }
 .lc-status:empty { display: none; }
+/* thumb-sized choices: creator tax and the first buy */
+.lc-form .chips { gap: 8px; }
+.lc-form .chips .chip { height: auto; min-height: 40px; padding: 0 16px; font-size: 13px; }
+/* the info tip keeps its 14 px circle with a 32 px hit area around it */
+.lc-form .info { position: relative; }
+.lc-form .info::after { content: ""; position: absolute; inset: -9px; border-radius: 50%; }
+/* links, folded until asked for */
+.lc-more { border-top: 1px solid var(--line); padding-top: 4px; }
+.lc-more > summary { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; cursor: pointer; list-style: none; font-size: 13px; color: var(--fg-2); }
+.lc-more > summary::-webkit-details-marker { display: none; }
+.lc-more > summary:hover { color: var(--fg); }
+.lc-more > summary svg { width: 14px; height: 14px; color: var(--blue-2); transition: transform .2s; }
+.lc-more[open] > summary svg { transform: rotate(45deg); }
+.lc-more > summary .muted { font-size: 12px; }
+.lc-more > .lc-links { margin-top: 8px; }
+/* the cost, the total tax and the daily count, right above the button */
+.lc-sum { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-1); font-size: 13px; color: var(--fg-2); line-height: 1.45; }
+.lc-sum b { color: var(--fg); font-weight: 600; }
+.lc-sum .fine { line-height: 1.45; }
+.lc-sum .lc-sum-stop { color: var(--warn); }
+.lc-form > .lc-sum + .note { margin-top: -10px; }
+.lc-form > .note:empty { display: none; }
+/* Project check, folded below the button */
+.lc-fold { border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-1); }
+.lc-fold > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 0 16px; cursor: pointer; list-style: none; font-size: 14px; font-weight: 500; }
+.lc-fold > summary::-webkit-details-marker { display: none; }
+.lc-fold > summary .muted { font-weight: 400; }
+.lc-fold > summary::after { content: ""; flex: none; width: 7px; height: 7px; margin-top: -3px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); transition: transform .2s, margin .2s; }
+.lc-fold[open] > summary::after { transform: rotate(-135deg); margin-top: 3px; }
+.lc-fold-b { display: grid; gap: 12px; padding: 0 16px 16px; }
+.lc-fix { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; color: var(--fg-2); line-height: 1.5; }
 .lc-side { position: sticky; top: 76px; display: grid; gap: 10px; }
 .lc-prev { padding: 16px; display: grid; gap: 12px; }
 .lc-prev-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
@@ -31,17 +64,36 @@
 .lc-prev-desc { margin: 0; font-size: 12.5px; color: var(--fg-2); line-height: 1.5; max-height: 6em; overflow: hidden; }
 .lc-prev .rows { margin: 0; }
 .lc-prev .rows > div { font-size: 12px; padding: 7px 0; }
+/* the bonding curve in market cap */
+.lc-curve { display: grid; gap: 9px; padding: 12px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg-2); }
+.lc-curve-k { font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.lc-curve-ends { display: flex; justify-content: space-between; gap: 12px; font-size: 11.5px; color: var(--muted); }
+.lc-curve-ends > div { display: grid; gap: 1px; }
+.lc-curve-ends > div:last-child { text-align: right; }
+.lc-curve-ends b { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: var(--fg); font-variant-numeric: tabular-nums; }
+.lc-curve-bar { display: block; height: 6px; border-radius: 3px; background: var(--line-2); overflow: hidden; }
+.lc-curve-bar > i { display: block; height: 100%; min-width: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--blue-2), var(--blue)); }
+.lc-curve p { margin: 0; font-size: 12px; color: var(--fg-2); line-height: 1.45; }
 .lc-done { grid-column: 1 / -1; display: grid; justify-items: center; text-align: center; gap: 12px; padding: 40px 20px; }
 .lc-done-img { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 4px rgba(95, 211, 239, .2); }
 .lc-done h2 { margin: 0; font-size: clamp(24px, 3vw, 34px); font-weight: 500; letter-spacing: -0.02em; }
 .lc-done p { margin: 0; }
-.lc-done-act { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 6px 0; }
+.lc-done-act, .lc-done-share { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 6px 0; }
+.lc-done-share { margin-top: 0; padding-top: 14px; border-top: 1px solid var(--line); width: min(100%, 640px); }
+.lc-done-share svg { width: 14px; height: 14px; }
+.lc-done .lc-fold { width: min(100%, 680px); text-align: left; margin-top: 8px; }
+.lc-done-new { margin-top: 4px; font-size: 13px; }
 @media (max-width: 960px) {
   .lc-grid { grid-template-columns: minmax(0, 1fr); }
   .lc-side { position: static; }
   .lc-links { grid-template-columns: minmax(0, 1fr); }
 }
-@media (max-width: 520px) { .lc-id { grid-template-columns: 1fr; } }
+@media (max-width: 520px) {
+  .lc-id { grid-template-columns: 1fr; }
+  .lc-drop-w { justify-items: start; }
+  .lc-drop-w > .fine { text-align: left; }
+  .lc-done-act > .btn, .lc-done-share > .btn { flex: 1 1 calc(50% - 4px); justify-content: center; }
+}
 
 /* Launch from X (#/launch/x) */
 .lx { display: grid; gap: 16px; }

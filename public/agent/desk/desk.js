@@ -1,7 +1,7 @@
 // Troya Desk (concept shell). Same pages, same API and wallet modules as /agent; only the frame changes:
 // grouped sidebar, top bar with Search (⌘K), an agent drawer that stays open beside any page, and a new Desk home.
 // Pages live in /agent/js/pages/<name>.js (unchanged). Desk home and Gate live next to this file.
-import { h, $, clear, icon, toast, modal, short, store, chainLogo, tokenIcon, setBorn, price, seg } from "/agent/js/ui.js";
+import { h, $, clear, icon, toast, modal, short, store, chainLogo, tokenIcon, coinIcon, setBorn, price, seg } from "/agent/js/ui.js";
 import { padName } from "/agent/js/marketlib.js";
 import { wallet, onWallet, openConnect, restore, disconnect, signIn, ensureChain, CHAINS, chainById } from "/agent/js/wallet.js";
 import { api } from "/agent/js/api.js";
@@ -438,19 +438,35 @@ $("[data-ask-fab]").addEventListener("click", () => openDrawer());
 const ASKS = ["What is moving on Robinhood Chain right now?", "Show funding extremes on Hyperliquid", "What should I watch today?"];
 function openAsk(prefill = "") {
   const input = h("input", { class: "d-pal-in", placeholder: matchMedia("(max-width: 560px)").matches ? "Search coins and pages" : "Search coins and pages, paste an address, or type a question", value: prefill, "aria-label": "Search", autocomplete: "off", spellcheck: "false" });
-  let sel = 0, flat = [], coins = [], coinQ = "", coinSeq = 0, coinTimer = 0;
+  let sel = 0, flat = [], coins = [], perps = [], coinQ = "", majorQ = false, coinSeq = 0, coinTimer = 0, ethPx = null, ethAsked = false;
   const opts = h("div", { class: "d-pal-list", role: "listbox" });
-  // coins by symbol, name or ticker: the server searches the whole chain (index, stock tokens, DexScreener)
+  // coins by symbol, name or ticker: the server searches the whole chain (index, stock tokens, DexScreener) and sends
+  // the matching perps (Hyperliquid and trade.xyz, by ticker or name) with them
   const findCoins = () => {
     clearTimeout(coinTimer);
     const raw = input.value.trim().replace(/^\$/, "");
-    if (raw.length < 2 || /0x[0-9a-fA-F]{40}/.test(raw) || raw.split(/\s+/).length > 3) { coins = []; coinQ = ""; return; }
+    if (raw.length < 2 || /0x[0-9a-fA-F]{40}/.test(raw) || raw.split(/\s+/).length > 3) { coins = []; perps = []; coinQ = ""; return; }
     coinTimer = setTimeout(async () => {
       const my = ++coinSeq;
-      try { const r = await api.get(`search/coins?q=${encodeURIComponent(raw)}&limit=6`); if (my !== coinSeq) return; coins = r.coins || []; coinQ = raw; render(); } catch {}
+      try {
+        const r = await api.get(`search/coins?q=${encodeURIComponent(raw)}&limit=6`);
+        if (my !== coinSeq) return;
+        coins = r.coins || []; perps = r.perps || []; majorQ = !!r.majorQuery; coinQ = raw; render();
+      } catch {}
     }, 180);
   };
-  // rows: { kind: "ask" | "coin" | "page", title, hint, icon, target }
+  // the majors' ETH price, when the search row came without one: the same Hyperliquid mid as /api/price/eth
+  const ethPrice = () => {
+    if (ethAsked) return ethPx;
+    ethAsked = true;
+    api.get("price/eth").then((r) => { if (r?.usd > 0) { ethPx = r.usd; render(); } }).catch(() => {});
+    return null;
+  };
+  // the quick Swap / Gate rows go with a coin people can mean by its name: a major, a stock token, the official $TROYA,
+  // or a coin with $50K of real money in its pools ("btc" offered "Swap into BTC" for a $2.4K copy)
+  const quickOk = (c) => !!c && c.address !== "native" && !c.copy && !c.teamTest
+    && (c.kind === "major" || c.kind === "stock" || c.official || (Number(c.realLiquidityUsd) || 0) >= 50_000);
+  // rows: { kind: "ask" | "coin" | "perp" | "page", title, hint, icon, target }
   const sections = () => {
     const raw = input.value.trim(), q = raw.toLowerCase();
     const ca = (/0x[0-9a-fA-F]{40}/.exec(raw) || [])[0];
@@ -458,30 +474,50 @@ function openAsk(prefill = "") {
     const asks = [];
     const fmt = (n) => (n == null ? null : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${Math.round(n)}`);
     const px = (n) => (n == null || !(n > 0) ? null : `$${price(n)}`);
-    if (coins.length && coinQ && q.replace(/^\$/, "").startsWith(coinQ.toLowerCase().slice(0, 2))) {
-      const rows = coins.map((c) => ({ kind: "coin", coin: c, title: `${c.symbol}${c.name && c.name.toLowerCase() !== c.symbol.toLowerCase() ? ` · ${c.name}` : ""}`,
-        hint: [c.kind === "stock" ? "Robinhood stock token" : c.kind === "major" ? "Major" : c.launchpad ? padName(c.launchpad) : null, px(c.priceUsd), c.liquidityUsd ? `liq ${fmt(c.liquidityUsd)}` : null].filter(Boolean).join(" · "),
-        target: c.address === "native" ? "#/swap" : `#/token/${c.address}` }));
-      const t = coins[0];
-      if (t && t.address !== "native") rows.splice(1, 0,
-        { kind: "page", title: `Swap into ${t.symbol}`, hint: "Opens Swap with it selected; the Gate runs first", icon: "swap", target: `#/swap?out=${t.address}` },
-        { kind: "page", title: `Gate ${t.symbol}`, hint: "Seven checks before you buy", icon: "gate", target: `#/gate/${t.address}` });
-      out.push(["Coins", rows]);
-    }
-    if (raw && !ca) asks.push({ kind: "ask", title: raw, hint: "Ask Troya: answered right here, in the popup", icon: "spark", target: raw });
-    for (const a of ASKS) if (!q || a.toLowerCase().includes(q)) asks.push({ kind: "ask", title: a, hint: "Ask Troya", icon: "spark", target: a });
+    // a single word that names a page ("swap", "perps") puts Go to first, before the coin rows that arrive ~180 ms
+    // later, so Enter always opens the page; anything longer reads as a question
+    const pages = FLAT.filter((it) => !q || it.t.toLowerCase().includes(q) || String(it.g || "").toLowerCase().includes(q))
+      .map((it) => ({ kind: "page", title: it.t, hint: it.g || "Home", icon: it.ic, target: it.href }));
+    const goTo = ["Go to", q ? pages.slice(0, 6) : pages.slice(0, 8)];
+    const pageFirst = q && !/\s/.test(q) && pages.some((p) => p.title.toLowerCase().startsWith(q));
+    if (pageFirst && pages.length) out.push(goTo);
     if (ca) out.push(["Check this coin", [
       { kind: "page", title: `Run Troya Gate on ${short(ca)}`, hint: "Seven checks: route, impact, depth, fees, simulation, test sell, tax", icon: "gate", target: `#/gate/${ca}` },
       { kind: "page", title: `Open the token page`, hint: "Price, chart, pools and trades", icon: "market", target: `#/token/${ca}` },
       { kind: "ask", title: `Ask Troya about ${short(ca)}`, hint: "Is it safe to buy? The agent reads the checks and explains", icon: "spark", target: `Is this token safe? ${ca}` },
       { kind: "page", title: `Swap into it`, hint: "Opens Swap with the coin selected", icon: "swap", target: `#/swap?out=${ca}` },
     ]]);
-    const pages = FLAT.filter((it) => !q || it.t.toLowerCase().includes(q) || String(it.g || "").toLowerCase().includes(q))
-      .map((it) => ({ kind: "page", title: it.t, hint: it.g || "Home", icon: it.ic, target: it.href }));
-    const goTo = ["Go to", q ? pages.slice(0, 6) : pages.slice(0, 8)];
-    // a single word that names a page ("swap", "perps") jumps there first; anything longer reads as a question
-    const pageFirst = q && !/\s/.test(q) && pages.some((p) => p.title.toLowerCase().startsWith(q));
-    if (pageFirst && pages.length) out.push(goTo);
+    const fresh = coinQ && q.replace(/^\$/, "").startsWith(coinQ.toLowerCase().slice(0, 2));
+    const coinSec = [], perpSec = [];
+    if (coins.length && fresh) {
+      const rows = coins.map((c) => {
+        const ethLike = c.kind === "major" && (c.address === "native" || c.symbol === "WETH");
+        const usd = c.priceUsd ?? (ethLike ? ethPrice() : null);
+        const liq = c.realLiquidityUsd ?? c.liquidityUsd;
+        return { kind: "coin", coin: c, title: `${c.symbol}${c.name && c.name.toLowerCase() !== String(c.symbol).toLowerCase() ? ` · ${c.name}` : ""}`,
+          hint: [c.official ? "Official" : c.teamTest ? "Team test" : null,
+            c.kind === "stock" ? "Robinhood stock token" : c.kind === "major" ? "Major" : c.launchpad ? padName(c.launchpad) : null,
+            px(usd), liq ? `liq ${fmt(liq)}` : null, c.address === "native" ? "Native" : short(c.address)].filter(Boolean).join(" · "),
+          target: c.address === "native" ? "#/swap" : `#/token/${c.address}` };
+      });
+      const t = coins[0];
+      if (quickOk(t)) rows.splice(1, 0,
+        { kind: "page", title: `Swap into ${t.symbol}`, hint: "Opens Swap with it selected; the Gate runs first", icon: "swap", target: `#/swap?out=${t.address}` },
+        { kind: "page", title: `Gate ${t.symbol}`, hint: "Seven checks before you buy", icon: "gate", target: `#/gate/${t.address}` });
+      coinSec.push(["Coins", rows]);
+    }
+    if (perps.length && fresh) {
+      const names = perps.map((p) => p.displayName);
+      perpSec.push(["Perps", perps.map((p) => ({ kind: "perp", perp: p,
+        // two markets under one name (SK hynix) say which ticker each is
+        title: names.filter((n) => n === p.displayName).length > 1 ? `${p.displayName} (${p.label})` : p.displayName,
+        hint: [p.dex === "xyz" ? "perp on Hyperliquid (trade.xyz)" : "perp on Hyperliquid", px(p.priceUsd), p.maxLeverage ? `up to ${p.maxLeverage}x` : null].filter(Boolean).join(" · "),
+        target: `#/perps/${p.coin}` }))]);
+    }
+    // BTC, ETH and SOL: the majors and their perps lead (a $2.4K "BTC" copy came first); otherwise the coins do
+    if (majorQ) out.push(...perpSec, ...coinSec); else out.push(...coinSec, ...perpSec);
+    if (raw && !ca) asks.push({ kind: "ask", title: raw, hint: "Ask Troya: answered right here, in the popup", icon: "spark", target: raw });
+    for (const a of ASKS) if (!q || a.toLowerCase().includes(q)) asks.push({ kind: "ask", title: a, hint: "Ask Troya", icon: "spark", target: a });
     if (asks.length) out.push(["Ask Troya", asks.slice(0, 4)]);
     if (!pageFirst && pages.length) out.push(goTo);
     return out;
@@ -494,7 +530,8 @@ function openAsk(prefill = "") {
     let i = 0;
     clear(opts, secs.map(([label, rows]) => h("div", { class: "d-pal-sec" }, h("div", { class: "d-pal-h" }, label),
       rows.map((it) => { const idx = i++; return h("button", { class: `d-pal-row ${idx === sel ? "sel" : ""}`, type: "button", role: "option", "aria-selected": String(idx === sel), onclick: () => run(it), onmousemove: () => { if (sel !== idx) { sel = idx; render(); } } },
-        it.coin ? h("span", { class: "d-pal-ic coin" }, tokenIcon(it.coin)) : h("span", { class: `d-pal-ic ${it.kind}` }, si(it.icon || "desk")), h("span", { class: "d-pal-t" }, h("b", {}, it.title), h("small", {}, it.hint)), h("kbd", {}, "↵")); }))));
+        it.coin ? h("span", { class: "d-pal-ic coin" }, tokenIcon(it.coin)) : it.perp ? h("span", { class: "d-pal-ic coin" }, coinIcon(it.perp.coin))
+          : h("span", { class: `d-pal-ic ${it.kind}` }, si(it.icon || "desk")), h("span", { class: "d-pal-t" }, h("b", {}, it.title), h("small", {}, it.hint)), h("kbd", {}, "↵")); }))));
     opts.querySelector(".sel")?.scrollIntoView({ block: "nearest" });
   };
   input.addEventListener("input", () => { sel = 0; findCoins(); render(); });

@@ -10,7 +10,8 @@
 //   · Optional initial buy ("buy 0.01"): the Agent Wallet buys its own coin right after the 3-second Pons snipe tax, as a
 //     normal Agent Wallet swap (Troya Gate, the wallet's caps). Not enough ETH for launch fee + buy → nothing is launched.
 // Routes:
-//   GET  /api/launch/rules              public numbers (holder minimum, limits, Troya's share, the splitter factory)
+//   GET  /api/launch/rules              public numbers (holder minimum, limits, Troya's share, the splitter factory) and the
+//                                       modes of Launch on X and Trade on X (a signed-out visitor sees the real status too)
 //   POST /api/launch/plan               { creator, creatorTaxBps, name?, symbol? } → who receives the creator fee for this launch
 //   POST /api/launch/record             { hash, salt?, troyaBps? } → a web launch checked on chain and added to the creator's list
 //   GET  /api/launch/mine               signed in: coins launched through Troya by this wallet
@@ -38,6 +39,17 @@ export const MAX_TAX_BPS = 400;                // 4%
 export const TROYA_VOLUME_BPS = 10;            // Troya's fee: 0.1% of volume, out of the creator's 70 bps
 export const MAX_INITIAL_BUY_ETH = 1;          // the wallet's own caps (per trade, per day) usually bite first
 const CREATOR_FEE_BPS = 70;                    // 70% of the 1% Pons fee
+/**
+ * What an Agent Wallet must hold to launch: the Pons fee and 0.0001 ETH, or with an initial buy the fee, the buy and
+ * 0.0002 (launchPlanned's own check; Troya pays the gas). Rounded up to a whole micro-ETH, because 0.0005 + 0.0001 is
+ * 0.0006000000000000001 in floating point: a wallet holding exactly the 0.0006 it was told to add was told "add 0 ETH more".
+ * The Launch from X page works the suggested top-up out the same way (launch-x.js needEth).
+ */
+export function needEthFor(feeEth, buyEth = 0) {
+  const b = Number(buyEth) > 0 && Number(buyEth) <= MAX_INITIAL_BUY_ETH ? Number(buyEth) : 0;
+  return Math.ceil((Number(feeEth || 0) + (b ? b + 0.0002 : 0.0001)) * 1e6 - 1e-6) / 1e6;
+}
+const ethText = (x) => Number(x).toFixed(6).replace(/\.?0+$/, "");
 export const PONS_ESCROW = "0xd3AFEB2a57f70eF218Aa82451c51B2fb0416Ac9e";
 const TOKEN_LAUNCHED = "0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607";
 const lc = (s) => String(s || "").toLowerCase();
@@ -289,7 +301,7 @@ async function launchPlanned(p, { owner, name, symbol, logo, creatorTaxBps = 0, 
     // the launch fee and the buy must both fit, or nothing is launched (no coin born without the buy that was asked for)
     const menu = await launchMenu(true);
     const bal = Number(BigInt(await rpc("robinhood", "eth_getBalance", [w.address, "latest"]))) / 1e18;
-    const need = menu.launchFeeEth + buyEth + 0.0002;
+    const need = needEthFor(menu.launchFeeEth, buyEth);
     if (bal < need) return { ok: false, why: "funds", reasons: [`the Agent Wallet holds ${bal.toFixed(5)} ETH; the launch fee plus a ${buyEth} ETH buy needs about ${need.toFixed(5)} ETH`] };
   }
   lap(t0, "checks done, sending");
@@ -479,11 +491,14 @@ export async function fromX({ tweetId, authorId, text, mediaUrl, mediaKinds = []
   const owner = await linkedOwner(authorId);
   if (xm === "test" && !(owner && admins().includes(lc(owner)))) return notYet;
   const ob = await import("./onboard.mjs"); ob.init(store);
-  if (!owner) return { reply: `Not launched yet. ${ob.gapsLine(["connect your wallet and link this X account", "switch Launch from X on", "add 0.0006 ETH to your Agent Wallet"], "launch-x")}. Then post again. Nothing was spent.` };
+  // what the Agent Wallet must hold for this very post: the fee, the asked buy and the same margin launchPlanned checks
+  const menu = await launchMenu().catch(() => ({ launchFeeEth: 0.0005 }));
+  const needEth = needEthFor(menu.launchFeeEth ?? 0.0005, ask.buyEth);
+  // a stranger gets every step at once, the Agent Wallet included (20 Nov audit: it listed three and left that one out)
+  if (!owner) return { reply: `Not launched yet. ${ob.gapsLine(["connect your wallet and link this X account", "create your Agent Wallet", `add ${ethText(needEth)} ETH to it on Robinhood Chain`, "switch Launch from X on"], "launch-x")}. Then post again. Nothing was spent.` };
   {
-    // everything still missing, at once, before anything is spent (fee + the asked buy + a little gas)
-    const menu = await launchMenu().catch(() => ({ launchFeeEth: 0.0005 }));
-    const gaps = await ob.gapsFor(owner, "launch-x", { needEth: Number(menu.launchFeeEth || 0.0005) + (Number(ask.buyEth) > 0 && Number(ask.buyEth) <= MAX_INITIAL_BUY_ETH ? Number(ask.buyEth) : 0) + 0.0001 }).catch(() => []);
+    // everything still missing, at once, before anything is spent
+    const gaps = await ob.gapsFor(owner, "launch-x", { needEth }).catch(() => []);
     if (gaps.length) return { reply: `Not launched yet. ${ob.gapsLine(gaps, "launch-x")}. Then post again. Nothing was spent.` };
   }
   // the switch is checked here too, so a failed status read never skips it
@@ -821,6 +836,9 @@ export async function register(r, ctx) {
     const factory = await splitterFactory();
     return { holderMin: HOLDER_MIN, limits: LIMITS, maxCreatorTaxBps: MAX_TAX_BPS, troyaVolumePct: TROYA_VOLUME_BPS / 100, creatorFeePct: CREATOR_FEE_BPS / 100,
       holderTroyaPct: 0, splitter: factory ? { factory, live: true } : { live: false }, xLaunch: (await xLaunchMode()) === "live", tgLaunch: (await tgLaunchMode()) === "live",
+      // the modes themselves (off | test | live, and holders for trading): the Launch from X page reads them from here, so a
+      // signed-out visitor sees the real status instead of "opens after its real-money test" for a feature that is open
+      xLaunchMode: await xLaunchMode(), xTradeMode: await import("./xtrade.mjs").then((m) => m.tradeMode()).catch(() => "off"),
       tgBot: process.env.TG_BOT_USERNAME || "TrojanTroya_bot",
       text: `Free to launch. Troya takes 0.1% of trading volume out of the creator's 0.7% share of the Pons fee; holders of ${HOLDER_MIN.toLocaleString("en-US")} $TROYA keep all of it. ${(await tgLaunchMode()) === "live" ? "X, Telegram and troya.codes are open to everyone" : "X and troya.codes are open to everyone; Telegram opens after its real-money test"}. Creator tax 0–4%. Without 1M $TROYA: up to ${LIMITS.perDay} launches a day, at most ${LIMITS.perDayX} of them from X; holders have no daily limit.` };
   });

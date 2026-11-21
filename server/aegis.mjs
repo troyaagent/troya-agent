@@ -11,7 +11,7 @@
 // Each alert goes to the holder's inbox and Telegram DM, with a cool-down per coin and kind. In "exit" mode a red alert
 // also builds a full sell of that coin to ETH: a ticket to approve, or, with the Agent Wallet on and AEGIS_AUTO_EXIT=1,
 // a sell through the Gate and the wallet's caps. Red alerts are sealed (V7 F35).
-//   GET  /api/aegis/feed            what Aegis caught lately, across all coins (no wallet data)
+//   GET  /api/aegis/feed            what Aegis caught lately, across all coins (no wallet data, no team test coins)
 //   GET  /api/aegis/token/:token    one coin's watch: who is watched, the last sell test, its alerts
 //   GET  /api/aegis/me              your guard, the coins it watches and their alerts         (session)
 //   POST /api/aegis/me              { on, mode: "alert"|"exit", minUsd }                        (session)
@@ -262,6 +262,49 @@ async function tick() {
 
 const pubEvent = (e) => ({ token: e.token, symbol: e.symbol, kind: e.kind, level: e.level, text: e.text, tx: e.tx, at: e.at });
 
+/* ---------- the team's own test coins stay out of the public feed ---------- */
+// The public feed and its counts leave out the team's test coins ($OATHTEST, the coin the team broke an Oath on to test
+// tier 2). The rule is the Troya Launches board's (launch.mjs isTeamTest: a "test" name or ticker, a team wallet, a
+// record flagged teamTest), plus an Oath signed by the team's test wallet and the short list below for anything those
+// miss. Only the public feed is filtered: holders of a test coin still get every alert, and /api/aegis/token/:token is
+// unchanged. $TROYA is never a test coin, although its creator is an admin wallet.
+const TEST_COINS = new Set(["0x01e1313d5b74eb39c55160f653ed59f18a0ee968"]);   // $OATHTEST (Oath tier 2 test, 19 Nov)
+const TROYA = "0x1fa81ddaaac83240803b3f2d20595e40edc1a074";
+let testMemo = null;
+async function teamTests() {
+  if (testMemo && Date.now() - testMemo.at < 60_000) return testMemo;
+  const L = await import("./launch.mjs").catch(() => null);
+  const named = (symbol) => (L?.isTeamTest ? L.isTeamTest({ symbol }) : /test/i.test(String(symbol || "")));
+  const set = new Set(TEST_COINS);
+  for (const l of await store.readJson("launches.json", []).catch(() => [])) {
+    try { if (l?.token && L?.isTeamTest?.(l)) set.add(lc(l.token)); } catch { /* a broken record is not a test coin */ }
+  }
+  const testWallets = new Set((L?.TEST_WALLETS || []).map(lc));
+  for (const o of Object.values((await store.readJson("oath.json", {}).catch(() => ({}))).oaths || {})) {
+    if (o?.token && [o.signer, o.deployer].some((w) => testWallets.has(lc(w)))) set.add(lc(o.token));
+  }
+  set.delete(TROYA);
+  testMemo = { at: Date.now(), set, isTest: (token, symbol) => lc(token) !== TROYA && (set.has(lc(token)) || named(symbol)) };
+  return testMemo;
+}
+
+/** The public feed: what Aegis caught lately on real coins, how many users guard coins, and how many coins Troya watches. */
+async function publicFeed() {
+  const d = await store.readJson(FILE, {});
+  const { isTest } = await teamTests();
+  const guards = Object.values(d.guards || {}).filter((g) => g.on);
+  const guarded = new Set();
+  for (const g of guards) for (const c of g.coins || []) if (c?.token && !isTest(c.token, c.symbol)) guarded.add(lc(c.token));
+  // site-wide: the coins Aegis guards for users plus the coins Watchfire reads live (open coin pages, Arena positions,
+  // Treasury pins); Aegis raises Watchfire's alerts on the coins it guards
+  const watched = new Set(guarded);
+  const wf = await import("./watchfire.mjs").catch(() => null);
+  for (const c of (wf?.watchedTokens?.() || [])) if (c?.token && !isTest(c.token, c.symbol)) watched.add(lc(c.token));
+  return { guards: guards.length, coins: guarded.size, coinsWatched: watched.size,
+    note: "coins counts the coins Aegis guards for users now; coinsWatched counts every coin Troya reads live now (Aegis and Watchfire). The team's own test coins are not included.",
+    events: (d.feed || []).filter((e) => !isTest(e.token, e.symbol)).slice(0, 60).map(pubEvent) };
+}
+
 export async function aegisToken(token) {
   const t = lc(token);
   const d = await store.readJson(FILE, {});
@@ -277,11 +320,7 @@ export async function register(r, ctx) {
   store = ctx.store;
   setTimeout(() => tick().catch(() => {}), 75_000);
   setInterval(() => tick().catch(() => {}), TICK_MS).unref();
-  r.get("/api/aegis/feed", async () => {
-    const d = await store.readJson(FILE, {});
-    const guards = Object.values(d.guards || {}).filter((g) => g.on);
-    return { guards: guards.length, coins: Object.keys(d.coins || {}).length, events: (d.feed || []).slice(0, 60).map(pubEvent) };
-  }, { weight: 1 });
+  r.get("/api/aegis/feed", () => publicFeed(), { weight: 1 });
   r.get("/api/aegis/token/:token", async ({ params }) => { if (!isAddress(params.token)) throw new HttpError(400, "That is not a token address."); return aegisToken(params.token); }, { weight: 1 });
   r.get("/api/aegis/me", async ({ req }) => {
     const me = lc(requireSession(req).address);

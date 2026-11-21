@@ -183,12 +183,15 @@ export function describeStatuses(res) {
 /**
  * market = an entry from /api/hl/meta ({asset, coin, szDecimals, maxLeverage, midPx, markPx, onlyIsolated}).
  * limitPx null → IOC at mid ± slippage. tp/sl = trigger prices for reduce-only market exits.
+ * leverage / isCross come from the caller: pass no leverage when the position already runs at it, and isCross false to
+ * keep an isolated position isolated (unsaid means cross).
  */
-export async function placeOrder({ owner, market, isBuy, size, limitPx = null, reduceOnly = false, slippage = 0.01, leverage, isCross = true, tp, sl, refPx }) {
+export async function placeOrder({ owner, market, isBuy, size, limitPx = null, reduceOnly = false, slippage = 0.01, leverage, isCross, tp, sl, refPx }) {
   const m = market;
   const sz = roundSz(size, m.szDecimals);
   if (!(sz > 0)) throw new Error(`Size rounds to zero: ${m.coin} trades in steps of ${10 ** -m.szDecimals}.`);
-  if (leverage) await setLeverage({ owner, market: m, leverage, isCross });
+  // a reduce-only order never changes leverage: it opens nothing, and an update refused on an open position would block the close
+  if (leverage && !reduceOnly) await setLeverage({ owner, market: m, leverage, isCross });
   const isMarket = limitPx == null;
   const base = refPx || m.midPx || m.markPx;
   const px = isMarket ? roundPx(base * (isBuy ? 1 + slippage : 1 - slippage), m.szDecimals) : roundPx(limitPx, m.szDecimals);
@@ -282,10 +285,12 @@ export async function sendToDex(owner, eip, amount, sourceDex, destinationDex) {
   const action = { type: "sendAsset", signatureChainId: "0xa4b1", hyperliquidChain: "Mainnet", destination, sourceDex, destinationDex, token, amount: amt, fromSubAccount: "", nonce };
   return relay({ action, nonce, signature: { r: sig.r, s: sig.s, v: sig.v }, vaultAddress: null });
 }
-export async function setLeverage({ owner, market, leverage, isCross = true }) {
+// isCross is the caller's (false keeps an isolated position isolated); unsaid means cross, and an isolated-only market
+// is always isolated
+export async function setLeverage({ owner, market, leverage, isCross }) {
   const lev = Math.round(Number(leverage));
   if (!(lev >= 1 && lev <= market.maxLeverage)) throw new Error(`${market.coin} allows 1–${market.maxLeverage}x.`);
-  return sendL1(owner, { type: "updateLeverage", asset: market.asset, isCross: market.onlyIsolated ? false : !!isCross, leverage: lev });
+  return sendL1(owner, { type: "updateLeverage", asset: market.asset, isCross: market.onlyIsolated ? false : isCross !== false, leverage: lev });
 }
 export async function cancelOrder({ owner, market, oid }) {
   return sendL1(owner, { type: "cancel", cancels: [{ a: market.asset, o: Number(oid) }] });

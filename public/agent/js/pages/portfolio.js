@@ -1,24 +1,42 @@
-// Portfolio: balances on Robinhood Chain and Hyperliquid, setup checklist, positions, inbox, history.
+// Portfolio: balances on Robinhood Chain and Hyperliquid, the Get started checklist, positions, inbox, history, weekly review.
 import { h, clear, icon, pageHead, tabs, table, toast, num, usd, pct, short, useCss, every, store, ago, chainLogo, coinIcon, tokenIcon, tiny } from "../ui.js";
 import { api } from "../api.js";
 import { wallet, onWallet, openConnect, reader, signIn } from "../wallet.js";
-import { tradingKeyStatus } from "../hl.js";
+import { getStarted } from "./start.js";
 
 const hideSetup = store("troya.portfolio.hideSetup", false);
 const fmtPx = (p) => (p == null || !isFinite(p) ? "–" : num(p, p >= 1000 ? 1 : p >= 1 ? 4 : 6));
 const asList = (r, ...keys) => { for (const k of keys) if (Array.isArray(r?.[k])) return r[k]; return Array.isArray(r) ? r : []; };
 const tsOf = (x) => x.ts ?? x.time ?? x.createdAt ?? x.at ?? x.created_at ?? null;
 const toMs = (t) => (t == null ? null : typeof t === "string" ? Date.parse(t) : t < 1e12 ? t * 1000 : t);
+// Inbox and History before a wallet is in: two plain lines on what lands there and one greyed row marked Example (an
+// illustration labelled as one, with no numbers in it), then the one button that opens it up
+function guestBox(lines, ex, act, cls = "panel pf-connect") {
+  return h("div", { class: cls },
+    lines.map((t) => h("p", { style: { margin: 0, maxWidth: "36em", textAlign: "center", lineHeight: "1.5" } }, t)),
+    h("div", { class: "pf-msg", role: "img", "aria-label": `Example: ${ex.title}`, style: { width: "min(100%, 520px)", opacity: ".55", border: "1px dashed var(--line-3)", borderRadius: "10px", textAlign: "left", pointerEvents: "none" } },
+      h("i", { class: "u" }),
+      h("div", {}, h("b", {}, h("span", { class: "pf-kind" }, ex.kind), ex.title), h("p", {}, ex.text)),
+      h("span", { class: "pf-kind", style: { margin: 0 } }, "Example")),
+    act);
+}
+const INBOX_LINES = ["Alerts from your playbooks land here when a trigger you set fires, so you do not have to watch the chart.", "So do the tickets your agent prepares for you. Each one waits for your signature, and nothing moves before it."];
+const INBOX_EX = { kind: "playbook", title: "A coin you watch crossed the trigger you set", text: "A real alert names the coin, the move and the rule that fired, with a button to act on it." };
+const JOURNAL_EX = { kind: "swap", title: "A swap you signed on the Swap page", text: "Each entry says when it happened, what it was and why, and whether it came from the app, the agent or a playbook." };
 
 export async function mount(view, ctx) {
   useCss("portfolio");
   let alive = true;
   const stops = [];
   let tab = ["inbox", "history", "owl"].includes(ctx.parts[0]) ? ctx.parts[0] : "overview";
-  const st = { rh: null, toks: null, hl: null, eth: null, key: null, journal: null, errors: {}, brief: null, briefSum: null };
+  const st = { rh: null, toks: null, hl: null, eth: null, errors: {}, brief: null, briefSum: null };
+  // the same checklist as the Desk and #/start, made once so a balance refresh re-draws the page without re-reading it
+  const setup = getStarted({ layout: "card", hide: hideSetup });
+  setup.el.style.margin = "16px 0 18px";                    // on the card itself, so a hidden card leaves no gap
+  stops.push(setup.stop);
 
   const body = h("div", {});
-  const tabsEl = tabs([{ value: "overview", label: "Overview" }, { value: "inbox", label: "Inbox" }, { value: "history", label: "History" }, { value: "owl", label: "Owl" }], tab, (v) => {
+  const tabsEl = tabs([{ value: "overview", label: "Overview" }, { value: "inbox", label: "Inbox" }, { value: "history", label: "History" }, { value: "owl", label: "Weekly review" }], tab, (v) => {
     tab = v;
     history.replaceState(null, "", `#/portfolio${v === "overview" ? "" : "/" + v}`);
     render();
@@ -44,7 +62,6 @@ export async function mount(view, ctx) {
         .catch(() => api.get(`chain/balances?address=${addr}`).then((b) => { st.toks = (b.balances || []).filter((x) => x.address !== "native" && Number(x.amount) > 0); st.tokUsd = 0; }).catch(() => { st.toks = null; }))),
       step(api.get("price/eth").then((p) => { st.eth = Number(p?.usd) || st.eth; }).catch(() => {})),
       step(api.get(`hl/user?address=${addr}`).then((u) => { st.hl = u; delete st.errors.hl; }).catch(() => { st.hl = null; st.errors.hl = true; })),
-      tradingKeyStatus(addr).then((k) => { st.key = k; }).catch(() => {}),
     ]);
     if (alive && addr === wallet.address && tab === "overview") render();
   }
@@ -88,10 +105,6 @@ export async function mount(view, ctx) {
       h("div", { class: "pf-brief-set" },
         h("label", { class: "row" }, h("input", { type: "checkbox", checked: p.on, onchange: (e) => save({ on: e.target.checked }) }), "Daily brief on Telegram"), hourSel,
         h("label", { class: "row" }, h("input", { type: "checkbox", checked: p.alerts, onchange: (e) => save({ alerts: e.target.checked }) }), "Smart alerts (liquidation, stops, funding)")));
-  }
-  async function loadJournal() {
-    if (!wallet.session) { st.journal = null; return; }
-    try { st.journal = asList(await api.get("journal?limit=100"), "entries", "items", "journal"); } catch { st.journal = null; }
   }
 
   /* ---------- overview ---------- */
@@ -193,25 +206,8 @@ export async function mount(view, ctx) {
     if (connected && wallet.session) parts.push(briefPanel());
     // the hero already offers Connect when no wallet is connected
 
-    // setup checklist: a step is ticked only when there is evidence for it
-    if (!hideSetup.get()) {
-      const swapped = (st.journal || []).some((j) => /swap/i.test(j.kind || j.type || ""));
-      const steps = [
-        { t: "Connect wallet", done: connected, act: (c) => h("button", { class: c, type: "button", onclick: () => openConnect() }, "Connect"), tip: "Your wallet signs everything; Troya never holds its key." },
-        { t: "Get ETH on Robinhood Chain", done: (st.rh || 0) > 0, act: (c) => h("a", { class: c, href: "#/bridge" }, "Bridge"), tip: "Robinhood Chain pays gas in ETH. Bridge it from Arbitrum, Base or Ethereum." },
-        { t: "Fund USDC on Hyperliquid", done: (st.hl?.accountValue || 0) > 0, act: (c) => h("a", { class: c, href: "#/bridge?dir=hl" }, "Fund from Robinhood Chain"), tip: "Perps margin is USDC in your Hyperliquid account. Bridge → To Hyperliquid turns ETH on Robinhood Chain into it in one transaction." },
-        { t: "Approve a trading key", done: st.key?.state === "approved", act: (c) => h("a", { class: c, href: "#/perps" }, "Perps"), tip: "A trade-only key in this browser, approved once with your wallet. It cannot withdraw." },
-        { t: "First swap", done: swapped, act: (c) => h("a", { class: c, href: "#/swap" }, "Swap"), tip: wallet.session ? "Ticked once a swap appears in your journal." : "Sign in so your journal can confirm it." },
-      ];
-      const next = steps.findIndex((s) => !s.done);
-      for (const [i, s] of steps.entries()) s.act = s.act(`btn sm${i === next ? " primary" : ""}`);
-      const n = steps.filter((s) => s.done).length;
-      parts.push(h("section", { class: "panel pf-setup", "aria-label": "Get set up" },
-        h("div", { class: "pf-setup-h" }, h("h2", {}, "Get set up"), h("span", { class: "ct" }, `${n} of ${steps.length}`), h("a", { class: "link", href: "#/start", style: { fontSize: "12.5px" } }, "Start in 60 seconds"), h("div", { class: "pf-bar", "aria-hidden": "true" }, h("i", { style: { width: `${(n / steps.length) * 100}%` } })),
-          h("button", { class: "icon-btn", type: "button", "aria-label": "Hide checklist", onclick: () => { hideSetup.set(true); render(); } }, icon("close"))),
-        h("div", { class: "pf-steps" }, steps.map((s, i) => h("div", { class: `pf-step ${s.done ? "done" : ""}` },
-          h("span", { class: "n" }, s.done ? icon("check") : i + 1), h("b", {}, s.t, h("i", { class: "info", title: s.tip, tabindex: "0" }, "i")), s.done ? null : h("div", { class: "act" }, s.act))))));
-    }
+    // Get started (then the optional Level up): every tick is read from the chain, the journal or the server, not guessed
+    parts.push(setup.el);
 
     if (connected) {
       const pos = table({ emptyText: "No open Hyperliquid positions.", onRow: (p) => ctx.go(`#/perps/${p.coin}`), cols: [
@@ -276,15 +272,15 @@ export async function mount(view, ctx) {
 
   /* ---------- inbox ---------- */
   async function inbox(box) {
-    if (!wallet.address) { clear(box, h("div", { class: "panel pf-connect" }, "Connect a wallet to see your inbox.", h("button", { class: "btn primary", type: "button", onclick: () => openConnect() }, icon("wallet"), "Connect wallet"))); return; }
+    if (!wallet.address) { clear(box, guestBox(INBOX_LINES, INBOX_EX, h("button", { class: "btn primary", type: "button", onclick: () => openConnect() }, icon("wallet"), "Connect wallet"))); return; }
     clear(box, h("div", { class: "panel" }, h("div", { class: "empty" }, "Loading your inbox…")));
     let r;
     try { r = await api.get("inbox?limit=100"); }
     catch (e) {
       if (!alive || tab !== "inbox") return;
       if (e.status === 401 || e.status === 403) {
-        clear(box, h("div", { class: "panel pf-connect" }, "Sign in to see your inbox: alerts from playbooks, agent proposals and fills.",
-          h("button", { class: "btn primary", type: "button", onclick: async () => { try { await signIn(); render(); } catch (err) { toast(err.message, "error"); } } }, icon("key"), "Sign in")));
+        clear(box, guestBox(INBOX_LINES, INBOX_EX,
+          h("button", { class: "btn primary", type: "button", onclick: async () => { try { await signIn(); render(); } catch (err) { toast(err.message, "error"); } } }, icon("key"), "Sign in to see your inbox")));
       } else clear(box, h("div", { class: "panel" }, h("div", { class: "empty" }, h("b", {}, "The inbox could not be loaded."), e.message)));
       return;
     }
@@ -307,7 +303,11 @@ export async function mount(view, ctx) {
 
   /* ---------- history ---------- */
   async function historyTab(box) {
-    if (!wallet.address) { clear(box, h("div", { class: "panel pf-connect" }, "Connect a wallet to see your history.", h("button", { class: "btn primary", type: "button", onclick: () => openConnect() }, icon("wallet"), "Connect wallet"))); return; }
+    if (!wallet.address) {
+      clear(box, guestBox(["Your journal lists every action Troya prepared or ran for this wallet, with the reason behind it.", "Your Hyperliquid fills sit beside it: the market, the direction, the price, the size, the closed PnL and the fee."],
+        JOURNAL_EX, h("button", { class: "btn primary", type: "button", onclick: () => openConnect() }, icon("wallet"), "Connect wallet")));
+      return;
+    }
     const jBox = h("section", { class: "panel pf-sec" }, h("div", { class: "panel-h" }, h("h2", {}, "Journal"), h("span", { class: "muted", style: { fontSize: "12px" } }, "Every action Troya prepared or ran, with the reason")), h("div", { class: "empty" }, "Loading…"));
     const fBox = h("section", { class: "panel pf-sec" }, h("div", { class: "panel-h" }, h("h2", {}, "Hyperliquid fills")), h("div", { class: "empty" }, "Loading…"));
     clear(box, jBox, fBox);
@@ -319,7 +319,8 @@ export async function mount(view, ctx) {
       if (!alive || tab !== "history") return;
       const slot = jBox.lastChild;
       if (err && (err.status === 401 || err.status === 403)) {
-        slot.replaceWith(h("div", { class: "pf-connect" }, "Sign in to read your journal.", h("button", { class: "btn", type: "button", onclick: async () => { try { await signIn(); render(); } catch (e) { toast(e.message, "error"); } } }, icon("key"), "Sign in")));
+        slot.replaceWith(guestBox(["Sign in to read your journal: every action Troya prepared or ran for this wallet, with the reason behind it.", "Your Hyperliquid fills below are public and need no sign-in."],
+          JOURNAL_EX, h("button", { class: "btn", type: "button", onclick: async () => { try { await signIn(); render(); } catch (e) { toast(e.message, "error"); } } }, icon("key"), "Sign in"), "pf-connect"));
         return;
       }
       if (err) { slot.replaceWith(h("div", { class: "empty" }, h("b", {}, "The journal could not be loaded."), err.message)); return; }
@@ -354,9 +355,10 @@ export async function mount(view, ctx) {
     })();
   }
 
-  /* ---------- V7 F35 Owl: your week, read from the chain, three plain lines of coaching ---------- */
+  /* ---------- V7 F35 Owl: your week, read from the chain, three plain lines of coaching (the tab says what it is:
+     Weekly review, with Owl as its eyebrow) ---------- */
   async function owlTab(box) {
-    const intro = h("div", { class: "panel", style: { padding: "18px 20px", marginBottom: "14px" } }, h("h2", { style: { margin: "0 0 6px" } }, "Owl"), h("p", { class: "muted", style: { margin: 0 } }, "Your last 7 days on Robinhood Chain: the coins you traded most, what each one really cost or made in ETH, and what Troya knew about it. Then three plain lines: keep, change, try."));
+    const intro = h("div", { class: "panel", style: { padding: "18px 20px", marginBottom: "14px" } }, h("p", { class: "dk-eyebrow", style: { margin: "0 0 8px" } }, "Owl"), h("h2", { style: { margin: "0 0 6px" } }, "Weekly review"), h("p", { class: "muted", style: { margin: 0 } }, "Your last 7 days on Robinhood Chain: the coins you traded most, what each one really cost or made in ETH, and what Troya knew about it. Then three plain lines: keep, change, try."));
     if (!wallet.session) { clear(box, intro, h("div", { class: "empty" }, h("b", {}, "Sign in to read your week."), h("button", { class: "btn primary sm", type: "button", onclick: async () => { try { if (!wallet.address) await openConnect(); if (wallet.address) await signIn(); } catch (e) { toast(e.message, "error"); } } }, wallet.address ? "Sign in" : "Connect wallet"))); return; }
     clear(box, intro, h("div", { class: "empty" }, h("b", {}, "Owl is reading your week…"), "Every trade is matched with what it cost and paid in ETH, so this takes a few seconds."));
     let v;
@@ -393,9 +395,6 @@ export async function mount(view, ctx) {
   render();
   stops.push(onWallet(async () => {
     st.ely = st.evm = st.hl = null;
-    st.key = null;
-    await loadJournal();
-    if (!alive) return;
     render();
     loadBalances();
     loadBrief();

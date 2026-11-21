@@ -26,27 +26,110 @@ export async function hlInfo(body, { timeout = 9000 } = {}) {
   try { return JSON.parse(text); } catch { throw new HlError(502, "Hyperliquid sent an unreadable answer."); }
 }
 
-// tiny TTL cache with in-flight de-duplication
-const cache = new Map();
-async function cached(key, ttl, fn) {
-  const hit = cache.get(key);
+// TTL cache with in-flight de-duplication, and stale-while-revalidate where a key asks for it (swr = a multiple of the
+// ttl): a value past its ttl but younger than swr × ttl is answered at once while ONE background refresh runs, so a
+// visitor no longer waits the 0.7-1.8 s Hyperliquid read each time an entry expires. swr 0 (the default) keeps the
+// strict ttl: an account's positions, its approved agents, the order book and the mids are always live reads.
+// A refresh that fails leaves the old value in place; the next reader tries again.
+const cache = new Map();   // key → { t, v, ok, p, ttl, swr }
+function cached(key, ttl, fn, { swr = 0 } = {}) {
   const now = Date.now();
-  if (hit && now - hit.t < ttl) return hit.p;
-  const p = fn().catch((e) => { if (cache.get(key)?.p === p) cache.delete(key); throw e; });
-  cache.set(key, { t: now, p });
-  if (cache.size > 800) for (const [k, v] of cache) if (now - v.t > 120_000) cache.delete(k);
-  return p;
+  let e = cache.get(key);
+  if (!e) { e = { t: 0, v: undefined, ok: false, p: null, ttl, swr }; cache.set(key, e); }
+  e.ttl = ttl; e.swr = Math.max(e.swr || 0, swr);
+  const age = e.ok ? now - e.t : Infinity;
+  if (age < ttl) return Promise.resolve(e.v);
+  if (!e.p) {
+    const p = Promise.resolve().then(fn).then(
+      (v) => { if (e.p === p) e.p = null; Object.assign(e, { t: Date.now(), v, ok: true }); return v; },
+      (err) => { if (e.p === p) e.p = null; throw err; });
+    e.p = p;
+    p.catch(() => {});                      // nobody may be waiting on a background refresh
+  }
+  if (swr > 0 && age < ttl * swr) return Promise.resolve(e.v);
+  if (cache.size > 800) for (const [k, x] of cache) if (!x.p && now - x.t > Math.max(120_000, x.ttl * (x.swr || 1))) cache.delete(k);
+  return e.p;
+}
+const STALE_X = 12;                         // display reads: an answer up to 12 × ttl old while the refresh runs
+
+/* ---------------- market names ---------------- */
+// displayName for every perp: trade.xyz lists bare tickers (SKHX, CL, SP500), so search and the pages can say what each
+// one is. Static names first, then the Robinhood stock-token list (the same companies trade there), then the ticker.
+const MAIN_NAMES = {
+  BTC: "Bitcoin", ETH: "Ethereum", SOL: "Solana", HYPE: "Hyperliquid", XRP: "XRP", DOGE: "Dogecoin", BNB: "BNB", ADA: "Cardano",
+  AVAX: "Avalanche", LINK: "Chainlink", SUI: "Sui", LTC: "Litecoin", TRX: "TRON", DOT: "Polkadot", TON: "Toncoin", BCH: "Bitcoin Cash",
+  NEAR: "NEAR", APT: "Aptos", ARB: "Arbitrum", OP: "Optimism", AAVE: "Aave", UNI: "Uniswap", ENA: "Ethena", TAO: "Bittensor",
+  kPEPE: "Pepe (per 1,000)", kBONK: "Bonk (per 1,000)", kSHIB: "Shiba Inu (per 1,000)", WLD: "Worldcoin", FARTCOIN: "Fartcoin", PUMP: "Pump.fun",
+};
+const XYZ_NAMES = {
+  XYZ100: "Nasdaq 100", SP500: "S&P 500", JP225: "Nikkei 225", KR200: "KOSPI 200", NIFTY: "Nifty 50", IBOV: "Ibovespa", DXY: "US Dollar Index",
+  VIX: "VIX volatility index", GOLD: "Gold", SILVER: "Silver", PLATINUM: "Platinum", PALLADIUM: "Palladium", COPPER: "Copper",
+  ALUMINIUM: "Aluminium", URANIUM: "Uranium", CL: "WTI crude", BRENTOIL: "Brent crude", NATGAS: "Natural gas", HO: "Heating oil",
+  TTF: "Dutch TTF gas", CORN: "Corn", WHEAT: "Wheat", JPY: "Japanese yen", EUR: "Euro", GBP: "British pound", KRW: "Korean won",
+  ANT: "Anthropic", SKHX: "SK hynix", SMSN: "Samsung Electronics", TSM: "TSMC", HOOD: "Robinhood", NVDA: "NVIDIA", TSLA: "Tesla",
+  AAPL: "Apple", MSFT: "Microsoft", GOOGL: "Alphabet", AMZN: "Amazon", META: "Meta", NFLX: "Netflix", ORCL: "Oracle", INTC: "Intel",
+  AMD: "AMD", MU: "Micron", PLTR: "Palantir", COIN: "Coinbase", MSTR: "Strategy", CRCL: "Circle", COST: "Costco", LLY: "Eli Lilly",
+  RIVN: "Rivian", BABA: "Alibaba", SNDK: "SanDisk", CRWV: "CoreWeave", GME: "GameStop", SOFTBANK: "SoftBank", HYUNDAI: "Hyundai Motor",
+  KIOXIA: "Kioxia", HIMS: "Hims & Hers", DKNG: "DraftKings", LITE: "Lumentum", BX: "Blackstone", MRVL: "Marvell", RKLB: "Rocket Lab",
+  ZM: "Zoom", EBAY: "eBay", ARM: "Arm", SPCX: "SpaceX", ASML: "ASML", MINIMAX: "MiniMax", BB: "BlackBerry", DELL: "Dell", IBM: "IBM",
+  AVGO: "Broadcom", NOW: "ServiceNow", NBIS: "Nebius", WDC: "Western Digital", NOK: "Nokia", BE: "Bloom Energy", ZHIPU: "Zhipu AI",
+  QCOM: "Qualcomm", AMAT: "Applied Materials", IBIDEN: "Ibiden", GIGADEV: "GigaDevice", CXMT: "ChangXin Memory", GEV: "GE Vernova",
+  UNITREE: "Unitree Robotics", IREN: "IREN", NET: "Cloudflare", CRWD: "CrowdStrike", RDDT: "Reddit", AAOI: "Applied Optoelectronics",
+  MRNA: "Moderna", SHEIN: "Shein", YMTC: "Yangtze Memory", BMNR: "BitMine", CVX: "Chevron", OURA: "Oura", LRCX: "Lam Research",
+  UMC: "United Microelectronics", CAMBRICON: "Cambricon", TWST: "Twist Bioscience", GLW: "Corning", ACN: "Accenture", INNOLIGHT: "InnoLight",
+  CATL: "CATL", RELIANCE: "Reliance Industries", JIO: "Jio Platforms", SNAP: "Snap", TTWO: "Take-Two", NU: "Nu Holdings",
+  ICE: "Intercontinental Exchange", MELI: "MercadoLibre", STX: "Seagate", PANW: "Palo Alto Networks", TENCENT: "Tencent", SNOW: "Snowflake",
+  SMCI: "Supermicro", USAR: "USA Rare Earth", EWY: "MSCI South Korea ETF", EWJ: "MSCI Japan ETF", EWZ: "MSCI Brazil ETF",
+  EWT: "MSCI Taiwan ETF", XLE: "Energy sector ETF", SMH: "Semiconductor ETF", SOXL: "Semiconductor 3x ETF", MAGS: "Magnificent Seven ETF",
+  XBI: "Biotech ETF", TLT: "20+ year Treasury ETF", URNM: "Uranium miners ETF",
+};
+// the Robinhood stock list (robinhood.mjs, merged with the stocks desk by market.mjs), read once it is loaded
+let STOCK_LIST = null, stockNames = new Map(), stockNamesN = -1, stockLoad = null;
+const cleanCo = (n) => String(n || "").replace(/\s•.*$/, "")
+  .replace(/,?\s+(Class [A-C]\b.*|Common Stock.*|Ordinary Shares.*|American Depositary Shares.*)$/i, "")
+  .replace(/,?\s+(Inc\.?|Incorporated|Corp\.?|Corporation|Ltd\.?|Limited|plc|PBC|N\.V\.|S\.A\.)$/i, "").trim();
+const loadStockNames = () => (stockLoad ||= import("./robinhood.mjs").then((m) => { STOCK_LIST = m.STOCKS || null; }).catch(() => {}));
+function stockName(ticker) {
+  if (!STOCK_LIST) return null;
+  if (STOCK_LIST.length !== stockNamesN) { stockNamesN = STOCK_LIST.length; stockNames = new Map(STOCK_LIST.map((s) => [String(s.symbol || "").toUpperCase(), cleanCo(s.name)])); }
+  return stockNames.get(ticker) || null;
+}
+/** "xyz:SKHX" → "SK hynix", "BTC" → "Bitcoin"; an unknown ticker is its own name. */
+export function perpName(coin) {
+  const c = String(coin || ""), xyz = /^xyz:/i.test(c), t = c.replace(/^xyz:/i, "");
+  if (!xyz) return MAIN_NAMES[t] || MAIN_NAMES[t.toUpperCase()] || t;
+  return XYZ_NAMES[t.toUpperCase()] || stockName(t.toUpperCase()) || t;
 }
 
+/* ---------------- perps meta ---------------- */
+// the raw meta + contexts of one dex, read once for everyone: hlMeta, hlXyzMeta and market.mjs getHlMarkets (the
+// Market board) used to make the same Hyperliquid call each. fresh: wait for a read younger than the ttl (every path
+// that prices or sizes an order); otherwise an older copy may answer while the refresh runs.
+export function hlCtxs(dex = "", { fresh = false } = {}) {
+  const key = `ctxs:${dex || "main"}`;
+  return cached(key, 5000, async () => {
+    await loadStockNames();
+    const [meta, ctxs] = await hlInfo(dex ? { type: "metaAndAssetCtxs", dex } : { type: "metaAndAssetCtxs" });
+    if (!Array.isArray(meta?.universe) || !Array.isArray(ctxs)) throw new HlError(502, "Hyperliquid sent an unreadable market list.");
+    return { meta, ctxs, at: Date.now() };
+  }, { swr: fresh ? 0 : STALE_X });
+}
+// the dex list sets trade.xyz's asset numbers (100000 + index × 10000): an order reads it strictly (fresh)
+const perpDexs = ({ fresh = false } = {}) => cached("perpDexs", 10 * 60e3, () => hlInfo({ type: "perpDexs" }), { swr: fresh ? 0 : STALE_X });
+// one normalized list per raw read (the same object answers until the next read lands)
+const BUILT = new WeakMap();
+const once = (raw, tag, build) => { let m = BUILT.get(raw); if (!m) BUILT.set(raw, (m = {})); return (m[tag] ||= build()); };
+
 // perps meta + live contexts, merged into one list
-export async function hlMeta() {
-  return cached("meta", 5000, async () => {
-    const [meta, ctxs] = await hlInfo({ type: "metaAndAssetCtxs" });
+export async function hlMeta({ fresh = false } = {}) {
+  const raw = await hlCtxs("", { fresh });
+  return once(raw, "meta", () => {
+    const { meta, ctxs } = raw;
     const markets = meta.universe.map((u, i) => {
       const c = ctxs[i] || {};
       const mark = +c.markPx || null, prev = +c.prevDayPx || null;
       return {
-        asset: i, coin: u.name, szDecimals: u.szDecimals, maxLeverage: u.maxLeverage,
+        asset: i, coin: u.name, displayName: perpName(u.name), szDecimals: u.szDecimals, maxLeverage: u.maxLeverage,
         onlyIsolated: !!u.onlyIsolated, isDelisted: !!u.isDelisted, marginMode: u.marginMode || null,
         markPx: mark, midPx: +c.midPx || null, oraclePx: +c.oraclePx || null, prevDayPx: prev,
         change24h: mark && prev ? ((mark - prev) / prev) * 100 : null,
@@ -58,30 +141,33 @@ export async function hlMeta() {
         impactPxs: c.impactPxs || null,
       };
     });
-    return { markets, time: Date.now() };
+    return { markets, time: raw.at };
   });
 }
 // F16: trade.xyz perps (stocks, indices, metals) are a HIP-3 dex on Hyperliquid. Same API, same trading key; orders
 // use asset 100000 + dexIndex × 10000 + index, margin sits in a separate "xyz" balance. Read from the live meta each time.
 export const XYZ = "xyz";
 export const XYZ_USDC = "USDC:0x6d1e7cde53ba9467b783cb7c530ce054";   // the collateral token as sendAsset names it
-// the last good trade.xyz list: a failed refresh (rate limit, timeout) serves it instead of dropping every stock perp
+// the last good trade.xyz list: a failed refresh (rate limit, timeout) serves it to the pages instead of dropping every
+// stock perp. A fresh read (an order being priced) never falls back to it: no read, no order.
 let lastXyz = null;
-export async function hlXyzMeta() {
+export async function hlXyzMeta({ fresh = false } = {}) {
+  if (fresh) return hlXyzMetaFresh({ fresh });
   try { const r = await hlXyzMetaFresh(); if (r.markets.length) lastXyz = r; return r.markets.length || !lastXyz ? r : lastXyz; }
   catch (e) { if (lastXyz) return lastXyz; throw e; }
 }
-async function hlXyzMetaFresh() {
-  return cached("meta:xyz", 5000, async () => {
-    const dexes = await cached("perpDexs", 10 * 60e3, () => hlInfo({ type: "perpDexs" }));
-    const idx = (dexes || []).findIndex((d) => d && d.name === XYZ);
-    if (idx < 1) return { markets: [], dexIndex: null };
-    const [meta, ctxs] = await hlInfo({ type: "metaAndAssetCtxs", dex: XYZ });
+async function hlXyzMetaFresh({ fresh = false } = {}) {
+  const dexes = await perpDexs({ fresh });
+  const idx = (dexes || []).findIndex((d) => d && d.name === XYZ);
+  if (idx < 1) return { markets: [], dexIndex: null };
+  const raw = await hlCtxs(XYZ, { fresh });
+  return once(raw, `xyz:${idx}`, () => {
+    const { meta, ctxs } = raw;
     const markets = meta.universe.map((u, i) => {
       const c = ctxs[i] || {};
       const mark = +c.markPx || null, prev = +c.prevDayPx || null;
       return {
-        asset: 100000 + idx * 10000 + i, coin: u.name, label: u.name.replace(/^xyz:/, ""), dex: XYZ, venue: "trade.xyz",
+        asset: 100000 + idx * 10000 + i, coin: u.name, label: u.name.replace(/^xyz:/, ""), displayName: perpName(u.name), dex: XYZ, venue: "trade.xyz",
         szDecimals: u.szDecimals, maxLeverage: u.maxLeverage, onlyIsolated: !!u.onlyIsolated || u.marginMode === "noCross", isDelisted: !!u.isDelisted, marginMode: u.marginMode || null,
         markPx: mark, midPx: +c.midPx || null, oraclePx: +c.oraclePx || null, prevDayPx: prev,
         change24h: mark && prev ? ((mark - prev) / prev) * 100 : null,
@@ -90,14 +176,17 @@ async function hlXyzMetaFresh() {
         premium: c.premium != null ? +c.premium : null, impactPxs: c.impactPxs || null,
       };
     });
-    return { markets, dexIndex: idx };
+    return { markets, dexIndex: idx, time: raw.at };
   });
 }
-export async function hlAsset(coin) {
+// fresh (the default): the mark, mid and limits come from a read younger than 5 s, as before the stale-while-revalidate
+// change, because the Agent Wallet sizes orders and sets the IOC price band from them. Name lookups (candles, the
+// book) pass fresh: false.
+export async function hlAsset(coin, { fresh = true } = {}) {
   const want = String(coin).toUpperCase();
-  const { markets } = await hlMeta();
+  const { markets } = await hlMeta({ fresh });
   let m = markets.find((x) => x.coin.toUpperCase() === want);
-  if (!m && want.startsWith("XYZ:")) m = (await hlXyzMeta()).markets.find((x) => x.coin.toUpperCase() === want && !x.isDelisted);
+  if (!m && want.startsWith("XYZ:")) m = (await hlXyzMeta({ fresh })).markets.find((x) => x.coin.toUpperCase() === want && !x.isDelisted);
   if (!m) throw new HlError(404, `Hyperliquid has no perp market called ${coin}.`);
   return m;
 }
@@ -296,6 +385,15 @@ export async function hlUpdateLeverage({ privateKey, coin, leverage, isCross = t
 const INTERVALS = { "1m": 60e3, "5m": 300e3, "15m": 900e3, "1h": 3600e3, "4h": 14400e3, "1d": 86400e3 };
 
 export async function register(r) {
+  // keep the shared market lists warm, so no visitor waits for Hyperliquid when an entry expires. Every 20 s: two
+  // metaAndAssetCtxs reads (weight 20 each, about 120 of the 1200 per minute Hyperliquid allows this server), well
+  // inside the 60 s a display read may be answered from; a page polling faster still refreshes at the 5 s ttl.
+  if (process.env.TROYA_BOARD !== "0") {
+    const warm = () => { hlMeta().catch(() => {}); hlXyzMeta().catch(() => {}); };
+    setTimeout(warm, 3000).unref?.();
+    setInterval(warm, 20_000).unref?.();
+  }
+  // displayName on every market (Anthropic for xyz:ANT, S&P 500 for xyz:SP500, Bitcoin for BTC)
   r.get("/api/hl/meta", async ({ query }) => {
     const main = await hlMeta();
     if (query.all !== "1") return main;
@@ -311,17 +409,17 @@ export async function register(r) {
     const end = Date.now();
     const from = Number(query.from) > 0 ? Number(query.from) : end - INTERVALS[interval] * 400;
     const start = Math.max(from, end - INTERVALS[interval] * 2000);
-    const canon = (await hlAsset(coin)).coin;
+    const canon = (await hlAsset(coin, { fresh: false })).coin;     // a name lookup: an older market list is fine
     const bucket = Math.floor(end / Math.min(INTERVALS[interval], 60e3));
     const rows = await cached(`candles:${canon}:${interval}:${Math.floor(start / INTERVALS[interval])}:${bucket}`, 4000,
-      () => hlInfo({ type: "candleSnapshot", req: { coin: canon, interval, startTime: start, endTime: end } }));
+      () => hlInfo({ type: "candleSnapshot", req: { coin: canon, interval, startTime: start, endTime: end } }), { swr: 3 });
     return { coin: canon, interval, candles: (rows || []).map((c) => ({ t: c.t, o: +c.o, h: +c.h, l: +c.l, c: +c.c, v: +c.v, n: c.n })) };
   }, { weight: 2 });
 
   r.get("/api/hl/book", async ({ query }) => {
     const coin = String(query.coin || "BTC").toUpperCase();
     // spot books (F12) are "@<index>" or "PURR/USDC"; anything else must be a known perp
-    const canon = /^@\d{1,5}$|^[A-Z0-9]{1,12}\/USDC$/.test(coin) ? coin : (await hlAsset(coin)).coin;
+    const canon = /^@\d{1,5}$|^[A-Z0-9]{1,12}\/USDC$/.test(coin) ? coin : (await hlAsset(coin, { fresh: false })).coin;
     const b = await cached(`book:${canon}`, 1000, () => hlInfo({ type: "l2Book", coin: canon }));
     const side = (lv) => (lv || []).slice(0, 20).map((x) => ({ px: +x.px, sz: +x.sz, n: x.n }));
     return { coin: canon, time: b?.time || Date.now(), bids: side(b?.levels?.[0]), asks: side(b?.levels?.[1]) };

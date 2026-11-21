@@ -23,3 +23,20 @@
 .lb-empty { padding: 18px; display: grid; gap: 8px; justify-items: start; }
 .lb-empty p { margin: 0; color: var(--muted); font-size: 13px; }
 @media (max-width: 720px) { .st-step { padding: 12px; } }
+/* Get started on the Desk and in Portfolio (20 Nov): the Desk's step card (desk.css .dk-steps) with three tiles, then the
+   four optional Level up tiles. Portfolio does not load home.css, so the step number's circle is drawn here as well. */
+.st-card .sn { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-3); display: grid; place-items: center; font-size: 11px; color: var(--fg-2); flex: none; }
+.st-card .sn svg { width: 12px; height: 12px; }
+.dk-steps-list.st-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@container shell (max-width: 640px) { .dk-steps-list.st-3 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 720px) { .dk-steps-list.st-3 { grid-template-columns: minmax(0, 1fr); } }
+/* #/start: the optional Level up list, and the parts of a step that has several */
+.st-peek { margin: 16px 0 0; }
+.st-lv-h { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 28px 0 12px; }
+.st-lv-h h2 { margin: 0; font-size: 16px; font-weight: 500; }
+.st-parts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--muted); }
+.st-parts li { display: inline-flex; align-items: center; gap: 6px; }
+.st-parts li i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line-3); }
+.st-parts li.now { color: var(--fg); }
+.st-parts li.now i { border-color: var(--accent, #5fd3ef); }
+.st-parts svg { width: 12px; height: 12px; color: var(--accent, #5fd3ef); }

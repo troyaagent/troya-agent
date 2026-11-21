@@ -9,6 +9,36 @@
 .mk-foot p { margin: 0 0 4px; }
 .tbl td.rank, .tbl .rank { color: var(--faint); text-align: left; width: 34px; }
 
+/* rows are links (ui.js table href): the first cell is a quiet link, the focused row shows a ring for the keyboard */
+.mk-panel a.tbl-a { color: inherit; }
+.mk-panel .tbl tbody tr:focus-visible { outline: 2px solid rgba(142, 223, 245, .55); outline-offset: -2px; }
+html[data-theme="light"] .mk-panel .tbl tbody tr:focus-visible { outline-color: rgba(10, 126, 163, .5); }
+/* the narrow Buy on a coin's row */
+.tbl th.mk-buy-c, .tbl td.mk-buy-c { width: 1%; padding-left: 4px; }
+.mk-buy { display: inline-flex; align-items: center; height: 26px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(142, 223, 245, .32); background: rgba(142, 223, 245, .06);
+  color: var(--c3); font-size: 11.5px; font-weight: 600; letter-spacing: .02em; transition: border-color .2s, background .2s; }
+.mk-buy:hover, .mk-buy:focus-visible { border-color: rgba(142, 223, 245, .7); background: rgba(142, 223, 245, .14); }
+html[data-theme="light"] .mk-buy { color: var(--blue-3); border-color: rgba(10, 126, 163, .32); background: rgba(10, 126, 163, .05); }
+/* the board is wider than a laptop's panel (it already scrolled sideways at 1280 px): Buy stays pinned at the right edge
+   while the other columns scroll under it */
+@media (min-width: 721px) and (max-width: 1600px) {
+  .mk-panel .tbl th.mk-buy-c, .mk-panel .tbl td.mk-buy-c { position: sticky; right: 0; z-index: 1; background: var(--bg-1); box-shadow: -14px 0 14px -12px rgba(0, 0, 0, .6); }
+  html[data-theme="light"] .mk-panel .tbl th.mk-buy-c, html[data-theme="light"] .mk-panel .tbl td.mk-buy-c { box-shadow: -14px 0 14px -12px rgba(20, 40, 60, .18); }
+}
+/* long lists: 60 rows and a Show more */
+.mk-more { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px 0 6px; }
+.mk-more:empty { display: none; }
+/* the launchpad strip says what its counts are */
+.mk-chips-l { align-self: center; flex: none; margin-right: 2px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+/* perps: a long name ("Applied Optoelectronics") ends in an ellipsis instead of widening the column */
+.mk-panel .tok .mk-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mk-filters .seg.mk-pcat { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.mk-filters .seg.mk-pcat::-webkit-scrollbar { display: none; }
+.mk-filters .seg.mk-pcat button { flex: none; }
+/* the busiest-coins cards: hidden while searching, placeholders until the data lands */
+.mk2-top[hidden] { display: none; }
+.mk2-card-sk { min-height: 132px; align-content: start; pointer-events: none; }
+
 /* launchpad */
 .lp-tabs { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .lp-more { display: flex; justify-content: center; padding: 14px 0 4px; }
@@ -65,7 +95,21 @@
   .mk-top .seg { max-width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
   .mk-top .seg button { justify-content: center; }
   .mk2-cats { overflow-x: auto; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  /* the first screen shows coins: no page description, the four cards in one sideways strip, two lines of the note */
+  .mk-head .mk-desc { display: none; }
+  .mk2-top { display: flex; gap: 10px; margin: 0 0 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, #000 86%, transparent); mask-image: linear-gradient(90deg, #000 86%, transparent); }
+  .mk2-top::-webkit-scrollbar { display: none; }
+  .mk2-top > .mk2-card { flex: 0 0 min(62%, 230px); scroll-snap-align: start; gap: 6px; padding: 12px 14px 14px; border-radius: 18px; }
+  .mk2-top > .mk2-card-sk { min-height: 104px; }
+  .mk2-top .mk2-c-p { font-size: 18px; }
+  .mk2-catnote { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+  .mk2-catnote.open { display: block; -webkit-line-clamp: unset; }
+  .tbl th.mk-buy-c, .tbl td.mk-buy-c { padding-left: 2px; padding-right: 4px; }
+  .mk-buy { height: 24px; padding: 0 9px; font-size: 11px; }
 }
+/* under 370 px the coin's name needs the room more than the Buy does (the row still opens the coin page, with Buy) */
+@media (max-width: 370px) { .tbl th.mk-buy-c, .tbl td.mk-buy-c { display: none; } }
 @media (max-width: 720px) {
   .tk-chart-bar .fine { display: none; }
   .tk-act .btn.ghost { display: none; }

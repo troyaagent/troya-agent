@@ -1,7 +1,7 @@
 // Browser chain helpers for Swap / Bridge / Create coin on Robinhood Chain. Reads go through the same-origin relay (wallet.js reader),
 // writes go through the user's wallet (signerFor). Nothing here holds a key.
 import { Contract, Interface, formatUnits, parseUnits } from "ethers";
-import { CHAINS, reader, signerFor, wallet } from "./wallet.js";
+import { CHAINS, reader, signerFor } from "./wallet.js";
 import { api } from "./api.js";
 import { store } from "./ui.js";
 
@@ -78,9 +78,14 @@ export function errText(e) {
   return m.length > 220 ? m.slice(0, 220) + "…" : m || "Something went wrong.";
 }
 
-/** Fire-and-forget audit entry (the journal module may not exist yet). */
+/** Fire-and-forget audit entry for something the user signed in their own wallet.
+ *  POST /api/journal keeps kind, summary, status, hash and data, and refuses an entry without a summary. Until 20 Nov the
+ *  entries went up flat with no summary, so every one was refused and a manual swap never reached History or the Get
+ *  started checklist: the summary is now the entry's own line (or its rationale), and the other fields travel as data. */
 export function journal(entry) {
-  api.post("journal", { ...entry, address: wallet.address, at: Date.now() }).catch(() => {});
+  const { kind, summary, status, hash, ...rest } = entry || {};
+  const line = summary || rest.rationale || [kind, rest.chain && `on ${rest.chain}`, status && `(${status})`].filter(Boolean).join(" ");
+  api.post("journal", { kind, summary: line, status, hash, data: { ...rest, tx: hash || null, at: Date.now() } }).catch(() => {});
 }
 
 /* ---------- bridge transfers kept in this browser ---------- */

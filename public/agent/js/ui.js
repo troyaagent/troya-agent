@@ -148,7 +148,11 @@ const NATIVE = /^(eth|native|0x0{40}|0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee)
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 export const logoUrl = (kind, key) => { const f = LOGOS[kind]?.[String(key || "").toLowerCase()] || LOGOS[kind]?.[key]; return f ? L + f : null; };
 
-// round badge that tries image sources in order and keeps a monogram only when none loads
+// round badge that tries image sources in order and keeps a monogram only when none loads.
+// A logo loads when its badge comes near the screen (native lazy loading): the Perps list asked for 300 logos at once.
+// The waiting image sits inside the badge, invisible and 1 px wide, so the browser knows where it is; the browser keeps
+// the bookkeeping, so a badge that is thrown away before it scrolls in costs nothing.
+const PENDING = "position:absolute;width:1px;height:1px;opacity:0;pointer-events:none";
 function logoBox(cls, label, sources, title) {
   const box = h("span", { class: cls, title: title || null });
   box.textContent = label;
@@ -158,11 +162,14 @@ function logoBox(cls, label, sources, title) {
     if (!src) return;
     const img = new Image();
     img.alt = "";
+    img.loading = "lazy";              // set before src, or the browser starts the request at once
     img.decoding = "async";
     img.referrerPolicy = "no-referrer";
-    img.onload = () => { box.textContent = ""; box.classList.add("has-img"); box.append(img); };
-    img.onerror = next;
+    img.style.cssText = PENDING;
+    img.onload = () => { img.style.cssText = ""; box.textContent = ""; box.classList.add("has-img"); box.append(img); };
+    img.onerror = () => { img.remove(); next(); };
     img.src = src;
+    box.append(img);
   };
   next();
   return box;
@@ -372,13 +379,20 @@ export function skeletonRows(n = 6, cols = 6) {
 }
 export function emptyState(title, text, action) { return h("div", { class: "empty" }, h("b", {}, title), text ? h("div", {}, text) : null, action || null); }
 
-// sortable table: cols = [{key,label,align:'l'|'r',sort:true,render:(row)=>node|string,hide:bool}]
-export function table({ cols, onRow, onSort, sort, emptyText = "Nothing here yet." }) {
+// sortable table: cols = [{key,label,align:'l'|'r',sort:true,render:(row)=>node|string,hide:bool,cls}]
+// href(row) → "#/token/…" makes the first cell a real link, so cmd-click, middle-click and "Open in new tab" work like
+// on any page; a plain click still goes through onRow. A clickable row takes keyboard focus and opens on Enter
+// (cmd/ctrl+Enter: a new tab). Links and buttons inside a row (socials, Buy) keep their own click, and a drag that
+// selects text (an address, a price) is not a click. setSort(key, dir) moves the arrow when the page changes the order
+// itself, for example a category with its own default sort.
+const ROW_OWN = "a[href], button, input, select, textarea, label, [role=button]";
+export function table({ cols, onRow, onSort, sort, href, emptyText = "Nothing here yet." }) {
   const thead = h("thead");
   const tbody = h("tbody");
   const el = h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, thead, tbody));
   let cur = sort || null;
-  const head = () => thead.replaceChildren(h("tr", {}, cols.filter((c) => !c.hide).map((c) => {
+  const shown = () => cols.filter((c) => !c.hide);
+  const head = () => thead.replaceChildren(h("tr", {}, shown().map((c) => {
     const active = cur && cur.key === c.key;
     return h("th", {
       class: `${c.align === "l" ? "l" : ""} ${c.sort ? "sort" : ""} ${c.cls || ""}`, ...(active ? { "aria-sort": cur.dir === "asc" ? "ascending" : "descending" } : {}),
@@ -386,11 +400,44 @@ export function table({ cols, onRow, onSort, sort, emptyText = "Nothing here yet
     }, c.label, active ? (cur.dir === "asc" ? " ↑" : " ↓") : "");
   })));
   head();
-  el.setLoading = (n = 8) => tbody.replaceChildren(...skeletonRows(n, cols.filter((c) => !c.hide).length));
+  el.setSort = (key, dir = "desc") => { cur = key ? { key, dir } : null; head(); };
+  el.setLoading = (n = 8) => tbody.replaceChildren(...skeletonRows(n, shown().length));
+  const newTab = (link) => { try { window.open(link, "_blank", "noopener"); } catch {} };
+  const rowEl = (r, i) => {
+    const link = href ? href(r) || null : null;
+    // with href, a row it gives no link for has nowhere to go: no click, no focus
+    const open = href && !link ? null : onRow ? () => onRow(r) : link ? () => { location.hash = link; } : null;
+    const tr = h("tr", { class: open ? "click" : "", tabindex: open ? "0" : null },
+      shown().map((c, j) => {
+        let v = c.render ? c.render(r, i) : r[c.key];
+        if (j === 0 && link) v = h("a", { class: "tbl-a", href: link, tabindex: "-1", style: { color: "inherit", textDecoration: "none", display: "block", minWidth: "0" } }, v);
+        return h("td", { class: c.align === "l" ? "l" : c.cls || "" }, v);
+      }));
+    if (!open) return tr;
+    // a link or control of its own inside the row (not the row's own first-cell link)
+    const own = (e) => { const x = e.target.closest?.(ROW_OWN); return !!x && !x.classList.contains("tbl-a"); };
+    tr.addEventListener("click", (e) => {
+      if (own(e)) return;
+      const mod = e.metaKey || e.ctrlKey || e.shiftKey;
+      if (e.target.closest?.("a.tbl-a")) {
+        if (mod || e.button) return;   // the browser opens the link in a new tab or window itself
+        e.preventDefault();
+      } else if (mod && link) { newTab(link); return; }
+      if (String(getSelection?.() || "")) return;
+      open();
+    });
+    // middle-click on a cell that is not the link: open the row in a new tab too
+    tr.addEventListener("auxclick", (e) => { if (e.button === 1 && link && !own(e) && !e.target.closest?.("a.tbl-a")) { e.preventDefault(); newTab(link); } });
+    tr.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" || e.target !== tr) return;
+      e.preventDefault();
+      if ((e.metaKey || e.ctrlKey) && link) newTab(link); else open();
+    });
+    return tr;
+  };
   el.setRows = (rows) => {
-    if (!rows.length) { tbody.replaceChildren(h("tr", {}, h("td", { colspan: cols.length, class: "l" }, emptyState(emptyText)))); return; }
-    tbody.replaceChildren(...rows.map((r, i) => h("tr", { class: onRow ? "click" : "", onclick: onRow ? () => onRow(r) : null },
-      cols.filter((c) => !c.hide).map((c) => { const v = c.render ? c.render(r, i) : r[c.key]; return h("td", { class: c.align === "l" ? "l" : c.cls || "" }, v); }))));
+    if (!rows.length) { tbody.replaceChildren(h("tr", {}, h("td", { colspan: shown().length, class: "l" }, emptyState(emptyText)))); return; }
+    tbody.replaceChildren(...rows.map(rowEl));
   };
   return el;
 }

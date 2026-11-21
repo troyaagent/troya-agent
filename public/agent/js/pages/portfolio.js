@@ -125,10 +125,17 @@ export async function mount(view, ctx) {
   }
   function paintPnl(box, p, x) {
     if (!p || p.status !== "ok") { clear(box, p?.status === "none" && p.transfersIn ? h("span", { class: "muted" }, "Received by transfer") : null); return; }
+    const buys = `${p.buys} buy${p.buys === 1 ? "" : "s"}${p.sells ? ` · ${p.sells} sell${p.sells === 1 ? "" : "s"}` : ""}`;
+    // bought, but nothing prices the coin yet: what it cost, and the PnL once it has a price
+    if (p.pnlEth == null) {
+      clear(box, h("span", { class: "muted" }, `Cost ${num(p.costEth, 4)} ETH${p.ethUsd ? ` · ${usd(p.costEth * p.ethUsd)}` : ""} · PnL once it has a price`),
+        h("small", { class: "muted" }, `${buys}${p.avgEntryUsd != null ? ` · avg entry $${tiny(p.avgEntryUsd)}` : ""}`));
+      return;
+    }
     const up = (p.pnlEth || 0) >= 0, sign = up ? "+" : "−";
     clear(box,
       h("span", { class: up ? "up" : "down" }, `PnL ${sign}${num(Math.abs(p.pnlEth), 4)} ETH`, p.pnlUsd != null ? ` · ${sign}${usd(Math.abs(p.pnlUsd))}` : "", p.pnlPct != null ? ` · ${sign}${Math.abs(p.pnlPct).toFixed(1)}%` : ""),
-      h("small", { class: "muted" }, `${p.buys} buy${p.buys === 1 ? "" : "s"}${p.sells ? ` · ${p.sells} sell${p.sells === 1 ? "" : "s"}` : ""}${p.avgEntryUsd != null ? ` · avg entry $${tiny(p.avgEntryUsd)}` : ""}`),
+      h("small", { class: "muted" }, `${buys}${p.avgEntryUsd != null ? ` · avg entry $${tiny(p.avgEntryUsd)}` : ""}`),
       // the card re-reads these numbers from the chain itself and prints the last trade's tx, so it cannot be typed in
       p.pnlEth != null && x?.address ? h("button", { class: "link pf2-share", type: "button", style: { justifySelf: "start", fontSize: "12px" }, onclick: (e) => {
         e.preventDefault(); e.stopPropagation();       // the row is a link to the coin page
@@ -141,6 +148,12 @@ export async function mount(view, ctx) {
   }
   async function fillPnl(slots) {
     const addr = wallet.address;
+    // past the first 12 (each PnL reads the trades from the chain), one click reads it
+    for (const [x, box] of slots.slice(12)) clear(box, h("button", { class: "link", type: "button", style: { justifySelf: "start", fontSize: "12px" }, onclick: (e) => {
+      e.preventDefault(); e.stopPropagation();       // the row is a link to the coin page
+      clear(box, h("span", { class: "muted" }, "PnL …"));
+      fillPnl([[x, box]]);
+    } }, "Show PnL"));
     for (const [x, box] of slots.slice(0, 12)) {
       if (/^(USDG|WETH)$/.test(x.symbol)) continue;
       const key = `${addr}:${x.address}`;
@@ -190,23 +203,44 @@ export async function mount(view, ctx) {
           h("li", {}, h("i", { style: { background: "#bff0fd" } }), h("span", {}, "Robinhood Chain"), h("b", {}, connected ? (st.rh == null ? "…" : `${num(st.rh, 5)} ETH`) : "–"), h("small", {}, connected && st.eth && st.rh != null ? usd(rhUsd) : "")),
           h("li", {}, h("i", { style: { background: "#5fc3e0" } }), h("span", {}, "Tokens"), h("b", {}, connected ? (st.toks == null ? "…" : usd(tokUsd)) : "–"), h("small", {}, connected && st.toks ? `${st.toks.length} on Robinhood Chain` : "")),
           h("li", {}, h("i", { style: { background: "#3c8fa8" } }), h("span", {}, "Hyperliquid"), h("b", {}, connected ? (st.hl ? usd(hlUsd) : "…") : "–"), h("small", {}, connected && st.hl ? `withdrawable ${usd(st.hl.withdrawable)}` : "")))));
-    // tokens worth a cent or more up front; unpriced ones (often airdropped spam) and dust fold away
-    const priced = (st.toks || []).filter((x) => x.valueUsd == null ? x.priceUsd === undefined : x.valueUsd >= 0.01), dust = (st.toks || []).filter((x) => !priced.includes(x));
-    const card = (x) => {
-      const pnlBox = h("div", { class: "pf2-pnl" }, x.valueUsd >= 0.5 && !/^(USDG|WETH)$/.test(x.symbol) ? h("span", { class: "muted" }, "PnL …") : null);
-      if (x.valueUsd >= 0.5) pnlSlots.push([x, pnlBox]);
+    // Up front: every token this wallet bought (priced or not: a coin still on its curve says "No price yet", it is never
+    // hidden) and every token worth a cent or more. Folded: what only ever arrived from others (airdrops, plain transfers)
+    // with no price or under a cent, and coins whose history is too old to tell. bought comes from the server: true, false
+    // or null. Community report 21 Nov 2026: two of four bought coins sat in "14 more without a price".
+    const all = st.toks || [];
+    const front = all.filter((x) => x.bought === true || x.valueUsd >= 0.01 || (x.valueUsd == null && x.priceUsd === undefined));
+    const received = all.filter((x) => !front.includes(x) && x.bought === false), older = all.filter((x) => !front.includes(x) && x.bought !== false);
+    const card = (x, slots = pnlSlots) => {
+      const wantPnl = !/^(USDG|WETH)$/.test(x.symbol) && (x.bought === true || x.valueUsd >= 0.5);
+      const pnlBox = h("div", { class: "pf2-pnl" }, wantPnl ? h("span", { class: "muted" }, "PnL …") : null);
+      if (wantPnl) slots.push([x, pnlBox]);
       return h("a", { class: "pf2-tok", href: x.address ? `#/token/${x.address}` : "#/market" },
         h("div", { class: "pf2-tok-top" },
           tokenIcon({ symbol: x.symbol, address: x.address, chain: "robinhood", image: x.image }),
-          h("span", { class: "pf2-tok-id" }, h("b", {}, x.symbol), h("small", {}, `${num(Number(x.amount), Number(x.amount) >= 1000 ? 0 : 4)}${x.stock ? " · stock" : ""}`)),
-          h("span", { class: "pf2-tok-v" }, h("b", {}, x.valueUsd != null ? usd(x.valueUsd) : "–"), x.change24h != null ? h("small", { class: x.change24h >= 0 ? "up" : "down" }, `${x.change24h >= 0 ? "+" : ""}${x.change24h.toFixed(1)}%`) : h("small", { class: "muted" }, x.priceUsd == null ? "no price" : ""))),
+          h("span", { class: "pf2-tok-id" }, h("b", {}, x.symbol), h("small", {}, `${num(Number(x.amount), Number(x.amount) >= 1000 ? 0 : 4)}${x.stock ? " · stock" : ""}${x.onCurve ? " · on curve" : ""}${x.spam ? " · flagged" : ""}`)),
+          h("span", { class: "pf2-tok-v" }, h("b", {}, x.valueUsd != null ? usd(x.valueUsd) : "–"), x.change24h != null ? h("small", { class: x.change24h >= 0 ? "up" : "down" }, `${x.change24h >= 0 ? "+" : ""}${x.change24h.toFixed(1)}%`) : h("small", { class: "muted" }, x.priceUsd == null ? "No price yet" : ""))),
         pnlBox);
+    };
+    // 30 cards, then the rest on request: nothing is cut off
+    const grid = (list) => {
+      const g = h("div", { class: "pf2-grid" }, list.slice(0, 30).map((x) => card(x)));
+      if (list.length > 30) {
+        const more = h("button", { class: "btn sm", type: "button", style: { gridColumn: "1 / -1", justifySelf: "center" }, onclick: (e) => {
+          e.preventDefault();
+          const extra = [];
+          more.replaceWith(...list.slice(30).map((x) => card(x, extra)));
+          fillPnl(extra);
+        } }, `Show all ${list.length}`);
+        g.append(more);
+      }
+      return g;
     };
     const pnlSlots = [];
     const toks = connected && st.toks?.length ? h("section", { class: "pf2-toks" },
       h("div", { class: "pf2-sec-h" }, h("h2", {}, "Your tokens"), h("span", { class: "fine muted" }, `Robinhood Chain · ${usd(tokUsd)}`)),
-      h("div", { class: "pf2-grid" }, priced.slice(0, 30).map(card)),
-      dust.length ? h("details", { class: "pf2-dust" }, h("summary", { class: "fine muted" }, `${dust.length} more without a price or worth under one cent`), h("div", { class: "pf2-grid" }, dust.slice(0, 30).map(card))) : null,
+      front.length ? grid(front) : null,
+      received.length ? h("details", { class: "pf2-dust" }, h("summary", { class: "fine muted" }, `${received.length} token${received.length === 1 ? "" : "s"} you received but never bought (${received.every((x) => x.priceUsd == null) ? "no price" : "no price or under one cent"})`), grid(received)) : null,
+      older.length ? h("details", { class: "pf2-dust" }, h("summary", { class: "fine muted" }, `${older.length} ${front.length || received.length ? "more " : ""}without a price or worth under one cent`), grid(older)) : null,
       h("p", { class: "fine muted pf2-pnl-note" }, "PnL is in ETH: what this wallet paid for the token against what it got back from sells plus what it holds now, at today's price. Gas is not counted, and tokens that arrived by plain transfer are not counted as bought.")) : null;
     fillPnl(pnlSlots);
     const gasCard = h("section", { class: "panel pf2-gas" });

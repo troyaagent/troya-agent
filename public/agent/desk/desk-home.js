@@ -126,7 +126,7 @@ export async function mount(view, { go, ask: askDrawer }) {
     const list = bal?.balances || [];
     const ethAmt = Number(list.find((b) => b.address === "native" || b.symbol === "ETH")?.amount ?? NaN);
     // coins at live prices from Portfolio's own source; without it, at least WETH and USDG from the chain read
-    let tokUsd = toks ? Number(toks.totalUsd) || 0 : null, nToks = toks ? (toks.tokens || []).filter((t) => Number(t.valueUsd) > 0.01).length : null;
+    let tokUsd = toks ? Number(toks.totalUsd) || 0 : null, nToks = toks ? (toks.tokens || []).filter((t) => t.bought === true || Number(t.valueUsd) >= 0.01).length : null;   // every coin bought (curve coins may have no price yet) plus anything worth a cent
     if (tokUsd == null && list.length) {
       tokUsd = list.reduce((s, b) => s + (b.symbol === "USDG" ? Number(b.amount) : b.symbol === "WETH" ? Number(b.amount) * ethUsd : 0), 0);
       nToks = list.filter((b) => b.address !== "native" && Number(b.amount) > 0).length;

@@ -237,8 +237,26 @@ export async function signerFor(key) {
   const provider = new E.BrowserProvider(wallet.eip, "any");
   const signer = await provider.getSigner(wallet.address);
   const send = signer.sendUncheckedTransaction.bind(signer);
-  signer.sendUncheckedTransaction = (tx) => send({ ...tx, chainId: CHAINS[key].id });
+  signer.sendUncheckedTransaction = async (tx) => {
+    const t = { ...tx, chainId: CHAINS[key].id };
+    return send(key === "robinhood" ? { ...t, ...(await robinhoodGas(t, wallet.address)) } : t);
+  };
   return signer;
+}
+// Robinhood Chain (an Arbitrum Orbit chain) costs about 0.02 gwei per gas. Some phone wallets don't know the chain and price
+// gas with Ethereum-style defaults: a launch (about 3.5M gas) then "needs" several times the balance and the wallet refuses
+// with "make sure you have enough funds" while the balance is plenty (a holder with 0.0024 ETH, 23 Nov 2026). So every
+// Robinhood Chain transaction carries the chain's real fee cap (twice the current gas price; only the actual fee is charged)
+// and a gas limit estimated here with headroom. Anything the caller already set is kept; if a read fails, the wallet decides.
+async function robinhoodGas(tx, from) {
+  const p = realReader("robinhood"), out = {};
+  if (tx.gasPrice == null && tx.maxFeePerGas == null) {
+    try { const gp = BigInt(await p.send("eth_gasPrice", [])); if (gp > 0n) { out.maxFeePerGas = gp * 2n; out.maxPriorityFeePerGas = 0n; } } catch {}
+  }
+  if (tx.gasLimit == null) {
+    try { const g = await p.estimateGas({ from, to: tx.to, data: tx.data, value: tx.value }); out.gasLimit = (g * 125n) / 100n + 20000n; } catch {}
+  }
+  return out;
 }
 
 /* ---------- sign-in (session for chat, inbox, agent wallet, playbooks) ---------- */

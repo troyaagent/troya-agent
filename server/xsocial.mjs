@@ -227,7 +227,8 @@ async function handleMention(t, { users, media, bot, m, L }) {
   }
   if (m === "off") entry.why = "AI replies are off";
   else if (!text || text.length < 3) entry.why = "nothing to answer";
-  else if ((PITCH.test(text) || (await import("./tgmod.mjs").then((x) => x.pitchAsk(text)).catch(() => false))) && !ISSUE.test(text)) await pitchStrike(t, entry, bot, m);
+  // owner, 23 Nov 2026: on X a promo, collab or DM pitch is simply ignored (no reply, no warning); Telegram removes them
+  else if ((PITCH.test(text) || (await import("./tgmod.mjs").then((x) => x.pitchAsk(text)).catch(() => false))) && !ISSUE.test(text)) entry.why = "a promo, collab or DM pitch: ignored";
   // people learning to launch or trade ask several questions in a row: guide them (owner, 18 Nov), still capped
   else if (recent >= (HELP_Q.test(text) ? 12 : 6)) entry.why = `${recent} answers to this account in 6 hours`;
   else {

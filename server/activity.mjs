@@ -273,11 +273,12 @@ export function xDigest(c, top = [], hours = 4) {
     c.agentChecks ? plural(c.agentChecks, "check by outside agents", "checks by outside agents") : "",
     c.agents ? plural(c.agents, "new agent registered", "new agents registered") : "",
     c.stakerEth > 0 ? `${fmtEth(c.stakerEth)} ETH paid to stakers` : "",
+    c.arenaCloses ? `Arena AI traders closed ${plural(c.arenaCloses, "real-money trade")} (${c.arenaWins} won, net ${c.arenaPnl >= 0 ? "+" : "−"}${fmtEth(Math.abs(c.arenaPnl))} ETH)` : "",
   ].filter(Boolean);
   if (!rows.length) return null;
   // a digest with nothing but a check or two reads as an empty account (22 Nov: "Last 4h on Troya: 1 check by outside agents"):
   // post only with a launch, graduation, staker, agent or payout, or at least ACTIVITY_X_MIN_CHECKS outside checks
-  const substance = c.launches || c.graduated || c.stakers || c.agents || c.stakerEth > 0 || (c.agentChecks || 0) >= Number(process.env.ACTIVITY_X_MIN_CHECKS || 5);
+  const substance = c.launches || c.graduated || c.stakers || c.agents || c.stakerEth > 0 || c.arenaCloses || (c.agentChecks || 0) >= Number(process.env.ACTIVITY_X_MIN_CHECKS || 5);
   if (!substance) return null;
   const tops = top.slice(0, 2).map((t) => `${coinTitle(t.name, t.symbol, { cash: false })}${t.gate?.word === "passed" ? ", Troya Gate passed" : ""}`);
   const text = `Last ${hours}h on Troya: ${rows.join(", ")}.${tops.length ? `\nNew: ${tops.join("; ")}.` : ""}\nhttps://troya.codes`;
@@ -681,6 +682,10 @@ async function countsFor(from, to, { trades = false } = {}) {
   if (S.cur && inWin(hourStart(S.cur.hour))) agentChecks += S.cur.api + S.cur.x402 + S.cur.acp;
   const c = { launches: real.length, real, stakers: ev.filter((e) => e.type === "stake" && !e.team).length, graduated: ev.filter((e) => e.type === "grad").length,
     agents: ev.filter((e) => e.type === "registry.agent" || e.type === "f20.agent").length, stakerEth: +stakerEth.toFixed(6), agentChecks };
+  // the Arena's real-money results (community asked 22 Nov to see them on X, not only in the group)
+  const closes = ev.filter((e) => e.type === "arena" && e.kind === "close" && Number.isFinite(Number(e.pnlEth)));
+  c.arenaCloses = closes.length; c.arenaWins = closes.filter((e) => Number(e.pnlEth) > 0).length;
+  c.arenaPnl = +closes.reduce((x, e) => x + Number(e.pnlEth), 0).toFixed(6);
   if (trades) {
     const team = teamSet();
     c.trades = (await store.tail("journal.jsonl", 1e6, (e) => inWin(Number(e.t) || 0) && TRADE.test(e.kind || "") && e.status === "executed" && e.source !== "arena" && !team.has(lc(e.address)))).length;

@@ -29,6 +29,8 @@ const IMPOSTOR = new RegExp([
   String.raw`\bverify\s+(?:your\s+|their\s+)?(?:previous\s+|old\s+)?(?:token\s+)?holdings\b`,
   String.raw`\b(?:v2|holder|token)\s+(?:allocation|migration)\b[^]{0,400}?(?:eligible\s+holders|official\s+updates|portal)`,
   String.raw`@(?!trojantroya_bot\b)[A-Za-z0-9_]*(?:d[e3]x[a-z0-9_]{0,8}n[e3]r|tr[o0]ya|claim|airdrop|migrat|rectif|validat|walletconnect)[A-Za-z0-9_]*bot\b`,
+  // "me and the rest of the team are working on something for holders, hit me up to get added" (22 Nov, three in one day)
+  String.raw`\b(?:me\s+and\s+the\s+(?:rest\s+of\s+(?:the\s+)?)?team|the\s+team\s+and\s+(?:i|me)|(?:i|we)\s+(?:and\s+the\s+team\s+)?(?:have\s+been|are|been)\s+working\s+(?:behind\s+the\s+scenes\s+)?on\s+something)\b[^]{0,300}?\b(?:hit\s+me\s+up|(?:dm|inbox|message|pm)\s+me|get\s+(?:you\s+)?added)\b`,
 ].join("|"), "iu");
 // "private holders group / whales chat" and "hit me up, I'll get you added": each half alone is a question, together the scam
 const DM_ASK = /\b(?:send|drop|shoot)\s+(?:me\s+|us\s+)?(?:a\s+)?(?:d[il1]rect\s+|pr[il1]vate\s+){1,2}(?:mess?age|msg|dm|pm)\b|\bhit\s+me\s+up\b|\bsend\s+me\s+a\s+(?:message|msg|pm|text)\b|\b(?:message|msg|pm|text)\s+me\b|\bget\s+(?:you\s+)?added\b|\bi.?ll\s+(?:get\s+you\s+)?add(?:ed)?\s+you\b/i;

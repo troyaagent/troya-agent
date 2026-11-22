@@ -36,7 +36,8 @@ async function earlyBuyers(token, fromBlock, toBlock) {
   const ps = await ponsState(token).catch(() => null);
   const venues = new Set([lc(ADDR.poolManager), lc(ADDR.universalRouter), lc(ADDR.swapRouter02), "0x204faca1764b154221e35c0d20abb3c525710498", "0x6131b5fae19ea4f9d964eac0408e4408b66337b5", ps?.curve && lc(ps.curve)].filter(Boolean));
   const devs = new Set([ps?.deployer, ps?.creatorFeeRecipient].filter(Boolean).map(lc));
-  const q = [{ address: token, topics: [T_TRANSFER], fromBlock: hex(fromBlock), toBlock: hex(toBlock) }];
+  // toBlock null = "latest": a coin younger than the window would ask past the node's head ("block range extends beyond current head block")
+  const q = [{ address: token, topics: [T_TRANSFER], fromBlock: hex(fromBlock), toBlock: toBlock == null ? "latest" : hex(toBlock) }];
   const logs = await rpc("robinhood", "eth_getLogs", q, { timeoutMs: 20_000 }).catch(() => rpc("robinhood", "eth_getLogs", q, { timeoutMs: 25_000, only: CHAINS.robinhood.wide }));
   const buyers = new Map();
   let firstBlock = null;
@@ -122,7 +123,8 @@ export async function smartIn(token) {
   let v;
   if (first == null) v = { token: getAddress(t), smart: [], note: "Not a Pons launch from the last ~2 days, so its first 15 minutes cannot be read live (older coins are scored from The Record)." };
   else {
-    const e = await earlyBuyers(t, first, first + Math.round(WINDOW_S * r.perS));
+    const end = first + Math.round(WINDOW_S * r.perS);
+    const e = await earlyBuyers(t, first, end >= r.head - 50 ? null : end);
     const hits = [...e.buyers.keys()].filter((w) => set.has(w)).map((w) => { const s = set.get(w); return { wallet: getAddress(w), rank: s.rank, wins: s.wins, losses: s.losses, secondsIn: Math.round((e.buyers.get(w) - first) / r.perS) }; }).sort((a, b) => a.rank - b.rank);
     v = { token: getAddress(t), firstBlock: first, buyers: e.buyers.size, smart: hits, baseRate: b.baseRate,
       summary: hits.length ? `${hits.length} smart wallet${hits.length > 1 ? "s" : ""} (past early buys on coins that reached 2x) bought in the first 15 minutes, best ranked #${hits[0].rank}` : "No wallet from the smart board bought in the first 15 minutes." };

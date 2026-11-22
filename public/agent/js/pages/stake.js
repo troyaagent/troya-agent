@@ -196,7 +196,18 @@ export async function mount(view) {
     ];
     if (!t.deployed || !me) { clear(tiles, ...pub, tile("Cooldown", "3 days", "between unstake and withdraw"), tile("Fee", "None", "no owner, no admin")); return; }
     const p = place(t, me.amount, me.since);
+    // one plain line on top (community asked 22 Nov: "how do I know if I'm at 7, 14 or 30 days?")
+    let status = "";
+    if (me.amount > 0n) {
+      const d = days(p.held), up = t.tiers.slice(p.idx + 1);
+      const nextBySize = up.find((x) => x.minRaw != null && me.amount >= BigInt(x.minRaw));
+      const head = `Staked for ${d < 1 ? `${(d * 24).toFixed(1)} hours` : `${d.toFixed(1)} days`}${p.tier ? ` · ${p.tier.name} now` : ""}`;
+      if (nextBySize) { const left = Math.max(0, nextBySize.minDays - d); status = `${head} · ${nextBySize.name} in ${left < 1 ? `${Math.ceil(left * 24)} hours` : `${left.toFixed(1)} days`}`; }
+      else if (up.length) status = `${head} · ${up[0].name} needs ${compact(Number(BigInt(up[0].minRaw)) / 1e18, 1)} $TROYA staked`;
+      else status = `${head} · top tier`;
+    }
     clear(tiles,
+      status ? h("div", { class: "stk-tile stk-status", style: { gridColumn: "1 / -1" } }, h("b", {}, status)) : null,
       tile("Your stake", `${tok(me.amount)} $TROYA`, me.amount ? `${t.supply ? ((Number(me.amount) / 1e18 / t.supply) * 100).toFixed(3) : "–"}% of the supply` : "nothing staked yet"),
       tile("Time staked", me.since ? `${days(p.held).toFixed(1)} days` : "–", me.since ? `counted from ${dateOf(me.since * 1000)}` : "starts when you stake"),
       h("div", { class: "stk-tile stk-tile-tier" }, h("span", {}, "Your tier"), h("b", {}, medal(p.tier?.key), p.tier?.name || "No tier yet"), h("small", {}, p.next ? `${p.next.name} next` : "the top tier")),

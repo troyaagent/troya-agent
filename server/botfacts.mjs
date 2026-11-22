@@ -89,6 +89,14 @@ export function gasFacts(gs, fsp) {
   return `Free gas (when someone asks about gas, say this plainly${fund ? ", then the limits" : ""}): ${fund} ${limits}`.replace(/\s+/g, " ").trim();
 }
 
+const AGENDA_FILE = process.env.DATA_DIR ? join(process.env.DATA_DIR, "agenda.json") : new URL("../data/agenda.json", import.meta.url);
+export function agendaLines(now = Date.now()) {
+  let list = [];
+  try { const o = JSON.parse(readFileSync(AGENDA_FILE, "utf8")); if (Array.isArray(o)) list = o; } catch { return ""; }
+  const on = list.filter((e) => e && typeof e.text === "string" && (!e.from || Date.parse(e.from) <= now) && (!e.until || Date.parse(e.until) > now));
+  return on.length ? `Team agenda, dated (when someone asks what is coming or planned, say these plainly; times are UTC): ${on.map((e) => e.text.replace(/\s+/g, " ").trim().slice(0, 400)).join(" ")}` : "";
+}
+
 async function build() {
   const [rm, vf, tr, lb, cup, pz] = await Promise.all([page("/roadmap"), page("/verify"), json("/api/treasury"), json("/api/herald/leaderboard"), json("/api/herald/cup"), json("/api/leaderboard/prizes")]);
   const v = receipts(vf), t = tiers(tr), hd = herald(lb, cup);
@@ -104,12 +112,15 @@ async function build() {
     : "";
   const gas = gasFacts(...(await Promise.all([json("/api/gas/status"), json("/api/feesplit")])));
   const burn = pb?.burnedWhole > 0 ? `$TROYA burned so far: ${Number(pb.burnedWhole).toLocaleString("en-US")} (${pb.pctOfMinted}% of the 1,000,000,000 minted), read on chain as 1,000,000,000 minus totalSupply() (${pb.totalSupply} now). Burned with the token's own burn(), so the supply itself goes down and nothing sits at a dead address.${pb.burns?.count && pb.burns.byCreatorWithBurn === pb.burns.count && Math.abs(pb.burnedWhole - pb.burns.listedTroya) < 1 ? " Every burn so far was signed by the creator wallet 0x57b0…09E4 (the wallet that launched $TROYA)." : ""} Every burn transaction with its signer: troya.codes/proof#burn.` : "";
+  // the team's dated agenda (data/agenda.json, 23 Nov 2026: a member asked "anything planned to drop today?" and the bot
+  // knew of nothing): [{ from, until, text }] in ISO times; only entries whose window covers now are told
+  const agenda = agendaLines();
   const make = (r) => {
     if (!r.length && !v.length) return "";
     return `\n\nLIVE STATUS, read from troya.codes just now. It is newer than anything written above: where they disagree, this block wins (a phase marked LIVE here is live even if an older line above says it is not, and a phase marked NOT live yet is never live). Use it to say what is live; for numbers still use the tools, except the tiers and terms below, which are read live and may be quoted.` +
       (r.length ? `\nRoadmap (troya.codes/roadmap):\n${r.join("\n")}` : "") +
       (v.length ? `\nReal-money receipts (troya.codes/verify, step number and title): ${v.join("; ")}` : "") +
-      (t ? `\n${t}` : "") + (hd ? `\n${hd}` : "") + (prize ? `\n${prize}` : "") + (burn ? `\n${burn}` : "") + (gas ? `\n${gas}` : "") + (stakeTiers ? `\n${stakeTiers}` : "");
+      (t ? `\n${t}` : "") + (hd ? `\n${hd}` : "") + (prize ? `\n${prize}` : "") + (burn ? `\n${burn}` : "") + (gas ? `\n${gas}` : "") + (stakeTiers ? `\n${stakeTiers}` : "") + (agenda ? `\n${agenda}` : "");
   };
   return { full: make(roadmap(rm)), brief: make(roadmap(rm, { brief: true })) };
 }

@@ -74,7 +74,7 @@ async function botTokens() {
   let t = unseal(b.enc);
   if (t.exp - Date.now() < 120_000 && t.refresh) {
     const j = await tokenCall({ grant_type: "refresh_token", refresh_token: t.refresh, client_id: process.env.X_CLIENT_ID });
-    t = { ...t, access: j.access_token, refresh: j.refresh_token || t.refresh, exp: Date.now() + (j.expires_in || 7200) * 1000 };
+    t = { ...t, access: j.access_token, refresh: j.refresh_token || t.refresh, scope: j.scope || t.scope || null, exp: Date.now() + (j.expires_in || 7200) * 1000 };
     await store.writeJson("x-bot.json", { ...b, enc: seal(t), refreshedAt: Date.now() });
   }
   return t;
@@ -92,7 +92,8 @@ function login(req, res, purpose, back) {
   pending.set(state, { purpose, address, verifier, home, exp: Date.now() + 10 * 60_000 });
   for (const [k, v] of pending) if (v.exp < Date.now()) pending.delete(k);
   // media.write: team posts can carry an image (18 Nov); the bot is reconnected once to grant it
-  const scope = purpose === "bot" ? "tweet.read tweet.write users.read media.write offline.access" : "tweet.read users.read";
+  // tweet.moderate.write + mute.write (23 Nov): a repeat promo pitch is hidden from our threads and its account muted
+  const scope = purpose === "bot" ? "tweet.read tweet.write users.read media.write tweet.moderate.write mute.write offline.access" : "tweet.read users.read";
   const q = new URLSearchParams({ response_type: "code", client_id: process.env.X_CLIENT_ID, redirect_uri: REDIRECT, scope, state, code_challenge: b64u(createHash("sha256").update(verifier).digest()), code_challenge_method: "S256" });
   return redirect(res, `https://x.com/i/oauth2/authorize?${q}`);
 }
@@ -111,7 +112,7 @@ async function callback(query, res) {
     if (!me?.id) throw new Error("no user");
     if (p.purpose === "bot") {
       if (lc(me.username) !== BOT) return redirect(res, `/agent#/social?x=notbot&as=${encodeURIComponent(me.username)}`);
-      await store.writeJson("x-bot.json", { id: me.id, username: me.username, connectedAt: Date.now(), enc: seal({ id: me.id, username: me.username, access: t.access_token, refresh: t.refresh_token || null, exp: Date.now() + (t.expires_in || 7200) * 1000 }) });
+      await store.writeJson("x-bot.json", { id: me.id, username: me.username, connectedAt: Date.now(), enc: seal({ id: me.id, username: me.username, access: t.access_token, refresh: t.refresh_token || null, scope: t.scope || null, exp: Date.now() + (t.expires_in || 7200) * 1000 }) });
       return redirect(res, "/agent#/social?x=bot");
     }
     await store.update("x-links.json", {}, (m) => {
@@ -151,6 +152,34 @@ const HELP_Q = /\b(launch|wallet|agent|token|coin|ticker|tax|buy|sell|fee|claim|
 // (owner, 18 Nov); a pitch that also carries a complaint or a question about Troya still gets its answer
 const PITCH = /\b(?:let'?s|lets|let\s+us)\s+(?:connect|talk|chat|collab(?:orate)?|work|partner|discuss|link\s+up)\b|\bwork(?:ing)?\s+together\b|\bcollab(?:oration|orate|s)?\b|\bpartnership\b|\bpromot(?:e|ion|ing)\b|\b(?:dm|inbox|pm)\s+(?:me|us)\b|\bcheck\s+(?:your|my)\s+dms?\b|\bconnect\s+with\s+(?:you|us)\b|\bopen\s+to\s+(?:collab|work|partner)/i;
 const ISSUE = /\b(?:fail(?:ed|s|ing)?|error|bug|broken|stuck|lost|missing|scam|rug|not\s+working|doesn'?t\s+work|can'?t|cannot|refund|how|why|where)\b/i;
+// promo, collab and DM pitches (owner, 23 Nov 2026: "warn them, and if they do it again remove it, we don't accept this"):
+// the first pitch from an account gets one public warning; a repeat is hidden from our thread and the account is muted
+// (needs the bot's tweet.moderate.write and mute.write permission: until the bot is reconnected with them, a repeat is
+// only ignored, and the warning says so). Accounts are kept in data/x-pitchers.json.
+const canModerate = (bot) => /\btweet\.moderate\.write\b/.test(bot?.scope || "") && /\bmute\.write\b/.test(bot?.scope || "");
+const pitchWarn = (bot) => canModerate(bot)
+  ? "Thanks, but Troya doesn't take promo, collab or DM offers, so please don't post them here. A repeat gets hidden and the account muted."
+  : "Thanks, but Troya doesn't take promo, collab or DM offers, so please don't post them here. Repeats will be ignored.";
+async function pitchStrike(t, entry, bot, m) {
+  entry.kind = "pitch";
+  let n = 0, warned = false;
+  await store.update("x-pitchers.json", {}, (o) => { const r = o[t.author_id] || { n: 0 }; r.n += 1; r.last = Date.now(); r.username = entry.author; n = r.n; warned = !!r.warnedAt; o[t.author_id] = r; return o; });
+  if (!warned) {
+    entry.reply = pitchWarn(bot);
+    if (m !== "live") { entry.status = "draft"; entry.why = "promo pitch: warning drafted (replies are not live)"; return; }
+    if (!(await spend("posts"))) { entry.status = "draft"; entry.why = "promo pitch: daily post cap reached"; return; }
+    const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: entry.reply, reply: { in_reply_to_tweet_id: t.id } } }).catch((e) => { entry.why = e.message; return null; });
+    entry.status = p?.data?.id ? "posted" : "failed"; entry.replyId = p?.data?.id || null;
+    if (p?.data?.id) await store.update("x-pitchers.json", {}, (o) => { (o[t.author_id] ||= { n: 1 }).warnedAt = Date.now(); return o; });
+    if (!entry.why) entry.why = "promo pitch: warned";
+    return;
+  }
+  if (!canModerate(bot)) { entry.why = `promo pitch again (${n}): ignored, the bot has no hide/mute permission yet`; return; }
+  const done = [];
+  await xApi(`/2/tweets/${t.id}/hidden`, { token: bot.access, method: "PUT", body: { hidden: true } }).then(() => done.push("hidden"), (e) => done.push(`not hidden (${String(e.message).slice(0, 60)})`));
+  await xApi(`/2/users/${bot.id}/muting`, { token: bot.access, method: "POST", body: { target_user_id: t.author_id } }).then(() => done.push("account muted"), (e) => done.push(`not muted (${String(e.message).slice(0, 60)})`));
+  entry.why = `promo pitch again (${n}): ${done.join(", ")}`;
+}
 async function handleMention(t, { users, media, bot, m, L }) {
   if (!t?.id || handled.has(t.id)) return null;
   handled.add(t.id);
@@ -198,7 +227,7 @@ async function handleMention(t, { users, media, bot, m, L }) {
   }
   if (m === "off") entry.why = "AI replies are off";
   else if (!text || text.length < 3) entry.why = "nothing to answer";
-  else if (PITCH.test(text) && !ISSUE.test(text)) entry.why = "a connect or collab pitch: not answered";
+  else if ((PITCH.test(text) || (await import("./tgmod.mjs").then((x) => x.pitchAsk(text)).catch(() => false))) && !ISSUE.test(text)) await pitchStrike(t, entry, bot, m);
   // people learning to launch or trade ask several questions in a row: guide them (owner, 18 Nov), still capped
   else if (recent >= (HELP_Q.test(text) ? 12 : 6)) entry.why = `${recent} answers to this account in 6 hours`;
   else {

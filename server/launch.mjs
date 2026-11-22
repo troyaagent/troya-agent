@@ -292,7 +292,10 @@ export async function recordWeb({ hash, owner, salt, troyaBps, session = null })
   if (!tx) throw new HttpError(404, "That transaction is not on Robinhood Chain yet.");
   const got = await launchedIn(hash);
   if (!got || got.failed) throw new HttpError(400, "That transaction did not launch a coin on Pons.");
-  const from = getAddress(tx.from);
+  // the wallet that launched is the factory's own record (msg.sender of launchToken). For a normal wallet it is tx.from; a
+  // smart wallet (ERC-4337) sends through a bundler and the EntryPoint, so tx.from is the bundler and the launch looked
+  // "signed by another wallet" (a holder's coin missing from the Creator desk, 23 Nov 2026)
+  const from = got.deployer ? getAddress(got.deployer) : getAddress(tx.from);
   if (owner && lc(owner) !== lc(from)) throw new HttpError(403, "That launch was signed by another wallet.");
   // only a launch made on troya.codes a moment ago: not an old coin, and not one launched elsewhere and brought in later
   // a fee splitter Troya planned for this wallet proves the launch came through troya.codes, whenever it is recorded

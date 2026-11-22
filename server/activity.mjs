@@ -275,6 +275,10 @@ export function xDigest(c, top = [], hours = 4) {
     c.stakerEth > 0 ? `${fmtEth(c.stakerEth)} ETH paid to stakers` : "",
   ].filter(Boolean);
   if (!rows.length) return null;
+  // a digest with nothing but a check or two reads as an empty account (22 Nov: "Last 4h on Troya: 1 check by outside agents"):
+  // post only with a launch, graduation, staker, agent or payout, or at least ACTIVITY_X_MIN_CHECKS outside checks
+  const substance = c.launches || c.graduated || c.stakers || c.agents || c.stakerEth > 0 || (c.agentChecks || 0) >= Number(process.env.ACTIVITY_X_MIN_CHECKS || 5);
+  if (!substance) return null;
   const tops = top.slice(0, 2).map((t) => `${coinTitle(t.name, t.symbol, { cash: false })}${t.gate?.word === "passed" ? ", Troya Gate passed" : ""}`);
   const text = `Last ${hours}h on Troya: ${rows.join(", ")}.${tops.length ? `\nNew: ${tops.join("; ")}.` : ""}\nhttps://troya.codes`;
   return fit(xSafe(text, { allowTroya: true }));

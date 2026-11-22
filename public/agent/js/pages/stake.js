@@ -239,7 +239,10 @@ export async function mount(view) {
           const ns = sinceAfter(me.amount, me.since, raw);
           const p = place(t, me.amount + raw, ns);
           clear(hint, me.amount ? `After this your stake counts as ${days(Math.max(0, Date.now() - ns * 1000)).toFixed(1)} days old (a top-up moves the start time forward in proportion to the coins added). ` : "Your stake's time starts now. ",
-            p.tier ? `That is ${p.tier.name} right away.` : p.next ? `${p.next.name} needs ${p.next.minDays} days at this size.` : "");
+            (() => {   // no lock to choose: the tier climbs by itself with time (22 Nov: a staker thought he had picked "7 days")
+              const amt = me.amount + raw, path = t.tiers.filter((x) => x.minRaw != null && amt >= BigInt(x.minRaw)).map((x) => `${x.name} after ${x.minDays} days`);
+              return path.length ? `No lock to choose: just stay staked and it climbs by itself, ${path.join(", ")}.` : `No lock to choose. ${t.tiers[0]?.name || "A tier"} starts at ${compact(Number(BigInt(t.tiers[0]?.minRaw || 0)) / 1e18, 1)} $TROYA.`;
+            })());
         } else clear(hint, "Approving lets the stake contract take exactly this amount, nothing more.");
       } else {
         clear(go, icon("clock"), st.busy || (bad ? "Enter an amount" : over ? "More than you have staked" : "Start the 3-day cooldown"));

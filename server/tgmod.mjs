@@ -37,6 +37,11 @@ const DM_ASK = /\b(?:send|drop|shoot)\s+(?:me\s+|us\s+)?(?:a\s+)?(?:d[il1]rect\s
 const PRIVATE_CHAT = /\b(?:private|exclusive|secret|inner|vip)\s+(?:holders?|whales?|alpha|investors?|community)\s+(?:group|chat|channel|circle)\b|\bwhales?\s+(?:chat|group|channel|circle)\b|\bholders?\s+only\s+(?:group|chat)\b/i;
 // "I am co-founder of X, I have a partnership offer, who is the best person to discuss this with?"
 const PARTNERSHIP = /\b(?:partnership|collaboration|collab)\s+(?:offer|proposal|opportunit\w*|deal)\b|\bbest\s+person\s+to\s+(?:discuss|talk|speak|contact|reach)\b|\b(?:discuss|talk\s+about)\s+(?:a\s+|this\s+|the\s+|potential\s+)?(?:partnership|collaboration|collab)\b/i;
+// a promo, collab or DM pitch aimed at the team ("message me if you're open to a collab", "come inbox", "follow me back",
+// "need more eyes on your coin?"): owner, 23 Nov 2026, "we don't accept these": the first one is removed with a warning,
+// a second inside 24 hours is a ban (the same two strikes as other promo)
+const PITCH_ASK = /\b(?:d\.?m|inbox|pm|message|msg|text)\s+(?:me|us)\b|\bcome\s+(?:to\s+(?:my\s+)?)?inbox\b|(?:^|[!.?,]\s*)inbox\s*(?:📥|📩|now|me|us)?\s*[!.]*$|\bfollow\s*(?:me\s*)?back\b|\bf4f\b|\bmore\s+eyes\s+on\s+(?:your|ur)\b|\bhype\s+partner\b|\bmake\s+(?:some\s+)?noise\s+(?:around|for)\s+(?:your|ur)\b|\b(?:open\s+to|explore|discuss|talk\s+about)\s+(?:a\s+)?(?:collab|collaboration|partnership)\b|\bcollab\s+(?:with\s+(?:you|us)|offer|opportunit\w*)\b|\bcan\s+you\s+d\.?m\s+me\b|\bcheck\s+(?:your|ur)\s+dms?\b/i;
+export const pitchAsk = (text) => PITCH_ASK.test(fold(text));
 // a member whose name claims a team role (or is the project's own name): nothing on its own, a ban with any promo or DM ask
 export const IMPOSTOR_NAME = /co.?founder|\bfounder\b|\bowner\b|\bceo\b|\bcto\b|\bcmo\b|\badmin\b|\bmoderator\b|\bmod\b|\bdev\b|\bdeveloper\b|\bsupport\b|\bofficial\b|\bteam\b|^\s*troya(?:\s+(?:agent|team|support|official|dev|admin))?\s*$/i;
 // letters swapped to slip past filters: "hoIders" (capital I for l), Cyrillic or Greek look-alikes, 𝐟𝐚𝐧𝐜𝐲 letters
@@ -214,12 +219,14 @@ async function ban(tg, chat, user, why) {
   return !!r?.ok;
 }
 // one offence: remove it, then warn, or ban when it is the second inside 24 hours or plainly spam
-async function offence(tg, chat, msgId, user, { severe = false, why = "" } = {}) {
+async function offence(tg, chat, msgId, user, { severe = false, why = "", pitch = false } = {}) {
   await del(tg, chat, msgId);
   const n = strike(`${chat}:${user.id}`);
   console.log(`[mod] removed ${msgId} from ${user.id} (${why}, strike ${n}${severe ? ", severe" : ""})`);
   if (severe || n >= 2) return ban(tg, chat, user, why);
-  await brief(tg, chat, `${who(user)}, this is a warning: promotions, calls and ads for other coins are not allowed here. Next time is a ban. Group rules: /rules`, 60000);
+  await brief(tg, chat, pitch
+    ? `${who(user)}, this is a warning: Troya does not take promo, collab or DM offers, so they are not allowed here. Next time is a ban. Group rules: /rules`
+    : `${who(user)}, this is a warning: promotions, calls and ads for other coins are not allowed here. Next time is a ban. Group rules: /rules`, 60000);
   return false;
 }
 const severeOf = (m, v) => v >= 6 || SCAM.test(fold(body(m))) || IMPOSTOR.test(fold(body(m))) || (fakeName(m.from) && v >= 2) || posesAsProject(m.from) || (foreignForward(m) && score(body(m)) >= 3);
@@ -270,6 +277,7 @@ export async function screen(m, tg, me) {
     return true;
   }
   if (flagged && v >= 1) { await del(tg, chat, m.message_id); return true; }
+  if (v < 3 && !(v >= 2 && fakeName(m.from)) && pitchAsk(body(m))) { await offence(tg, chat, m.message_id, m.from, { why: "promo, collab or DM pitch", pitch: true }); return true; }
   if (v >= 3 || (v >= 2 && fakeName(m.from))) { await offence(tg, chat, m.message_id, m.from, { severe: severeOf(m, v), why: foreignForward(m) ? "forwarded ad" : fakeName(m.from) && v < 3 ? `score ${v}, name poses as the team` : `score ${v}` }); return true; }
   return false;
 }

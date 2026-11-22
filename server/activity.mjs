@@ -202,7 +202,9 @@ export function agentsHourMsg(d) {
 }
 export function arenaHourMsg(d) {
   const rows = (d.trades || []).slice(0, 8).map((t) => {
-    const who = esc(t.agent), sym = esc(tag(cleanSym(t.symbol) || "a coin"));
+    // tickers repeat across launchpads (three NOX coins, 22 Nov): name the exact coin with its short address, linked to its page
+    const ca = /^0x[0-9a-fA-F]{40}$/.test(t.token || "") ? t.token : null;
+    const who = esc(t.agent), sym = esc(tag(cleanSym(t.symbol) || "a coin")) + (ca ? ` (${link(`${SITE}/agent#/token/${ca}`, `${ca.slice(0, 6)}…${ca.slice(-4)}`)})` : "");
     if (t.kind === "open") return `${who} opened ${sym} with ${fmtEth(t.eth)} ETH`;
     const pnl = Number(t.pnlEth) || 0;
     return `${who} closed ${sym}: ${pnl >= 0 ? "+" : "−"}${fmtEth(Math.abs(pnl))} ETH${t.reason ? ` (${esc(cleanName(t.reason, 40))})` : ""}`;
@@ -500,7 +502,7 @@ async function pollArena() {
       if (seen(key)) continue;
       mark(key);
       const t = kind === "open" ? p.openedAt : p.closedAt;
-      const row = { kind, agent: name(p.agent), symbol: p.symbol, eth: p.amountEth, pnlEth: p.pnlEth, reason: p.reason || null };
+      const row = { kind, agent: name(p.agent), symbol: p.symbol, token: p.token || null, eth: p.amountEth, pnlEth: p.pnlEth, reason: p.reason || null };
       note("arena", `${row.agent} ${kind === "open" ? "opened" : "closed"} ${cleanSym(p.symbol)}`, { kind, pnlEth: kind === "close" ? p.pnlEth : undefined });
       if (D.now() - (Number(t) || 0) > MAX_AGE) continue;
       S.cur.arena.push(row);

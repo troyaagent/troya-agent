@@ -52,6 +52,7 @@ const SI = {
   close: "M18 6 6 18M6 6l12 12",
   expand: "M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7",
   spark: "M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8",
+  heel: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 1v4M12 19v4M1 12h4M19 12h4",
 };
 export function si(name, cls = "") {
   const chrome = chromeIcon(name, cls);         // Desk 2.0: the chrome set first, the stroke set for anything else
@@ -69,7 +70,7 @@ export function si(name, cls = "") {
 // No route was removed in the regroup: every old address still resolves through ROUTES below.
 export const GROUPS = [
   [null, [["Home", "#/", "desk"]]],
-  ["Discover", [["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["All Robinhood coins", "#/launch", "launch"], ["Gate a coin", "#/gate", "gate"], ["Leaderboard", "#/leaderboard", "leaderboard"]]],
+  ["Discover", [["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["All Robinhood coins", "#/launch", "launch"], ["Gate a coin", "#/gate", "gate"], ["Find the weak spot", "#/heel", "heel"], ["Leaderboard", "#/leaderboard", "leaderboard"]]],
   ["Trade", [["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Stock desk", "#/stocks", "stocks"], ["Liquidity desk", "#/liquidity", "liquidity"], ["Lighter perps", "#/lighter", "lighter"], ["Bridge", "#/bridge", "bridge"]]],
   ["Launch", [["Create coin", "#/create", "create"], ["My coins & fees", "#/creator", "creator"]]],
   // Autopilot keeps its place until the owner decides where it belongs
@@ -91,9 +92,10 @@ const ROUTES = {
   bridge: "bridge", agent: "agent", assistant: "agent", portfolio: "portfolio", docs: "docs", start: "start", leaderboard: "leaderboard", gate: "gate", spot: "spot", lighter: "lighter", stocks: "stocks", liquidity: "liquidity", flywheel: "flywheel", social: "social", registry: "registry", rail: "rail", "troya-launches": "hippodrome", hippodrome: "hippodrome", create: "create", creator: "creator",
   herald: "herald", treasury: "treasury",                    // V8 F42: /agent/js/pages/herald.js
   stake: "stake",                                            // $TROYA staking (21 Nov): /agent/js/pages/stake.js
+  heel: "heel",                                              // V9 F47 Heel: ./heel.js (loads its own heel.css)
   u: "portfolio",                                            // profiles (21 Nov): #/u/<username> → a wallet's public page
 };
-const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js" };
+const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js" };
 // The sheets each page asks for with useCss at mount. route() requests them together with the module, so the stylesheet
 // is not one more round trip after the code. The boot script in /agent/index.html keeps a copy of this table and of the
 // routes above to start the same downloads before this file has even arrived: change both together.
@@ -562,6 +564,7 @@ function openAsk(prefill = "") {
     if (pageFirst && pages.length) out.push(goTo);
     if (ca) out.push(["Check this coin", [
       { kind: "page", title: `Run Troya Gate on ${short(ca)}`, hint: "Seven checks: route, impact, depth, fees, simulation, test sell, tax", icon: "gate", target: `#/gate/${ca}` },
+      { kind: "page", title: `Find the weak spot of ${short(ca)}`, hint: "Heel: a coin, a dev wallet or an agent, in one sentence with proof", icon: "heel", target: `#/heel/${ca}` },
       { kind: "page", title: `Open the token page`, hint: "Price, chart, pools and trades", icon: "market", target: `#/token/${ca}` },
       { kind: "ask", title: `Ask Troya about ${short(ca)}`, hint: "Is it safe to buy? The agent reads the checks and explains", icon: "spark", target: `Is this token safe? ${ca}` },
       { kind: "page", title: `Swap into it`, hint: "Opens Swap with the coin selected", icon: "swap", target: `#/swap?out=${ca}` },

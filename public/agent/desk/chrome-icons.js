@@ -13,6 +13,7 @@ const G = {
   liquidity: `<path d="M12 2.2c3.7 4.4 6.7 8.2 6.7 11.8a6.7 6.7 0 0 1-13.4 0C5.3 10.4 8.3 6.6 12 2.2z"/>`,
   bridge: `<rect x="2" y="17" width="20" height="3" rx="1"/><rect x="4" y="10.5" width="2.2" height="7"/><rect x="17.8" y="10.5" width="2.2" height="7"/><path d="M2 9.6c4.2 0 6-3.8 10-3.8s5.8 3.8 10 3.8v2.4c-4.2 0-6-3.8-10-3.8S6.2 12 2 12z"/>`,
   gate: `<path d="M3 21V10.2L12 3l9 7.2V21h-6v-5.2a3 3 0 0 0-6 0V21z"/>`,
+  heel: `<path fill-rule="evenodd" d="M12 3.4a8.6 8.6 0 1 1 0 17.2 8.6 8.6 0 0 1 0-17.2zm0 2.6a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/><circle cx="12" cy="12" r="2.7"/><rect x="11" y=".8" width="2" height="4" rx="1"/><rect x="11" y="19.2" width="2" height="4" rx="1"/><rect x=".8" y="11" width="4" height="2" rx="1"/><rect x="19.2" y="11" width="4" height="2" rx="1"/>`,   // V9 F47 Heel: a sight on the one weak spot
   market: `<rect x="5.3" y="4.5" width="1.4" height="15.5" rx=".7"/><rect x="3.8" y="7.5" width="4.4" height="9" rx="1.2"/><rect x="11.3" y="2.5" width="1.4" height="14" rx=".7"/><rect x="9.8" y="5" width="4.4" height="8" rx="1.2"/><rect x="17.3" y="7" width="1.4" height="14" rx=".7"/><rect x="15.8" y="10" width="4.4" height="7.5" rx="1.2"/>`,
   launch: `<path d="M14.6 2.4c3.7.4 6.6 3.3 7 7l-7.1 7.1-7-7z"/><path d="M6.6 10.6l6.8 6.8-2.2 2.2-2.6-.5L4.9 15.4l-.5-2.6z"/><path d="M4.6 16.4l3 3c-1.2 1.4-3.3 2.1-5.4 2.4.3-2.1 1-4.2 2.4-5.4z"/>`,
   create: `<path fill-rule="evenodd" d="M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3zm4.6 4v3.6H7v2.8h3.6V17h2.8v-3.6H17v-2.8h-3.6V7z"/>`,

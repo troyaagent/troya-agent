@@ -334,6 +334,7 @@ export function gatePanel({ go, ask, compact = false, start = "", chain: startCh
       h("div", { class: "dk-gate-a" },
         rh && has("fomo") ? h("a", { class: "btn sm dk-fomo", href: `https://fomo.family/tokens/robinhood/${a}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/fomo.png", alt: "", width: 18, height: 18 }), "Buy on Fomo") : null,
         rh && has("token") ? h("a", { class: "btn sm", href: `#/token/${a}` }, "Token page") : null,
+        rh && !example ? h("a", { class: "btn sm", href: `#/heel/${a}`, title: "V9 Heel: its one weak spot in a sentence, with the transactions behind it" }, "Find its weak spot") : null,
         ask && has("ask") ? h("button", { class: "btn sm", type: "button", onclick: () => ask(`Is this token safe? ${a}${rh ? "" : ` (on ${net.name})`}`) }, icon("spark"), "Ask Troya") : null,
         ask && has("explain") ? h("button", { class: "btn sm", type: "button", onclick: () => ask(`Why did the Troya Gate block ${r.symbol ? "$" + r.symbol : a} (${a}) on ${net.name}? Explain it in plain words.`) }, icon("spark"), "Ask why") : null,
         rh && has("badge") ? h("a", { class: "btn sm", href: `/badge?ca=${a}`, target: "_blank", rel: "noopener" }, icon("shield"), "Get the badge") : null));

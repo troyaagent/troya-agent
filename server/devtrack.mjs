@@ -17,6 +17,7 @@ const T_TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df5
 const FIRST_LAUNCH = 27_000_000;   // the first Pons launch is at block 27,027,321
 const SPAN = 9_900_000;            // the official RPC answers eth_getLogs over at most 10,000,000 blocks
 const HOUR = 34_000, DAY = 820_000; // Robinhood Chain makes about 9.5 blocks a second
+export const BLOCKS = { HOUR, DAY };   // V9 F47 Heel reads the same windows
 const lc = (s) => String(s || "").toLowerCase();
 const pad = (a) => "0x" + "0".repeat(24) + lc(a).slice(2);
 const hex = (n) => "0x" + Number(n).toString(16);
@@ -41,12 +42,12 @@ const head = () => cached("head", 20_000, async () => Number(BigInt(await rpc("e
 
 // every coin these wallets launched on Pons (as the deployer). The official RPC takes a wide block range only with
 // one value per topic, so each wallet is read on its own (about 10 reads), and kept for 30 minutes
-async function launchesOf(wallet) {
+export async function launchesOf(wallet) {   // throws when the chain cannot be read (Heel says so)
   return cached(`l:${lc(wallet)}`, 30 * 60_000, async () => {
     const h = await head(), out = [];
     for (let from = FIRST_LAUNCH; from <= h; from += SPAN) {
       const logs = await rpc("eth_getLogs", [{ address: FACTORY, topics: [T_LAUNCH, null, null, pad(wallet)], fromBlock: hex(from), toBlock: hex(Math.min(h, from + SPAN - 1)) }]);
-      for (const l of logs || []) out.push({ token: "0x" + l.topics[1].slice(26), block: Number(l.blockNumber), dev: lc(wallet) });
+      for (const l of logs || []) out.push({ token: "0x" + l.topics[1].slice(26), block: Number(l.blockNumber), dev: lc(wallet), tx: l.transactionHash });
     }
     return out;
   });
@@ -67,19 +68,20 @@ export async function coinStory(token, dev, born) {
     ]);
     const got = (ins || []).reduce((s, l) => s + BigInt(l.data === "0x" ? 0 : l.data), 0n);
     // a burn (to 0x0 or 0x…dEaD) is not a sale; everything else that leaves counts as sold or moved out
-    let sent = 0n, burned = 0n, outBlock = null;
+    let sent = 0n, burned = 0n, outBlock = null, outTx = null;
     for (const l of (outs || []).sort((a, b) => Number(a.blockNumber) - Number(b.blockNumber))) {
       const v = BigInt(l.data === "0x" ? 0 : l.data), to = "0x" + l.topics[2].slice(26);
       if (/^0x0{40}$/.test(to) || lc(to) === "0x000000000000000000000000000000000000dead") { burned += v; continue; }
       sent += v;
-      if (outBlock == null && got > 0n && sent * 10n >= got * 8n) outBlock = Number(l.blockNumber);
+      if (outBlock == null && got > 0n && sent * 10n >= got * 8n) { outBlock = Number(l.blockNumber); outTx = l.transactionHash; }
     }
     const status = got === 0n ? "no-buy" : outBlock != null ? (outBlock - born <= HOUR ? "dumped" : "sold-day1") : burned * 2n >= got ? "burned" : "held";
-    return { token: lc(token), dev: lc(dev), born, status, graduated: !!ps?.graduated, young: h - born < DAY };
+    // outBlock / outTx: where 80% of what the dev got had left (V9 F47 Heel shows the transaction and the hours since launch)
+    return { token: lc(token), dev: lc(dev), born, status, graduated: !!ps?.graduated, young: h - born < DAY, outBlock, outTx, got: got.toString() };
   });
 }
 
-async function walletAge(wallet) {
+export async function walletAge(wallet) {
   return cached(`a:${lc(wallet)}`, 6 * 3600_000, async () => {
     const [nonce, fund] = await Promise.all([rpc("eth_getTransactionCount", [wallet, "latest"]).then((n) => Number(BigInt(n || 0))).catch(() => null), funding(wallet)]);
     let days = null;

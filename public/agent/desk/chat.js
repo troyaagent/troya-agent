@@ -4,8 +4,8 @@
 // and scam rules; this file only shows its answer.
 //   mountChat(document.body)          a "Community" tab tucked on the right edge that opens a side panel (every page); on a
 //                                     wide desk (1400 px+) the page makes room for it, so the board stays usable beside
-//                                     it. Phones open it from the tab bar: window events "troya:chat-open" (toggle) in,
-//                                     "troya:chat-state" ({ open, unread }) out, so the tab can show the unread count.
+//                                     it. Phones open it from the top-bar chat button: window events "troya:chat-open" (toggle) in,
+//                                     "troya:chat-state" ({ open, unread }) out, so the button can show the unread count.
 //   mountChat(el, { inline: true })   the same panel drawn inside el (e.g. a Desk section)
 // Returns a stop function. New messages are read every 4 s while the panel is open and every 30 s while it is closed
 // (for the unread count); nothing is read while the tab is hidden.
@@ -102,7 +102,7 @@ export function mountChat(host = document.body, { inline = false } = {}) {
   if (floating) panel.setAttribute("aria-hidden", "true");
   const onKey = (e) => { if (floating && open && e.key === "Escape" && !document.querySelector(".modal-bg")) setOpen(false); };
   document.addEventListener("keydown", onKey);
-  // the phone's tab bar opens and closes it, and shows the unread count it is told
+  // the phone's top-bar chat button opens and closes it, and shows the unread count it is told
   let unread = 0;
   const tellState = () => { if (floating) dispatchEvent(new CustomEvent("troya:chat-state", { detail: { open, unread } })); };
   const onOpenAsk = () => { if (floating) setOpen(!open); };

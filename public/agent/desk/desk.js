@@ -165,7 +165,7 @@ async function route() {
   const page = r.name == null ? null : ROUTES[r.name];
   const act = activeItem(r.path);
   // items only: the "Launch a coin" shortcut in the Discover header must not light up (or be revealed) as the page
-  for (const a of document.querySelectorAll("[data-nav] .d-group-items a, [data-tabbar] a, [data-side-foot] a.d-about")) {
+  for (const a of document.querySelectorAll("[data-nav] .d-group-items a, [data-nav] .d-pin a, [data-tabbar] a, [data-side-foot] a.d-about")) {
     // a tab lights for any page of its group (Troya Launches under Discover, Perps under Trade)
     const tab = a.dataset.tab;
     const on = !!act && (tab != null ? (tab ? act.g === tab : act.href === "#/") : a.getAttribute("href") === act.href);
@@ -262,11 +262,15 @@ function navGroup([g, items]) {
     h("span", { style: { flex: 1 } }, g));
   const mark = h("i", { "aria-hidden": "true", style: { fontStyle: "normal", opacity: ".6" } }, list.hidden ? "+" : "−");
   btn.append(mark);
-  // the shortcut people look for first: launching a coin, from the Discover header
-  const extra = g === "Discover" ? h("a", { href: "#/create", class: "link", style: { all: "unset", cursor: "pointer", textTransform: "none", letterSpacing: "normal", color: "var(--blue)" } }, "Launch a coin") : null;
-  return h("div", { class: "d-group" }, h("h5", { style: { display: "flex", alignItems: "center", gap: "8px" } }, btn, extra), list);
+  return h("div", { class: "d-group" }, h("h5", { style: { display: "flex", alignItems: "center", gap: "8px" } }, btn), list);
 }
 clear($("[data-nav]"), GROUPS.map(navGroup));
+// the two things people come to Troya for, pinned under Home: the AI agent and the launchpad (community request,
+// 23 Nov 2026). They used to sit under Launch and a shut Agent group near the bottom; the groups stay for every sub-page.
+// A tile lights for any page of its group (data-tab, the same rule as the phone tabs).
+const PINNED = [["Agent", "#/agent/scepter", "agent", "Trades for you"], ["Launch", "#/create", "launch", "Create a coin"]];
+$("[data-nav]").firstElementChild.after(h("div", { class: "d-pin" },
+  PINNED.map(([g, href, ic, sub]) => h("a", { href, "data-tab": g }, si(ic), h("b", {}, g), h("small", {}, sub)))));
 // Leaderboard stays hidden until traders opt in (the same check as the Desk home) or the weekly prize pool runs
 // (prizes.show, 22 Nov 2026); the route itself always works
 api.get("leaderboard?days=30").then((d) => { if (d?.rows?.length || d?.prizes?.show) for (const a of document.querySelectorAll("[data-leaderboard]")) a.hidden = false; }).catch(() => {});
@@ -286,10 +290,11 @@ clear($("[data-side-foot]"),
 
 const side = $("[data-side]"), scrim = $("[data-scrim]");
 function revealActive() {
-  const a = side.querySelector("[data-nav] a[aria-current]");
+  const a = side.querySelector("[data-nav] .d-group-items a[aria-current]");
   if (!a) return;
   const list = a.closest(".d-group-items");
   if (list?.hidden) { list.hidden = false; list.parentElement.querySelector("h5 button")?.setAttribute("aria-expanded", "true"); const m = list.parentElement.querySelector("h5 button i"); if (m) m.textContent = "−"; }
+  if (side.querySelector(".d-pin a[aria-current]")) return;   // the lit Agent or Launch tile at the top already says where you are
   const ar = a.getBoundingClientRect(), sr = side.getBoundingClientRect();
   // the brand and Search stay pinned at the top of the sidebar, so an item under them counts as hidden too
   const pinned = side.querySelector(".d-side-top")?.offsetHeight || 90;
@@ -303,23 +308,26 @@ $("[data-burger]").addEventListener("click", () => (side.classList.contains("ope
 scrim.addEventListener("click", closeSide);
 
 /* ---------- mobile tab bar ---------- */
-// one tap to each job: Home, Discover, Ask, Chat, Portfolio (the Inbox count rides on Portfolio). Chat took the Trade tab's
-// place (community request, 23 Nov 2026): every coin row already has a Buy that opens Swap, and the floating chat button
-// sat on top of those Buys. Swap stays in the menu, in Search and on every coin; the chat module (chat.js) answers the
-// "troya:chat-open" event and reports { open, unread } back with "troya:chat-state".
-const chatBadge = h("i", { class: "badge", hidden: true, style: { position: "absolute", top: "6px", left: "calc(50% + 6px)", fontStyle: "normal" } });
-const chatTab = h("button", { type: "button", class: "d-tab-chat", "aria-label": "Community chat", "aria-pressed": "false", style: { position: "relative" }, onclick: () => dispatchEvent(new CustomEvent("troya:chat-open")) },
-  si("chat"), h("span", {}, "Chat"), chatBadge);
+// one tap to each job: Home, Launch, Ask, Agent, Portfolio (the Inbox count rides on Portfolio). Launch and Agent took the
+// Discover and Chat places (community request, 23 Nov 2026: "the agent and the launchpad are the important things on the
+// platform"). Nothing left the phone: Market is on Home ("Buy a coin", "Full market"), in Search and in the menu, and the
+// community chat moved to a button in the top bar with its unread count (Trade gave its tab to Chat earlier the same day;
+// Swap is on every coin's Buy). The chat module (chat.js) answers the "troya:chat-open" event and reports
+// { open, unread } back with "troya:chat-state".
+const chatBadge = h("span", { class: "badge", hidden: true });
+const chatTop = h("button", { type: "button", class: "icon-btn d-chat-top", "aria-label": "Community chat", title: "Community chat", "aria-pressed": "false",
+  onclick: () => dispatchEvent(new CustomEvent("troya:chat-open")) }, si("chat"), chatBadge);
 addEventListener("troya:chat-state", (e) => {
   const { open = false, unread = 0 } = e.detail || {};
-  chatTab.setAttribute("aria-pressed", String(!!open));
+  chatTop.setAttribute("aria-pressed", String(!!open));
+  chatTop.setAttribute("aria-label", unread && !open ? `Community chat, ${unread} new` : "Community chat");
   chatBadge.hidden = !unread || open; chatBadge.textContent = unread > 9 ? "9+" : String(unread || "");
 });
 clear($("[data-tabbar]"),
   h("a", { href: "#/", "data-tab": "" }, si("desk"), h("span", {}, "Home")),
-  h("a", { href: "#/market", "data-tab": "Discover" }, si("market"), h("span", {}, "Discover")),
+  h("a", { href: "#/create", "data-tab": "Launch" }, si("launch"), h("span", {}, "Launch")),
   h("button", { type: "button", class: "d-tab-ask", onclick: () => askTroya() }, h("i", { class: "mark" }), h("span", {}, "Ask")),
-  chatTab,
+  h("a", { href: "#/agent/scepter", "data-tab": "Agent" }, si("agent"), h("span", {}, "Agent")),
   h("a", { href: "#/portfolio", "data-tab": "Portfolio", style: { position: "relative" } }, si("portfolio"), h("span", {}, "Portfolio"),
     h("i", { class: "badge", "data-inbox": "", style: { position: "absolute", top: "6px", left: "calc(50% + 6px)", fontStyle: "normal" } })));
 
@@ -385,7 +393,7 @@ function renderRight() {
     onclick: (e) => (elsewhere ? switchToMain(e.currentTarget) : chainPop(e.currentTarget)) },
     chainLogo(wallet.address ? (c?.key || "") : "robinhood", 16), wallet.address ? name : MAIN.name);
   if (pop) closePop();          // the chip is drawn anew, so a card left open would point at nothing
-  const bell = h("a", { class: "icon-btn", href: "#/portfolio/inbox", "aria-label": "Inbox" }, si("inbox"), inboxCount ? h("span", { class: "badge" }, inboxCount > 9 ? "9+" : inboxCount) : null);
+  const bell = h("a", { class: "icon-btn d-bell", href: "#/portfolio/inbox", "aria-label": "Inbox" }, si("inbox"), inboxCount ? h("span", { class: "badge" }, inboxCount > 9 ? "9+" : inboxCount) : null);
   // connected but not signed in: a small "Sign in" tag on the button, so the missing step is visible before a feature asks
   const unsigned = !!wallet.address && !wallet.session;
   const wbtn = wallet.address
@@ -396,7 +404,7 @@ function renderRight() {
   const gear = h("button", { class: "icon-btn", type: "button", "aria-label": "Settings", onclick: openSettings }, si("gear"));
   const light = document.documentElement.dataset.theme === "light";
   const mode = h("button", { class: "icon-btn d-mode", type: "button", "aria-label": light ? "Dark mode" : "Light mode", title: light ? "Dark mode" : "Light mode", onclick: () => setTheme(light ? "dark" : "light") }, si(light ? "moon" : "sun"));
-  clear(right, chip, bell, mode, gear, wbtn);
+  clear(right, chip, chatTop, bell, mode, gear, wbtn);
   for (const el of document.querySelectorAll("[data-inbox]")) { el.textContent = inboxCount ? (inboxCount > 9 ? "9+" : inboxCount) : ""; el.hidden = !inboxCount; }
 }
 function walletMenu() {

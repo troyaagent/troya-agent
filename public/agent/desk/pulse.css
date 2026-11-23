@@ -154,9 +154,6 @@ body.cc-open .cc-panel.cc-float { transform: none; opacity: 1; pointer-events: a
 }
 @media (max-width: 860px) {
   .cc-fab.cc-edge { display: none; }
-  .d-tabbar .d-tab-chat { border: 0; background: none; font: inherit; font-size: 10.5px; cursor: pointer; }
-  .d-tabbar .d-tab-chat[aria-pressed="true"] { color: var(--fg); }
-  .d-tabbar .d-tab-chat[aria-pressed="true"] svg { opacity: 1; filter: drop-shadow(0 0 8px rgba(142, 223, 245, .55)); }
 }
 html[data-theme="light"] .cc-fab { background: var(--bg-1); border-color: rgba(10, 126, 163, .3); box-shadow: 0 14px 34px rgba(20, 40, 60, .14); }
 html[data-theme="light"] .cc-panel { background: var(--bg-1); border-color: rgba(10, 126, 163, .22); }

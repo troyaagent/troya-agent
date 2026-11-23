@@ -310,7 +310,9 @@ $("[data-burger]").addEventListener("click", () => (side.classList.contains("ope
 scrim.addEventListener("click", closeSide);
 
 /* ---------- mobile tab bar ---------- */
-// one tap to each job: Home, Launch, Ask, Agent, Portfolio (the Inbox count rides on Portfolio). Launch and Agent took the
+// 24 Nov 2026 (same member, correction): Market is the main target for users, so it takes back the Launch slot; Launch stays
+// one tap away on Home, in the menu (pinned tile on desktop) and in Search.
+// one tap to each job: Home, Market, Ask, Agent, Portfolio (the Inbox count rides on Portfolio). Launch and Agent took the
 // Discover and Chat places (community request, 23 Nov 2026: "the agent and the launchpad are the important things on the
 // platform"). Nothing left the phone: Market is on Home ("Buy a coin", "Full market"), in Search and in the menu, and the
 // community chat moved to a button in the top bar with its unread count (Trade gave its tab to Chat earlier the same day;
@@ -327,7 +329,7 @@ addEventListener("troya:chat-state", (e) => {
 });
 clear($("[data-tabbar]"),
   h("a", { href: "#/", "data-tab": "" }, si("desk"), h("span", {}, "Home")),
-  h("a", { href: "#/create", "data-tab": "Launch" }, si("launch"), h("span", {}, "Launch")),
+  h("a", { href: "#/market", "data-tab": "Discover" }, si("market"), h("span", {}, "Market")),
   h("button", { type: "button", class: "d-tab-ask", onclick: () => askTroya() }, h("i", { class: "mark" }), h("span", {}, "Ask")),
   h("a", { href: "#/agent/scepter", "data-tab": "Agent" }, si("agent"), h("span", {}, "Agent")),
   h("a", { href: "#/portfolio", "data-tab": "Portfolio", style: { position: "relative" } }, si("portfolio"), h("span", {}, "Portfolio"),

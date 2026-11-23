@@ -142,11 +142,13 @@ export function campaignLine(now = Date.now()) {
 // 81.6M balance"): the Pons graduation locker, the dev side's sales and whether the fee split is enforced. The locker
 // and the fee path are fixed by the contracts; the dev side's numbers are the live Gate check (/api/proof/gate).
 export function supplyFacts(gate) {
-  const dev = (gate?.checks || []).find((x) => x?.key === "devlinks")?.detail;
+  // right after a restart the check reads "Still reading the wallets tied to the dev…": never hand the bot that
+  const raw = (gate?.checks || []).find((x) => x?.key === "devlinks")?.detail;
+  const dev = raw && /\d/.test(raw) && !/still reading|check again|try again/i.test(raw) ? raw : null;
   return [
     "$TROYA supply and fee facts (quote these when asked; they were checked on chain):",
     "- PonsV2LaunchLocker 0x267444D099b10fB5Ed7c3Cc7B7c767AdcA574952 holds 81,632,653 $TROYA. It is Pons' own graduation locker, not a team wallet: at graduation the curve's leftover virtual-reserve tokens that cannot enter the pool without lowering the opening price are sent there with lockTokenSupply(). The verified contract has no function that sends tokens out, so there is no beneficiary and no unlock date: they are locked for good, out of circulation. Anyone can read lockedTokenSupply(<the $TROYA CA>) on it. The same locker holds the graduation liquidity position NFT #4302001.",
-    dev ? `- Dev side, from Troya Gate's live check of $TROYA: ${String(dev).slice(0, 600)}. troya.codes/proof publishes this itself. The first burns, 26,884,853 $TROYA on 15 Nov 2026, came from the dev's own bag. No policy has been announced for what the dev side still holds; never invent one.` : "",
+    `- Dev side: ${dev ? `from Troya Gate's live check of $TROYA: ${String(dev).slice(0, 600)}. troya.codes/proof publishes this itself.` : "the live numbers (what the wallets tied to the dev sold and still hold) are on troya.codes/proof, Gate check \"Dev side wallets\"; send people there rather than quoting a figure."} The first burns, 26,884,853 $TROYA on 15 Nov 2026, came from the dev's own bag. No policy has been announced for what the dev side still holds; never invent one.`,
     "- Fees: the Pons contracts credit the creator wallet 2.6% of every $TROYA trade (the 1.9% creator tax plus 70% of the 1% Pons fee) into the Pons fee escrow, which only the creator wallet can claim. That part is enforced on chain. What happens after the claim (the stakers' share, buyback and burn, the team's part, which pays for servers, APIs and the build) is NOT enforced by a contract: Troya's server code runs it from the creator wallet, and every claim, payout and burn is a public transaction on troya.codes/proof and troya.codes/flywheel. When asked, say this plainly and never claim a contract enforces the split.",
     "- The dev reads this group and posts in it as the group's anonymous admin (shown with the group's name). Never say the dev is not in this chat or will not see a message; say the team reads the group.",
   ].filter(Boolean).join("\n");

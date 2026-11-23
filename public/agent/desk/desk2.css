@@ -1726,3 +1726,114 @@ html[data-theme="light"] .stk-badge.t-gold { --stk-c: #9a6400; }
 .hr-stk { margin-left: 6px; }
 /* the $TROYA fee split line on the flywheel page */
 .fw-split { margin: 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+
+/* ---------- 23 Nov 2026 (community requests): two backgrounds only, black or white ----------
+   The app had a blue-slate dark and a cream light. People asked for a darker room and then for exactly two choices,
+   black and white, so coin names, descriptions and numbers stand out. The chrome-blue accent stays; only the surfaces
+   change. Contrast (WCAG): dark --muted 6.0:1 and --faint 5.8:1 on black, 5.1:1+ on the raised panels; light --muted
+   6.5:1 and --faint 5.7:1 on white, 4.9:1+ on --bg-3, the accent 5.3:1 on white and 4.9:1 on --bg-2. */
+:root:not([data-theme="light"]) {
+  --bg: #000000; --bg-1: #0a0a0b; --bg-2: #101012; --bg-3: #17171a; --bg-4: #1f1f23;
+  --glass-solid: linear-gradient(180deg, rgba(20, 20, 23, .9), rgba(10, 10, 12, .94));
+}
+.d-silk { opacity: .5; }              /* the room light is a faint sheen on black now, never a tint */
+.d-room::before { opacity: .22; }
+.d-side { background: rgba(0, 0, 0, .9); }
+.d-top::before { background: rgba(0, 0, 0, .72); }
+@media (max-width: 860px) {
+  .d-tabbar { background: rgba(0, 0, 0, .94); }
+  .d-tab-ask .mark { box-shadow: 0 0 0 6px #000, 0 6px 24px rgba(142, 223, 245, .25); }
+}
+html[data-theme="light"] {
+  --bg: #ffffff; --bg-1: #ffffff; --bg-2: #f5f5f6; --bg-3: #eeeef0; --bg-4: #e4e4e7;
+  --line: #e7e7ea; --line-2: #dcdce0; --line-3: #c6c6cc;
+  --fg: #0a0a0b; --fg-2: #2f2f34; --muted: #5d5d66; --faint: #66666f;
+  --blue: #08739a; --up: #08739a;
+  --glass-solid: #ffffff; --glass: #ffffff;
+  --logo-ring: rgba(0, 0, 0, .14); --logo-ring-2: rgba(0, 0, 0, .2); --logo-edge: rgba(0, 0, 0, .09);
+}
+html[data-theme="light"] .d-top::before { background: rgba(255, 255, 255, .9); }
+html[data-theme="light"] .d-drawer-b .ag-dock { background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--bg-1) 26%); }
+html[data-theme="light"] .d2-hero h1 span { color: #85858e; }      /* big display words, 3.7:1 (AA for large text) */
+html[data-theme="light"] .d-side, html[data-theme="light"] .d-drawer { scrollbar-color: #d4d4d9 transparent; }
+@media (max-width: 860px) {
+  html[data-theme="light"] .d-tabbar { background: rgba(255, 255, 255, .96); }
+  html[data-theme="light"] .d-tab-ask .mark { box-shadow: 0 0 0 6px #fff, 0 6px 24px rgba(10, 126, 163, .2); }
+  html[data-theme="light"] .d-side { box-shadow: none; }               /* closed: its shadow used to bleed onto the page edge */
+  html[data-theme="light"] .d-side.open { box-shadow: 30px 0 80px rgba(0, 0, 0, .12); }
+}
+
+/* ---------- About Troya: the sidebar link above the $TROYA chip, the strip's link, and the page (#/about, about.js) ---------- */
+.d-about { display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 10px; border-radius: 11px; border: 1px solid var(--line); background: var(--glass);
+  font-size: 13px; color: var(--fg-2); text-decoration: none; transition: color .3s var(--soft), border-color .3s var(--soft), background .3s var(--soft); }
+.d-about svg { width: 19px; height: 19px; flex: none; }
+.d-about svg.ci { filter: none; opacity: .85; }
+.d-about span { flex: 1; min-width: 0; }
+.d-about i { font-style: normal; color: var(--faint); transition: transform .3s var(--soft); }
+.d-about:hover { color: var(--fg); border-color: rgba(142, 223, 245, .35); }
+.d-about:hover i { transform: translateX(2px); color: var(--fg-2); }
+.d-about[aria-current="page"] { color: var(--fg); border-color: rgba(142, 223, 245, .4); background: linear-gradient(180deg, rgba(142, 223, 245, .14), rgba(142, 223, 245, .045)); }
+html[data-theme="light"] .d-about { background: var(--bg-2); }
+
+/* the Desk's top strip: one line of context, its link one tap from the page that explains it */
+.dk-promise { display: flex; align-items: baseline; gap: 0; }
+.dk-promise b { flex: none; }
+.dk-promise span { margin-left: .3em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-about { flex: none; display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding-left: 14px; font-size: 12.5px; color: var(--blue); text-decoration: none; white-space: nowrap; }
+.dk-about svg { width: 13px; height: 13px; transition: transform .3s var(--soft); }
+.dk-about:hover { color: var(--fg); }
+.dk-about:hover svg { transform: translateX(2px); }
+html[data-theme="light"] .dk-about { color: var(--c3); }
+
+.ab { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 26px 0 8px; }
+.ab-hero .d2-txt { padding-top: 38px; padding-bottom: 32px; }
+.ab-hero h1 { font-size: clamp(38px, 3.9vw, 62px); }
+.ab-cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+.ab-cta .btn { height: 40px; padding: 0 16px; border-radius: 12px; }
+.ab-cta .btn svg { width: 15px; height: 15px; }
+.ab-hero .d2-kpis { padding-top: 26px; }
+.ab-steps { list-style: none; margin: 0; padding: 8px 16px 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ab-step { position: relative; display: grid; align-content: start; gap: 10px; padding: 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--glass); }
+.ab-step-n { position: absolute; top: 14px; right: 16px; font-family: var(--mono); font-size: 12px; color: var(--faint); }
+.ab-step b { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.ab-step p { margin: 0; color: var(--fg-2); font-size: 13.5px; line-height: 1.5; }
+.ab-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+.ab-body { display: grid; align-content: start; gap: 12px; padding: 8px 16px 16px; }
+.ab-note { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.ab-note b { color: var(--fg); font-weight: 600; }
+.ab-ca { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px; border-radius: 11px; border: 1px solid var(--line-2); background: var(--bg-2); color: var(--fg);
+  font-size: 12.5px; text-align: left; cursor: pointer; transition: border-color .2s; }
+.ab-ca span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ab-ca svg { width: 14px; height: 14px; flex: none; color: var(--muted); }
+.ab-ca:hover { border-color: rgba(142, 223, 245, .4); }
+.ab-ca-a { display: flex; flex-wrap: wrap; gap: 8px; }
+.ab-ca-a .btn svg { width: 15px; height: 15px; }
+.ab-links { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.ab-link { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 16px; border: 1px solid var(--line); background: var(--glass); color: var(--fg); text-decoration: none;
+  transition: border-color .3s var(--soft), background .3s var(--soft); }
+.ab-link > span:not(.d2-tile) { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.ab-link b { font-size: 14px; font-weight: 600; }
+.ab-link small { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.ab-link > i { font-style: normal; color: var(--faint); align-self: flex-start; }
+.ab-link:hover { border-color: rgba(142, 223, 245, .35); background: rgba(142, 223, 245, .04); }
+.ab-social { margin: 0; font-size: 12.5px; color: var(--muted); }
+.ab-social a { color: var(--fg-2); }
+.ab-social a:hover { color: var(--fg); }
+@media (max-width: 1100px) { .ab-links { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) {
+  .ab { gap: 12px; padding-top: 14px; }
+  .ab-steps, .ab-cols { grid-template-columns: minmax(0, 1fr); }
+  .ab-steps { padding: 6px 12px 12px; gap: 10px; }
+  .ab-step { padding: 14px; }
+  .ab-body { padding: 6px 12px 14px; }
+  .dk-promise { align-items: center; }
+}
+@media (max-width: 560px) {
+  .ab-links { grid-template-columns: minmax(0, 1fr); }
+  .ab-hero .d2-txt { padding: 24px 18px 20px; }
+  .ab-hero h1 { font-size: 36px; }
+  .ab-cta .btn { flex: 1 1 auto; }
+  .ab-hero .d2-stage { min-height: 260px; }
+}
+html[data-theme="light"] .ab-step, html[data-theme="light"] .ab-link { background: var(--bg-1); }
+html[data-theme="light"] .ab-ca { background: var(--bg-2); }

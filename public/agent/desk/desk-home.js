@@ -1,11 +1,12 @@
 // Desk (#/): one calm page that answers "where am I, what's moving, what is my agent doing, what next".
 // Audit, 21 Nov 2026: the big hero filled the whole first screen (558 px on desktop, 821 px on a phone) and the coin list
 // started at y=5843 on a phone, while a connected wallet saw none of its own money. So now:
-//   first visit   a slim intent bar (no modal, no loader), then the big hero with the ask bar in it
-//   returning     a compact top strip (one line, the ask bar, three chips, the fee line, a small horse mark), at most 220 px
+//   everyone      a compact top strip (one line, the ask bar, three chips, the fee line, a small horse mark), at most 220 px
 //   connected     a "You" row: Robinhood Chain and Hyperliquid balances, open positions, today's PnL, approvals waiting
 //   then          Troya picks and trending coins with quick buy chips, Sentry's latest checks, quick tiles, the rest.
-// The intent ("Buy a coin", "Check a coin" …) only reorders the sections; it is kept in this browser and nothing else.
+// 23 Nov 2026 (community request): the first-visit hero and its "What brings you here?" bar moved to their own page,
+// About Troya (#/about, ./about.js), linked from the strip and from the foot of the sidebar, so the app opens on action.
+// The intent ("Buy a coin", "Check a coin" …, picked on About Troya) only reorders the sections; it is kept in this browser.
 import { h, clear, icon, useCss, every, sparkline, pctEl, usd, tiny, toast, store, infoTip, tokenIcon, coinIcon, short, ago, table } from "/agent/js/ui.js";
 import { api, cached } from "/agent/js/api.js";
 import { wallet, onWallet, openConnect, signIn } from "/agent/js/wallet.js";
@@ -17,7 +18,6 @@ import { mountPassStrip, mountGraduated } from "./pulse.js";   // community requ
 
 const hideSteps = store("troya.home.hideSteps", false);
 const autoPref = store("troya.autopilot", { on: false, playbooks: true, chat: false });
-const visited = store("troya.desk.visited", 0);
 const intentPref = store("troya.desk.intent", null);
 const coinTab = store("troya.desk.coins", "picks");
 const HORSE = "/img/logo-3d-512.webp";   // 66 KB; the 1024 px PNG it replaces was 651 KB
@@ -25,17 +25,6 @@ const BUY_ETH = ["0.005", "0.01", "0.05"];
 const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
 const INTENTS = [["buy", "Buy a coin"], ["check", "Check a coin"], ["launch", "Launch a coin"], ["perps", "Trade perps"], ["look", "Just looking"]];
 
-// The big hero is for the first visit only: this browser has never opened the Desk, or first did so in this browser
-// session (so moving around the app on day one keeps the same page). Storage that throws counts as a first visit.
-function isFirstVisit() {
-  let firstThisSession = false;
-  try { firstThisSession = sessionStorage.getItem("troya.desk.first") === "1"; } catch {}
-  if (firstThisSession) return true;
-  if (visited.get()) return false;
-  visited.set(Date.now());
-  try { sessionStorage.setItem("troya.desk.first", "1"); } catch {}
-  return true;
-}
 // a quick buy opens Swap on its review: the Gate checks the coin and the wallet still signs (or not)
 const buyHref = (a, eth) => `#/swap?${new URLSearchParams({ in: "eth", out: a, amount: eth, review: "1" })}`;
 
@@ -45,8 +34,7 @@ export async function mount(view, { go, ask: askDrawer }) {
   let alive = true;
   stops.push(() => { alive = false; });
   const ask = (q) => (askDrawer ? askDrawer(q) : go(`#/agent?q=${encodeURIComponent(q)}`));
-  const first = isFirstVisit();
-  let intent = INTENTS.some(([k]) => k === intentPref.get()) ? intentPref.get() : null;
+  const intent = INTENTS.some(([k]) => k === intentPref.get()) ? intentPref.get() : null;
 
   /* ---------- the ask bar: paste a coin (opens it in the Gate) or ask Troya ---------- */
   const CHIPS = [["What's running hot?", "What is moving most on Robinhood Chain and Hyperliquid in the last 24 hours?"],
@@ -81,17 +69,10 @@ export async function mount(view, { go, ask: askDrawer }) {
   const strip = h("section", { class: "dk-strip", "aria-label": "Ask Troya" },
     h("a", { class: "dk-mark", href: "#/flywheel", "aria-label": "$TROYA flywheel" }, h("img", { src: HORSE, alt: "", width: "512", height: "512", decoding: "async" })),
     h("div", { class: "dk-strip-b" },
-      h("p", { class: "dk-promise" }, h("b", {}, "Every coin opened at the gate."), h("span", {}, " Troya checks the coin and simulates your trade before your wallet signs.")),
+      h("p", { class: "dk-promise" }, h("b", {}, "Every coin opened at the gate."), h("span", {}, " Troya checks the coin and simulates your trade before your wallet signs."),
+        h("a", { class: "dk-about", href: "#/about" }, "About Troya", icon("arrowRight"))),
       askBlock("in-strip"),
       feeLine));
-
-  /* ---------- first visit: what brought you here (reorders the page, nothing else) ---------- */
-  const intentChips = h("div", { class: "chips dk-intent-c", role: "group", "aria-label": "What brings you here?" });
-  const paintIntent = () => clear(intentChips, INTENTS.map(([k, t]) => h("button", { class: "chip", type: "button", "aria-pressed": String(intent === k), onclick: () => { intent = intent === k ? null : k; intentPref.set(intent); paintIntent(); layout(); } }, t)));
-  paintIntent();
-  const intentBar = h("section", { class: "dk-intent" },
-    h("div", { class: "dk-intent-h" }, h("b", {}, "What brings you here?"), intentChips),
-    h("p", { class: "dk-intent-n" }, "No wallet needed to look around: ask Troya or gate any coin."));
 
   /* ---------- Get started: the same three steps (then the optional Level up) as Portfolio and #/start ---------- */
   const setup = getStarted({ layout: "card", hide: hideSteps });
@@ -304,49 +285,8 @@ export async function mount(view, { go, ask: askDrawer }) {
   const gate = gatePanel({ go, ask, compact: true });
   stops.push(gate.stop);
 
-  /* ---------- first-visit hero: the Troya horse, the promise, the ask bar, live numbers ---------- */
   const CA = (window.SITE && window.SITE.ca) || "";
-  const compact = (n) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(Math.round(n)));
-  const troyaPx = (n) => `$${tiny(n)}`;
-  const kpi = (label, v, s) => h("div", { class: "d2-kpi" }, h("div", { class: "l" }, label), v, s);
-  const kEth = h("div", { class: "v" }, "–"), kEthS = h("div", { class: "s" }, "gas under $0.01");
-  const kTro = h("div", { class: "v" }, "–"), kTroS = h("div", { class: "s" }, "on chain, live");
-  const kSen = h("div", { class: "v" }, "–"), kSenS = h("div", { class: "s" }, "Sentry calls");
-  const kBurn = h("div", { class: "v" }, "–"), kBurnS = h("div", { class: "s" }, "of the 1B minted");
-  const tagGateB = h("b", {}, "Troya Gate"), tagGateS = h("small", {}, "$TROYA, checking…");
-  const tagFlyB = h("b", {}, "Flywheel"), tagFlyS = h("small", {}, "reading the chain…");
-  const hero = h("section", { class: "d2-hero dk-first" },
-    h("div", { class: "d2-beams", "aria-hidden": "true" }),
-    h("div", { class: "d2-txt" },
-      h("p", { class: "d2-mic" }, h("i", { class: "live-dot" }), "Live · Robinhood Chain"),
-      h("h1", {}, "Every coin", h("br"), h("em", {}, "opened"), h("span", {}, " at the"), h("br"), h("span", {}, "gate.")),
-      h("p", { class: "d2-lead" }, "Troya reads the chain, simulates every trade from your own address and tells you what it found, before your wallet signs anything."),
-      askBlock("in-hero"),
-      h("div", { class: "d2-kpis" }, kpi("ETH", kEth, kEthS), kpi("$TROYA", kTro, kTroS), kpi("Sentry", kSen, kSenS), kpi("Burned", kBurn, kBurnS))),
-    h("div", { class: "d2-stage" },
-      h("div", { class: "d2-floor", "aria-hidden": "true" }), h("div", { class: "d2-logo-w", "aria-hidden": "true" }, h("img", { class: "d2-logo", src: HORSE, alt: "", width: "512", height: "512", decoding: "async" })),
-      h("a", { class: "d2-tag t1", href: CA ? `#/gate/${CA}` : "#/gate" }, tile("verify"), h("span", {}, tagGateB, tagGateS)),
-      h("a", { class: "d2-tag t2", href: "#/flywheel" }, tile("flywheel"), h("span", {}, tagFlyB, tagFlyS))));
-  // the hero's numbers are read only while the hero is on the page
-  const heroOn = () => alive && hero.isConnected;
-  async function heroNumbers() {
-    if (!heroOn()) return;
-    // the burn first, from the light proof read (1,000,000,000 − totalSupply() on chain, cached 5 minutes), so the tile does
-    // not wait for the whole flywheel view
-    try { const pb = await api.get("/api/proof/burn"); if (pb?.burnedWhole > 0) { kBurn.textContent = compact(pb.burnedWhole); kBurnS.textContent = `${Number(pb.pctOfMinted).toFixed(2)}% of the 1B minted · 1B − totalSupply()`; tagFlyB.textContent = `${compact(pb.burnedWhole)} burned`; } } catch {}
-    try {
-      const f = await api.get("flywheel");
-      if (f.price?.troyaUsd) kTro.textContent = troyaPx(f.price.troyaUsd);
-      if (f.burned) { kBurn.textContent = compact(f.burned.total); kBurnS.textContent = `${f.burned.pctOfMinted.toFixed(2)}% of the 1B minted`; tagFlyB.textContent = `${compact(f.burned.total)} burned`; }
-      const c = f.totals?.cycles || 0; tagFlyS.textContent = `flywheel · ${c} cycle${c === 1 ? "" : "s"}`;
-    } catch { tagFlyS.textContent = "flywheel"; }
-    try { const r = await api.get("record?limit=1"); kSen.textContent = String(r.stats.calls); kSenS.textContent = `calls, ${r.stats.graded} graded in public`; } catch {}
-    if (CA) try {
-      const b = await api.get(`/api/badge/${CA}`);
-      const n = (b.checks || []).length, pass = (b.checks || []).filter((c) => c.status === "pass").length;
-      if (n) { tagGateB.textContent = `${pass} / ${n} passed`; tagGateS.textContent = `$TROYA · Gate${b.checkedAt ? `, ${ago(b.checkedAt)}` : ""}`; }
-    } catch { tagGateS.textContent = "$TROYA · open the Gate"; }
-  }
+  const troyaPx = (n) => "$" + tiny(n);
 
   /* ---------- ETH / $TROYA chart ---------- */
   const TF = { "1D": { hl: ["15m", 24], rh: "15m" }, "1W": { hl: ["1h", 168], rh: "1h" }, "1M": { hl: ["4h", 720], rh: "4h" } };
@@ -392,7 +332,7 @@ export async function mount(view, { go, ask: askDrawer }) {
   paintChartHead();
   stops.push(() => { try { cst.chart?.remove(); } catch {} });
 
-  /* ---------- layout: first visit or returning, connected or not, ordered by the intent ---------- */
+  /* ---------- layout: connected or not, ordered by the intent ---------- */
   // The lead section moves to just under the top; the rest keep their places. An element can sit in one place only, so
   // whatever leads is left out of the columns below.
   const LEAD = { check: gate.el, perps: hlTable, launch: quick };
@@ -400,11 +340,9 @@ export async function mount(view, { go, ask: askDrawer }) {
   const passStrip = h("div"); stops.push(mountPassStrip(passStrip));
   const gradLane = h("div"); stops.push(mountGraduated(gradLane));
   const root = h("div", { class: "dk" });
-  let wasHero = null;
   function layout() {
-    const showHero = first && !wallet.address;
     const lead = LEAD[intent] || null;
-    const parts = showHero ? [intentBar, hero] : [strip];
+    const parts = [strip];
     if (wallet.address) parts.push(you);
     if (lead) parts.push(lead);
     if (intent === "launch") parts.push(passStrip, live, gradLane); else parts.push(passStrip, live, gradLane, quick);
@@ -413,8 +351,6 @@ export async function mount(view, { go, ask: askDrawer }) {
         h("div", { class: "dk-col" }, chart, lead === gate.el ? null : gate.el, brief, lead === hlTable ? null : hlTable),
         h("div", { class: "dk-col" }, agent, sigs, shortcuts)));
     clear(root, parts);
-    if (showHero && wasHero !== true) heroNumbers();
-    wasHero = showHero;
   }
   layout();
   clear(view, root);
@@ -433,11 +369,6 @@ export async function mount(view, { go, ask: askDrawer }) {
   /* ---------- data ---------- */
   setTimeout(() => { if (alive) loadChart(); }, 60);
   stops.push(every(120000, () => loadChart()));
-  stops.push(every(60000, () => heroNumbers()));
-  stops.push(every(10000, async () => {
-    if (!heroOn()) return;
-    try { const p = await api.get("price/eth"); kEth.textContent = usd(p.usd); } catch { kEthS.textContent = "price unavailable"; }
-  }));
   stops.push(every(30000, async () => {
     try {
       // the server ranks and trims the movers ($1M+ volume, biggest 24 h move): a couple of KB instead of every market

@@ -37,6 +37,7 @@ const G = {
   social: `<path d="M4.2 3.5h11.6a2.2 2.2 0 0 1 2.2 2.2v7.1a2.2 2.2 0 0 1-2.2 2.2H9.2L5 18.6V15H4.2A2.2 2.2 0 0 1 2 12.8V5.7a2.2 2.2 0 0 1 2.2-2.2z"/><path d="M20 8h.4A1.6 1.6 0 0 1 22 9.6v6.3a1.6 1.6 0 0 1-1.6 1.6H20V20l-3.2-2.5H13l2.2-2.2H18a2 2 0 0 0 2-2z"/>`,
   start: `<path fill-rule="evenodd" d="M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19zM10 7.8v8.4l6.4-4.2z"/>`,
   docs: `<path fill-rule="evenodd" d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.6V8h4.4zM8 12v1.8h8V12zm0 4v1.8h6V16z"/>`,
+  about: `<path fill-rule="evenodd" d="M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19zM10.7 10.4v6.8h2.6v-6.8zM12 6.4a1.55 1.55 0 1 0 0 3.1 1.55 1.55 0 0 0 0-3.1z"/>`,   // About Troya (23 Nov): an "i" cut from a disc
   verify: `<path d="M12 2l8.2 3.1v6.6c0 5-3.5 9.2-8.2 10.6-4.7-1.4-8.2-5.6-8.2-10.6V5.1z"/>`,   // the shield: "Is it safe?" and the Gate tag
   proof: `<path fill-rule="evenodd" d="M12 2.8l2.7 2.7h3.8v3.8l2.7 2.7-2.7 2.7v3.8h-3.8L12 21.2l-2.7-2.7H5.5v-3.8L2.8 12l2.7-2.7V5.5h3.8zM7.4 12.1l1.6-1.6 2 2 4.1-4.1 1.6 1.6-5.7 5.7z"/>`,   // Verify: a seal with a tick, not the safety shield
   news: `<rect x="4" y="2.5" width="2.2" height="19" rx="1.1"/><path d="M7.2 3.6h12.6l-3 4.7 3 4.7H7.2z"/>`,   // What's new: the milestone flag on the roadmap

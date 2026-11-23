@@ -46,6 +46,7 @@ const SI = {
   history: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2",
   start: "M13 2 3 14h9l-1 8 10-12h-9z",
   docs: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6",
+  about: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7.5h.01",
   verify: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4",
   search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm10 2-4.3-4.3",
   menu: "M3 6h18M3 12h18M3 18h18",
@@ -81,7 +82,8 @@ export const GROUPS = [
   ["More", [["Invite & earn", "#/herald", "herald"], ["Holder tiers", "#/treasury", "treasury"], ["$TROYA flywheel", "#/flywheel", "flywheel"], ["AI calls", "#/registry", "agent"], ["Robinhood MCP rail", "#/rail", "rail"], ["Social", "#/social", "social"], ["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Safety", "/safety", "verify"], ["What's new", "/roadmap#v8", "news"], ["Plans and tiers", "/plans", "plans"], ["Report a bug", "/community", "bug"]]],
 ];
 // not in the sidebar, still found by Search (⌘K): the Inbox has the bell and the Portfolio badge; Verify and The Record sit under Safety
-const SEARCH_ONLY = [["Portfolio", [["Inbox", "#/portfolio/inbox", "inbox"]]], ["More", [["Verify", "/verify", "proof"], ["The Record", "/record", "record"]]]];
+// About Troya has its own link at the foot of the sidebar, just above the $TROYA chip (community request, 23 Nov 2026)
+const SEARCH_ONLY = [["Portfolio", [["Inbox", "#/portfolio/inbox", "inbox"]]], ["More", [["About Troya", "#/about", "about"], ["Verify", "/verify", "proof"], ["The Record", "/record", "record"]]]];
 const COLLAPSED_DEFAULT = { Agent: true, More: true };   // with these two shut the sidebar fits a 900 px screen
 const NAV_KEY = "troya.navGroups";
 const navState = (() => { try { return { ...COLLAPSED_DEFAULT, ...JSON.parse(localStorage.getItem(NAV_KEY) || "{}") }; } catch { return { ...COLLAPSED_DEFAULT }; } })();
@@ -95,9 +97,10 @@ const ROUTES = {
   stake: "stake",                                            // $TROYA staking (21 Nov): /agent/js/pages/stake.js
   heel: "heel",                                              // V9 F47 Heel: ./heel.js (loads its own heel.css)
   swift: "swift",                                            // V9 F49 Swift: ./swift.js (loads its own swift.css)
+  about: "about",                                            // About Troya (23 Nov): ./about.js, the intro that used to open the Desk
   u: "portfolio",                                            // profiles (21 Nov): #/u/<username> → a wallet's public page
 };
-const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", swift: "./swift.js" };
+const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", swift: "./swift.js", about: "./about.js" };
 // The sheets each page asks for with useCss at mount. route() requests them together with the module, so the stylesheet
 // is not one more round trip after the code. The boot script in /agent/index.html keeps a copy of this table and of the
 // routes above to start the same downloads before this file has even arrived: change both together.
@@ -106,7 +109,7 @@ const PAGE_CSS = {
   swap: ["swap"], perps: ["perps"], bridge: ["bridge"], agent: ["agent"], portfolio: ["portfolio", "start", "profile"], docs: ["docs"], start: ["start"], leaderboard: ["start"], herald: ["herald"],
   spot: ["perps"], registry: ["perps"], rail: ["perps"], hippodrome: ["perps"], create: ["perps"], creator: ["perps"],
   lighter: ["perps", "swap"], stocks: ["perps", "swap"], liquidity: ["perps", "swap"], flywheel: ["perps", "swap"], social: ["perps", "swap"],
-  stake: ["stake"],
+  stake: ["stake"], about: ["home"],
 };
 export const prefs = store("troya.prefs", { slippage: 1, density: "comfortable", motion: "system", lang: "auto" });
 
@@ -162,7 +165,7 @@ async function route() {
   const page = r.name == null ? null : ROUTES[r.name];
   const act = activeItem(r.path);
   // items only: the "Launch a coin" shortcut in the Discover header must not light up (or be revealed) as the page
-  for (const a of document.querySelectorAll("[data-nav] .d-group-items a, [data-tabbar] a")) {
+  for (const a of document.querySelectorAll("[data-nav] .d-group-items a, [data-tabbar] a, [data-side-foot] a.d-about")) {
     // a tab lights for any page of its group (Troya Launches under Discover, Perps under Trade)
     const tab = a.dataset.tab;
     const on = !!act && (tab != null ? (tab ? act.g === tab : act.href === "#/") : a.getAttribute("href") === act.href);
@@ -269,6 +272,8 @@ clear($("[data-nav]"), GROUPS.map(navGroup));
 api.get("leaderboard?days=30").then((d) => { if (d?.rows?.length || d?.prizes?.show) for (const a of document.querySelectorAll("[data-leaderboard]")) a.hidden = false; }).catch(() => {});
 const caShort = SITE.ca ? short(SITE.ca, 4) : "Not live yet";
 clear($("[data-side-foot]"),
+  // what Troya is, one tap away: the Desk opens straight on markets and the ask bar (community request, 23 Nov 2026)
+  h("a", { class: "d-about", href: "#/about" }, si("about"), h("span", {}, "About Troya"), h("i", { "aria-hidden": "true" }, "→")),
   h("button", { class: "d-ca", type: "button", title: "Copy contract address", onclick: async () => {
     if (!SITE.ca) return toast("The contract address is not live yet.");
     try { await navigator.clipboard.writeText(SITE.ca); toast("Contract address copied", "ok"); } catch { toast(SITE.ca); }
@@ -326,7 +331,7 @@ let inboxCount = 0;
 function setTheme(t) {
   if (t === "light") document.documentElement.dataset.theme = "light"; else delete document.documentElement.dataset.theme;
   try { localStorage.setItem("troya.theme", t); } catch {}
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", t === "light" ? "#f5f3ee" : "#03060a");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", t === "light" ? "#ffffff" : "#000000");
   renderRight();
   requestAnimationFrame(() => silk?.resume());
 }

@@ -592,6 +592,9 @@ async function work(s) {
     if (MODE !== "dry" && r.v === "passed") import("./autopilot.mjs").then((a) => a.onLaunch(r)).catch((e) => console.warn("[sentry] autopilot:", e.message));
     // V7 F34: the Arena's paper traders (AI models and proving strategies) see the same passing checks
     if (MODE !== "dry" && r.v === "passed") import("./arena.mjs").then((a) => a.onLaunch(r)).catch((e) => console.warn("[sentry] arena:", e.message));
+    // V9 F57 Phoenix: the setup the Arena and Autopilot saw (Gate notes, curve, Ring Radar), kept for the lesson written when
+    // the trade closes. Only recorded, never read by any buy or sell.
+    if (r.v === "passed") import("./phoenix.mjs").then((p) => p.noteSetup(r)).catch(() => {});
     await measureBuyers(r, q);                                          // every checked coin feeds the wallet history
     const copy = r.v === "passed" ? copyOf(s, r) : null;
     const why = r.v === "passed" && recentlyPosted(s, r.token) ? "Posted already in the last 24 hours" : holdReason(r, { copy });

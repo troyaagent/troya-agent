@@ -97,6 +97,32 @@ export function agendaLines(now = Date.now()) {
   return on.length ? `Team agenda, dated (when someone asks what is coming or planned, say these plainly; times are UTC): ${on.map((e) => e.text.replace(/\s+/g, " ").trim().slice(0, 400)).join(" ")}` : "";
 }
 
+// V9 F57 Phoenix (24 Nov 2026): the team's corrections (data/lessons-bot.json, [{ at, wrong, right, source }], seeded by
+// server/phoenix.mjs, one more with /lesson from an admin chat). Read on every answer (cached for 30 s), never in the
+// 15-minute cache, so a correction counts from the next reply.
+const LESSONS_FILE = process.env.DATA_DIR ? join(process.env.DATA_DIR, "lessons-bot.json") : new URL("../data/lessons-bot.json", import.meta.url);
+let corr = { at: 0, text: "" };
+export function correctionsBlock(now = Date.now()) {
+  if (now - corr.at < 30_000) return corr.text;
+  let list = [];
+  try { const o = JSON.parse(readFileSync(LESSONS_FILE, "utf8")); if (Array.isArray(o)) list = o; } catch { /* no file: nothing to add */ }
+  const on = list.filter((e) => e && typeof e.wrong === "string" && typeof e.right === "string" && e.wrong.trim() && e.right.trim() && e.active !== false && (!e.until || Date.parse(e.until) > now)).slice(-40);
+  const text = on.length ? `\n\nCORRECTIONS THE TEAM MADE (never repeat these mistakes; each one is newer than anything written above, and the live facts still win for numbers):\n` +
+    on.map((e) => `- Wrong: ${e.wrong.replace(/\s+/g, " ").trim().slice(0, 600)} Right: ${e.right.replace(/\s+/g, " ").trim().slice(0, 900)}`).join("\n") : "";
+  corr = { at: now, text };
+  return text;
+}
+// the share of the $TROYA supply staked against the target for the full daily stakers' share, read live (/api/feesplit
+// rate): a staker was told the 5% target was still ahead when 7.6% was staked (23 Nov 2026)
+export function stakeShareLine(fsp) {
+  const r = fsp?.rate, staked = Number(r?.stakedTokens), target = Number(r?.targetTokens), pct = Number(r?.targetPct);
+  if (!(staked >= 0) || !(target > 0) || !(pct > 0)) return "";
+  const share = (staked / target) * pct;
+  return share >= pct
+    ? `$TROYA staked right now (read live from the staking contract): ${Math.round(staked).toLocaleString("en-US")} $TROYA, about ${share.toFixed(2)}% of the supply. The ${pct}% target is met, so the full daily stakers' share is paid; never say it still needs ${pct}% staked.`
+    : `$TROYA staked right now (read live from the staking contract): ${Math.round(staked).toLocaleString("en-US")} $TROYA, about ${share.toFixed(2)}% of the supply, under the ${pct}% target, so ${Math.round((staked / target) * 100)}% of the daily stakers' share is paid until more is staked.`;
+}
+
 async function build() {
   const [rm, vf, tr, lb, cup, pz] = await Promise.all([page("/roadmap"), page("/verify"), json("/api/treasury"), json("/api/herald/leaderboard"), json("/api/herald/cup"), json("/api/leaderboard/prizes")]);
   const v = receipts(vf), t = tiers(tr), hd = herald(lb, cup);
@@ -110,7 +136,8 @@ async function build() {
   const stakeTiers = Array.isArray(sk?.tiers) && sk.tiers.length && sk.deployed
     ? `$TROYA staking tiers, live (quote these when asked): ${sk.tiers.map((x) => `${x.name} = at least ${Math.round(Number(x.minTokens)).toLocaleString("en-US")} $TROYA staked and ${x.minDays} days staked`).join("; ")}. There is no lock period to choose: a staker never picks 7, 14 or 30 days; the tier climbs by itself while the coins stay staked (it needs both the amount and the days). Days count from the stake's start; adding more moves the start to a weighted average, unstaking everything resets it. The stake page shows "Staked for X days · next tier in Y days".`
     : "";
-  const gas = gasFacts(...(await Promise.all([json("/api/gas/status"), json("/api/feesplit")])));
+  const [gst, fsp] = await Promise.all([json("/api/gas/status"), json("/api/feesplit")]);
+  const gas = gasFacts(gst, fsp), stakeShare = stakeShareLine(fsp);
   const burn = pb?.burnedWhole > 0 ? `$TROYA burned so far: ${Number(pb.burnedWhole).toLocaleString("en-US")} (${pb.pctOfMinted}% of the 1,000,000,000 minted), read on chain as 1,000,000,000 minus totalSupply() (${pb.totalSupply} now). Burned with the token's own burn(), so the supply itself goes down and nothing sits at a dead address.${pb.burns?.count && pb.burns.byCreatorWithBurn === pb.burns.count && Math.abs(pb.burnedWhole - pb.burns.listedTroya) < 1 ? " Every burn so far was signed by the creator wallet 0x57b0…09E4 (the wallet that launched $TROYA)." : ""} Every burn transaction with its signer: troya.codes/proof#burn.` : "";
   // the team's dated agenda (data/agenda.json, 23 Nov 2026: a member asked "anything planned to drop today?" and the bot
   // knew of nothing): [{ from, until, text }] in ISO times; only entries whose window covers now are told
@@ -120,7 +147,7 @@ async function build() {
     return `\n\nLIVE STATUS, read from troya.codes just now. It is newer than anything written above: where they disagree, this block wins (a phase marked LIVE here is live even if an older line above says it is not, and a phase marked NOT live yet is never live). Use it to say what is live; for numbers still use the tools, except the tiers and terms below, which are read live and may be quoted.` +
       (r.length ? `\nRoadmap (troya.codes/roadmap):\n${r.join("\n")}` : "") +
       (v.length ? `\nReal-money receipts (troya.codes/verify, step number and title): ${v.join("; ")}` : "") +
-      (t ? `\n${t}` : "") + (hd ? `\n${hd}` : "") + (prize ? `\n${prize}` : "") + (burn ? `\n${burn}` : "") + (gas ? `\n${gas}` : "") + (stakeTiers ? `\n${stakeTiers}` : "") + (agenda ? `\n${agenda}` : "");
+      (t ? `\n${t}` : "") + (hd ? `\n${hd}` : "") + (prize ? `\n${prize}` : "") + (burn ? `\n${burn}` : "") + (gas ? `\n${gas}` : "") + (stakeTiers ? `\n${stakeTiers}` : "") + (stakeShare ? `\n${stakeShare}` : "") + (agenda ? `\n${agenda}` : "");
   };
   return { full: make(roadmap(rm)), brief: make(roadmap(rm, { brief: true })) };
 }
@@ -128,7 +155,7 @@ async function build() {
 // { brief: true } leaves out each phase's description (for a prompt that already carries the feature glossary)
 // { work: false } leaves out the WORK IN PROGRESS block (for a prompt that adds workBlock() itself)
 export async function liveFacts({ brief = false, work = true } = {}) {
-  const pick = () => (brief ? cache.brief : cache.full) + (work ? workBlock() : "");
+  const pick = () => (brief ? cache.brief : cache.full) + (work ? workBlock() : "") + correctionsBlock();
   if (Date.now() - cache.at < TTL && cache.full) return pick();
   inflight ||= build().then((b) => { if (b.full) cache = { at: Date.now(), ...b }; else cache.at = Date.now() - TTL + 60_000; }).catch(() => {}).finally(() => { inflight = null; });
   await inflight;

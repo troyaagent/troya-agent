@@ -28,7 +28,10 @@ async function ask(agent, m, d) {
   const past = (d.calls || []).filter((c) => c.agent === agent.id && c.status === "closed").slice(0, 5).map((c) => `${c.side} ${c.lev}x → ${c.pnlPct >= 0 ? "+" : ""}${c.pnlPct.toFixed(1)}% (${c.reason})`).join("; ") || "none yet";
   const system = `You are ${agent.name}, an AI trader in Troya's Arena. This round you trade one market: Anthropic (ANT), the company behind Claude, through the trade.xyz perpetual xyz:ANT on Hyperliquid, which tracks the Nasdaq share. Facts: Anthropic priced its IPO at $83 a share on 18 Nov 2026 (range had been $70-78), opened around $110-111.50 on 19 Nov, touched $114.99, and closed near $97 by one report. You get a $10 stake. Decide long, short or flat, leverage 1 to ${MAX_LEV}, a stop loss % and a take profit % on your stake (leveraged move), for a hold of up to 24 hours. Be disciplined: a flat call is fine. Answer with one JSON object only: {"side":"long"|"short"|"flat","leverage":1-${MAX_LEV},"stopPct":5-60,"takeProfitPct":5-150} and then one line starting with THESIS: (under 25 words).`;
   const user = `Now: mark $${m.mark.toFixed(2)}, previous day $${m.prev.toFixed(2)} (${((m.mark / m.prev - 1) * 100).toFixed(2)}%), 24 h volume $${Math.round(m.volume24h / 1e6)}M, open interest $${Math.round(m.oi / 1e6)}M, funding ${(m.funding * 100).toFixed(4)}% an hour. Your last calls: ${past}.`;
-  const out = await llm.ask({ system, user, model: agent.model, maxTokens: 600, temperature: 0.5 }).catch(() => "");
+  // V9 F57 Phoenix (PHOENIX_INJECT=1 only): what this trader's graded ANT calls taught it, as advice; the stake, the leverage cap
+  // and the clamps below are unchanged. Off: the prompt is exactly as before.
+  const learned = process.env.PHOENIX_INJECT === "1" ? await import("./phoenix.mjs").then((x) => x.lessonBlock({ kind: "ant", agent: agent.id, record: true })).catch(() => "") : "";
+  const out = await llm.ask({ system, user: learned ? `${user}\n${learned}` : user, model: agent.model, maxTokens: 600, temperature: 0.5 }).catch(() => "");
   const j = out.match(/\{[\s\S]*?\}/);
   let x = null; try { x = j ? JSON.parse(j[0]) : null; } catch { x = null; }
   if (!x || !["long", "short", "flat"].includes(x.side)) return null;

@@ -764,7 +764,7 @@ export async function handleBotMessage(m, tg, me) {
   const [, cmdRaw, at, arg = ""] = cm;
   if (at && me?.username && at.toLowerCase() !== me.username.toLowerCase()) return;
   const cmd = cmdRaw.toLowerCase();
-  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "oath", "aegis", "smart", "raid", "persona", "personas", "rules", "sentry", "badge", "perks", "reports", "flywheel"].includes(cmd)) return;
+  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "oath", "aegis", "smart", "raid", "persona", "personas", "rules", "sentry", "badge", "perks", "reports", "flywheel", "lesson"].includes(cmd)) return;
   // one answer per person every 3 s keeps the group readable
   const who = `${chatId}:${m.from?.id}`;
   if (Date.now() - (lastReply.get(who) || 0) < 3000) return;
@@ -786,6 +786,28 @@ export async function handleBotMessage(m, tg, me) {
       if (!on && !off) { await tg("sendMessage", { chat_id: chatId, text: "/flywheel off stops the automatic cycles · /flywheel on starts them again" }); return; }
       const r = await import("./flywheel-auto.mjs").then((f) => f.setEnabled(on)).catch(() => null);
       await tg("sendMessage", { chat_id: chatId, text: r?.ok ? (on ? "Automatic flywheel on." : "Automatic flywheel off. No cycle will run until you switch it on again.") : `Could not switch it: ${r?.why || "try again"}` });
+      return;
+    }
+    // V9 F57 Phoenix: a correction the community bot must never repeat, from a linked admin chat only (the same test as
+    // /flywheel). /lesson what it got wrong => what is right · /lesson list · /lesson off <n>
+    if (cmd === "lesson") {
+      if (m.chat.type !== "private") return;
+      const c = await import("./community.mjs");
+      if (!(await c.isReportsChat(chatId).catch(() => false))) { await tg("sendMessage", { chat_id: chatId, text: "Only an admin chat linked from the app can add a lesson for the bot." }); return; }
+      const ph = await import("./phoenix.mjs");
+      const a = arg.trim(), say = (text) => tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+      if (!a || /^list$/i.test(a)) {
+        const l = await ph.botLessons().catch(() => []);
+        await say(l.length ? `<b>Corrections the bot follows (${l.length})</b>\n\n${l.map((e, i) => `${i + 1}. <b>Wrong:</b> ${esc(e.wrong).slice(0, 300)}\n<b>Right:</b> ${esc(e.right).slice(0, 400)}`).join("\n\n")}\n\n/lesson wrong => right adds one · /lesson off &lt;n&gt; drops one`.slice(0, 3900)
+          : "No corrections yet.\n/lesson what the bot got wrong => what is right");
+        return;
+      }
+      const off = /^off\s+(\d{1,3})$/i.exec(a);
+      if (off) { const hit = await ph.offBotLesson(Number(off[1])).catch(() => null); await say(hit ? `Dropped: ${esc(hit.wrong).slice(0, 200)}` : "No correction with that number. /lesson list shows them."); return; }
+      const parts = a.split(/\s*(?:=>|→|->)\s*/);
+      if (parts.length < 2) { await say("Write it as: <code>/lesson what the bot got wrong =&gt; what is right</code>"); return; }
+      const r = await ph.addBotLesson({ wrong: parts[0], right: parts.slice(1).join(" => "), source: "team, /lesson in the admin chat" }).catch((e) => ({ ok: false, why: e.message }));
+      await say(r.ok ? `Saved. The bot follows it from its next answer (${r.active} correction${r.active === 1 ? "" : "s"} active).` : esc(r.why || "Could not save it."));
       return;
     }
     if (cmd === "reports" && m.chat.type === "private") {

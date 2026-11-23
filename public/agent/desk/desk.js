@@ -55,6 +55,7 @@ const SI = {
   spark: "M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8",
   heel: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 1v4M12 19v4M1 12h4M19 12h4",
   swift: "M3 7h9M3 12h13M3 17h9M14 5l6 7-6 7",
+  phoenix: "M12 21c-3.9 0-6.5-2.7-6.5-6.2 0-3.4 2.6-5.2 3.4-8.8 1.9 1.5 2.9 3.4 3 5.4 1-.9 1.7-2.2 1.9-3.8 2.5 2 4.7 4.8 4.7 7.6 0 3.3-2.8 5.8-6.5 5.8zM12 21c-1.6 0-2.7-1.1-2.7-2.6 0-1.6 1.4-2.6 2.7-4.4 1.3 1.8 2.7 2.8 2.7 4.4 0 1.5-1.1 2.6-2.7 2.6z",   // V9 F57 Phoenix
 };
 export function si(name, cls = "") {
   const chrome = chromeIcon(name, cls);         // Desk 2.0: the chrome set first, the stroke set for anything else
@@ -76,7 +77,7 @@ export const GROUPS = [
   ["Trade", [["Swift", "#/swift", "swift"], ["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Stock desk", "#/stocks", "stocks"], ["Liquidity desk", "#/liquidity", "liquidity"], ["Lighter perps", "#/lighter", "lighter"], ["Bridge", "#/bridge", "bridge"]]],
   ["Launch", [["Create coin", "#/create", "create"], ["My coins & fees", "#/creator", "creator"]]],
   // Autopilot keeps its place until the owner decides where it belongs
-  ["Agent", [["Chat", "#/agent", "chat"], ["Agent control", "#/agent/scepter", "scepter"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Launch Autopilot", "#/agent/sentry", "sentry"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Exit guard", "#/agent/aegis", "aegis"], ["Strategy arena", "#/agent/arena", "arena"]]],
+  ["Agent", [["Chat", "#/agent", "chat"], ["Agent control", "#/agent/scepter", "scepter"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Launch Autopilot", "#/agent/sentry", "sentry"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Exit guard", "#/agent/aegis", "aegis"], ["Strategy arena", "#/agent/arena", "arena"], ["What the agents learned", "#/phoenix", "phoenix"]]],
   ["Portfolio", [["Overview", "#/portfolio", "portfolio"], ["Stake $TROYA", "#/stake", "stake"], ["History", "#/portfolio/history", "history"], ["Weekly review", "#/portfolio/owl", "news"]]],
   // Safety, Verify and The Record are public pages: one entry, opened in a new tab so the app keeps its place
   ["More", [["Invite & earn", "#/herald", "herald"], ["Holder tiers", "#/treasury", "treasury"], ["$TROYA flywheel", "#/flywheel", "flywheel"], ["AI calls", "#/registry", "agent"], ["Robinhood MCP rail", "#/rail", "rail"], ["Social", "#/social", "social"], ["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Safety", "/safety", "verify"], ["What's new", "/roadmap#v8", "news"], ["Plans and tiers", "/plans", "plans"], ["Report a bug", "/community", "bug"]]],
@@ -98,9 +99,10 @@ const ROUTES = {
   heel: "heel",                                              // V9 F47 Heel: ./heel.js (loads its own heel.css)
   swift: "swift",                                            // V9 F49 Swift: ./swift.js (loads its own swift.css)
   about: "about",                                            // About Troya (23 Nov): ./about.js, the intro that used to open the Desk
+  phoenix: "phoenix",                                        // V9 F57 Phoenix: ./phoenix.js (loads its own phoenix.css)
   u: "portfolio",                                            // profiles (21 Nov): #/u/<username> → a wallet's public page
 };
-const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", swift: "./swift.js", about: "./about.js" };
+const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", swift: "./swift.js", about: "./about.js", phoenix: "./phoenix.js" };
 // The sheets each page asks for with useCss at mount. route() requests them together with the module, so the stylesheet
 // is not one more round trip after the code. The boot script in /agent/index.html keeps a copy of this table and of the
 // routes above to start the same downloads before this file has even arrived: change both together.

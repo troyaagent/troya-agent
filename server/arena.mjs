@@ -116,7 +116,10 @@ async function aiDaily(d) {
     const pnl = mine.reduce((s, p) => s + (p.pnlEth || 0), 0);
     const user = `Base rates from The Record: ${st.graded || "?"} coins called and graded, ${Math.round((st.winRate || 0) * 100)}% higher after 24 h, median 24 h change ${st.median24h != null ? Number(st.median24h).toFixed(0) : "?"}%, ${st.reached2x ?? "?"} of ${st.reachedOf ?? "?"} reached 2x.\nYour current rules: ${JSON.stringify(ag.rules)}\nYour last 7 days on paper: ${mine.length} closed trades, ${pnl >= 0 ? "+" : ""}${pnl.toFixed(4)} ETH, ${mine.filter((p) => p.pnlEth > 0).length} winners.\nWrite your rules for today. Keep what works, change what does not.`;
     const system = `You are ${a.name}, an AI trader in Troya's Arena on Robinhood Chain, trading paper money on new memecoin launches that already passed Troya Gate, against other AI models. Your goal is the best result after costs with controlled losses. ${RULES_SPEC} Reply with exactly two lines: line 1 the JSON object, line 2 "THESIS: " and your plan in one sentence.`;
-    const out = await llm.ask({ system, user, model: a.model, maxTokens: 1500, temperature: 0.5 }).catch((e) => { console.warn("[arena]", a.name, e.message); return ""; });
+    // V9 F57 Phoenix: with PHOENIX_INJECT=1 the trader also reads what its graded trades taught it (advice in the prompt only:
+    // cleanRules() and every cap, budget, pause and Gate check below stay exactly as they are). Off: the prompt is unchanged.
+    const learned = process.env.PHOENIX_INJECT === "1" ? await import("./phoenix.mjs").then((m) => m.lessonBlock({ kind: "arena", agent: a.id, record: true })).catch(() => "") : "";
+    const out = await llm.ask({ system, user: learned ? `${user}\n${learned}` : user, model: a.model, maxTokens: 1500, temperature: 0.5 }).catch((e) => { console.warn("[arena]", a.name, e.message); return ""; });
     const m = out.match(/\{[\s\S]*?\}/);
     let rules = null;
     try { rules = m ? cleanRules(JSON.parse(m[0])) : null; } catch {}

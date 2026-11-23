@@ -55,6 +55,7 @@ const MODULES = [
   "./stats.mjs",       // public usage numbers (community request 21 Nov): GET /api/stats, page /stats
   "./xtracker.mjs",    // V8 F41 X Tracker: tracked X accounts ride on the filtered stream; a posted contract gets the Gate and a ping
   "./antround.mjs",    // Arena: Anthropic Round, the five AI traders on xyz:ANT (paper; live with ANT_ROUND_LIVE=1)
+  "./phoenix.mjs",     // V9 F57 Phoenix: lessons from every closed Arena trade and graded call, pattern stats, bot corrections (shadow unless PHOENIX_INJECT=1)
   "./seal.mjs",
   "./quantum.mjs",
   "./oath.mjs",        // V7 F32 Oath (tier 1, watched): signed dev pledges shown live as kept or broken, with the breaking txs

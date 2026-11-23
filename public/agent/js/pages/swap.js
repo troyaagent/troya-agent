@@ -1411,5 +1411,11 @@ export async function mount(view, ctx) {
   if (isSolNet()) restoreSol().then(() => { refreshBal(); paint(); });
   render();
   if (st.amount) requote();
+  // ?pay=base|arbitrum (Swift, V9 F49): open "Pay from another chain" on that chain with the same ETH amount filled in.
+  // It only fills the panel: the route is quoted again for this wallet, the Gate runs, and the review waits for Confirm
+  if (/^(base|arbitrum)$/.test(ctx.query.pay || "") && st.amount && openXc(ctx.query.pay)) {
+    if (!xc.amount) { xcInput.value = st.amount; xcInput.dispatchEvent(new Event("input")); }
+    setTimeout(() => { if (alive && !xcBox.hidden) xcBox.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, 400);
+  }
   return () => { alive = false; cancelQuote(); off(); offSol(); clearInterval(ageTick); fitObs?.disconnect(); phoneMq?.removeEventListener?.("change", placeNote); try { chartObj?.remove(); } catch {} };
 }

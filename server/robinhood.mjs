@@ -646,6 +646,33 @@ async function routerQuote(tin, tout, amountIn, hubs = []) {
   const impact = smallOut > 0n ? Math.max(0, 1 - (Number(best.out) / Number(amountIn)) / (Number(smallOut) / Number(small))) : null;
   return { ok: true, best, ranked, impact };
 }
+/**
+ * V9 F49 Swift: the best Uniswap v3 route and the best Uniswap v4 route for one trade, each with its own price impact (a
+ * 1/1000 probe on the same path) and pool fees, because quoteSwap keeps only the overall winner. Read-only quoter calls;
+ * fees are counted as quoteSwap counts them (the Pons hook's fee and creator tax added for a graduated Pons coin).
+ * → { v3: { venue, out, amountOut, priceImpact, feePct, label, hops } | null, v4: … | null, reason }
+ */
+export async function uniswapVenues({ tokenIn, tokenOut, amountIn, amountInRaw }) {
+  const { tin, tout, mo, amt } = await swapInput({ tokenIn, tokenOut, amountIn, amountInRaw });
+  const coin = tin === ZERO ? tout : tout === ZERO ? tin : null;
+  const ps = coin ? await ponsState(coin).catch(() => null) : null;
+  const r = await routerQuote(tin, tout, amt, ps?.graduated && ps.pair !== ZERO ? [ps.pair] : []);
+  if (!r.ok) return { v3: null, v4: null, reason: r.reason };
+  const tops = ["v3", "v4"].map((v) => r.ranked.find((x) => x.c.venue === v) || null);
+  const small = amt / 1000n > 0n ? amt / 1000n : 1n;
+  const probes = await readMany(tops.filter(Boolean).map((t) => quoteCall(t.c, small)), 8);
+  let i = 0;
+  const view = (t) => {
+    if (!t) return null;
+    const smallOut = decodeOut(t.c, probes[i++]);
+    const impact = smallOut > 0n ? Math.max(0, 1 - (Number(t.out) / Number(amt)) / (Number(smallOut) / Number(small))) : null;
+    let feePct = t.c.venue === "v3" ? t.c.hops.reduce((s, h) => s + h.fee / 10000, 0) : t.c.hops.reduce((s, h) => s + (h.key.fee < 0x800000 ? h.key.fee / 10000 : 0), 0);
+    if (ps?.graduated) feePct += Number(ps.feeBps + ps.taxBps) / 100;
+    return { venue: t.c.venue === "v3" ? "uniswap-v3" : "uniswap-v4", out: t.out, amountOut: fmt(t.out, mo.decimals), priceImpact: impact, feePct, label: routeLabel(t.c), hops: hopsView(t.c) };
+  };
+  const [v3, v4] = tops.map(view);
+  return { v3, v4, reason: null };
+}
 function buildRouterTx(c, tin, tout, amountIn, minOut, deadline) {
   const inEth = tin === ZERO, outEth = tout === ZERO;
   if (c.venue === "v3") {

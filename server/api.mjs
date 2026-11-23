@@ -83,6 +83,7 @@ const MODULES = [
   "./profile.mjs",     // profiles (community request, 21 Nov): username, bio, avatar, banner per wallet; shown on Portfolio, #/u/<name> and in the chat
   "./stake.mjs",       // $TROYA staking (21 Nov): tiers from TroyaStake on chain and the perks behind them; read-only, off until a contract is set
   "./feesplit.mjs",    // $TROYA fee split (21 Nov): creator fees split by the hourly market cap (stakers, burn, owner); sent weekly by payouts.mjs (STAKE_REWARDS)
+  "./atlas.mjs",       // V9 F49 Swift: one buy box, every venue Troya reaches quoted at once (Troya Atlas), ranked after fees and gas
   "./heel.mjs",        // V9 F47 Heel: paste a coin, dev or agent → its one weak spot in a sentence, with on-chain evidence and a Guard
   "./activity.mjs",    // activity feed (22 Nov): real launches, stakers, agents, Gate use, graduations, payouts → the Telegram group + an X digest (ACTIVITY_FEED / ACTIVITY_X, dry by default)
 ];
@@ -93,7 +94,7 @@ const ctx = {};
 // Arbitrum and Solana through ?chain=, and the cross-chain buy, which runs the destination chain's Gate), so their
 // KyberSwap calls take the priority lane: served before Sentry, Arena, Autopilot, Aegis and Gate API background work, and
 // failing fast to a fallback route instead of queueing behind it (kyber.mjs).
-const INTERACTIVE = new Set(["GET /api/swap/quote", "GET /api/swap/gate", "POST /api/swap/build", "GET /api/bridge/cross-buy"]);
+const INTERACTIVE = new Set(["GET /api/swap/quote", "GET /api/swap/gate", "POST /api/swap/build", "GET /api/bridge/cross-buy", "GET /api/atlas/quote"]);
 
 const r = {
   get: (path, fn, opts) => routes.push({ method: "GET", ...compile(path), fn, opts: opts || {} }),

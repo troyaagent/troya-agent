@@ -4,7 +4,7 @@
 // channels are never touched. The join guard in tgbot.mjs still handles newcomers.
 //   score(text)  → how promotional a message reads (3+ = remove on sight, 2+ = remove when a member reports it)
 //   screen(m, tg, me) → true when the message was handled (removed or a command) and the bot should stay quiet
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 const OWN_HANDLES = /^(trojantroya_bot|troyaagent|troyasentry|admin|admins)$/i;
 const OWN_CHATS = new Set([String(process.env.SENTRY_CHANNEL_ID || "-1004430431881")]);
 const MAJORS = /^(TROYA|ETH|WETH|BTC|WBTC|HYPE|SOL|USDC|USDT|USDG|NVDA|TSLA|AAPL|SPY|QQQ|AMZN|MSFT|GOOGL|META)$/i;
@@ -194,12 +194,23 @@ const strikes = new Map();      // `${chat}:${user}` → offence times in the la
 const caught = new Map();       // `${chat}:${user}` → until (ms): right after a warning, more promo is the second strike
 const reports = new Map();      // `${chat}:${msg}` → Set of reporter ids
 const STRIKE_MS = 24 * 3600e3, FLAG_MS = 30 * 60e3;
+// strikes survive a restart (24 Nov 2026: a promoter warned in the morning came back after several deploys and was
+// counted as a first offence again): kept in data/mod-strikes.json, last 24 hours only
+const STRIKES_FILE = process.env.DATA_DIR ? `${process.env.DATA_DIR}/mod-strikes.json` : new URL("../data/mod-strikes.json", import.meta.url);
+try {
+  const saved = JSON.parse(readFileSync(STRIKES_FILE, "utf8"));
+  for (const [k, list] of Object.entries(saved || {})) { const l = (Array.isArray(list) ? list : []).filter((t) => Date.now() - t < STRIKE_MS); if (l.length) strikes.set(k, l); }
+} catch { /* no file yet */ }
+function saveStrikes() {
+  try { writeFileSync(STRIKES_FILE, JSON.stringify(Object.fromEntries([...strikes].map(([k, l]) => [k, l.filter((t) => Date.now() - t < STRIKE_MS)]).filter(([, l]) => l.length)))); } catch { /* best effort */ }
+}
 function strike(key) {
   const now = Date.now();
   const list = (strikes.get(key) || []).filter((t) => now - t < STRIKE_MS);
   list.push(now); strikes.set(key, list);
   if (strikes.size > 2000) strikes.delete(strikes.keys().next().value);
   caught.set(key, now + FLAG_MS);
+  saveStrikes();
   return list.length;
 }
 

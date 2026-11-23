@@ -1,0 +1,273 @@
+# Slither 0.11.6 on TroyaFeeRouter.sol, pass 1: first draft
+# command, run in a scratch copy of contracts/: slither . --foundry-compile-all --include-paths "src/TroyaFeeRouter.sol" --json router-slither.json
+# exit code 255 (Slither exits 255 when it reports results); solc 0.8.24 via solc-select 1.2.0, Python 3.12
+# ---- raw output below ----
+Impossible to generate IR for TroyaStake._settle (src/TroyaStake.sol#200-205):
+ 'NoneType' object has no attribute 'parameters'
+
+Detector: weak-prng
+TroyaFeeRouter._observe() (src/TroyaFeeRouter.sol#567-576) uses a weak PRNG: "_observations[hour % OBSERVATIONS] = Observation(p,uint64(hour)) (src/TroyaFeeRouter.sol#572)" 
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#weak-PRNG
+
+Detector: reentrancy-eth
+Reentrancy in TroyaFeeRouter.distribute() (src/TroyaFeeRouter.sol#288-315):
+	External calls:
+	- escrow.claim() (src/TroyaFeeRouter.sol#296)
+	- stake.notifyReward{value: s.toStakers}() (src/TroyaFeeRouter.sol#311)
+	- _pay(c.gasWallet,s.toGas) (src/TroyaFeeRouter.sol#312)
+		- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#581)
+	External calls sending eth:
+	- stake.notifyReward{value: s.toStakers}() (src/TroyaFeeRouter.sol#311)
+	- _pay(c.gasWallet,s.toGas) (src/TroyaFeeRouter.sol#312)
+		- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#581)
+	State variables written after the call(s):
+	- _pay(c.gasWallet,s.toGas) (src/TroyaFeeRouter.sol#312)
+		- totalOwed += amount (src/TroyaFeeRouter.sol#584)
+	TroyaFeeRouter.totalOwed (src/TroyaFeeRouter.sol#179) can be used in cross function reentrancies:
+	- TroyaFeeRouter._free() (src/TroyaFeeRouter.sol#519-521)
+	- TroyaFeeRouter.totalOwed (src/TroyaFeeRouter.sol#179)
+Reentrancy in TroyaFeeRouter.distribute() (src/TroyaFeeRouter.sol#288-315):
+	External calls:
+	- escrow.claim() (src/TroyaFeeRouter.sol#296)
+	- stake.notifyReward{value: s.toStakers}() (src/TroyaFeeRouter.sol#311)
+	- _pay(c.gasWallet,s.toGas) (src/TroyaFeeRouter.sol#312)
+		- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#581)
+	- _pay(c.team,s.toTeam) (src/TroyaFeeRouter.sol#313)
+		- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#581)
+	External calls sending eth:
+	- stake.notifyReward{value: s.toStakers}() (src/TroyaFeeRouter.sol#311)
+	- _pay(c.gasWallet,s.toGas) (src/TroyaFeeRouter.sol#312)
+		- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#581)
+	- _pay(c.team,s.toTeam) (src/TroyaFeeRouter.sol#313)
+		- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#581)
+	State variables written after the call(s):
+	- _pay(c.team,s.toTeam) (src/TroyaFeeRouter.sol#313)
+		- owed[to] += amount (src/TroyaFeeRouter.sol#583)
+	TroyaFeeRouter.owed (src/TroyaFeeRouter.sol#177) can be used in cross function reentrancies:
+	- TroyaFeeRouter.owed (src/TroyaFeeRouter.sol#177)
+	- _pay(c.team,s.toTeam) (src/TroyaFeeRouter.sol#313)
+		- totalOwed += amount (src/TroyaFeeRouter.sol#584)
+	TroyaFeeRouter.totalOwed (src/TroyaFeeRouter.sol#179) can be used in cross function reentrancies:
+	- TroyaFeeRouter._free() (src/TroyaFeeRouter.sol#519-521)
+	- TroyaFeeRouter.totalOwed (src/TroyaFeeRouter.sol#179)
+Reentrancy in TroyaFeeRouter.distribute() (src/TroyaFeeRouter.sol#288-315):
+	External calls:
+	- escrow.claim() (src/TroyaFeeRouter.sol#296)
+	- stake.notifyReward{value: s.toStakers}() (src/TroyaFeeRouter.sol#311)
+	- _pay(c.gasWallet,s.toGas) (src/TroyaFeeRouter.sol#312)
+		- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#581)
+	- _pay(c.team,s.toTeam) (src/TroyaFeeRouter.sol#313)
+		- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#581)
+	- _buyAndBurn(c) (src/TroyaFeeRouter.sol#314)
+		- r = poolManager.unlock(abi.encode(ethIn,uint160(limit))) (src/TroyaFeeRouter.sol#554-559)
+		- troya.burn(burned) (src/TroyaFeeRouter.sol#563)
+	External calls sending eth:
+	- stake.notifyReward{value: s.toStakers}() (src/TroyaFeeRouter.sol#311)
+	- _pay(c.gasWallet,s.toGas) (src/TroyaFeeRouter.sol#312)
+		- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#581)
+	- _pay(c.team,s.toTeam) (src/TroyaFeeRouter.sol#313)
+		- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#581)
+	State variables written after the call(s):
+	- _buyAndBurn(c) (src/TroyaFeeRouter.sol#314)
+		- burnReserve = ethIn - spent (src/TroyaFeeRouter.sol#560)
+	TroyaFeeRouter.burnReserve (src/TroyaFeeRouter.sol#175) can be used in cross function reentrancies:
+	- TroyaFeeRouter._free() (src/TroyaFeeRouter.sol#519-521)
+	- TroyaFeeRouter.burnReserve (src/TroyaFeeRouter.sol#175)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-1
+
+Detector: divide-before-multiply
+TroyaFeeRouter._split(uint256,TroyaFeeRouter.Config) (src/TroyaFeeRouter.sol#523-539) performs a multiplication on the result of a division:
+	- due = (amount * c.stakerBps[s.tier]) / creatorBps (src/TroyaFeeRouter.sol#529)
+	- due = (due * s.totalStaked) / s.stakeTarget (src/TroyaFeeRouter.sol#530)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#divide-before-multiply
+
+Detector: incorrect-equality
+TroyaFeeRouter._buyAndBurn(TroyaFeeRouter.Config) (src/TroyaFeeRouter.sol#541-565) uses a dangerous strict equality:
+	- ethIn == 0 || ethIn < c.minBurnWei (src/TroyaFeeRouter.sol#543)
+TroyaFeeRouter._matured(uint256) (src/TroyaFeeRouter.sol#589-593) uses a dangerous strict equality:
+	- eta == 0 (src/TroyaFeeRouter.sol#590)
+TroyaFeeRouter._observe() (src/TroyaFeeRouter.sol#567-576) uses a dangerous strict equality:
+	- hour == lastObservedHour (src/TroyaFeeRouter.sol#569)
+TroyaFeeRouter._pay(address,uint256) (src/TroyaFeeRouter.sol#579-587) uses a dangerous strict equality:
+	- amount == 0 (src/TroyaFeeRouter.sol#580)
+TroyaFeeRouter.distribute() (src/TroyaFeeRouter.sol#288-315) uses a dangerous strict equality:
+	- amount == 0 (src/TroyaFeeRouter.sol#298)
+TroyaFeeRouter.nextDistributionAt() (src/TroyaFeeRouter.sol#463-467) uses a dangerous strict equality:
+	- lastDistribution == 0 (src/TroyaFeeRouter.sol#464)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#dangerous-strict-equalities
+
+Detector: reentrancy-no-eth
+Reentrancy in TroyaFeeRouter._buyAndBurn(TroyaFeeRouter.Config) (src/TroyaFeeRouter.sol#541-565):
+	External calls:
+	- r = poolManager.unlock(abi.encode(ethIn,uint160(limit))) (src/TroyaFeeRouter.sol#554-559)
+	State variables written after the call(s):
+	- burnReserve = ethIn - spent (src/TroyaFeeRouter.sol#560)
+	TroyaFeeRouter.burnReserve (src/TroyaFeeRouter.sol#175) can be used in cross function reentrancies:
+	- TroyaFeeRouter._free() (src/TroyaFeeRouter.sol#519-521)
+	- TroyaFeeRouter.burnReserve (src/TroyaFeeRouter.sol#175)
+Reentrancy in TroyaFeeRouter.distribute() (src/TroyaFeeRouter.sol#288-315):
+	External calls:
+	- escrow.claim() (src/TroyaFeeRouter.sol#296)
+	State variables written after the call(s):
+	- lastDistribution = uint64(block.timestamp) (src/TroyaFeeRouter.sol#301)
+	TroyaFeeRouter.lastDistribution (src/TroyaFeeRouter.sol#172) can be used in cross function reentrancies:
+	- TroyaFeeRouter.lastDistribution (src/TroyaFeeRouter.sol#172)
+	- TroyaFeeRouter.nextDistributionAt() (src/TroyaFeeRouter.sol#463-467)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-2
+
+Detector: unused-return
+TroyaFeeRouter.distribute() (src/TroyaFeeRouter.sol#288-315) ignores return value by escrow.claim() (src/TroyaFeeRouter.sol#296)
+TroyaFeeRouter.unlockCallback(bytes) (src/TroyaFeeRouter.sol#357-368) ignores return value by poolManager.settle{value: spent}() (src/TroyaFeeRouter.sol#365)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#unused-return
+
+Detector: missing-zero-check
+TroyaFeeRouter.withdrawOwed(address).to (src/TroyaFeeRouter.sol#335) lacks a zero-check on :
+		- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#341)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-zero-address-validation
+
+Detector: reentrancy-benign
+Reentrancy in TroyaFeeRouter._buyAndBurn(TroyaFeeRouter.Config) (src/TroyaFeeRouter.sol#541-565):
+	External calls:
+	- r = poolManager.unlock(abi.encode(ethIn,uint160(limit))) (src/TroyaFeeRouter.sol#554-559)
+	State variables written after the call(s):
+	- totalBurnEthSpent += spent (src/TroyaFeeRouter.sol#561)
+	- totalTroyaBurned += burned (src/TroyaFeeRouter.sol#562)
+Reentrancy in TroyaFeeRouter._pay(address,uint256) (src/TroyaFeeRouter.sol#579-587):
+	External calls:
+	- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#581)
+	State variables written after the call(s):
+	- owed[to] += amount (src/TroyaFeeRouter.sol#583)
+	- totalOwed += amount (src/TroyaFeeRouter.sol#584)
+Reentrancy in TroyaFeeRouter.distribute() (src/TroyaFeeRouter.sol#288-315):
+	External calls:
+	- escrow.claim() (src/TroyaFeeRouter.sol#296)
+	State variables written after the call(s):
+	- burnReserve += s.toBurn (src/TroyaFeeRouter.sol#308)
+	- number = ++ distributions (src/TroyaFeeRouter.sol#302)
+	- totalDistributed += amount (src/TroyaFeeRouter.sol#303)
+	- totalToBurn += s.toBurn (src/TroyaFeeRouter.sol#307)
+	- totalToGas += s.toGas (src/TroyaFeeRouter.sol#305)
+	- totalToStakers += s.toStakers (src/TroyaFeeRouter.sol#304)
+	- totalToTeam += s.toTeam (src/TroyaFeeRouter.sol#306)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-3
+
+Detector: timestamp
+TroyaFeeRouter.distribute() (src/TroyaFeeRouter.sol#288-315) uses timestamp for comparisons
+	Dangerous comparisons:
+	- lastDistribution != 0 && block.timestamp / period <= uint256(lastDistribution) / period (src/TroyaFeeRouter.sol#292)
+TroyaFeeRouter.proposeConfig(TroyaFeeRouter.Config) (src/TroyaFeeRouter.sol#376-383) uses timestamp for comparisons
+	Dangerous comparisons:
+	- pendingConfigEta != 0 (src/TroyaFeeRouter.sol#378)
+TroyaFeeRouter.cancelConfig() (src/TroyaFeeRouter.sol#397-402) uses timestamp for comparisons
+	Dangerous comparisons:
+	- pendingConfigEta == 0 (src/TroyaFeeRouter.sol#398)
+TroyaFeeRouter.nextDistributionAt() (src/TroyaFeeRouter.sol#463-467) uses timestamp for comparisons
+	Dangerous comparisons:
+	- lastDistribution == 0 (src/TroyaFeeRouter.sol#464)
+TroyaFeeRouter.medianSqrtPrice() (src/TroyaFeeRouter.sol#483-501) uses timestamp for comparisons
+	Dangerous comparisons:
+	- o.hour != 0 && uint256(o.hour) + OBSERVATIONS > nowHour (src/TroyaFeeRouter.sol#488)
+TroyaFeeRouter._observe() (src/TroyaFeeRouter.sol#567-576) uses timestamp for comparisons
+	Dangerous comparisons:
+	- hour == lastObservedHour (src/TroyaFeeRouter.sol#569)
+TroyaFeeRouter._matured(uint256) (src/TroyaFeeRouter.sol#589-593) uses timestamp for comparisons
+	Dangerous comparisons:
+	- eta == 0 (src/TroyaFeeRouter.sol#590)
+	- block.timestamp < eta (src/TroyaFeeRouter.sol#591)
+	- block.timestamp > eta + EXECUTION_WINDOW (src/TroyaFeeRouter.sol#592)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+
+Detector: pragma
+4 different versions of Solidity are used:
+	- Version constraint >=0.8.13<0.9.0 is used by:
+		->=0.8.13<0.9.0 (lib/forge-std/src/Base.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdAssertions.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdChains.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdCheats.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdConstants.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdError.sol#3)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdInvariant.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdJson.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdMath.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdStorage.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdStyle.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdToml.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdUtils.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/Test.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/Vm.sol#4)
+		->=0.8.13<0.9.0 (lib/forge-std/src/console.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/console2.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/interfaces/IMulticall3.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/safeconsole.sol#2)
+	- Version constraint ^0.8.20 is used by:
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/access/Ownable.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/access/Ownable2Step.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/interfaces/IERC1363.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/interfaces/IERC165.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/interfaces/draft-IERC6093.sol#3)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/proxy/Clones.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/IERC721.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/IERC721Receiver.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/extensions/IERC721Metadata.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Utils.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Address.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Base64.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Context.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Errors.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Panic.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Strings.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/introspection/ERC165.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/introspection/IERC165.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/math/Math.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/math/SafeCast.sol#5)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/math/SignedMath.sol#4)
+	- Version constraint 0.8.24 is used by:
+		-0.8.24 (src/TroyaFeeRouter.sol#2)
+		-0.8.24 (src/TroyaFeeSplitter.sol#2)
+	- Version constraint ^0.8.24 is used by:
+		-^0.8.24 (src/TroyaOathVault.sol#2)
+		-^0.8.24 (src/TroyaPass.sol#2)
+		-^0.8.24 (src/TroyaStake.sol#2)
+		-^0.8.24 (test/TroyaFeeRouter.t.sol#2)
+		-^0.8.24 (test/TroyaFeeRouterFork.t.sol#2)
+		-^0.8.24 (test/TroyaFeeSplitter.t.sol#2)
+		-^0.8.24 (test/TroyaFeeSplitterFork.t.sol#2)
+		-^0.8.24 (test/TroyaOathVault.t.sol#2)
+		-^0.8.24 (test/TroyaPass.t.sol#2)
+		-^0.8.24 (test/TroyaPassFork.t.sol#2)
+		-^0.8.24 (test/TroyaStake.t.sol#2)
+		-^0.8.24 (test/TroyaStakeFork.t.sol#2)
+		-^0.8.24 (test/TroyaStakeInvariant.t.sol#2)
+		-^0.8.24 (test/halmos/TroyaFeeSplitter.halmos.t.sol#2)
+		-^0.8.24 (test/halmos/TroyaOathVault.halmos.t.sol#2)
+		-^0.8.24 (test/halmos/TroyaPass.halmos.t.sol#2)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#different-pragma-directives-are-used
+
+Detector: cyclomatic-complexity
+TroyaFeeRouter._check(TroyaFeeRouter.Config) (src/TroyaFeeRouter.sol#595-610) has a high cyclomatic complexity (13).
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#cyclomatic-complexity
+
+Detector: low-level-calls
+Low level call in TroyaFeeRouter.withdrawOwed(address) (src/TroyaFeeRouter.sol#335-343):
+	- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#341)
+Low level call in TroyaFeeRouter._pay(address,uint256) (src/TroyaFeeRouter.sol#579-587):
+	- (ok,None) = to.call{value: amount}() (src/TroyaFeeRouter.sol#581)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#low-level-calls
+
+Detector: missing-inheritance
+TroyaFeeRouter (src/TroyaFeeRouter.sol#74-625) should inherit from IUnlockCallback (test/TroyaFeeRouter.t.sol#44)
+MockPonsFactory (test/TroyaFeeRouter.t.sol#35-42) should inherit from IPonsFactory (src/TroyaFeeRouter.sol#29-31)
+MockPoolManager (test/TroyaFeeRouter.t.sol#49-109) should inherit from IPoolManager (src/TroyaFeeRouter.sol#48-55)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-inheritance
+. analyzed (115 contracts with 102 detectors), 33 result(s) found
+'forge clean' running (wd: contracts)
+'forge config --json' running
+'forge build --build-info --deny never' running (wd: contracts)

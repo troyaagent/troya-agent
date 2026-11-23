@@ -14,6 +14,8 @@ import { ADDR, CHAINS, rpc, ponsState } from "./robinhood.mjs";
 
 const MODE = process.env.BUYBOT || "";
 const CHAT = process.env.BUYBOT_CHAT || "@troyaagent";
+// group topics (24 Nov 2026): buy alerts go into the "Buys & Launches" topic when its thread id is set
+const THREAD = Number(process.env.TG_THREAD_BUYS || 0) || null;
 const MIN_USD = Number(process.env.BUYBOT_MIN_USD ?? 25);
 const BIG_USD = Number(process.env.BUYBOT_BIG_USD ?? 500);
 const EXTRA_POOLS = (process.env.BUYBOT_POOLS || "").split(/[\s,]+/).filter((x) => /^0x[0-9a-fA-F]{64}$/.test(x)).map((x) => x.toLowerCase());
@@ -108,7 +110,7 @@ async function send(text, markup) {
   const wait = lastPost + 4000 - Date.now();
   if (wait > 0) await new Promise((x) => setTimeout(x, wait));
   lastPost = Date.now();
-  const once = () => tg("sendMessage", { chat_id: CHAT, text, parse_mode: "HTML", reply_markup: markup, link_preview_options: { is_disabled: true } });
+  const once = () => tg("sendMessage", { chat_id: CHAT, ...(THREAD ? { message_thread_id: THREAD } : {}), text, parse_mode: "HTML", reply_markup: markup, link_preview_options: { is_disabled: true } });
   const j = await once();
   if (!j.ok && j.parameters?.retry_after) { await new Promise((x) => setTimeout(x, (j.parameters.retry_after + 1) * 1000)); return once(); }
   return j;

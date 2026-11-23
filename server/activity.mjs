@@ -320,7 +320,7 @@ const D = {
     const T = process.env.TELEGRAM_BOT_TOKEN || "";
     if (!T) return { ok: false, description: "TELEGRAM_BOT_TOKEN is not set" };
     const j = await fetch(`https://api.telegram.org/bot${T}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(20_000),
-      body: JSON.stringify({ chat_id: CFG().chat, text, parse_mode: "HTML", link_preview_options: { is_disabled: true } }) }).then((r) => r.json()).catch((e) => ({ ok: false, description: e.message }));
+      body: JSON.stringify({ chat_id: CFG().chat, ...(Number(process.env.TG_THREAD_BUYS || 0) ? { message_thread_id: Number(process.env.TG_THREAD_BUYS) } : {}), text, parse_mode: "HTML", link_preview_options: { is_disabled: true } }) }).then((r) => r.json()).catch((e) => ({ ok: false, description: e.message }));
     if (j?.description) j.description = String(j.description).split(T).join("…");           // never the token in a log
     return j;
   },
@@ -606,8 +606,10 @@ async function finalize(it) {
     case "grad": return gradMsg({ ...d, gate: gateWord((await boardRow(d.token))?.gate) });
     case "payout": return payoutMsg(d);
     case "mc.tier": return mcMsg(d);
-    case "agents.hour": return agentsHourMsg(d);
-    case "arena.hour": return arenaHourMsg(d);
+    // owner, 24 Nov 2026 ("the bot's hourly reports made this chat feel like robots only, I'm cutting those down"): the
+    // hourly Gate/Arena lines stay out of the group unless ACTIVITY_HOURLY_TG=1; the daily recap and the X digest keep them
+    case "agents.hour": return process.env.ACTIVITY_HOURLY_TG === "1" ? agentsHourMsg(d) : { skip: "hourly lines are off in the group" };
+    case "arena.hour": return process.env.ACTIVITY_HOURLY_TG === "1" ? arenaHourMsg(d) : { skip: "hourly lines are off in the group" };
     case "cup": {
       const cup = [], refs = { n: 0, eth: 0 };
       for (const x of (d.items || []).sort((a, b) => (a.rank || 9) - (b.rank || 9))) {

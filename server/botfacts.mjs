@@ -123,6 +123,35 @@ export function stakeShareLine(fsp) {
     : `$TROYA staked right now (read live from the staking contract): ${Math.round(staked).toLocaleString("en-US")} $TROYA, about ${share.toFixed(2)}% of the supply, under the ${pct}% target, so ${Math.round((staked / target) * 100)}% of the daily stakers' share is paid until more is staked.`;
 }
 
+// the buyback-and-burn campaign (server/flywheel-auto.mjs campaignTick, data/flywheel-campaign.json), read on every build:
+// 23 Nov 2026 a member asked "Twitter says you plan on doing burns today and tomorrow, when is that" and the bot did not know
+const CAMPAIGN_FILE = process.env.DATA_DIR ? join(process.env.DATA_DIR, "flywheel-campaign.json") : new URL("../data/flywheel-campaign.json", import.meta.url);
+export function campaignLine(now = Date.now()) {
+  let c = null;
+  try { c = JSON.parse(readFileSync(CAMPAIGN_FILE, "utf8")); } catch { /* no campaign file */ }
+  const after = "From $100k market cap, 0.1% of $TROYA trading volume buys back and burns automatically. Never promise another campaign: a new one is announced on x.com/Troyaagent and in the group first.";
+  if (!c?.active || !(Number(c.endsAt) > now)) return `$TROYA buyback-and-burn campaign: none is running right now. ${after}`;
+  const every = Number(c.everyMinutes) >= 90 ? `about every ${+(Number(c.everyMinutes) / 60).toFixed(1)} hours` : `every ${c.everyMinutes} minutes`;
+  const usd = Number(c.minUsd) && Number(c.maxUsd) && c.minUsd !== c.maxUsd ? `$${c.minUsd}–${c.maxUsd}` : `$${c.minUsd || c.maxUsd}`;
+  const ends = new Date(Number(c.endsAt)).toISOString().replace(/^(\d{4})-(\d\d)-(\d\d)T(\d\d:\d\d).*/, (_, y, m, d, t) => `${+d} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]} ${y} at ${t} UTC`);
+  const since = Number(c.startedAt) ? ` since ${new Date(Number(c.startedAt)).toISOString().slice(0, 10)}` : "";
+  return `$TROYA buyback-and-burn campaign, running now (read live): it has run${since}, buys ${usd} of $TROYA ${every} with ETH from the creator wallet and burns all of it; ${Array.isArray(c.buys) ? c.buys.length : Number(c.count) || 0} buys and ${Math.round(Number(c.burned) || 0).toLocaleString("en-US")} $TROYA burned so far; it ends ${ends}. Every burn: troya.codes/flywheel. ${after}`;
+}
+
+// what a due-diligence question asked on 23 Nov 2026 and the bot could not answer ("I can't confirm that name or the
+// 81.6M balance"): the Pons graduation locker, the dev side's sales and whether the fee split is enforced. The locker
+// and the fee path are fixed by the contracts; the dev side's numbers are the live Gate check (/api/proof/gate).
+export function supplyFacts(gate) {
+  const dev = (gate?.checks || []).find((x) => x?.key === "devlinks")?.detail;
+  return [
+    "$TROYA supply and fee facts (quote these when asked; they were checked on chain):",
+    "- PonsV2LaunchLocker 0x267444D099b10fB5Ed7c3Cc7B7c767AdcA574952 holds 81,632,653 $TROYA. It is Pons' own graduation locker, not a team wallet: at graduation the curve's leftover virtual-reserve tokens that cannot enter the pool without lowering the opening price are sent there with lockTokenSupply(). The verified contract has no function that sends tokens out, so there is no beneficiary and no unlock date: they are locked for good, out of circulation. Anyone can read lockedTokenSupply(<the $TROYA CA>) on it. The same locker holds the graduation liquidity position NFT #4302001.",
+    dev ? `- Dev side, from Troya Gate's live check of $TROYA: ${String(dev).slice(0, 600)}. troya.codes/proof publishes this itself. The first burns, 26,884,853 $TROYA on 15 Nov 2026, came from the dev's own bag. No policy has been announced for what the dev side still holds; never invent one.` : "",
+    "- Fees: the Pons contracts credit the creator wallet 2.6% of every $TROYA trade (the 1.9% creator tax plus 70% of the 1% Pons fee) into the Pons fee escrow, which only the creator wallet can claim. That part is enforced on chain. What happens after the claim (the stakers' share, buyback and burn, the team's part, which pays for servers, APIs and the build) is NOT enforced by a contract: Troya's server code runs it from the creator wallet, and every claim, payout and burn is a public transaction on troya.codes/proof and troya.codes/flywheel. When asked, say this plainly and never claim a contract enforces the split.",
+    "- The dev reads this group and posts in it as the group's anonymous admin (shown with the group's name). Never say the dev is not in this chat or will not see a message; say the team reads the group.",
+  ].filter(Boolean).join("\n");
+}
+
 async function build() {
   const [rm, vf, tr, lb, cup, pz] = await Promise.all([page("/roadmap"), page("/verify"), json("/api/treasury"), json("/api/herald/leaderboard"), json("/api/herald/cup"), json("/api/leaderboard/prizes")]);
   const v = receipts(vf), t = tiers(tr), hd = herald(lb, cup);
@@ -142,12 +171,13 @@ async function build() {
   // the team's dated agenda (data/agenda.json, 23 Nov 2026: a member asked "anything planned to drop today?" and the bot
   // knew of nothing): [{ from, until, text }] in ISO times; only entries whose window covers now are told
   const agenda = agendaLines();
+  const supply = supplyFacts(await json("/api/proof/gate")), campaign = campaignLine();
   const make = (r) => {
     if (!r.length && !v.length) return "";
     return `\n\nLIVE STATUS, read from troya.codes just now. It is newer than anything written above: where they disagree, this block wins (a phase marked LIVE here is live even if an older line above says it is not, and a phase marked NOT live yet is never live). Use it to say what is live; for numbers still use the tools, except the tiers and terms below, which are read live and may be quoted.` +
       (r.length ? `\nRoadmap (troya.codes/roadmap):\n${r.join("\n")}` : "") +
       (v.length ? `\nReal-money receipts (troya.codes/verify, step number and title): ${v.join("; ")}` : "") +
-      (t ? `\n${t}` : "") + (hd ? `\n${hd}` : "") + (prize ? `\n${prize}` : "") + (burn ? `\n${burn}` : "") + (gas ? `\n${gas}` : "") + (stakeTiers ? `\n${stakeTiers}` : "") + (stakeShare ? `\n${stakeShare}` : "") + (agenda ? `\n${agenda}` : "");
+      (t ? `\n${t}` : "") + (hd ? `\n${hd}` : "") + (prize ? `\n${prize}` : "") + (burn ? `\n${burn}` : "") + (gas ? `\n${gas}` : "") + (stakeTiers ? `\n${stakeTiers}` : "") + (stakeShare ? `\n${stakeShare}` : "") + (agenda ? `\n${agenda}` : "") + `\n${campaign}\n${supply}`;
   };
   return { full: make(roadmap(rm)), brief: make(roadmap(rm, { brief: true })) };
 }

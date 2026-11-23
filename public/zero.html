@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | Zero Watch</title>
+<meta name="description" content="Troya Zero Watch: LayerZero's new chain, Zero, is scheduled to go live on 30 Nov 2026 with ATLAS, an exchange engine other apps can plug into. A countdown, and where Troya stands: Gate and Sentry on Zero planned, Open ATLAS in Troya being researched.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | Zero Watch">
+<meta property="og:description" content="Zero is scheduled to go live on 30 Nov 2026. Troya is getting ready: Gate and Sentry for Zero's tokens and launchpads, and a study of Open ATLAS trading inside Troya. Part of roadmap V9 Achilles.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/zero">
+<meta property="og:url" content="https://troya.codes/zero">
+<meta property="og:image" content="https://troya.codes/img/roadmap/v9-achilles.jpg">
+<meta property="og:image:width" content="1600">
+<meta property="og:image:height" content="893">
+<meta property="og:image:alt" content="Roadmap V9 Achilles: the hero sprints past a coin cracked at its one weak spot">
+<meta name="twitter:image" content="https://troya.codes/img/roadmap/v9-achilles.jpg">
+<meta name="theme-color" content="#0d0c0b">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<link rel="preload" href="/home/fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/home/pages.css?v=lg1">
+<link rel="stylesheet" href="/css/buybar.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+<style>
+/* Troya Zero Watch (/zero, roadmap V9 F56). Kept inline: only this page uses it. */
+.zw-cd { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; width: min(680px, 100%); margin-top: 34px; }
+.zw-cd > div { position: relative; padding: 18px 14px 14px; border: 1px solid var(--line-2); border-radius: 18px; background: linear-gradient(180deg, color-mix(in srgb, var(--fg) 6%, transparent), color-mix(in srgb, var(--fg) 1%, transparent)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 20px 50px rgba(0, 0, 0, .35); text-align: center; }
+.zw-cd i { display: block; font: 600 clamp(40px, 6.4vw, 92px)/.9 var(--sans); font-style: normal; font-variant-numeric: tabular-nums; letter-spacing: -0.05em; background: var(--grad, linear-gradient(180deg, #fff, #9fb6bf)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.zw-cd span { display: block; margin-top: 10px; font: 500 10.5px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.zw-when { display: block; margin: 18px 0 0; font: 500 11px/1.7 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--fg-2); }
+.zw-when b { color: var(--accent, var(--blue-2)); font-weight: 600; white-space: nowrap; margin-right: 8px; }
+.zw-done { margin-top: 34px; max-width: 30em; padding: 20px 22px; border: 1px solid color-mix(in srgb, var(--accent, #6fd39a) 45%, transparent); border-radius: 18px; font: 500 clamp(20px, 2.2vw, 30px)/1.25 var(--sans); letter-spacing: -0.01em; }
+.zw-done[hidden], .zw-cd[hidden] { display: none; }
+.zw-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line-2); }
+.zw-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 24px; align-items: center; padding: 22px 0; border-bottom: 1px solid var(--line-2); }
+.zw-row b { display: block; font: 600 20px/1.25 var(--sans); letter-spacing: -0.01em; }
+.zw-row p { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--muted); max-width: 40em; }
+.zw-st { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 11px; border-radius: 999px; border: 1px dashed var(--line-3); font: 600 10.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; color: var(--muted); }
+.zw-st::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.zw-st.counting { color: var(--accent, var(--blue-2)); border-style: solid; border-color: color-mix(in srgb, var(--accent, #6fd39a) 50%, transparent); }
+.zw-st.counting::before { animation: zw-pulse 1.8s ease-in-out infinite; }
+.zw-st.live { color: #6fd39a; border-style: solid; border-color: color-mix(in srgb, #6fd39a 50%, transparent); }
+.zw-st.researching { color: #f2c26b; border-color: color-mix(in srgb, #f2c26b 55%, transparent); }
+@keyframes zw-pulse { 50% { opacity: .3; } }
+.zw-facts { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+.zw-facts li { font-size: 15px; line-height: 1.55; color: var(--fg-2); padding-left: 18px; position: relative; }
+.zw-facts li::before { content: ""; position: absolute; left: 0; top: .62em; width: 7px; height: 1px; background: var(--accent, var(--blue-2)); }
+.zw-src { margin-top: 22px; font-size: 13px; color: var(--muted); }
+.zw-src a { color: var(--fg-2); text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 760px) {
+  .zw-cd { gap: 6px; }
+  .zw-cd > div { padding: 14px 4px 11px; border-radius: 14px; }
+  .zw-cd i { font-size: clamp(30px, 10vw, 44px); }
+  .zw-cd span { font-size: 9px; letter-spacing: .1em; }
+  .zw-row { grid-template-columns: 1fr; }
+  .zw-row .zw-st { justify-self: start; }
+  .zw-row b { font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) { .zw-st.counting::before { animation: none; } }
+</style>
+</head>
+<body class="site pn">
+<a class="skip" href="#main">Skip to content</a>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="pn-nav" data-pn-nav>
+  <a class="pn-logo" href="/" aria-label="Troya Agent home"><span>Troya</span><b>Agent</b><small>MMXXVI</small></a>
+  <div class="pn-r">
+    <nav class="bb-soc" aria-label="Troya elsewhere"><a class="bb-com" href="/proof">Proof</a><a class="bb-com" href="/roadmap">Roadmap</a><a class="bb-com" href="/community">Community</a><a class="bb-com" href="/stake">Stake</a><a href="https://x.com/Troyaagent" target="_blank" rel="noopener" aria-label="Troya on X" title="X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.12z"/></svg></a><a href="https://t.me/troyaagent" target="_blank" rel="noopener" aria-label="Troya on Telegram" title="Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg></a><a href="https://github.com/troyaagent/troya-agent" target="_blank" rel="noopener" aria-label="Troya on GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg></a></nav>
+    <div class="bb-buy" data-bb><button class="bb-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="bb-menu" data-bb-btn><img src="/img/logo-3d-128.png" alt="" width="24" height="24">Buy<span class="bb-t">$TROYA</span><svg class="bb-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button><div class="bb-menu" id="bb-menu" hidden data-bb-menu><a class="bb-i bb-main" href="/agent/#/swap?out=0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="/agent/#/swap?out={ca}"><img src="/img/logo-3d-128.png" alt="" width="36" height="36"><span><b>Troya Swap</b><small>Our own desk. The Gate checks $TROYA first, then Troya routes the best price on Robinhood Chain.</small></span><em>Best</em></a><a class="bb-i" href="https://ponsfamily.com/launchpad/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://ponsfamily.com/launchpad/{ca}" target="_blank" rel="noopener"><img src="/img/logos/pons.svg" alt="" width="36" height="36"><span><b>Pons</b><small>The launchpad where $TROYA started</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><a class="bb-i" href="https://fomo.family/tokens/robinhood/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://fomo.family/tokens/robinhood/{ca}" target="_blank" rel="noopener"><img src="/img/logos/fomo.png" alt="" width="36" height="36"><span><b>Fomo</b><small>The social trading app, on web and phone</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><a class="bb-i" href="https://dexscreener.com/robinhood/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://dexscreener.com/robinhood/{ca}" target="_blank" rel="noopener"><img src="/img/logos/dexscreener.png" alt="" width="36" height="36"><span><b>DexScreener</b><small>Live chart, pools and trades</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><button class="bb-ca" type="button" data-bb-ca><span>CA</span><code data-bb-ca-full>0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074</code><b>Copy</b></button></div></div>
+    <a class="pn-pill" href="/agent">Open app</a>
+    <button class="pn-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="pn-menu" data-pn-burger><i></i><i></i></button>
+  </div>
+</header>
+<nav class="pn-menu" id="pn-menu" aria-label="Site" data-pn-menu></nav>
+
+<main id="main">
+  <section class="page-hero" aria-labelledby="ph">
+    <canvas class="rain" data-rain aria-hidden="true"></canvas>
+    <span class="eyebrow"><i class="dot"></i>Troya Zero Watch · Roadmap V9</span>
+    <h1 id="ph">Zero is coming. Troya is getting ready.</h1>
+    <p class="lead">LayerZero's new chain, Zero, is scheduled to go live on 30 Nov 2026 with ATLAS, an exchange engine other apps can plug into (Open ATLAS). Troya is getting ready: checking Zero's tokens and launchpads for the Gate and Sentry, and studying bringing Open ATLAS trading into Troya.</p>
+    <div class="zw-cd" data-zw-cd role="timer" aria-label="Time left until 30 November 2026, 00:00 UTC">
+      <div><i data-zw="d">–</i><span>Days</span></div>
+      <div><i data-zw="h">–</i><span>Hours</span></div>
+      <div><i data-zw="m">–</i><span>Minutes</span></div>
+      <div><i data-zw="s">–</i><span>Seconds</span></div>
+    </div>
+    <p class="zw-done" data-zw-done hidden>Zero is live (scheduled 30 Nov). Troya is checking it now.</p>
+    <p class="zw-when" data-zw-when><b>30 Nov (UTC)</b> scheduled start · no time of day announced</p>
+  </section>
+
+  <section class="ip" id="where" aria-labelledby="where-h">
+    <div class="eyebrow-line"><span>01 / Where Troya stands</span></div>
+    <div class="split" style="margin-bottom:36px">
+      <h2 id="where-h" class="h2">Honest states, nothing more</h2>
+      <p class="lead">Each line says what is true today. Nothing Troya does runs on Zero yet; a line changes only when the work behind it ships, and the roadmap says so first.</p>
+    </div>
+    <ul class="zw-list" data-zw-list>
+      <li class="zw-row"><div><b>Zero mainnet</b><p>Scheduled for 30 Nov 2026.</p></div><span class="zw-st counting">Counting down</span></li>
+      <li class="zw-row"><div><b>Troya Gate on Zero</b><p>Check a Zero token before you buy, the way the Gate checks every coin on Robinhood Chain.</p></div><span class="zw-st">Planned</span></li>
+      <li class="zw-row"><div><b>Sentry on Zero</b><p>Read new tokens and launchpads on Zero and flag the risky ones, the way Sentry reads every launch today.</p></div><span class="zw-st">Planned</span></li>
+      <li class="zw-row"><div><b>Open ATLAS in Troya</b><p>Studying whether Troya can bring Open ATLAS trading into its own desk, behind the Gate and your Agent Wallet caps.</p></div><span class="zw-st researching">Researching</span></li>
+    </ul>
+  </section>
+
+  <section class="ip" id="what" aria-labelledby="what-h">
+    <div class="eyebrow-line"><span>02 / What Zero and ATLAS are</span></div>
+    <div class="split">
+      <h2 id="what-h" class="h2">In plain words</h2>
+      <div>
+        <ul class="zw-facts">
+          <li>Zero is a new blockchain made by LayerZero. Its work is split into zones, for EVM apps, for trading and for private payments, and it uses zero-knowledge proofs so a computation can be checked without running it again.</li>
+          <li>ATLAS is an exchange engine on Zero that matches, clears and settles trades in one system. It has no app of its own: trading venues put their own screens on top of it.</li>
+          <li>Open ATLAS is the standard setup for crypto trading apps: a venue connects, picks or creates markets and serves its users without building an exchange engine.</li>
+          <li>Zero and ATLAS are scheduled to launch on 30 Nov 2026. That date is LayerZero's; no time of day has been announced, so this countdown runs to the start of 30 Nov in UTC.</li>
+        </ul>
+        <p class="zw-src">Sources: <a href="https://layerzero.network/blog/introducing-atlas" target="_blank" rel="noopener">Introducing ATLAS</a> (LayerZero blog, 25 Aug 2026) and <a href="https://cryptobriefing.com/layerzero-zero-mainnet-lzatlas-launch/" target="_blank" rel="noopener">Crypto Briefing</a> (launch date).</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="ip" aria-labelledby="no-h">
+    <div class="eyebrow-line"><span>03 / Read it plainly</span></div>
+    <div class="split">
+      <h2 id="no-h" class="h2 sm">Getting ready, on our own</h2>
+      <p class="lead">Troya has no deal or tie with LayerZero; this page watches a public launch and says what Troya plans to build for it. Troya Atlas, the router in V9's Swift, is Troya's own and not part of ATLAS. Robinhood Chain stays home.</p>
+    </div>
+    <div class="cta-band">
+      <h2 class="h2 sm">The rest of V9 Achilles</h2>
+      <div class="acts"><a class="ulink" href="/roadmap#v9">Roadmap V9</a><a class="ulink" href="/agent#/heel">Try Heel</a><a class="ulink" href="/agent">Open the app</a></div>
+    </div>
+  </section>
+</main>
+
+<footer class="pn-foot" data-pn-foot></footer>
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/home/pages.js"></script>
+<script src="/js/buybar.js" defer></script>
+<script src="/home/rain.js" defer></script>
+<script>
+// Troya Zero Watch. The honest states live here, in one place: change a line only when the work behind it ships.
+// Zero mainnet's state follows the clock: "counting" until 30 Nov 2026 00:00 UTC (no time of day was announced), then "live".
+(() => {
+  const ZERO = {
+    at: Date.UTC(2026, 10, 30, 0, 0, 0),
+    items: [
+      { name: "Zero mainnet", state: "auto", note: { counting: "Scheduled for 30 Nov 2026.", live: "Scheduled for 30 Nov 2026; Troya is checking it now." } },
+      { name: "Troya Gate on Zero", state: "planned", note: "Check a Zero token before you buy, the way the Gate checks every coin on Robinhood Chain." },
+      { name: "Sentry on Zero", state: "planned", note: "Read new tokens and launchpads on Zero and flag the risky ones, the way Sentry reads every launch today." },
+      { name: "Open ATLAS in Troya", state: "researching", note: "Studying whether Troya can bring Open ATLAS trading into its own desk, behind the Gate and your Agent Wallet caps." },
+    ],
+  };
+  const LABEL = { counting: "Counting down", live: "Live (scheduled)", planned: "Planned", researching: "Researching" };
+  const cd = document.querySelector("[data-zw-cd]"), done = document.querySelector("[data-zw-done]"), list = document.querySelector("[data-zw-list]");
+  let shown = "";
+  const render = (isLive) => {
+    const key = isLive ? "live" : "counting";
+    if (shown === key || !list) return;
+    shown = key;
+    list.replaceChildren(...ZERO.items.map((it) => {
+      const st = it.state === "auto" ? key : it.state;
+      const li = document.createElement("li"); li.className = "zw-row";
+      const box = document.createElement("div");
+      const b = document.createElement("b"); b.textContent = it.name;
+      const p = document.createElement("p"); p.textContent = typeof it.note === "string" ? it.note : it.note[key];
+      box.append(b, p);
+      const pill = document.createElement("span"); pill.className = `zw-st ${st}`; pill.textContent = LABEL[st] || st;
+      li.append(box, pill);
+      return li;
+    }));
+  };
+  let timer = 0;
+  const tick = () => {
+    const left = ZERO.at - Date.now();
+    if (left <= 0) {
+      if (cd) cd.hidden = true;
+      if (done) done.hidden = false;
+      render(true);
+      clearInterval(timer);
+      return;
+    }
+    const s = Math.floor(left / 1000);
+    const v = { d: Math.floor(s / 86400), h: Math.floor(s / 3600) % 24, m: Math.floor(s / 60) % 60, s: s % 60 };
+    for (const k in v) { const el = cd && cd.querySelector(`[data-zw="${k}"]`); if (el) el.textContent = k === "d" ? String(v[k]) : String(v[k]).padStart(2, "0"); }
+    render(false);
+  };
+  tick();
+  timer = setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>

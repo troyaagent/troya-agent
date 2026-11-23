@@ -51,6 +51,7 @@ const ROUTES = {
   "/stats": "/stats.html",
   "/swap": "/swap.html",
   "/stake": "/stake.html",
+  "/zero": "/zero.html",
   "/safety": "/safety.html",
   "/proof": "/proof.html",
   "/agent": "/agent/index.html",

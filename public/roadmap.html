@@ -4,20 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Troya Agent | Roadmap</title>
-<meta name="description" content="Every Troya roadmap in one place: V1 to V7 shipped and tested live, V8 Agamemnon live and finishing its real-money tests, V9 to V14 named up to Olympus. What each phase does, where it lives and how it was tested.">
+<meta name="description" content="Every Troya roadmap in one place: V1 to V7 shipped and tested live, V8 Agamemnon live and finishing its real-money tests, V9 Achilles now (Heel live), V10 to V14 named up to Olympus. What each phase does, where it lives and how it was tested.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Troya Agent">
 <meta property="og:title" content="Troya Agent | Roadmap">
-<meta property="og:description" content="V1 to V7 shipped and tested live. V8 Agamemnon, the King, is live: Watchfire, Tribute, War Table, Herald, Champions, Scepter, Allies and Treasury, each marked with where its real-money test stands. V9 Achilles is next.">
+<meta property="og:description" content="V9 Achilles, the Swift: find the one weak spot in anything before it hurts you. Heel is live; Chiron, Swift and Troya Atlas are next, and Troya Zero Watch counts down to Zero on 30 Nov. V1 to V8 are live.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@Troyaagent">
 <link rel="canonical" href="https://troya.codes/roadmap">
 <meta property="og:url" content="https://troya.codes/roadmap">
-<meta property="og:image" content="https://troya.codes/img/roadmap/v8-agamemnon.jpg">
+<meta property="og:image" content="https://troya.codes/img/roadmap/v9-achilles.jpg">
 <meta property="og:image:width" content="1600">
 <meta property="og:image:height" content="893">
-<meta property="og:image:alt" content="Roadmap V8 Agamemnon: the King with his golden sceptre at a war table, an army of chrome agents around him">
-<meta name="twitter:image" content="https://troya.codes/img/roadmap/v8-agamemnon.jpg">
+<meta property="og:image:alt" content="Roadmap V9 Achilles: the hero sprints past a coin cracked at its one weak spot, chrome agents pointing at it">
+<meta name="twitter:image" content="https://troya.codes/img/roadmap/v9-achilles.jpg">
 <meta name="theme-color" content="#0d0c0b">
 <link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
@@ -31,7 +31,7 @@
 <script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
 <script src="/config.js"></script>
 <style>
-/* Phone readability (audit 4-07): V8 leads as "Now", V1-V7 fold into one row each, and on phones every phase shows its
+/* Phone readability (audit 4-07): the current roadmap (V9) leads as "Now", V8 stays open below it, V1-V7 fold into one row each, and on phones every phase shows its
    first sentence with a More toggle. Kept inline because the shared stylesheets belong to other pages too. */
 .rm-now { margin-bottom: 22px; }
 .rm-pasth { padding-bottom: 0; }
@@ -52,6 +52,22 @@
 .rm-more-t[hidden] { display: none; }
 .rm-log-all { margin-top: 12px; min-height: 36px; padding: 0 16px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--fg); font: 500 12px/1 var(--mono); letter-spacing: .06em; cursor: pointer; }
 .rm-log li.rm-off, .rm-later-c.rm-off { display: none; }
+/* V9 adds phases that are not live yet: go = building next, soon = coming or still researched. The green tick still only
+   ever means "tested with real money". F56 carries a countdown, kept outside the phase text so the phone trim leaves it whole. */
+/* (the rows carry .next so the bots' fact reader, server/botfacts.mjs, reads them as not live yet) */
+.rm-ph.next .rm-ck.go { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.rm-ph.next .rm-ck.go svg { fill: none; stroke: var(--accent); stroke-width: 2.2; }
+.rm-ph.next .rm-ck.soon { border: 1px dashed var(--line-3); background: transparent; }
+.rm-ph.next .rm-ck.soon svg { fill: none; stroke: var(--muted); stroke-width: 1.8; }
+.rm-st.go { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); border-style: dashed; }
+.rm-st.soon { color: var(--muted); border-style: dashed; }
+.rm-cd { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--fg) 3%, transparent); }
+.rm-cd-l { font: 600 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.rm-cd-n { display: flex; gap: 12px; }
+.rm-cd-n > span { display: flex; align-items: baseline; gap: 4px; font: 500 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.rm-cd-n i { font: 650 20px/1 var(--sans); font-style: normal; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; color: var(--fg); }
+.rm-cd-done { font: 500 14px/1.45 var(--sans); color: var(--fg); }
+.rm-cd-done[hidden], .rm-cd-n[hidden] { display: none; }
 @media (max-width: 760px) {
   .rm-log li { font-size: 14px; }
   /* the jump bar becomes one swipeable row instead of four stacked lines */
@@ -80,15 +96,47 @@
   <section class="page-hero" aria-labelledby="ph">
     <canvas class="rain" data-rain aria-hidden="true"></canvas>
     <span class="eyebrow"><i class="dot"></i>Roadmap</span>
-    <h1 id="ph" class="words" data-words>Eight live. The King has landed.</h1>
-    <p class="lead rv">Every shipped phase ran on the live site before it was announced; the receipts are on <a class="ulink" href="/verify">/verify</a>. V8 Agamemnon is live and finishing its real-money tests; V9 Achilles is next, and the roadmaps after it already have their names, up to Olympus.</p>
+    <h1 id="ph" class="words" data-words>Achilles is here. Find the heel.</h1>
+    <p class="lead rv">Every shipped phase ran on the live site before it was announced; the receipts are on <a class="ulink" href="/verify">/verify</a>. V9 Achilles is the roadmap now and its first phase, Heel, is live; V8 Agamemnon is live and finishing its real-money tests, and the roadmaps after V9 already have their names, up to Olympus.</p>
     <nav class="rm-jump rv" aria-label="Roadmaps">
-      <a href="#v8">V8 · Agamemnon</a><a href="#v7">V7 · Athena</a><a href="#v6">V6 · Hermes</a><a href="#v5">V5 · Odysseus</a><a href="#v4">V4 · Cassandra</a><a href="#v3">V3 · More chains</a><a href="#v2">V2 · Terminal</a><a href="#v1">V1 · Sentry</a><a class="later" href="#later">V9–V14 · Later</a>
+      <a class="next" href="#v9">V9 · Achilles</a><a href="#v8">V8 · Agamemnon</a><a href="#v7">V7 · Athena</a><a href="#v6">V6 · Hermes</a><a href="#v5">V5 · Odysseus</a><a href="#v4">V4 · Cassandra</a><a href="#v3">V3 · More chains</a><a href="#v2">V2 · Terminal</a><a href="#v1">V1 · Sentry</a><a class="later" href="#later">V10–V14 · Later</a>
     </nav>
   </section>
 
+  <section class="ip rm-v rm-next" id="v9" aria-labelledby="v9-h">
+    <div class="eyebrow-line rm-now"><span>Now / V9 Achilles</span></div>
+    <div class="rm-head">
+      <span class="rm-num">V9</span>
+      <div>
+        <p class="rm-meta"><span class="rm-chip build"><i></i>Now, building</span><span>Announced 23 Nov 2026</span><span>Heel live since 23 Nov; Chiron and Swift next</span><span class="new-badge" data-new="2026-11-23T14:00:00Z">New</span></p>
+        <h2 id="v9-h" class="h2 words" data-words>Achilles, the Swift</h2>
+        <p class="lead rv">The fastest warrior of the Trojan War, almost impossible to beat, with one weak spot: his heel. He fought against Troy, so V9 takes the best of an old enemy: speed, and finding the one weak spot in anything before it hurts you. Paste a coin, a dev, an agent or a trader and Troya names its heel with the evidence and one tap to guard against it; one box buys at the best price Troya can reach. V9 comes from a research pass on 22 Nov 2026. Each phase below says where it stands: live, building next, coming, or still being researched, and like V8 each one names its own limit.</p>
+      </div>
+    </div>
+      <figure class="rm-art rv"><img src="/img/roadmap/v9-achilles.jpg" alt="Achilles sprints along a harbour with spear and shield, a coin cracked at one glowing weak spot, chrome agents pointing at it, a centaur reading a chart and the chrome Troya horse on a pedestal" loading="lazy" width="1600" height="893"></figure>
+    <ol class="rm-phases">
+        <li class="rm-ph"><span class="rm-ck read"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg></span><div><small>F47</small><b>Heel <a class="rm-open" href="/agent#/heel">Open</a></b><span><strong class="rm-st read" title="Heel reads the chain and moves no money">Live · read-only</strong>Paste a coin, a dev wallet or an AI agent and Troya names its one weak spot in a sentence, with the on-chain evidence for every fact. A dev gets a passport: its past launches, what it did with each in the first day, and where its first ETH came from. One Guard button pins the coin to Watchfire or watches the dev, so you hear when it moves. Thetis dipped Achilles in the Styx holding him by the heel; Heel looks for that one spot in everything. Honest limit: wallet clusters are always a probability, so Heel describes what wallets did, never who people are. <em>Live 23 Nov at troya.codes/agent#/heel and in the API at /api/heel.</em></span></div></li>
+        <li class="rm-ph next"><span class="rm-ck go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span><div><small>F48</small><b>Chiron</b><span><strong class="rm-st go" title="Being built now; nothing of it is live yet">Building next</strong>Paste any trader wallet, no connecting needed, and Chiron reads its own trades to find the one habit that costs it most: buying in the first minute of a launch, holding losers far longer than winners, or trading too often. One tap turns it into a personal rule the Gate and Scepter enforce for you, such as no buys in a launch's first 60 seconds. The centaur Chiron trained Achilles. <em>It describes habits, it never tells anyone what to buy.</em></span></div></li>
+        <li class="rm-ph next"><span class="rm-ck go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span><div><small>F49</small><b>Swift and Troya Atlas</b><span><strong class="rm-st go" title="Being built now; nothing of it is live yet">Building next</strong>One buy box on the home screen. Troya Atlas compares every venue Troya already reaches (the Pons curve, Uniswap, KyberSwap, Base, Arbitrum, Hyperliquid and Lighter) and routes your trade to the best price, with the Gate checking the coin first, and you can fund it from any chain. Achilles was the fastest runner of the Greeks. <em>The full desk stays one tap away for anyone who wants every control.</em></span></div></li>
+        <li class="rm-ph next"><span class="rm-ck soon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1.4"/><circle cx="6.5" cy="12" r="1.4"/><circle cx="17.5" cy="12" r="1.4"/></svg></span><div><small>F50</small><b>Heel Hunt</b><span><strong class="rm-st soon" title="Planned; opens after the bot hardening">Coming</strong>A public challenge: trick Troya's trading bot into sending the prize and it is yours. Free to enter, every attempt in the open. Troya hunts for its own heel before anyone else finds it. <em>Opens after the bot hardening and a private red-team pass; the prize and rules are announced before it opens.</em></span></div></li>
+        <li class="rm-ph next"><span class="rm-ck soon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1.4"/><circle cx="6.5" cy="12" r="1.4"/><circle cx="17.5" cy="12" r="1.4"/></svg></span><div><small>F51</small><b>Zeno's Gap</b><span><strong class="rm-st soon" title="Planned">Coming</strong>Stock tokens on Robinhood Chain trade around the clock; the stock markets do not. Zeno's Gap shows a fair value for each stock token while the markets are closed, how far the token has moved from it, and a squeeze radar. In Zeno's paradox, Achilles can never quite catch the tortoise. <em>It builds on the stock gap board from V7's Robinhood Radar.</em></span></div></li>
+        <li class="rm-ph next"><span class="rm-ck soon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1.4"/><circle cx="6.5" cy="12" r="1.4"/><circle cx="17.5" cy="12" r="1.4"/></svg></span><div><small>F52</small><b>Two Fates and War Room <em class="rm-from">Community idea</em></b><span><strong class="rm-st soon" title="Planned">Coming</strong>Every new launch gets a signed 24-hour survival call, graded in public afterwards, misses included. In the War Room the community can challenge any Troya verdict with evidence and make its own predictions, graded the same way. Achilles was told he had two fates to choose from. <em>A scorecard, not a betting market: no stakes and no money on predictions.</em></span></div></li>
+        <li class="rm-ph next"><span class="rm-ck soon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1.4"/><circle cx="6.5" cy="12" r="1.4"/><circle cx="17.5" cy="12" r="1.4"/></svg></span><div><small>F53</small><b>Myrmidons</b><span><strong class="rm-st soon" title="Planned">Coming</strong>Community rug hunters submit on-chain proof of a ring or a rug; Troya checks it automatically and pays from a capped pool. The Myrmidons were Achilles' loyal army. <em>The pool's size and rules are announced before it opens; proof is about what wallets did, never about people.</em></span></div></li>
+        <li class="rm-ph next"><span class="rm-ck soon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1.4"/><circle cx="6.5" cy="12" r="1.4"/><circle cx="17.5" cy="12" r="1.4"/></svg></span><div><small>F54</small><b>Patroclus</b><span><strong class="rm-st soon" title="Planned">Coming</strong>The Heel card, embeddable in launchpads, bots and wallets, with a revenue share for the ones that show it. Patroclus went into battle wearing Achilles' armour. <em>Every card is a dated snapshot, never a safe stamp.</em></span></div></li>
+        <li class="rm-ph next"><span class="rm-ck soon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M14.6 14.6 20 20"/></svg></span><div><small>F55</small><b>Styx Promise</b><span><strong class="rm-st soon" title="Still being researched; not promised yet">Researching</strong>If a coin that passed the Gate is proven rugged, Troya refunds its own fee cut, automatically, with a receipt. The Styx made Achilles nearly unbeatable, all but the heel. <em>Researching: it needs legal and technical checks before anything is promised, and it refunds only Troya's own fee; it is not insurance.</em></span></div></li>
+        <li class="rm-ph next"><span class="rm-ck soon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4.3l2.8 1.7M9.5 2.5h5"/></svg></span><div><small>F56</small><b>Troya Zero Watch <a class="rm-open" href="/zero">Open</a></b><span><strong class="rm-st soon" title="A countdown and a research track; no Troya feature runs on Zero yet" data-cd-st>Countdown · researching</strong>LayerZero's new chain, Zero, is scheduled to go live on 30 Nov 2026 with ATLAS, an exchange engine other apps can plug into (Open ATLAS). Troya is getting ready: checking Zero's tokens and launchpads for the Gate and Sentry, and studying bringing Open ATLAS trading into Troya. <em>No time of day has been announced, so the countdown runs to the start of 30 Nov (UTC). Troya Atlas in F49 is Troya's own router and not part of ATLAS.</em></span><div class="rm-cd" data-zero-cd><span class="rm-cd-l">30 Nov (UTC)</span><span class="rm-cd-n" data-cd-run><span><i data-cd="d">–</i>days</span><span><i data-cd="h">–</i>hrs</span><span><i data-cd="m">–</i>min</span><span><i data-cd="s">–</i>sec</span></span><span class="rm-cd-done" data-cd-done hidden>Zero is live (scheduled 30 Nov). Troya is checking it now.</span></div></div></li>
+    </ol>
+    <div class="lg-card rv rm-log" id="v9-progress" style="margin-top:18px"><small>V9 progress, updated as it ships</small>
+      <ul>
+        <li><b>23 Nov 2026</b> V9 Achilles is on the roadmap. Heel is live at troya.codes/agent#/heel: paste a coin, a dev wallet or an agent and get its one weak spot with the evidence, a dev passport and a Guard button.</li>
+        <li><b>23 Nov 2026</b> Troya Zero Watch is up at <a class="ulink" href="/zero">troya.codes/zero</a>, counting down to Zero's scheduled start on 30 Nov (UTC).</li>
+        <li><b>23 Nov 2026</b> Next: Chiron, then Swift and Troya Atlas.</li>
+      </ul>
+    </div>
+  </section>
+
   <section class="ip rm-v" id="v8" aria-labelledby="v8-h">
-    <div class="eyebrow-line rm-now"><span>Now / V8 Agamemnon</span></div>
+    <div class="eyebrow-line rm-now"><span>Live, finishing / V8 Agamemnon</span></div>
     <div class="rm-head">
       <span class="rm-num">V8</span>
       <div>
@@ -298,10 +346,9 @@
     <div class="eyebrow-line"><span>Later / The rest of the voyage</span></div>
     <div class="split" style="margin-bottom:34px">
       <h2 id="later-h" class="h2 words" data-words>Named, not yet planned</h2>
-      <p class="lead rv">The story goes on after Agamemnon. These roadmaps have names and a direction, nothing more: no phases, no dates and no promises until each one is announced.</p>
+      <p class="lead rv">The story goes on after Achilles. These roadmaps have names and a direction, nothing more: no phases, no dates and no promises until each one is announced.</p>
     </div>
     <ol class="rm-later-g">
-      <li class="rm-later-c rv"><figure class="rm-later-art" aria-hidden="true" style="--d:-2.2s;--m:url(/img/roadmap/later/v9-achilles.webp)"><span class="rm-later-fig"><img src="/img/roadmap/later/v9-achilles.webp" alt="" loading="lazy" decoding="async" width="360" height="360"><i></i></span></figure><span class="rm-later-v">V9</span><b>Achilles</b><small>The greatest warrior of the Trojan War</small><span>Strength and speed for serious traders.</span></li>
       <li class="rm-later-c rv"><figure class="rm-later-art" aria-hidden="true" style="--d:-3.3s;--m:url(/img/roadmap/later/v10-poseidon.webp)"><span class="rm-later-fig"><img src="/img/roadmap/later/v10-poseidon.webp" alt="" loading="lazy" decoding="async" width="360" height="360"><i></i></span></figure><span class="rm-later-v">V10</span><b>Poseidon</b><small>God of the sea, the voyage's hardest crossing</small><span>The seas: liquidity and more chains.</span></li>
       <li class="rm-later-c rv"><figure class="rm-later-art" aria-hidden="true" style="--d:-4.4s;--m:url(/img/roadmap/later/v11-penelope.webp)"><span class="rm-later-fig"><img src="/img/roadmap/later/v11-penelope.webp" alt="" loading="lazy" decoding="async" width="360" height="360"><i></i></span></figure><span class="rm-later-v">V11</span><b>Penelope</b><small>Odysseus's wife, weaving and waiting for years</small><span>Patience: tools for the long run.</span></li>
       <li class="rm-later-c rv"><figure class="rm-later-art" aria-hidden="true" style="--d:-5.5s;--m:url(/img/roadmap/later/v12-prometheus.webp?v=2)"><span class="rm-later-fig"><img src="/img/roadmap/later/v12-prometheus.webp" alt="" loading="lazy" decoding="async" width="360" height="360"><i></i></span></figure><span class="rm-later-v">V12</span><b>Prometheus</b><small>The titan who brought fire to people</small><span>Fire for everyone: open tools for builders.</span></li>
@@ -343,12 +390,35 @@
     if (a) openFor(a.getAttribute("href"));
   });
 
+  // F56: the countdown to Zero's scheduled start (30 Nov 2026, 00:00 UTC; no time of day was announced). Once it passes,
+  // the row switches by itself to the plain "Zero is live (scheduled)" line.
+  const ZERO_AT = Date.UTC(2026, 10, 30, 0, 0, 0);
+  const cd = document.querySelector("[data-zero-cd]");
+  if (cd) {
+    const run = cd.querySelector("[data-cd-run]"), done = cd.querySelector("[data-cd-done]"), st = document.querySelector("[data-cd-st]");
+    const put = (k, v) => { const el = cd.querySelector(`[data-cd="${k}"]`); if (el) el.textContent = String(v).padStart(k === "d" ? 1 : 2, "0"); };
+    let timer = 0;
+    const tick = () => {
+      const left = ZERO_AT - Date.now();
+      if (left <= 0) {
+        run.hidden = true; done.hidden = false;
+        if (st) st.textContent = "Watching · researching";
+        clearInterval(timer);
+        return;
+      }
+      const s = Math.floor(left / 1000);
+      put("d", Math.floor(s / 86400)); put("h", Math.floor(s / 3600) % 24); put("m", Math.floor(s / 60) % 60); put("s", s % 60);
+    };
+    tick();
+    timer = setInterval(tick, 1000);
+  }
+
   if (!matchMedia("(max-width: 760px)").matches) return;
   const END = /[.?!](\s+)(?=[A-Z0-9“"$(@])/;
-  // the progress log: the three first entries, then the rest on request
-  const log = document.querySelector("#v8-progress ul");
-  const rows = log ? [...log.children] : [];
-  if (rows.length > 3) {
+  // each progress log (V9, V8): the three first entries, then the rest on request
+  for (const log of document.querySelectorAll(".rm-log ul")) {
+    const rows = [...log.children];
+    if (rows.length <= 3) continue;
     rows.slice(3).forEach((li) => li.classList.add("rm-off"));
     const all = document.createElement("button");
     all.type = "button";
@@ -357,7 +427,7 @@
     all.addEventListener("click", () => { rows.forEach((li) => li.classList.remove("rm-off")); all.remove(); });
     log.after(all);
   }
-  // V9 to V14 stay at the end; a phone shows the next two and the rest on request
+  // V10 to V14 stay at the end; a phone shows the next two and the rest on request
   const later = [...document.querySelectorAll(".rm-later-g > .rm-later-c")];
   if (later.length > 2) {
     later.slice(2).forEach((li) => li.classList.add("rm-off"));
@@ -368,7 +438,7 @@
     all.addEventListener("click", () => { later.forEach((li) => { li.classList.remove("rm-off"); li.classList.add("in"); }); all.remove(); });
     document.querySelector(".rm-later-g").after(all);
   }
-  for (const sp of document.querySelectorAll(".rm-ph > div > span, #v8 .rm-head .lead")) {
+  for (const sp of document.querySelectorAll(".rm-ph > div > span, #v9 .rm-head .lead, #v8 .rm-head .lead")) {
     const kids = [...sp.childNodes];
     const i = kids.findIndex((k) => k.nodeType === 3 && END.test(k.data));
     if (i < 0) continue;

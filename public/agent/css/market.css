@@ -38,6 +38,37 @@ html[data-theme="light"] .mk-buy { color: var(--blue-3); border-color: rgba(10, 
 /* the busiest-coins cards: hidden while searching, placeholders until the data lands */
 .mk2-top[hidden] { display: none; }
 .mk2-card-sk { min-height: 132px; align-content: start; pointer-events: none; }
+/* Market's busiest-coins cards, compact (community request, 23 Nov 2026: about 40% shorter, so the board starts higher):
+   name and price on one line, the 24h, volume and liquidity under it */
+.mk3-top { gap: 10px; margin: 0 0 14px; }
+.mk3-top > .mk2-card { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 12px 14px 13px; border-radius: 18px; }
+.mk3-top .mk2-c-h { gap: 9px; }
+.mk3-top .mk2-c-h .tok-ico { width: 30px; height: 30px; }
+.mk3-top .mk2-c-h b { font-size: 14px; }
+.mk3-top .mk2-c-h small { font-size: 11.5px; }
+.mk3-top .mk2-rank { display: none; }
+.mk3-top .mk2-c-p { font-size: 18px; text-align: right; }
+.mk3-top .mk2-c-f { grid-column: 1 / -1; gap: 4px 10px; font-size: 11.5px; }
+.mk3-top .mk2-c-f .pct { font-size: 11px; }
+.mk3-top > .mk2-card-sk { min-height: 84px; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.mk3-top > .mk2-card-sk .sk:first-child { height: 30px !important; }
+/* the category note: one line on a desk too, a click opens the rest (phones: two lines, below) */
+@media (min-width: 721px) {
+  .mk2-catnote { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; max-width: 980px; }
+  .mk2-catnote.open { display: block; -webkit-line-clamp: unset; }
+}
+/* a pick's reasons on one line; the full list is in the tooltip */
+.mk-panel .mk2-why { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 340px; }
+@media (min-width: 721px) { .mk-panel .mk2-pick { min-width: 190px; } .mk-panel .mk2-why { max-width: 300px; } }
+.mk-panel .tbl td.mk-age-c, .mk-panel .tbl th.mk-age-c { text-align: left; padding-left: 4px; padding-right: 6px; }
+.mk-panel .tbl td.rank, .mk-panel .tbl th.rank { width: 26px; padding-right: 0; }
+.mk-panel .mk-age-c .age-pill { padding: 0 5px; }
+/* a long ticker with its launchpad tag gives way (ellipsis) before the board scrolls sideways */
+@media (min-width: 721px) {
+  .mk-panel .tok > div { max-width: 148px; }
+  .mk-panel .tok > div > b { overflow: hidden; }
+  .mk-panel .tok > div > b .pad-tag { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+}
 
 /* launchpad */
 .lp-tabs { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
@@ -91,6 +122,10 @@ html[data-theme="light"] .mk-buy { color: var(--blue-3); border-color: rgba(10, 
   .mk-filters .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
   .mk-filters .chip { flex: none; }
   .mk-panel .tok small { max-width: 110px; }
+  /* the four columns fit a 390 px phone with a long name too (TOGI "S&P500" pushed Buy off the right edge) */
+  .mk-panel .tbl td:not(.mk-spark), .mk-panel .tbl th:not(.mk-spark) { padding-left: 5px; padding-right: 5px; }
+  .mk-panel .tok small, .mk-panel .tok b { max-width: 92px; }
+  .mk-panel .tok .tok-ico { width: 30px; height: 30px; }
   .mk-panel .tbl { font-size: 12.5px; }
   .mk-top .seg { max-width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
   .mk-top .seg button { justify-content: center; }
@@ -103,6 +138,10 @@ html[data-theme="light"] .mk-buy { color: var(--blue-3); border-color: rgba(10, 
   .mk2-top > .mk2-card { flex: 0 0 min(62%, 230px); scroll-snap-align: start; gap: 6px; padding: 12px 14px 14px; border-radius: 18px; }
   .mk2-top > .mk2-card-sk { min-height: 104px; }
   .mk2-top .mk2-c-p { font-size: 18px; }
+  .mk3-top > .mk2-card { flex: 0 0 min(72%, 260px); padding: 10px 12px 11px; gap: 6px 10px; }
+  .mk3-top .mk2-c-p { font-size: 16px; }
+  .mk3-top > .mk2-card-sk { min-height: 74px; }
+  .mk-panel .mk2-why { display: block; max-width: 46vw; white-space: nowrap; text-overflow: ellipsis; }
   .mk2-catnote { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
   .mk2-catnote.open { display: block; -webkit-line-clamp: unset; }
   .tbl th.mk-buy-c, .tbl td.mk-buy-c { padding-left: 2px; padding-right: 4px; }

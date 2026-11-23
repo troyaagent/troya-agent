@@ -134,6 +134,30 @@ body.cc-open .cc-panel.cc-float { transform: none; opacity: 1; pointer-events: a
   .cc-panel.cc-float { left: 8px; right: 8px; bottom: calc(68px + env(safe-area-inset-bottom)); width: auto; height: min(74vh, 600px); border-radius: 20px; }
   .cc-mod { opacity: 1; }
 }
+/* Desktop (community request, 23 Nov 2026): the chat is a side panel. Closed, it is a slim tab tucked on the right edge;
+   open, it runs the height of the window, and a wide desk (1400 px+) makes room for it, as it does for Ask Troya, so the
+   board stays usable beside the chat. Phones open it from the tab bar instead of a floating button (that button sat on
+   top of the rows' Buy). */
+@media (min-width: 861px) {
+  .cc-fab.cc-edge { right: 0; top: 50%; bottom: auto; flex-direction: column; gap: 10px; width: 38px; height: auto; padding: 14px 0 12px; border-radius: 14px 0 0 14px; border-right: 0;
+    transform: translateY(-50%); writing-mode: vertical-rl; font-size: 12px; letter-spacing: .08em; }
+  .cc-fab.cc-edge svg { width: 17px; height: 17px; }
+  .cc-fab.cc-edge:hover { transform: translateY(-50%) translateX(-3px); }
+  .cc-fab.cc-edge .cc-badge { writing-mode: horizontal-tb; }
+  body.g-tucked .cc-fab.cc-edge { bottom: auto; }
+  body.cc-open .cc-fab.cc-edge, body.g-open .cc-fab.cc-edge, body.drawer-open .cc-fab.cc-edge, body.on-chat .cc-fab.cc-edge { transform: translateY(-50%) translateX(100%); }
+  .cc-panel.cc-float { top: 12px; bottom: 12px; right: 12px; width: 380px; height: auto; transform: translateX(24px); }
+  body.drawer-open .cc-panel.cc-float { opacity: 0; pointer-events: none; }
+}
+@media (min-width: 1400px) {
+  body.cc-open:not(.drawer-open) .d-shell { margin-right: 404px; }
+}
+@media (max-width: 860px) {
+  .cc-fab.cc-edge { display: none; }
+  .d-tabbar .d-tab-chat { border: 0; background: none; font: inherit; font-size: 10.5px; cursor: pointer; }
+  .d-tabbar .d-tab-chat[aria-pressed="true"] { color: var(--fg); }
+  .d-tabbar .d-tab-chat[aria-pressed="true"] svg { opacity: 1; filter: drop-shadow(0 0 8px rgba(142, 223, 245, .55)); }
+}
 html[data-theme="light"] .cc-fab { background: var(--bg-1); border-color: rgba(10, 126, 163, .3); box-shadow: 0 14px 34px rgba(20, 40, 60, .14); }
 html[data-theme="light"] .cc-panel { background: var(--bg-1); border-color: rgba(10, 126, 163, .22); }
 html[data-theme="light"] .cc-panel.cc-float { box-shadow: 0 30px 80px rgba(20, 40, 60, .18); }

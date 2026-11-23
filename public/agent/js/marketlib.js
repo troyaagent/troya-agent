@@ -25,8 +25,10 @@ export function tokenCell(t, opts = {}) {
   return h("div", { class: "tok" }, tokenIcon(t),
     h("div", { style: { minWidth: 0 } },
       h("b", {}, t.symbol || "?", opts.tag !== false && t.launchpad ? h("span", { class: `pad-tag${narrow ? " mini" : ""}`, title: padName(t.launchpad) }, padLogo(t.launchpad, 12), narrow ? null : padName(t.launchpad)) : null,
+        opts.age && !narrow ? agePill(opts.age) : null,
         !t.tradable && opts.flagUntradable ? h("span", { class: "pad-tag warn", title: "Troya found no route for it yet: Pons curves, Uniswap v3/v4 and the other Robinhood Chain venues through KyberSwap." }, "not routed") : null),
-      h("small", {}, h("span", { class: "tok-nm" }, t.name || ""), socialLinks(t.socials))));
+      // phones: the age leads the second line (the first is full with the ticker and its launchpad)
+      h("small", {}, opts.age && narrow ? h("span", { class: "tok-agenm" }, agePill(opts.age), h("span", { class: "tok-nm" }, t.name || "")) : h("span", { class: "tok-nm" }, t.name || ""), socialLinks(t.socials))));
 }
 // "$0.00175" on top, "0.0₇8 ETH" under it
 export function priceCell(priceEth, priceUsd) {
@@ -48,6 +50,13 @@ export function ageText(ms) {
   if (s < 3600) return `${Math.max(1, Math.floor(s / 60))}m`;
   if (s < 86400 * 2) return `${Math.floor(s / 3600)}h`;
   return `${Math.floor(s / 86400)}d`;
+}
+// a coin's age as a small pill (community request, 23 Nov 2026): under a day it reads bright, so a fresh launch stands out
+// in a list at a glance; the tooltip has the exact time
+export function agePill(ms) {
+  if (!ms) return null;
+  const fresh = Date.now() - ms < 86400_000;
+  return h("span", { class: `age-pill${fresh ? " fresh" : ""}`, title: `Created ${new Date(ms).toLocaleString()}` }, ageText(ms));
 }
 export function updatedText(ts) {
   if (!ts) return "";

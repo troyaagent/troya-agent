@@ -400,6 +400,36 @@ const PAGES = [
     .map((d) => `dexes/${d}/pools?page=1&sort=h24_volume_usd_desc&include=base_token`),
   ...[1, 2].map((p) => `new_pools?page=${p}&include=base_token`),
 ];
+// New coins (23 Nov 2026, community report "only 3 new coins show"). The lists above only reach a coin once it is among
+// GeckoTerminal's busiest pools or on its two new_pools pages, which a young coin with little volume leaves within the
+// hour (and those pages often come back 429): 83 of the last 100 launches Sentry saw on chain were not on the board.
+// Each pass now asks GeckoTerminal for the missing ones in one call (tokens/multi, up to 30, newest first); a coin whose
+// pools are still under the board's $500 floor is asked again 30 minutes later.
+const NEW_MS = 72 * 3600_000;                 // the New category: born in the last 72 hours
+const LAUNCH_TRIED = new Map();               // address → when it was last asked for
+async function catchUpLaunches(map, ethUsd) {
+  const s = await import("./sentry.mjs").catch(() => null);
+  if (!s?.recentResults) return;
+  const now = Date.now(), want = [];
+  for (const r of s.recentResults(200)) {
+    const a = lc(r.token);
+    if (!ADDR_RE.test(a) || HUBS.has(a) || map.has(a) || board.rows.has(a) || want.includes(a)) continue;
+    if (r.at && now - r.at > NEW_MS) continue;
+    if (now - (LAUNCH_TRIED.get(a) || 0) < 30 * 60_000) continue;
+    want.push(a);
+    if (want.length >= 30) break;
+  }
+  if (!want.length) return;
+  for (const a of want) LAUNCH_TRIED.set(a, now);
+  while (LAUNCH_TRIED.size > 3000) LAUNCH_TRIED.delete(LAUNCH_TRIED.keys().next().value);
+  const d = await gecko(`tokens/multi/${want.join(",")}?include=top_pools`);
+  const inc = new Map([...(d.data || []), ...(d.included || [])].map((x) => [x.id, x]));
+  for (const p of d.included || []) {
+    if (p.type !== "pool") continue;
+    const pr = poolRow(p, inc);
+    if (want.includes(pr.base)) fold(map, pr, ethUsd);
+  }
+}
 async function refreshBoard() {
   if (board.refreshing) return board.refreshing;
   board.refreshing = (async () => {
@@ -438,6 +468,8 @@ async function refreshBoard() {
         for (const p of d.data) { const pr = poolRow(p, inc); if (pr.base === a) fold(map, pr, ethUsd); }
       }
     } catch {}
+    // the launches Sentry saw on chain that none of the lists above reached (see catchUpLaunches)
+    try { await catchUpLaunches(map, ethUsd); } catch (e) { console.warn("[market] launch catch-up:", e.message); }
     publish(map, { full: ok >= PAGES.length * 0.75 });
     try { noteV4(v4seen); } catch {}
     board.error = null;
@@ -633,7 +665,10 @@ function publish(map, { full = false } = {}) {
   // they go once unseen for 30 minutes, while a pass is still running or was cut short by 429s they stay up to 6 hours
   const keep = full ? 30 * 60_000 : BOARD_MAX_AGE;
   const next = new Map(map);
-  for (const [a, t] of board.rows) if (!next.has(a) && now - (t.seenAt || 0) < keep) next.set(a, t);
+  // a coin born in the last 72 hours stays up to a day after it was last on a list, so New keeps the quiet launches too
+  // (their prices keep coming from the chain and the stale sweep)
+  const young = (t) => t.createdAt && now - t.createdAt < NEW_MS && now - (t.seenAt || 0) < 24 * 3600_000;
+  for (const [a, t] of board.rows) if (!next.has(a) && (now - (t.seenAt || 0) < keep || young(t))) next.set(a, t);
   board.rows = next;
   board.updatedAt = now;
   board.volumeUsd = [...next.values()].filter((t) => !t.stock).reduce((s, t) => s + (t.volume24hUsd || 0), 0);
@@ -979,10 +1014,11 @@ export async function getRobinhoodTokens(opts = {}) {
   const counts = { all: base.length };
   for (const t of base) counts[t.launchpad] = (counts[t.launchpad] || 0) + 1;
   let rows = o.launchpad === "all" ? base : base.filter((t) => t.launchpad === o.launchpad);
-  // categories: Trending (real trading today), New (born in the last 72 hours, off a bonding curve: graduated or
-  // launched straight into a pool), Bonding (still on a Pons curve)
+  // categories: Trending (real trading today), New (born in the last 72 hours: on a Pons curve, graduated or launched
+  // straight into a pool; until 23 Nov it left out the curves, which are most launches, and showed a handful), Bonding
+  // (still on a Pons curve)
   const onCurve = (t) => t.poolDex === "pons-v2";
-  const isNew = (t) => t.createdAt && Date.now() - t.createdAt < 72 * 3600_000 && !onCurve(t);
+  const isNew = (t) => t.createdAt && Date.now() - t.createdAt < NEW_MS;
   const isTrend = (t) => (t.volume24hUsd || 0) >= 1000 && (t.txns24h || 0) >= 20;
   const picked = pickCoins(rows);
   const catCounts = { all: rows.length, picks: picked.length, trending: rows.filter(isTrend).length, new: rows.filter(isNew).length, bonding: rows.filter(onCurve).length };

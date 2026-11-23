@@ -2,7 +2,7 @@
 // launch-create.js and #/launch/x by launch-x.js; the Create coin chooser is the Desk page #/create.
 import { h, clear, useCss, pageHead, tabs, table, pctEl, compact, debounce, icon, padLogo, usd, tokenIcon, tiny } from "../ui.js";
 import { api } from "../api.js";
-import { LAUNCHPADS, tokenCell, priceCell, usdCell, mcapCell, ageText, updatedText } from "../marketlib.js";
+import { LAUNCHPADS, tokenCell, priceCell, usdCell, mcapCell, ageText, agePill, updatedText } from "../marketlib.js";
 
 const STEP = 50;
 const NARROW = matchMedia("(max-width: 720px)").matches;
@@ -43,8 +43,9 @@ export async function mount(view, ctx) {
     onRow: (t) => go(`#/token/${t.address}`),
     emptyText: "No launch matches.",
     cols: [
-      { key: "token", label: "Token", align: "l", render: (t) => tokenCell(t) },
-      { key: "age", label: "Age", render: (t) => h("span", { class: "muted" }, ageText(t.bornAt || t.createdAt)), hide: NARROW },   // bornAt: the creation block, as the coin page shows it
+      // phones: the age rides beside the name (the Age column is hidden there)
+      { key: "token", label: "Token", align: "l", render: (t) => tokenCell(t, { age: NARROW ? t.bornAt || t.createdAt : null }) },
+      { key: "age", label: "Age", render: (t) => agePill(t.bornAt || t.createdAt) || h("span", { class: "muted" }, "–"), hide: NARROW },   // bornAt: the creation block, as the coin page shows it
       // phones: the market cap sits under the price (as on Market), so no column hides off-screen
       { key: "price", label: NARROW ? "Price · MC" : "Price", render: (t) => (NARROW ? h("div", { class: "pcell" }, h("span", {}, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"), h("span", { class: "sub" }, t.mcapUsd > 0 ? `MC ${usd(t.mcapUsd, { compact: true })}` : "MC –")) : priceCell(t.priceEth, t.priceUsd)) },
       { key: "change", label: "24h", render: (t) => pctEl(t.change24h) },

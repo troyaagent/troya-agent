@@ -1,14 +1,14 @@
 // Market (#/market): Robinhood Chain board (default), tokenized stocks, Hyperliquid perps and spot.
 import { h, clear, useCss, pageHead, seg, table, sparkline, pctEl, usd, tiny, compact, every, debounce, emptyState, tokenIcon, coinIcon, padLogo, chainLogo, infoTip } from "../ui.js";
 import { api, cached } from "../api.js";
-import { LAUNCHPADS, padName, tokenCell, priceCell, ethAmount, usdCell, mcapCell, ageText, updatedText, fmtFunding, fmtApr, perpPrice, perpTicker, perpName, perpSub, perpCategory, PERP_CATS, BUY_ETH, buyHref } from "../marketlib.js";
+import { LAUNCHPADS, padName, tokenCell, priceCell, ethAmount, usdCell, mcapCell, ageText, agePill, updatedText, fmtFunding, fmtApr, perpPrice, perpTicker, perpName, perpSub, perpCategory, PERP_CATS, BUY_ETH, buyHref } from "../marketlib.js";
 // phones: price on top, market cap under it (instead of the ETH price), so the board stays three columns wide
 // token age (community request, 20 Nov 2026): when the coin was born, from its creation block (/api/token-age). The board's
 // createdAt is the main pool's date, so a coin that graduated to Uniswap looked as old as its graduation; it stays the
 // fallback until the birth is read.
 const BORN = new Map();
 const bornOf = (t) => BORN.get(String(t.address || "").toLowerCase()) || t.bornAt || t.createdAt || null;   // bornAt: the server's copy of the same birth
-const priceMcCell = (t) => h("div", { class: "pcell" }, h("span", {}, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"), h("span", { class: "sub" }, t.mcapUsd > 0 ? `MC ${usd(t.mcapUsd, { compact: true })}` : "MC –", bornOf(t) ? h("span", { title: "Age: how long ago the coin was created" }, ` · ${ageText(bornOf(t))}`) : null), staleNote(t));
+const priceMcCell = (t) => h("div", { class: "pcell" }, h("span", {}, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"), h("span", { class: "sub" }, t.mcapUsd > 0 ? `MC ${usd(t.mcapUsd, { compact: true })}` : "MC –"), staleNote(t));   // the age is a pill beside the name
 // Liquidity is the money side of a coin's pools (ETH, USDG or stock tokens): what a seller can take out. The pool total
 // also counts the coin at the pool's own price (MOW: $18.6M on 0.81 ETH), so it only shows in the tooltip.
 const liqTip = (t) => (t.liquidityUsd != null ? (t.realLiquidityUsd != null ? `${usd(t.liquidityUsd, { compact: true })} incl. the coin side` : `Pool total ${usd(t.liquidityUsd, { compact: true })} incl. the coin side; the ETH or USDG side is not read yet`) : "");
@@ -77,7 +77,7 @@ function robinhoodTab(box, go, query) {
   const catSort = (k, sort) => (k === "picks" ? "picks" : k === "new" ? "newest" : sort === "newest" || sort === "picks" || !sort ? "volume" : sort);
   const cat0 = ["picks", "trending", "new", "bonding", "all"].includes(query.cat) ? query.cat : "picks";
   const state = { q: query.q || "", launchpad: query.pad || "all", sort: catSort(cat0), dir: "desc", offset: 0, showAll: false, cat: cat0 };
-  const CATS = [["picks", "Troya picks", "Picked by Troya from live data: at least $10K of real liquidity (the ETH, USDG or stock-token side of its pools), 40+ trades and $2K+ volume today, volume under 25 times that liquidity, the 10 largest wallets under 80% and not down 40% today; real buyers, spread-out holders and listed socials rank it higher. A read of the data, not advice. Run the Gate before you buy."], ["trending", "Trending", "Real trading today: $1K+ volume and 20+ trades in 24 hours"], ["new", "New", "Born in the last 72 hours, off a bonding curve: just graduated, or launched straight into a pool"], ["bonding", "Bonding", "Still on a Pons bonding curve, before graduation"], ["all", "All", "Every coin Troya can route"]];
+  const CATS = [["picks", "Troya picks", "Picked by Troya from live data: at least $10K of real liquidity (the ETH, USDG or stock-token side of its pools), 40+ trades and $2K+ volume today, volume under 25 times that liquidity, the 10 largest wallets under 80% and not down 40% today; real buyers, spread-out holders and listed socials rank it higher. A read of the data, not advice. Run the Gate before you buy."], ["trending", "Trending", "Real trading today: $1K+ volume and 20+ trades in 24 hours"], ["new", "New", "Born in the last 72 hours, newest first: on a Pons curve, just graduated, or launched straight into a pool"], ["bonding", "Bonding", "Still on a Pons bonding curve, before graduation"], ["all", "All", "Every coin Troya can route"]];
   const catBar = h("div", { class: "mk2-cats", role: "tablist" });
   // phones show two lines of the note; a tap opens the rest
   const catNote = h("p", { class: "fine muted mk2-catnote", onclick: () => catNote.classList.toggle("open") });
@@ -116,26 +116,28 @@ function robinhoodTab(box, go, query) {
     emptyText: "No token matches.",
     cols: [
       { key: "rank", label: "#", render: (t, i) => h("span", { class: "rank" }, state.offset + i + 1), cls: "rank", hide: NARROW },
-      { key: "token", label: "Token", align: "l", render: (t) => (state.cat === "picks" && t.pick?.why?.length ? h("div", { class: "mk2-pick" }, tokenCell(t, { flagUntradable: true }), h("p", { class: "mk2-why" }, t.pick.why.join(" · "))) : tokenCell(t, { flagUntradable: true })) },
+      // the age rides beside the name on phones (desktop has its own Age column next to the coin); a pick's reasons stay on
+      // one line, the full list in the tooltip, so a pick row is as tall as any other
+      { key: "token", label: "Token", align: "l", render: (t) => { const cell = tokenCell(t, { flagUntradable: true, age: NARROW ? bornOf(t) : null }); return state.cat === "picks" && t.pick?.why?.length ? h("div", { class: "mk2-pick" }, cell, h("p", { class: "mk2-why", title: t.pick.why.join(" · ") }, t.pick.why.join(" · "))) : cell; } },
+      { key: "newest", label: "Age", sort: true, cls: "mk-age-c", render: (t) => agePill(bornOf(t)) || h("span", { class: "muted" }, "–"), hide: NARROW },
       { key: "price", label: NARROW ? "Price · MC" : "Price", sort: true, render: (t) => { if (NARROW) return priceMcCell(t); const c = priceCell(t.priceEth, t.priceUsd), n = staleNote(t); if (n) c.append(n); return c; } },
-      { key: "chart", label: NARROW ? "24h" : "24h chart", render: (t) => (NARROW ? h("div", { class: "mk-spark-c" }, sparkline(t.spark, { w: 56, h: 22 }), pctEl(t.change24h)) : sparkline(t.spark, { w: 96, h: 30 })), cls: "mk-spark" },
+      { key: "chart", label: NARROW ? "24h" : "24h chart", render: (t) => (NARROW ? h("div", { class: "mk-spark-c" }, sparkline(t.spark, { w: 56, h: 22 }), pctEl(t.change24h)) : sparkline(t.spark, { w: 84, h: 30 })), cls: "mk-spark" },
       { key: "change", label: "24h", sort: true, render: (t) => pctEl(t.change24h), hide: NARROW },
       { key: "volume", label: "24h volume", sort: true, render: (t) => usdCell(t.volume24hUsd, t.volume24hEth), hide: NARROW },
       { key: "liquidity", label: "Liquidity", sort: true, render: (t) => liqCell(t), hide: NARROW },
       { key: "mcap", label: "Mkt cap", sort: true, render: (t) => mcapCell(t), hide: NARROW },
       { key: "holders", label: "Holders", sort: true, render: (t) => (t.holders != null ? h("div", { class: "pcell" }, h("span", {}, compact(t.holders, 1).replace(/\.0(?=[KMB]$)/, "")), t.top10Pct != null ? h("span", { class: `sub ${t.top10Pct > 60 ? "warnc" : ""}`, title: "Share held by the 10 largest wallets" }, `top 10 ${t.top10Pct.toFixed(0)}%`) : null) : h("span", { class: "muted" }, "–")), hide: NARROW },
       { key: "txns", label: "Trades 24h", sort: true, render: (t) => (t.txns24h != null ? compact(t.txns24h, 1) : "–"), hide: NARROW },
-      { key: "newest", label: "Age", sort: true, render: (t) => h("span", { class: "muted", title: "How long ago the coin was created" }, ageText(bornOf(t))), hide: NARROW },
       buyCol,
     ],
   });
   // Desk 2.0: the four busiest coins as cards above the board. Four placeholders hold their place until the data
   // lands, so the categories and the board do not jump down when the cards arrive.
-  const topBox = h("div", { class: "mk2-top" });
+  const topBox = h("div", { class: "mk2-top mk3-top" });   // mk3: the compact cards (community request, 23 Nov)
   let topPainted = false;
   if (!state.q && state.offset === 0 && state.launchpad === "all") clear(topBox, [0, 1, 2, 3].map(() => h("div", { class: "mk2-card mk2-card-sk", "aria-hidden": "true" }, h("div", { class: "sk", style: { height: "40px", width: "60%" } }), h("div", { class: "sk", style: { height: "22px", width: "70%" } }), h("div", { class: "sk", style: { height: "14px", width: "85%" } }))));
   const paintTop = (rows) => (topPainted = true) && clear(topBox, rows.slice(0, 4).map((t, i) => h("a", { class: "mk2-card", href: `#/token/${t.address}` },
-    h("div", { class: "mk2-c-h" }, tokenIcon({ ...t, chain: "robinhood" }), h("span", {}, h("b", {}, t.symbol), h("small", {}, i === 0 ? "Busiest today" : t.launchpad ? padName(t.launchpad) : "Robinhood Chain")), h("span", { class: "mk2-rank" }, `#${i + 1}`)),
+    h("div", { class: "mk2-c-h" }, tokenIcon({ ...t, chain: "robinhood" }), h("span", {}, h("b", {}, t.symbol), h("small", {}, i === 0 ? "Busiest today" : t.launchpad ? padName(t.launchpad) : "Robinhood Chain", bornOf(t) ? ` · ${ageText(bornOf(t))} old` : "")), h("span", { class: "mk2-rank" }, `#${i + 1}`)),
     h("div", { class: "mk2-c-p" }, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"),
     h("div", { class: "mk2-c-f" }, pctEl(t.change24h), h("span", {}, `vol ${t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : "–"}`), h("span", { title: liqTip(t) }, `liq ${t.realLiquidityUsd != null ? usd(t.realLiquidityUsd, { compact: true }) : "–"}`)),
     h("i", { class: "mk2-bar", style: { "--w": `${Math.min(100, Math.abs(t.change24h || 0))}%` }, "data-dir": (t.change24h || 0) >= 0 ? "up" : "down" }))));

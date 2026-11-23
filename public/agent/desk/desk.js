@@ -294,12 +294,23 @@ $("[data-burger]").addEventListener("click", () => (side.classList.contains("ope
 scrim.addEventListener("click", closeSide);
 
 /* ---------- mobile tab bar ---------- */
-// one tap to each job: Home, Discover, Ask, Trade, Portfolio (the Inbox count rides on Portfolio)
+// one tap to each job: Home, Discover, Ask, Chat, Portfolio (the Inbox count rides on Portfolio). Chat took the Trade tab's
+// place (community request, 23 Nov 2026): every coin row already has a Buy that opens Swap, and the floating chat button
+// sat on top of those Buys. Swap stays in the menu, in Search and on every coin; the chat module (chat.js) answers the
+// "troya:chat-open" event and reports { open, unread } back with "troya:chat-state".
+const chatBadge = h("i", { class: "badge", hidden: true, style: { position: "absolute", top: "6px", left: "calc(50% + 6px)", fontStyle: "normal" } });
+const chatTab = h("button", { type: "button", class: "d-tab-chat", "aria-label": "Community chat", "aria-pressed": "false", style: { position: "relative" }, onclick: () => dispatchEvent(new CustomEvent("troya:chat-open")) },
+  si("chat"), h("span", {}, "Chat"), chatBadge);
+addEventListener("troya:chat-state", (e) => {
+  const { open = false, unread = 0 } = e.detail || {};
+  chatTab.setAttribute("aria-pressed", String(!!open));
+  chatBadge.hidden = !unread || open; chatBadge.textContent = unread > 9 ? "9+" : String(unread || "");
+});
 clear($("[data-tabbar]"),
   h("a", { href: "#/", "data-tab": "" }, si("desk"), h("span", {}, "Home")),
   h("a", { href: "#/market", "data-tab": "Discover" }, si("market"), h("span", {}, "Discover")),
   h("button", { type: "button", class: "d-tab-ask", onclick: () => askTroya() }, h("i", { class: "mark" }), h("span", {}, "Ask")),
-  h("a", { href: "#/swap", "data-tab": "Trade" }, si("swap"), h("span", {}, "Trade")),
+  chatTab,
   h("a", { href: "#/portfolio", "data-tab": "Portfolio", style: { position: "relative" } }, si("portfolio"), h("span", {}, "Portfolio"),
     h("i", { class: "badge", "data-inbox": "", style: { position: "absolute", top: "6px", left: "calc(50% + 6px)", fontStyle: "normal" } })));
 
@@ -532,6 +543,8 @@ function openAsk(prefill = "") {
   // or a coin with $50K of real money in its pools ("btc" offered "Swap into BTC" for a $2.4K copy)
   const quickOk = (c) => !!c && c.address !== "native" && !c.copy && !c.teamTest
     && (c.kind === "major" || c.kind === "stock" || c.official || (Number(c.realLiquidityUsd) || 0) >= 50_000);
+  // a coin row goes straight to Swap when Troya can route it (tradable from the search, or a major / stock token)
+  const swapOk = (c) => !!c && /^0x[0-9a-fA-F]{40}$/.test(String(c.address || "")) && (c.tradable === true || c.kind === "major" || c.kind === "stock");
   // rows: { kind: "ask" | "coin" | "perp" | "page", title, hint, icon, target }
   const sections = () => {
     const raw = input.value.trim(), q = raw.toLowerCase();
@@ -561,15 +574,17 @@ function openAsk(prefill = "") {
         const usd = c.priceUsd ?? (ethLike ? ethPrice() : null);
         const liq = c.realLiquidityUsd ?? c.liquidityUsd;
         return { kind: "coin", coin: c, title: `${c.symbol}${c.name && c.name.toLowerCase() !== String(c.symbol).toLowerCase() ? ` · ${c.name}` : ""}`,
-          hint: [c.official ? "Official" : c.teamTest ? "Team test" : null,
+          hint: [swapOk(c) ? "Buy on Swap" : null, c.official ? "Official" : c.teamTest ? "Team test" : null,
             c.kind === "stock" ? "Robinhood stock token" : c.kind === "major" ? "Major" : c.launchpad ? padName(c.launchpad) : null,
             px(usd), liq ? `liq ${fmt(liq)}` : null, c.address === "native" ? "Native" : short(c.address)].filter(Boolean).join(" · "),
-          target: c.address === "native" ? "#/swap" : `#/token/${c.address}` };
+          // a coin Troya can route opens Swap with it selected, ready to buy (community request, 23 Nov 2026: one tap
+          // from search to Swap, as the Market's Buy does); the Gate still runs there before anything is signed
+          target: c.address === "native" ? "#/swap" : swapOk(c) ? `#/swap?out=${c.address}` : `#/token/${c.address}` };
       });
       const t = coins[0];
-      if (quickOk(t)) rows.splice(1, 0,
-        { kind: "page", title: `Swap into ${t.symbol}`, hint: "Opens Swap with it selected; the Gate runs first", icon: "swap", target: `#/swap?out=${t.address}` },
-        { kind: "page", title: `Gate ${t.symbol}`, hint: "Seven checks before you buy", icon: "gate", target: `#/gate/${t.address}` });
+      if (t && t.address !== "native" && swapOk(t)) rows.splice(1, 0,
+        { kind: "page", title: `Open the ${t.symbol} page`, hint: "Price, chart, holders and trades", icon: "market", target: `#/token/${t.address}` },
+        ...(quickOk(t) ? [{ kind: "page", title: `Gate ${t.symbol}`, hint: "Seven checks before you buy", icon: "gate", target: `#/gate/${t.address}` }] : []));
       coinSec.push(["Coins", rows]);
     }
     if (perps.length && fresh) {

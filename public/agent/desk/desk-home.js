@@ -240,7 +240,7 @@ export async function mount(view, { go, ask: askDrawer }) {
     href: (t) => `#/token/${t.address}`,
     emptyText: "No coins to show right now.",
     cols: [
-      { key: "symbol", label: "Coin", align: "l", render: (t) => h("div", { class: "dk-coin" }, tokenCell(t), t.pick?.why?.[0] ? h("span", { class: "dk-why" }, t.pick.why[0]) : null) },
+      { key: "symbol", label: "Coin", align: "l", render: (t) => h("div", { class: "dk-coin" }, tokenCell(t, { age: t.bornAt || t.createdAt }), t.pick?.why?.[0] ? h("span", { class: "dk-why" }, t.pick.why[0]) : null) },
       { key: "priceUsd", label: "Price", cls: "hide-s", render: hotPrice },
       { key: "change24h", label: "24h", render: (t) => pctEl(t.change24h) },
       { key: "realLiquidityUsd", label: "Liquidity", cls: "hide-s", render: liqCell },

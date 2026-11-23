@@ -2,7 +2,10 @@
 // Every message is from a signed-in wallet: Troya's bots never post here (server/chat.mjs refuses a message that speaks as
 // Troya, its bots or the team). The server checks links (troya.codes only), length, rate and the Telegram group's spam
 // and scam rules; this file only shows its answer.
-//   mountChat(document.body)          a "Community" button above the Guide orb that opens a floating panel (every page)
+//   mountChat(document.body)          a "Community" tab tucked on the right edge that opens a side panel (every page); on a
+//                                     wide desk (1400 px+) the page makes room for it, so the board stays usable beside
+//                                     it. Phones open it from the tab bar: window events "troya:chat-open" (toggle) in,
+//                                     "troya:chat-state" ({ open, unread }) out, so the tab can show the unread count.
 //   mountChat(el, { inline: true })   the same panel drawn inside el (e.g. a Desk section)
 // Returns a stop function. New messages are read every 4 s while the panel is open and every 30 s while it is closed
 // (for the unread count); nothing is read while the tab is hidden.
@@ -16,6 +19,8 @@ import { pulseCss } from "./pulse.js";
 const MAX = 280;
 const OPEN_MS = 4_000, CLOSED_MS = 30_000;
 const SEEN = "troya.chat.seen";
+const DOCK = "troya.chat.dock";          // a wide desk that left the panel open finds it open again (this browser only)
+const WIDE = matchMedia("(min-width: 1400px)");
 const lc = (s) => String(s || "").toLowerCase();
 const seenGet = () => { try { return Number(localStorage.getItem(SEEN)) || 0; } catch { return 0; } };
 const seenSet = (v) => { try { localStorage.setItem(SEEN, String(v)); } catch {} };
@@ -80,7 +85,7 @@ export function mountChat(host = document.body, { inline = false } = {}) {
 
   /* ---------- the floating button ---------- */
   const badge = h("span", { class: "cc-badge", hidden: true });
-  const fab = floating ? h("button", { class: "cc-fab", type: "button", "aria-label": "Open the community chat", onclick: () => setOpen(true) }, ico("chat"), h("span", { class: "cc-fab-t" }, "Community"), badge) : null;
+  const fab = floating ? h("button", { class: "cc-fab cc-edge", type: "button", "aria-label": "Open the community chat", "aria-expanded": "false", onclick: () => setOpen(true) }, ico("chat"), h("span", { class: "cc-fab-t" }, "Community"), badge) : null;
   if (floating) host.append(fab, panel); else clear(host, panel);
 
   function setOpen(v) {
@@ -88,12 +93,20 @@ export function mountChat(host = document.body, { inline = false } = {}) {
     if (!floating) return;
     document.body.classList.toggle("cc-open", open);
     panel.setAttribute("aria-hidden", String(!open));
+    fab.setAttribute("aria-expanded", String(open));
+    if (WIDE.matches) { try { if (open) localStorage.setItem(DOCK, "1"); else localStorage.removeItem(DOCK); } catch {} }
+    tellState();
     if (open) { markSeen(); requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; if (canPost()) input.focus({ preventScroll: true }); }); }
     schedule(open ? 50 : CLOSED_MS);
   }
   if (floating) panel.setAttribute("aria-hidden", "true");
   const onKey = (e) => { if (floating && open && e.key === "Escape" && !document.querySelector(".modal-bg")) setOpen(false); };
   document.addEventListener("keydown", onKey);
+  // the phone's tab bar opens and closes it, and shows the unread count it is told
+  let unread = 0;
+  const tellState = () => { if (floating) dispatchEvent(new CustomEvent("troya:chat-state", { detail: { open, unread } })); };
+  const onOpenAsk = () => { if (floating) setOpen(!open); };
+  addEventListener("troya:chat-open", onOpenAsk);
 
   /* ---------- composer: connect, sign in, muted, or write ---------- */
   // the server's answer decides (a live sign-in cookie), so a session still counts while the wallet extension reconnects
@@ -199,13 +212,14 @@ export function mountChat(host = document.body, { inline = false } = {}) {
     if (n) repaintAll();   // the next message may have hung under the removed one's name
     empty.hidden = nodes.size > 0;
   }
-  function markSeen() { seenSet(Math.max(seenGet(), lastId)); badge.hidden = true; }
+  function markSeen() { seenSet(Math.max(seenGet(), lastId)); badge.hidden = true; if (unread) { unread = 0; tellState(); } }
   function paintBadge() {
     if (!floating) return;
     if (open) { markSeen(); return; }
     const seen = seenGet(), mineLc = myAddr();
     const n = [...nodes.values()].filter((el) => el._m.id > seen && lc(el._m.from) !== mineLc).length;
     badge.hidden = !n; badge.textContent = n > 9 ? "9+" : String(n);
+    if (n !== unread) { unread = n; tellState(); }
   }
   function repaintAll() {
     const msgs = [...nodes.values()].map((el) => el._m);
@@ -282,6 +296,8 @@ export function mountChat(host = document.body, { inline = false } = {}) {
   paintFoot();
   poll(true);
   schedule(open ? OPEN_MS : CLOSED_MS);
+  // a wide desk that had the panel open last time gets it back, docked beside the page
+  if (floating && WIDE.matches) { try { if (localStorage.getItem(DOCK) === "1") setOpen(true); } catch {} }
 
   return () => {
     alive = false;
@@ -289,6 +305,7 @@ export function mountChat(host = document.body, { inline = false } = {}) {
     offWallet();
     document.removeEventListener("keydown", onKey);
     document.removeEventListener("visibilitychange", onVis);
+    removeEventListener("troya:chat-open", onOpenAsk);
     if (floating) { fab.remove(); panel.remove(); document.body.classList.remove("cc-open"); } else panel.remove();
   };
 }

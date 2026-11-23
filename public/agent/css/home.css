@@ -61,6 +61,16 @@
 .warnc { color: var(--warn); }
 .pad-tag { display: inline-flex; align-items: center; height: 16px; padding: 0 5px; margin-left: 6px; border-radius: 3px; border: 1px solid var(--line-3); font-size: 9.5px; font-weight: 400; color: var(--muted); vertical-align: 1px; text-transform: none; }
 .pad-tag.warn { border-color: rgba(242,194,107,.35); color: var(--warn); }
+/* a coin's age beside its name or in an Age column (marketlib agePill): bright under a day old */
+.age-pill { display: inline-flex; align-items: center; height: 17px; padding: 0 6px; margin-left: 6px; border-radius: 999px; border: 1px solid var(--line-3); font-size: 10px; font-weight: 600; letter-spacing: .02em;
+  color: var(--fg-2); font-variant-numeric: tabular-nums; vertical-align: 1px; white-space: nowrap; }
+.age-pill.fresh { border-color: rgba(142, 223, 245, .45); background: rgba(142, 223, 245, .1); color: var(--c3, #8edff5); }
+td .age-pill:only-child { margin-left: 0; }
+/* phones: the age and the name share the coin's second line, the name giving way first */
+.tok-agenm { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.tok-agenm .age-pill { flex: none; margin-left: 0; height: 16px; font-size: 9.5px; }
+.tok-agenm .tok-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-theme="light"] .age-pill.fresh { border-color: rgba(10, 126, 163, .35); background: rgba(10, 126, 163, .07); color: var(--blue-3); }
 .pcell { display: grid; justify-items: end; line-height: 1.25; }
 
 @media (max-width: 1000px) {

@@ -371,6 +371,7 @@ export async function mount(view, ctx) {
     ["Simulation", "The exact swap is run against the pool as it is now."],
     ["Test sell", "Selling back is simulated too, so a coin that cannot be sold is caught."],
     ["Transfer tax", "A token that skims transfers shows up here."],
+    ["Dev side wallets", "On Robinhood Chain: the wallets tied to the dev (named in the launch, funded by the same wallets, bundled at launch), what they still hold and what they sold. Two or more linked wallets holding 30% with the dev, or a dev side selling now while it still holds 10%, fails a buy."],
   ];
   clear(view, h("div", { class: "dk dk-gatepage" },
     h("header", { class: "dk-pagehead" },

@@ -333,16 +333,19 @@ export async function assay(token, { deep = true, waitMs = 20000 } = {}) {
   }
   const p = inflight.get(key);
   const r = await Promise.race([p, new Promise((ok) => setTimeout(() => ok(null), waitMs))]);
-  return (await withDevSide(r)) || { token: t, status: "running", note: "Reading the coin's history and who funded its wallets. Ask again in a few seconds." };
+  return (await withDevSide(r, deep)) || { token: t, status: "running", note: "Reading the coin's history and who funded its wallets. Ask again in a few seconds." };
 }
 // the dev's sales counted with its side wallets (devlinks.mjs, cache only), as the Gate's Dev side check reports them: the dev
 // wallet alone can show 0% sold while the wallets tied to it sold most of what they got (Xivor, 24 Nov 2026). Cache only:
-// the Gate and Sentry already start that read, the Assay never adds one
-async function withDevSide(r) {
+// a quick Assay never starts that read; a deep one waits up to 9 s for it
+async function withDevSide(r, deep = false) {
   if (!r || r.status !== "done") return r;
   const D = await import("./devlinks.mjs").catch(() => null);
   if (!D) return r;
-  const ds = D.devLinksCached(r.token)?.devSide;
+  // a deep Assay (the Gate page, Heel, the Cluster map) waits a few seconds for the dev-side read when it is not cached yet,
+  // for example right after a restart; a quick one (Sentry, Telegram) only uses the cache
+  let ds = D.devLinksCached(r.token)?.devSide;
+  if (!ds && deep) ds = (await D.devLinks(r.token, { deep: true, waitMs: 9000 }).catch(() => null))?.devSide;
   if (!ds || ds.soldOfGotPct == null) return r;
   const devSide = { soldOfGotPct: ds.soldOfGotPct, holdsPct: ds.holdsPct, gotPct: ds.gotPct };
   let flags = r.flags || [];

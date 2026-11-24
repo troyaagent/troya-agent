@@ -1,8 +1,33 @@
 # TroyaFeeRouter: migration plan
 
-Status: built and tested locally only (`src/TroyaFeeRouter.sol`). Nothing deployed, no transaction sent, the Pons fee
-recipient is unchanged (still the creator wallet `0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4`). Deploying it and moving
-the fee recipient are two separate owner decisions.
+Status: **deployed on 24 Nov 2026** (see "Deployed" below), but the Pons fee recipient is unchanged (still the creator
+wallet `0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4`). Deploying it and moving the fee recipient are two separate owner
+decisions; only the first has been taken.
+
+## Deployed (24 Nov 2026)
+
+- **TroyaFeeRouter: `0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B`** (Robinhood Chain 4663)
+  https://robinhood.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B
+- Deploy tx `0x9431ae1486efb2020851f4978fb42981813a63398d8e7c1b66ea3b2705abe741`, block 122,080,108, ~08:18 UTC,
+  from the creator wallet (nonce 327, signed on the server). Gas used 4,689,541 at 0.020068 gwei = 0.0000941 ETH.
+- Source: `src/TroyaFeeRouter.sol` at commit `2c9b906`, solc v0.8.24+commit.e11b9ed9, optimizer 500 runs, evm shanghai,
+  runtime 20,106 B. Blockscout: "Pass - Verified" (standard-json input), `is_fully_verified: true`. Sourcify not done yet.
+- Constructor exactly as section 3, with the thresholds at the server's ETH/USD of $1,694.95 at deploy time:
+  `midMcWei = 20649576683677984601` (20.65 ETH = $35k), `highMcWei = 58998790524794241718` (59.00 ETH = $100k).
+- Read back after deploy: `owner()` = creator wallet, `pendingOwner()` = 0; `config()` = team creator wallet, gas wallet
+  `0x9375…390B`, stakers [10, 50, 100], burn [0, 0, 10], gas 10, target 500, slippage 500, interval 86400, minSend
+  0.00002 ETH, minBurn 0.0005 ETH; `poolId()` = `0x050f1f04…38c1`, `creatorBps()` 260; no pending config or recipient
+  move; all totals 0; 0 observations (`marketCap()` tier 0); router ETH 0, escrow balance 0; `distribute()` simulated by
+  `eth_call` reverts `NothingToDistribute()` (nothing sent). `factory.getLaunchedToken(TROYA).creatorFeeRecipient` is
+  still the creator wallet.
+- Pre-deploy `forge test`: 121 passed; `test_Fork_RecipientSweepDistribute` failed at the latest block only because the
+  pool had no unswept fees at that moment (the simulated sweep credited 0); pinned to block 121,420,011 both fork tests
+  pass.
+- **Not done (owner decisions):** the Pons recipient has NOT been switched. The planned switch is after the stakers'
+  first payout by the server on **29 Nov 2026 01:00 UTC**, at a UTC day boundary, following section 5 steps 3 to 9
+  (hourly `poke()` first, claim the creator's own escrow balance, check no Pons override is pending, then
+  `transferCreatorFeeRecipient(TROYA, router)`). Ownership is the creator wallet for now; it can move to a Safe or
+  hardware wallet with `transferOwnership` + `acceptOwnership` (Ownable2Step).
 
 ## 1. How $TROYA creator fees reach the recipient today (read from the verified sources and the chain, 23 Nov 2026)
 

@@ -75,6 +75,9 @@ async function readings() {
   const pend = await R.rpc("robinhood", "eth_call", [{ to: "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e", data: "0x9beacf4a" + "1fa81ddaaac83240803b3f2d20595e40edc1a074".padStart(64, "0") }, "latest"], { timeoutMs: 10_000 }).catch(() => null);
   const w = typeof pend === "string" ? pend.slice(2).match(/.{64}/g) || [] : [];
   if (w.length >= 3) out.ponsRedirect = BigInt("0x" + w[0]) === 0n ? null : { to: "0x" + w[0].slice(24), effectiveAt: Number(BigInt("0x" + w[1])) };
+  // $TROYA market cap (feesplit's hourly median), for the 35K boost promise of 25 Nov 2026
+  const fs2 = await fetch(`http://127.0.0.1:${process.env.PORT || 9270}/api/feesplit`, { signal: AbortSignal.timeout(8000) }).then((x) => x.json()).catch(() => null);
+  if (fs2?.now?.mcUsd > 0) out.mcUsd = fs2.now.mcUsd;
   // the server
   const mem = Object.fromEntries((await readFile("/proc/meminfo", "utf8").catch(() => "")).split("\n").filter(Boolean).map((l) => { const [k, v] = l.split(":"); return [k, parseInt(v) / 1024]; }));
   out.server = { memFreeMb: Math.round(mem.MemAvailable || 0), swapUsedMb: Math.round((mem.SwapTotal || 0) - (mem.SwapFree || 0)) };
@@ -103,6 +106,13 @@ async function tick() {
       if (t.lastHour > RL_HOUR) add(`rl:${mod}`, t.lastHour > RL_HOUR * 4, `${t.lastHour > RL_HOUR * 4 ? "🔴" : "🟠"} Modul ${mod} kena limit RPC (429) ${t.lastHour}x dalam 1 jam terakhir (batas ${RL_HOUR}); ${t.gaveUp} bacaan gagal setelah dicoba ulang sejak server jalan. Kurangi frekuensi modul itu atau arahkan bacaannya ke node Chainstack.`);
     }
     if (r.ponsRedirect) add(`pons:${r.ponsRedirect.to}:${r.ponsRedirect.effectiveAt}`, true, `🔴 Pons mengajukan pengalihan creator fee $TROYA ke ${r.ponsRedirect.to}, bisa dieksekusi mulai ${new Date(r.ponsRedirect.effectiveAt * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC. Cek troya.codes/proof#claim-pons-fee-redirect dan hubungi Pons sekarang.`);
+    // owner, 25 Nov 2026: at a 35K market cap the dev turns on a 30x DexScreener boost (announced in the group and on X);
+    // told once, the moment it is reached, so the boost and its receipt go out fast
+    if (r.mcUsd >= 35_000 && !d.mc35Told) {
+      const mcTxt = "$" + Math.round(r.mcUsd).toLocaleString("en-US");
+      alerts.push(`🟢 MC $TROYA sudah ${mcTxt} (target $35K tercapai). Sesuai pengumuman: nyalakan DexScreener boost 30x sekarang, lalu kirim bukti/link-nya ke dev supaya diposting di grup dan X. Bagian staker juga otomatis naik ke 0,5% volume.`);
+      await store.update(FILE, {}, (x) => { x.mc35Told = Date.now(); return x; });
+    }
     const s = r.server;
     if (s.memFreeMb < 200) add("mem", true, `🔴 RAM server tinggal ${s.memFreeMb} MB. Server bisa melambat atau proses mati: naikkan Hetzner ke 4 GB.`);
     if (s.swapUsedMb > 1500) add("swap", false, `🟠 Server memakai swap ${s.swapUsedMb} MB (RAM kurang). Pertimbangkan naik ke Hetzner 4 GB.`);

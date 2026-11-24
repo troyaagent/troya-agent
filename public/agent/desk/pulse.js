@@ -50,11 +50,14 @@ export function mountPassStrip(el, { limit = 12 } = {}) {
 /* ---------- Just graduated ---------- */
 export function mountGraduated(el, { limit = 12 } = {}) {
   pulseCss();
+  const allLink = h("a", { class: "link pl-grad-all", href: "#/market?tab=graduated" }, "See all graduated");
   const lane = h("div", { class: "pl-lane", role: "list" });
   const box = h("section", { class: "panel pl-grad", "aria-label": "Coins that just graduated", hidden: true },
     h("div", { class: "panel-h" },
       h("h2", {}, "Just graduated", infoTip("Pons coins whose bonding curve filled and moved to their own Uniswap v4 pool. Read from Robinhood Chain: the pool's creation with the Pons hook, confirmed by the Pons factory. The time is the block's own time.", "Just graduated")),
-      h("span", { class: "pl-grad-sub" }, "Pons curve filled · own Uniswap v4 pool")),
+      h("span", { class: "pl-grad-sub" }, "Pons curve filled · own Uniswap v4 pool"),
+      // the full list lives on the Market's Graduated tab (community request, 24 Nov 2026)
+      allLink),
     lane);
   clear(el, box);
   el.hidden = true;
@@ -68,7 +71,7 @@ export function mountGraduated(el, { limit = 12 } = {}) {
         x.mcapUsd > 0 ? ["Market cap", usd(x.mcapUsd, { compact: true })] : null,
         x.liquidityUsd > 0 ? ["Liquidity", usd(x.liquidityUsd, { compact: true })] : null,
         x.change24h != null ? ["24h", pctEl(x.change24h)] : null,
-        x.threshold > 0 && x.pair?.symbol ? ["Curve filled", `${x.threshold >= 100 ? Math.round(x.threshold).toLocaleString("en-US") : x.threshold} ${x.pair.symbol}`] : null,
+        x.threshold > 0 && x.pair?.symbol ? ["Curve filled", `${x.threshold >= 100 ? Math.round(x.threshold).toLocaleString("en-US") : +Number(x.threshold).toFixed(2)} ${x.pair.symbol}`] : null,
       ].filter(Boolean).slice(0, 4);
       return h("article", { class: "pl-card", role: "listitem" },
         h("a", { class: "pl-card-id", href: `#/token/${x.token}` },
@@ -87,6 +90,7 @@ export function mountGraduated(el, { limit = 12 } = {}) {
     try { d = await api.get(`pulse/graduated?limit=${limit}`); } catch { return; }
     if (!alive) return;
     last = (d.items || []).filter((x) => ADDR.test(x.token) && Number.isFinite(x.at));
+    allLink.textContent = d.total > 0 ? `See all ${d.total} graduated` : "See all graduated";
     paint();
   });
   // "Graduated 12m ago" keeps moving between reads

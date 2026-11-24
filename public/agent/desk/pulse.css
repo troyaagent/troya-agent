@@ -162,3 +162,9 @@ html[data-theme="light"] .cc-in { background: var(--bg-2); }
 html[data-theme="light"] .cc-jump { background: var(--bg-1); }
 html[data-theme="light"] .cc-msg:hover { background: rgba(0, 0, 0, .03); }
 @media (prefers-reduced-motion: reduce) { .cc-fab, .cc-panel.cc-float, .pl-chip, .pl-card { transition: none; } }
+/* "See all graduated": the Market's Graduated tab (24 Nov 2026) */
+.pl-grad-all { margin-left: auto; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pl-grad-all::after { content: " \2192"; }
+@media (max-width: 720px) {
+  .pl-grad-sub { order: 3; flex-basis: 100%; }   /* phones: the title and "See all" share the first line */
+}

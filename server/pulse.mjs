@@ -176,11 +176,15 @@ async function tick() {
     console.warn("[pulse] graduations:", e.message);
   } finally { busy = false; }
 }
+const inLane = () => { const cut = Date.now() - LANE_MS; return state.items.filter((x) => x.at >= cut && !isStock(x.token)); };
+// the Market's Graduated tab (community request, 24 Nov) reads the same list with the board's routing and volume fields,
+// so its rows can carry a Buy like the other tabs; the Desk lane ignores the extra fields
 function gradList(limit) {
-  const cut = Date.now() - LANE_MS;
-  return state.items.filter((x) => x.at >= cut && !isStock(x.token)).slice(0, limit).map((x) => {
+  return inLane().slice(0, limit).map((x) => {
     const row = indexRow(x.token);   // the Market's own board row (no network call here); null when it is not listed yet
-    return { ...x, priceUsd: num(row?.priceUsd), mcapUsd: num(row?.mcapUsd), liquidityUsd: num(row?.liquidityUsd), change24h: num(row?.change24h), image: row?.image || null };
+    return { ...x, priceUsd: num(row?.priceUsd), priceEth: num(row?.priceEth), mcapUsd: num(row?.mcapUsd), liquidityUsd: num(row?.liquidityUsd), realLiquidityUsd: num(row?.realLiquidityUsd),
+      change24h: num(row?.change24h), volume24hUsd: num(row?.volume24hUsd), volume24hEth: num(row?.volume24hEth), txns24h: num(row?.txns24h), holders: num(row?.holders), top10Pct: num(row?.top10Pct),
+      priceAt: num(row?.priceAt), spark: Array.isArray(row?.spark) ? row.spark : null, tradable: !!row?.tradable, onBoard: !!row, image: row?.image || null };
   });
 }
 
@@ -193,8 +197,8 @@ export async function register(r, ctx) {
     return { items, bar: "Passed with no failed check, at least 0.5 ETH in from 25 independent buyers (Sentry's channel bar)", updatedAt: Date.now() };
   }, { perMin: 240 });
   r.get("/api/pulse/graduated", ({ query }) => {
-    const items = gradList(Math.min(24, Math.max(1, Number(query.limit) || 12)));
-    return { items, watching: ON, coverage: { fromBlock: state.back || null, toBlock: state.fwd || null, backfillDone: !!state.fwd && state.back <= state.floor },
+    const items = gradList(Math.min(200, Math.max(1, Number(query.limit) || 12)));
+    return { items, total: inLane().length, windowDays: LANE_MS / 86400e3, watching: ON, coverage: { fromBlock: state.back || null, toBlock: state.fwd || null, backfillDone: !!state.fwd && state.back <= state.floor },
       source: "Robinhood Chain: PoolManager Initialize with the Pons hook, confirmed by the Pons factory", lastError: lastErr ? "The chain read failed on the last try; showing what is saved." : null, updatedAt: lastTickAt || null };
   }, { perMin: 240 });
   if (!ON) return;

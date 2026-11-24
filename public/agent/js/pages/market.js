@@ -1,5 +1,5 @@
 // Market (#/market): Robinhood Chain board (default), tokenized stocks, Hyperliquid perps and spot.
-import { h, clear, useCss, pageHead, seg, table, sparkline, pctEl, usd, tiny, compact, every, debounce, emptyState, tokenIcon, coinIcon, padLogo, chainLogo, infoTip } from "../ui.js";
+import { h, clear, useCss, pageHead, seg, table, sparkline, pctEl, usd, tiny, compact, every, debounce, emptyState, tokenIcon, coinIcon, padLogo, chainLogo, infoTip, ago } from "../ui.js";
 import { api, cached } from "../api.js";
 import { LAUNCHPADS, padName, tokenCell, priceCell, ethAmount, usdCell, mcapCell, ageText, agePill, updatedText, fmtFunding, fmtApr, perpPrice, perpTicker, perpName, perpSub, perpCategory, PERP_CATS, BUY_ETH, buyHref } from "../marketlib.js";
 // phones: price on top, market cap under it (instead of the ETH price), so the board stays three columns wide
@@ -19,6 +19,9 @@ const STALE_MS = 15 * 60_000;
 const ageOf = (t) => (t.priceAt ? (boardNow || Date.now()) - t.priceAt : 0);
 const ageWords = (ms) => (ms < 3600_000 ? `${Math.max(1, Math.round(ms / 60_000))} min` : `${Math.floor(ms / 3600_000)} h`);
 const staleNote = (t) => (ageOf(t) > STALE_MS ? h("span", { class: "sub warnc" }, `price ${ageWords(ageOf(t))} old`) : null);
+
+// "7h ago" as a pill for the Graduated tab; under a day it reads bright like a fresh coin's age
+const gradPill = (t) => { const a = ago(t.at); return h("span", { class: `age-pill mk-grad-pill${Date.now() - t.at < 86400_000 ? " fresh" : ""}`, title: `Graduated ${new Date(t.at).toLocaleString()} (block ${t.block ?? "?"})` }, a === "–" ? "just now" : `${a} ago`); };
 
 const PAGE = 50;
 const NARROW = matchMedia("(max-width: 720px)").matches;
@@ -40,6 +43,8 @@ const buyCol = { key: "buy", label: "", cls: "mk-buy-c", render: (t) => (t.trada
 export async function mount(view, { go, query }) {
   useCss("home");
   useCss("market");
+  // #/market?tab=graduated (the Desk's "See all graduated") opens the Robinhood Chain board on its Graduated category
+  if (query.tab === "graduated") query = { ...query, tab: "robinhood", cat: "graduated" };
   let tab = ["robinhood", "stocks", "perps", "spot"].includes(query.tab) ? query.tab : "robinhood";
   let stopTab = null;
 
@@ -75,24 +80,26 @@ export async function mount(view, { go, query }) {
 function robinhoodTab(box, go, query) {
   // each category has its default order: picks keep Troya's own, New lists the youngest first, the rest the busiest
   const catSort = (k, sort) => (k === "picks" ? "picks" : k === "new" ? "newest" : sort === "newest" || sort === "picks" || !sort ? "volume" : sort);
-  const cat0 = ["picks", "trending", "new", "bonding", "all"].includes(query.cat) ? query.cat : "picks";
+  const cat0 = ["picks", "trending", "new", "graduated", "bonding", "all"].includes(query.cat) ? query.cat : "picks";
   const state = { q: query.q || "", launchpad: query.pad || "all", sort: catSort(cat0), dir: "desc", offset: 0, showAll: false, cat: cat0 };
-  const CATS = [["picks", "Troya picks", "Picked by Troya from live data: at least $10K of real liquidity (the ETH, USDG or stock-token side of its pools), 40+ trades and $2K+ volume today, volume under 25 times that liquidity, the 10 largest wallets under 80% and not down 40% today; real buyers, spread-out holders and listed socials rank it higher. A read of the data, not advice. Run the Gate before you buy."], ["trending", "Trending", "Real trading today: $1K+ volume and 20+ trades in 24 hours"], ["new", "New", "Born in the last 72 hours, newest first: on a Pons curve, just graduated, or launched straight into a pool"], ["bonding", "Bonding", "Still on a Pons bonding curve, before graduation"], ["all", "All", "Every coin Troya can route"]];
+  const CATS = [["picks", "Troya picks", "Picked by Troya from live data: at least $10K of real liquidity (the ETH, USDG or stock-token side of its pools), 40+ trades and $2K+ volume today, volume under 25 times that liquidity, the 10 largest wallets under 80% and not down 40% today; real buyers, spread-out holders and listed socials rank it higher. A read of the data, not advice. Run the Gate before you buy."], ["trending", "Trending", "Real trading today: $1K+ volume and 20+ trades in 24 hours"], ["new", "New", "Born in the last 72 hours, newest first: on a Pons curve, just graduated, or launched straight into a pool"], ["graduated", "Graduated", "Pons coins whose bonding curve filled in the last 7 days and moved to their own Uniswap v4 pool, newest first. Read from Robinhood Chain: the pool's creation with the Pons hook, confirmed by the Pons factory; the time is the block's own time."], ["bonding", "Bonding", "Still on a Pons bonding curve, before graduation"], ["all", "All", "Every coin Troya can route"]];
   const catBar = h("div", { class: "mk2-cats", role: "tablist" });
   // phones show two lines of the note; a tap opens the rest
   const catNote = h("p", { class: "fine muted mk2-catnote", onclick: () => catNote.classList.toggle("open") });
   // the row is drawn at once with "–" for the counts, so nothing below it moves when the numbers arrive
-  let lastCatCounts = null;
+  let lastCatCounts = null, gradTotal = null;
   const paintCats = (counts = lastCatCounts) => {
     lastCatCounts = counts || null;
+    if (gradTotal != null) counts = { ...(counts || {}), graduated: gradTotal };
     clear(catBar, CATS.map(([k, label, tip]) => h("button", { type: "button", role: "tab", "aria-selected": String(state.cat === k), title: tip, onclick: () => {
       if (state.cat === k) return;
+      if (k === "graduated" || state.cat === "graduated") reqId++;   // a board read still on its way does not paint over the other view
       const was = state.sort;
       state.cat = k; state.offset = 0; state.sort = catSort(k, was);
       if (state.sort !== was) state.dir = "desc";
       // the arrow follows the order the new category uses (Trending lost it after Troya picks)
       tbl.setSort(state.sort === "picks" ? null : state.sort, state.dir);
-      history.replaceState(null, "", `#/market${k === "picks" ? "" : `?cat=${k}`}`);
+      history.replaceState(null, "", `#/market${k === "picks" ? "" : k === "graduated" ? "?tab=graduated" : `?cat=${k}`}`);
       catNote.classList.remove("open");
       paintCats();
       load();
@@ -141,7 +148,56 @@ function robinhoodTab(box, go, query) {
     h("div", { class: "mk2-c-p" }, t.priceUsd != null ? `$${tiny(t.priceUsd)}` : "–"),
     h("div", { class: "mk2-c-f" }, pctEl(t.change24h), h("span", {}, `vol ${t.volume24hUsd != null ? usd(t.volume24hUsd, { compact: true }) : "–"}`), h("span", { title: liqTip(t) }, `liq ${t.realLiquidityUsd != null ? usd(t.realLiquidityUsd, { compact: true }) : "–"}`)),
     h("i", { class: "mk2-bar", style: { "--w": `${Math.min(100, Math.abs(t.change24h || 0))}%` }, "data-dir": (t.change24h || 0) >= 0 ? "up" : "down" }))));
-  clear(box, topBox, catBar, catNote, h("div", { class: "mk-filters" }, search, chips), notice, h("div", { class: "panel mk-panel" }, tbl), pager, h("div", { class: "mk-sub" }, untradable), foot);
+  // Graduated (community request, 24 Nov 2026): the Desk's "Just graduated" lane as a full list, in the board's table style.
+  // The rows come from /api/pulse/graduated (the chain's own record of each graduation) with the board's price fields.
+  const grad = { rows: [], sort: "at", dir: "desc", loaded: false, data: null };
+  const gradTbl = table({
+    sort: { key: "at", dir: "desc" },
+    onSort: (key, dir) => { grad.sort = key; grad.dir = dir; paintGrad(); },
+    onRow: (t) => go(`#/token/${t.address}`),
+    href: (t) => `#/token/${t.address}`,
+    emptyText: "No Pons coin graduated in the last 7 days.",
+    cols: [
+      { key: "token", label: "Token", align: "l", render: (t) => h("div", { class: "mk-grad-tok" }, tokenCell(t, { tag: !NARROW }),
+        // phones: when it graduated and how big the curve was ride under the name (no room for their own columns)
+        NARROW ? h("p", { class: "mk-grad-line" }, gradPill(t), t.curve ? h("span", {}, t.curve) : null, t.change24h != null ? pctEl(t.change24h) : null) : null) },
+      { key: "at", label: "Graduated", sort: true, cls: "mk-grad-c", render: (t) => gradPill(t), hide: NARROW },
+      { key: "threshold", label: "Curve filled", sort: true, render: (t) => (t.curve ? h("span", { title: t.pair?.address && t.pair.address !== "native" ? `Paired with ${t.pair.symbol} (${t.pair.address})` : "Paired with ETH" }, t.curve) : h("span", { class: "muted" }, "–")), hide: NARROW },
+      { key: "price", label: NARROW ? "Price · MC" : "Price", render: (t) => (NARROW ? priceMcCell(t) : priceCell(t.priceEth, t.priceUsd)) },
+      { key: "change", label: "24h", sort: true, render: (t) => (t.change24h != null ? pctEl(t.change24h) : h("span", { class: "muted" }, "–")), hide: NARROW },
+      { key: "volume", label: "24h volume", sort: true, render: (t) => usdCell(t.volume24hUsd, t.volume24hEth), hide: NARROW },
+      { key: "liquidity", label: "Liquidity", sort: true, render: (t) => liqCell(t), hide: NARROW },
+      { key: "mcap", label: "Mkt cap", sort: true, render: (t) => (t.mcapUsd > 0 ? h("div", { class: "pcell" }, h("span", {}, `≈ ${usd(t.mcapUsd, { compact: true })}`)) : h("span", { class: "muted" }, "–")), hide: NARROW },
+      { key: "acts", label: "", cls: "mk-buy-c mk-grad-a", render: (t) => h("div", { class: "mk-grad-acts" },
+        buyCol.render(t),
+        h("span", { class: "mk-grad-links" },
+          h("a", { href: `#/gate/${t.address}`, title: `Run the Gate on ${t.symbol || "this coin"}`, onclick: (e) => e.stopPropagation() }, "Gate"),
+          t.tx ? h("a", { href: `https://robinhoodchain.blockscout.com/tx/${t.tx}`, target: "_blank", rel: "noopener", title: "The graduation transaction on Blockscout", onclick: (e) => e.stopPropagation() }, NARROW ? "Tx" : "Graduation tx") : null)) },
+    ],
+  });
+  const gradNotice = h("div");
+  const gradFoot = h("div", { class: "mk-foot" });
+  const gradPanel = h("div", { class: "panel mk-panel mk-grad" }, gradTbl);
+  const filters = h("div", { class: "mk-filters" }, search, chips);
+  const boardPanel = h("div", { class: "panel mk-panel" }, tbl);
+  const sub2 = h("div", { class: "mk-sub" }, untradable);
+  clear(box, topBox, catBar, catNote, filters, notice, gradNotice, boardPanel, gradPanel, pager, sub2, foot, gradFoot);
+  // one view at a time: the board (its cards, launchpad chips, pager) or the Graduated list
+  const applyMode = () => {
+    const g = state.cat === "graduated";
+    for (const el of [boardPanel, pager, sub2, foot, notice, chips]) el.hidden = g;
+    for (const el of [gradPanel, gradFoot, gradNotice]) el.hidden = !g;
+    topBox.hidden = g || !!state.q;
+    search.placeholder = g ? "Search graduated coins" : "Search symbol, name or address";
+  };
+  applyMode();
+  // the count on the Graduated tab, also while another category is open
+  const readGrad = async () => {
+    const d = await api.get("pulse/graduated?limit=200");
+    gradTotal = Number.isFinite(d.total) ? d.total : (d.items || []).length;
+    paintCats();
+    return d;
+  };
 
   // the launchpad counts are the whole board's (every category), which is why the strip says "On the board": Troya picks
   // can show 20 coins while All says 255
@@ -153,6 +209,8 @@ function robinhoodTab(box, go, query) {
   }
   renderChips();
   async function load() {
+    applyMode();
+    if (state.cat === "graduated") return loadGrad();
     const id = ++reqId;
     tbl.setLoading(10);
     const qs = new URLSearchParams({ q: state.q, launchpad: state.launchpad, sort: state.sort, dir: state.dir, offset: String(state.offset), limit: String(PAGE), tradable: state.showAll ? "0" : "1", cat: state.q ? "all" : state.cat });
@@ -201,7 +259,7 @@ function robinhoodTab(box, go, query) {
         if (busy.length) paintTop(busy);
       }
       if (!topPainted) clear(topBox);   // no cards to show (a search or a launchpad from the link): drop the placeholders
-      topBox.hidden = !!state.q;
+      topBox.hidden = !!state.q || state.cat === "graduated";
       const hiddenTotal = d.hiddenTotal;
       untradable.textContent = state.showAll ? "Hide coins Troya cannot route" : `Show coins Troya cannot route yet${hiddenTotal ? ` (${compact(hiddenTotal, 0)})` : ""}`;
       untradable.onclick = () => { state.showAll = !state.showAll; load(); };
@@ -223,9 +281,51 @@ function robinhoodTab(box, go, query) {
       clear(notice, h("div", { class: "alert error", style: { marginBottom: "10px" } }, `Could not load the Robinhood Chain market: ${e.message}`));
     }
   }
-  search.addEventListener("input", debounce(() => { state.q = search.value.trim(); state.offset = 0; load(); }, 300));
+  async function loadGrad() {
+    const id = ++reqId;
+    if (!grad.loaded) gradTbl.setLoading(8);
+    try {
+      // the board's category counts too, so the other tabs keep their numbers while this one is open
+      const [d, b] = await Promise.all([readGrad(), lastCatCounts ? null : api.get("market/robinhood?cat=picks&limit=1&tradable=1").catch(() => null)]);
+      if (id !== reqId) return;
+      if (b?.catCounts) paintCats(b.catCounts);
+      if (b?.now) boardNow = b.now;
+      grad.loaded = true;
+      grad.data = d;
+      grad.rows = (d.items || []).filter((x) => /^0x[0-9a-fA-F]{40}$/.test(String(x.token || "")) && Number.isFinite(x.at)).map((x) => ({
+        ...x, address: x.token, launchpad: "pons", symbol: x.symbol || x.name || "?",
+        curve: x.threshold > 0 && x.pair?.symbol ? `${x.threshold >= 100 ? Math.round(x.threshold).toLocaleString("en-US") : +x.threshold.toFixed(2)} ${x.pair.symbol}` : null,
+      }));
+      paintGrad();
+      const notOn = grad.rows.filter((t) => !t.onBoard).length;
+      clear(gradNotice, d.lastError ? h("div", { class: "alert warn", style: { marginBottom: "10px" } }, d.lastError) : d.coverage && !d.coverage.backfillDone ? h("div", { class: "alert warn", style: { marginBottom: "10px" } }, "Still reading back through the chain: older graduations are being added.") : null);
+      clear(gradFoot,
+        h("p", {}, `${grad.rows.length.toLocaleString()} Pons coin${grad.rows.length === 1 ? "" : "s"} graduated in the last ${d.windowDays || 7} days`, notOn ? ` · ${notOn} not on the board (no pool with $500+ of liquidity), shown without a price` : "", d.updatedAt ? ` · chain ${updatedText(d.updatedAt)}.` : "."),
+        h("p", {}, "Read from Robinhood Chain: the Uniswap v4 PoolManager's Initialize event for a pool with the Pons hook, then the Pons factory confirms the coin graduated and that this pool is its own. The time is the block's own timestamp. Prices, liquidity and market cap are the board's (see the other tabs). Graduating is not a recommendation: open the coin and its Gate before you trade."));
+    } catch (e) {
+      if (id !== reqId) return;
+      if (!grad.loaded) gradTbl.setRows([]);
+      clear(gradNotice, h("div", { class: "alert error", style: { marginBottom: "10px" } }, `Could not load the graduated coins: ${e.message}`));
+    }
+  }
+  function paintGrad() {
+    const q = state.q.toLowerCase();
+    const val = { at: (t) => t.at, threshold: (t) => t.threshold, change: (t) => t.change24h, volume: (t) => t.volume24hUsd, liquidity: (t) => t.realLiquidityUsd, mcap: (t) => t.mcapUsd }[grad.sort] || ((t) => t.at);
+    const s = grad.dir === "asc" ? 1 : -1;
+    const rows = grad.rows.filter((t) => !q || [t.symbol, t.name, t.address].some((v) => String(v || "").toLowerCase().includes(q)))
+      .sort((a, b) => ((val(a) ?? -Infinity) - (val(b) ?? -Infinity)) * s || b.at - a.at);
+    gradTbl.setRows(rows);
+  }
+  // when the tab opened from a link, bring it into view on a phone (the category row scrolls sideways)
+  if (state.cat === "graduated") requestAnimationFrame(() => catBar.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "center" }));
+  else readGrad().catch(() => {});
+  search.addEventListener("input", debounce(() => { state.q = search.value.trim(); state.offset = 0; if (state.cat === "graduated" && grad.loaded) paintGrad(); else load(); }, 300));
   load();
-  const t = setInterval(() => { if (!document.hidden && state.offset === 0) load(); }, 45000);
+  const t = setInterval(() => {
+    if (document.hidden) return;
+    if (state.cat === "graduated") load();
+    else { if (state.offset === 0) load(); readGrad().catch(() => {}); }
+  }, 45000);
   return () => clearInterval(t);
 }
 

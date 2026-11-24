@@ -217,3 +217,19 @@ html[data-theme="light"] .mk-buy { color: var(--blue-3); border-color: rgba(10, 
   body.tk-has-mbar .g-nudge { bottom: calc(184px + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 370px) { .tk-mbar-l { display: none; } .tk2.tk2 .tk-mbar { padding: 8px 10px; gap: 5px; } }
+
+/* Graduated (community request, 24 Nov 2026): the Desk's "Just graduated" lane as its own category on the board */
+.mk-panel[hidden], .mk-foot[hidden], .mk-filters .chips[hidden], .pager[hidden], .mk-sub[hidden], .mk2-top[hidden] { display: none; }
+.mk-grad .mk-grad-c .age-pill, .mk-grad-pill { margin-left: 0; }
+.mk-grad-acts { display: flex; align-items: center; justify-content: flex-end; gap: 12px; white-space: nowrap; }
+.mk-grad-links { display: inline-flex; gap: 10px; font-size: 11.5px; }
+.mk-grad-links a { color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--line-3); }
+.mk-grad-links a:hover, .mk-grad-links a:focus-visible { color: var(--c3); border-color: currentColor; }
+html[data-theme="light"] .mk-grad-links a:hover, html[data-theme="light"] .mk-grad-links a:focus-visible { color: var(--blue-3); }
+.mk-grad-line { display: flex; align-items: center; gap: 6px; margin: 4px 0 0 40px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+@media (max-width: 720px) {
+  /* phones: Buy on top, Gate and the graduation tx under it, so the row keeps three columns */
+  .mk-grad-acts { flex-direction: column; align-items: flex-end; gap: 5px; }
+  .mk-grad-links { gap: 8px; font-size: 10.5px; }
+}
+/* under 370 px the actions column hides with Buy (see above); the row still opens the coin page */

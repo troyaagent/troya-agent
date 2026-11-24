@@ -7,7 +7,7 @@ decisions; only the first has been taken.
 ## Deployed (24 Nov 2026)
 
 - **TroyaFeeRouter: `0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B`** (Robinhood Chain 4663)
-  https://robinhood.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B
+  https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B
 - Deploy tx `0x9431ae1486efb2020851f4978fb42981813a63398d8e7c1b66ea3b2705abe741`, block 122,080,108, ~08:18 UTC,
   from the creator wallet (nonce 327, signed on the server). Gas used 4,689,541 at 0.020068 gwei = 0.0000941 ETH.
 - Source: `src/TroyaFeeRouter.sol` at commit `2c9b906`, solc v0.8.24+commit.e11b9ed9, optimizer 500 runs, evm shanghai,

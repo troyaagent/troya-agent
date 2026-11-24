@@ -40,13 +40,19 @@ const PONS_FACTORY = "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e";     // Pons v
 const ESCROW = "0xd3AFEB2a57f70eF218Aa82451c51B2fb0416Ac9e";             // Pons fee escrow (Pons's contract)
 const LAUNCH_TX = "0xf5e33fcd6b28c87ec4bd25b0d7b35477d019a0ed2386963f8089265b294cad2e";
 const LP_BURN_TX = "0xfe7f12591df9b9f53a0366a31cf36d1cf00b8200b6ae05fb8eeb7989afc24ea0";
-const LP_NFT = 4293939;
+const LP_NFT = 4293939;                                                  // small separate 1% pool with no hook, burned to 0x…dEaD
+const MAIN_LP = 4302001;                                                 // the main pool's position, minted at graduation and held by the Pons locker
+const PONS_LOCKER = "0x267444D099b10fB5Ed7c3Cc7B7c767AdcA574952";        // Pons v2 launch locker (Pons's contract)
+const PONS_HOOK = "0xE5e702641Ea86F4ae6cC3cDaeD2B886f976Be044";          // Pons v2 meme hook (Pons's contract)
+const GRAD_TX = "0xa77271fef8b0ac94235545a28895bfc0e67e77815dbccadc2246bdca07818dd8";   // PoolGraduated($TROYA, position 4302001), 16 Nov 2026
+const HOOK_TX = "0x220a9825bb32374540a6c7f3d6e7c769de64430c7f2155484ad0344d1c955d4b";   // the hook's deployment
+const PONS_FACTORY_TX = "0x3817f297aa7c2ef78789bffac57491ceedc218fef962d47ed36c272699deddeb";
 const MINTED_RAW = 10n ** 27n;                                            // 1,000,000,000 × 10^18, minted once at launch
 const GITHUB = "https://github.com/troyaagent/troya-agent";
 const SRC = `${GITHUB}/blob/main/contracts/src`;
 const BS = "https://robinhoodchain.blockscout.com";
 const RPC_PUBLIC = "https://rpc.mainnet.chain.robinhood.com";
-const SEL = { totalSupply: "0x18160ddd", balanceOf: "0x70a08231", owner: "0x8da5cb5b", ownerOf: "0x6352211e", token: "0xfc0c546a", cooldown: "0xa2724a4d", burn: "0x42966c68",
+const SEL = { pendingCreatorFeeRecipient: "0x9beacf4a", creatorFeeTimelock: "0x5a83b00a", totalSupply: "0x18160ddd", balanceOf: "0x70a08231", owner: "0x8da5cb5b", ownerOf: "0x6352211e", token: "0xfc0c546a", cooldown: "0xa2724a4d", burn: "0x42966c68",
   pendingOwner: "0xe30c3978", timelock: "0x7aadef8b", pendingConfigEta: "0xac679bf5", pendingRecipient: "0xaa0d276a", getLaunchedToken: "0x3cf28b5a" };
 const lc = (s) => String(s || "").toLowerCase();
 const isHash = (h) => /^0x[0-9a-fA-F]{64}$/.test(String(h || ""));
@@ -224,12 +230,24 @@ async function contractFacts() {
     chain().then((m) => m.rpc("robinhood", "eth_getCode", [FEE_ROUTER, "latest"])).then((c) => (String(c || "0x").length - 2) / 2).catch(() => null),
     probe(recipientCall.to, recipientCall.data),
   ]);
+  const ponsPendingCall = { to: PONS_FACTORY, data: SEL.pendingCreatorFeeRecipient + word(TROYA) }, mainLpCall = { to: POSM, data: SEL.ownerOf + pad(MAIN_LP) };
+  const [mainLpOwner, ponsOwner, ponsPending, ponsTimelock] = await Promise.all([probe(mainLpCall.to, mainLpCall.data), probe(PONS_FACTORY, SEL.owner), probe(ponsPendingCall.to, ponsPendingCall.data), probe(PONS_FACTORY, SEL.creatorFeeTimelock)]);
+  const pendWords = ponsPending && ponsPending !== "reverts" ? String(ponsPending).slice(2).match(/.{64}/g) || [] : [];
+  const pons = {
+    mainLpOwner: mainLpOwner && mainLpOwner !== "reverts" ? getAddress("0x" + String(mainLpOwner).slice(-40)) : null,
+    owner: ponsOwner && ponsOwner !== "reverts" ? getAddress("0x" + String(ponsOwner).slice(-40)) : null,
+    timelockSeconds: ponsTimelock && ponsTimelock !== "reverts" ? Number(BigInt(ponsTimelock)) : null,
+    pendingTo: pendWords.length >= 3 && BigInt("0x" + pendWords[0]) !== 0n ? getAddress("0x" + pendWords[0].slice(24)) : null,
+    pendingEta: pendWords.length >= 3 ? Number(BigInt("0x" + pendWords[1])) : null,
+    read: pendWords.length >= 3,
+    checks: [mainLpCall, ponsPendingCall, { to: PONS_FACTORY, data: SEL.creatorFeeTimelock }, { to: PONS_FACTORY, data: SEL.owner }].map((c) => ({ rpc: RPC_PUBLIC, body: { jsonrpc: "2.0", id: 1, method: "eth_call", params: [c, "latest"] } })),
+  };
   const feeRecipient = launched !== "reverts" && String(launched || "").length >= 2 + 64 * 4 ? getAddress("0x" + String(launched).slice(2 + 64 * 3 + 24, 2 + 64 * 4)) : null;
   const addrOf = (r) => (r === "reverts" || !r ? null : getAddress("0x" + String(r).slice(-40)));
   const noOwner = (r) => (r === "reverts" ? "owner() reverts: the contract has no owner function" : `owner() returns ${addrOf(r)}`);
   const ownerCall = (to) => ({ rpc: RPC_PUBLIC, body: { jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data: SEL.owner }, "latest"] } });
   const ver = (a) => (src[a] ? `source verified on Sourcify (${src[a]})` : "source in the public repo; not yet verified on Sourcify");
-  facts = { at: Date.now(), contracts: [
+  facts = { at: Date.now(), pons, contracts: [
     { name: "$TROYA token", address: TROYA, by: "Pons Family token template (launched by the creator wallet)", url: `${BS}/token/${TROYA}`, facts: [noOwner(troyaOwner), "1,000,000,000 minted once at launch, straight into the Pons curve"], checks: [ownerCall(TROYA)], sourcify: src[TROYA] || null, tx: LAUNCH_TX },
     { name: "TroyaStake", address: STAKE, by: "Troya", source: `${SRC}/TroyaStake.sol`, url: addrUrl(STAKE), codeBytes: codes[0],
       facts: [noOwner(stakeOwner), `token() = ${addrOf(stakeToken) || "–"}${lc(addrOf(stakeToken)) === lc(TROYA) ? " ($TROYA)" : ""}`, `COOLDOWN() = ${stakeCooldown === "reverts" ? "–" : `${Number(BigInt(stakeCooldown))} seconds (${Number(BigInt(stakeCooldown)) / 86400} days)`}`, "no admin, pause, upgrade, fee or rescue function in its source", ver(STAKE)],
@@ -354,7 +372,12 @@ export async function claimsView() {
     ...b.burns.list.map((x) => ev.tx(x.hash, `burn of ${Number(x.troya).toLocaleString("en-US", { maximumFractionDigits: 2 })} $TROYA`)),
   ], { checkedAt: b.checkedAt, block: b.block });
   const lp = c?.contracts?.filter((x) => x.tokenId) || [];
-  if (lp.length) add("liquidity-locked", `${lp.filter((x) => x.deadOwned).length} Uniswap v4 $TROYA/ETH liquidity position${lp.length === 1 ? "" : "s"} owned by 0x…dEaD (#${lp.map((x) => x.tokenId).join(", #")}), so that liquidity cannot be removed.`, st(lp.some((x) => x.deadOwned)), [
+  const pn = c?.pons;
+  if (pn) add("liquidity-main", `The main $TROYA/ETH pool's liquidity is Uniswap v4 position #${MAIN_LP}, minted when $TROYA graduated from the Pons curve on 16 Nov 2026 (4.2 ETH and 204,081,632 $TROYA went in). ownerOf(${MAIN_LP}) = ${pn.mainLpOwner || "–"}${lc(pn.mainLpOwner) === lc(PONS_LOCKER) ? ", the Pons launch locker, which has no function that moves the position or removes its liquidity" : ""}. This is the liquidity that protects holders.`, st(lc(pn.mainLpOwner) === lc(PONS_LOCKER)), [
+    ev.tx(GRAD_TX, `graduation: PoolGraduated($TROYA, position ${MAIN_LP})`), ev.call(pn.checks[0].body, `ownerOf(${MAIN_LP}) on the PositionManager`),
+    ev.contract(PONS_LOCKER, "the Pons launch locker (verified source: lockPosition only, no withdraw)"), ev.page(`${BS}/token/${POSM}/instance/${MAIN_LP}`, "the position NFT and its owner"),
+  ], { checkedAt: c.at });
+  if (lp.length) add("liquidity-locked", `Smaller positions owned by 0x…dEaD, so that liquidity cannot be removed: ${lp.filter((x) => x.deadOwned).length} of ${lp.length} (#${lp.map((x) => x.tokenId).join(", #")}). #${LP_NFT} is a separate 1% pool with no hook (0.0012 ETH went in), which keeps a route open if the hook ever failed${lp.length > 1 ? "; the others are small additions to the main pool from the flywheel" : ""}. The main liquidity is #${MAIN_LP} above.`, st(lp.some((x) => x.deadOwned)), [
     ...lp.map((x) => x.tx && ev.tx(x.tx, `position #${x.tokenId} sent or minted to 0x…dEaD`)), ...lp.map((x) => ev.call(x.checks[0].body, `ownerOf(${x.tokenId}) on the PositionManager`)),
   ], { checkedAt: c.at });
   add("gate", "Troya Gate checks any Robinhood Chain coin before a buy, free and without a wallet: route, price impact, pool depth, fees and taxes, the exact swap simulated with eth_call, a test sell and a transfer-tax probe. Fail one and no order is offered.", ge ? "live" : "planned", [
@@ -410,6 +433,14 @@ export async function claimsView() {
       ev.call(fr.checks[0].body, "owner()", fr.owner ? "0x" + word(fr.owner) : null), ev.call(fr.checks[2].body, "getLaunchedToken($TROYA) on the Pons factory: word 3 is creatorFeeRecipient"),
       ev.call(fr.checks[1].body, "TIMELOCK()", fr.timelockSeconds != null ? "0x" + pad(fr.timelockSeconds) : null), ev.tx(FEE_ROUTER_TX, "deployment"),
     ], { checkedAt: c.at, ...(fr.routerIsRecipient ? {} : { note: "planned: the router splits the fees once the Pons recipient is switched to it" }) });
+  }
+  if (pn) {
+    const days = pn.timelockSeconds != null ? `${pn.timelockSeconds / 86400} days` : "3 days";
+    add("pons-fee-redirect", `Known dependency: the Pons factory owner (${pn.owner || "–"}, Pons's multisig) can redirect the $TROYA creator-fee recipient, but only by proposing it on chain and waiting CREATOR_FEE_RECIPIENT_TIMELOCK() = ${days}; anyone can see the proposal (CreatorFeeRecipientChangeProposed) during that time. ${!pn.read ? "The pending proposal could not be read just now." : pn.pendingTo ? `A proposal IS pending for $TROYA: to ${pn.pendingTo}, executable from ${when(pn.pendingEta * 1000)}.` : "No proposal is pending for $TROYA."} The Pons hook, factory, escrow and locker have no pause or upgrade path.`, st(pn.read && !pn.pendingTo), [
+      ev.call(pn.checks[1].body, "pendingCreatorFeeRecipient($TROYA): zero address means nothing pending"), ev.call(pn.checks[2].body, "CREATOR_FEE_RECIPIENT_TIMELOCK()"), ev.call(pn.checks[3].body, "owner() of the Pons factory"),
+      ev.contract(PONS_FACTORY, "the Pons v2 launch factory (verified source)"), ev.tx(PONS_FACTORY_TX, "the factory's deployment"),
+      ev.contract(PONS_HOOK, "the Pons v2 hook (verified source, not a proxy)"), ev.tx(HOOK_TX, "the hook's deployment"),
+    ], { checkedAt: c.at });
   }
   let rscan = null;
   try { rscan = JSON.parse(await readFile(join(root, "public", "security", "troyafeerouter-scan.json"), "utf8")); } catch { /* not published */ }
@@ -514,7 +545,7 @@ function paintTrades(v) {
   setFragment("wallets", v.wallets.map((w) => `<tr><td>${esc(w.name)}<small>${esc(w.role)}</small></td><td>${A(w.url, w.address)}</td></tr>`).join(""));
 }
 function paintClaims(v) {
-  const rows = (s) => v.claims.filter((x) => x.status === s).map((x) => `<li class="pf-claim pf-${esc(x.status)}"><span class="pf-st">${x.status === "live" ? "Live" : "Planned"}</span><div><p>${esc(x.claim)}</p>${x.evidence.length ? `<small>${x.evidence.slice(0, 4).map((e) => e.url ? A(e.url, e.what || e.type) : e.body ? `<code>${esc(e.what || "eth_call")}</code>` : "").filter(Boolean).join(" · ")}${x.evidence.length > 4 ? ` · ${x.evidence.length - 4} more in proof.json` : ""}</small>` : ""}</div></li>`).join("");
+  const rows = (s) => v.claims.filter((x) => x.status === s).map((x) => `<li id="claim-${esc(x.id)}" class="pf-claim pf-${esc(x.status)}"><span class="pf-st">${x.status === "live" ? "Live" : "Planned"}</span><div><p>${esc(x.claim)}</p>${x.evidence.length ? `<small>${x.evidence.slice(0, 4).map((e) => e.url ? A(e.url, e.what || e.type) : e.body ? `<code>${esc(e.what || "eth_call")}</code>` : "").filter(Boolean).join(" · ")}${x.evidence.length > 4 ? ` · ${x.evidence.length - 4} more in proof.json` : ""}</small>` : ""}</div></li>`).join("");
   setFragment("claims-live", rows("live") || '<li class="pf-claim">–</li>');
   setFragment("claims-planned", rows("planned") || '<li class="pf-claim">Nothing planned is listed.</li>');
   setFragment("contracts", (v.contracts || []).map((c) => `<tr><td>${esc(c.name)}<small>${esc(c.by)}</small></td><td>${A(c.url, c.tokenId ? `#${c.tokenId}` : c.address)}${c.source ? `<small>${A(c.source, "source")}</small>` : ""}</td><td class="pf-wrap">${c.facts.map((f) => esc(f)).join("<br>")}${c.tx ? `<small>${T(c.tx, "transaction")}</small>` : ""}</td></tr>`).join(""));

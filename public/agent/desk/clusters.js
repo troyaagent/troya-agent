@@ -2,7 +2,8 @@
 // wallets linked to each other are joined by lines and coloured by cluster; pools, lockers, staking and burn addresses are
 // drawn apart in grey and never grouped. Tap or hover a bubble: its address, its share and why it is linked, with the
 // transaction behind each link. The data is GET /api/clusters/:token (server/clusters.mjs); this file only draws it.
-//   clusterSection(address, { lazy, inset, link })  the section for the token page and the Gate result
+//   clusterSection(address, { lazy, inset, link, compact })  the section for the token page and the Gate result
+//     (compact: the token page's analysis card, beside the chart: the map fills the pane, details float over it)
 //   mount(view, ctx)                                the page at #/clusters and #/clusters/<token>
 import { h, clear, icon, short, ago, toast } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
@@ -82,9 +83,14 @@ function layout(nodes, links, W, H) {
 }
 
 /* ---------- one map ---------- */
-function renderMap(box, r, { standalone }) {
+function renderMap(box, r, { standalone, compact = false, address = "" }) {
   const stage = h("div", { class: "cm-stage" });
   const detail = h("div", { class: "cm-detail", "aria-live": "polite" });
+  const legendC = h("div", { class: "cm-legend cm-legend-c", "aria-hidden": "true" },
+    h("span", {}, h("i", { class: "cm-k cm-k-link" }), "Linked"),
+    h("span", {}, h("i", { class: "cm-k cm-k-w" }), "Wallet"),
+    h("span", {}, h("i", { class: "cm-k cm-k-dev" }), "Dev"),
+    h("span", {}, h("i", { class: "cm-k cm-k-c" }), "Pool or contract"));
   const legend = h("div", { class: "cm-legend", "aria-hidden": "true" },
     h("span", {}, h("i", { class: "cm-k cm-k-link" }), "Linked wallets (one colour per cluster)"),
     h("span", {}, h("i", { class: "cm-k cm-k-w" }), "Wallet, no link found"),
@@ -96,8 +102,9 @@ function renderMap(box, r, { standalone }) {
   let sel = null, svg = null, focusCl = null;
 
   const draw = () => {
-    const W = Math.max(300, Math.round(stage.clientWidth || 700));
-    const H = Math.round(W < 520 ? Math.max(340, W * 1.05) : Math.min(520, Math.max(380, W * 0.56)));
+    // compact: the pane decides the size (the card is as tall as the chart beside it)
+    const W = Math.max(compact ? 200 : 300, Math.round(stage.clientWidth || 700));
+    const H = compact && stage.clientHeight > 120 ? Math.round(stage.clientHeight) : Math.round(W < 520 ? Math.max(340, W * 1.05) : Math.min(520, Math.max(380, W * 0.56)));
     layout(nodes, r.links, W, H);
     svg = s("svg", { class: "cm-svg", viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "group", "aria-label": `Bubble map of the ${nodes.length} largest holders` });
     const gl = s("g", { class: "cm-lines" }), gn = s("g", { class: "cm-nodes" });
@@ -145,6 +152,14 @@ function renderMap(box, r, { standalone }) {
       g.classList.toggle("is-dim", on && !(sel && a === sel.address) && !(focusCl && c === focusCl));
     }
     for (const l of svg.querySelectorAll(".cm-l")) l.classList.toggle("is-dim", on && !(focusCl && l.getAttribute("data-cl") === focusCl));
+    if (compact) {
+      // over the map: shown while a bubble is hovered or tapped; a tapped one keeps it (with a close button) and its links work
+      const card = sel ? nodeCard(sel) : focusCl ? clusterCard(clusterOf.get(focusCl)) : null;
+      detail.hidden = !card;
+      detail.classList.toggle("is-pinned", pinned && !!card);
+      clear(detail, card, card && pinned ? h("button", { class: "cm-x", type: "button", "aria-label": "Close details", onclick: (e) => { e.stopPropagation(); pick(null, true); } }, icon("close")) : null);
+      return;
+    }
     clear(detail, sel ? nodeCard(sel) : focusCl ? clusterCard(clusterOf.get(focusCl)) : h("p", { class: "fine cm-hint" }, "Tap or hover a bubble: its address, its share and why it is linked. Bubble size is the share of the supply it holds."));
   }
   function nodeCard(n) {
@@ -176,7 +191,14 @@ function renderMap(box, r, { standalone }) {
     : null;
 
   const stopList = [];
-  clear(box,
+  if (compact) {
+    const nc = r.clusters.length;
+    clear(box,
+      h("p", { class: "cm-sum cm-sum-c", title: r.summary }, r.summary),
+      h("div", { class: "cm-cbox" }, stage, detail),
+      h("div", { class: "cm-foot" }, legendC,
+        h("a", { class: "link fine cm-more", href: `#/clusters/${address}` }, nc ? `${nc} cluster${nc > 1 ? "s" : ""}, the proof and sources` : "The proof and sources", " →")));
+  } else clear(box,
     h("p", { class: "cm-sum" }, r.summary),
     h("div", { class: "cm-body" }, h("div", { class: "cm-left" }, stage, legend), detail),
     list,
@@ -185,8 +207,11 @@ function renderMap(box, r, { standalone }) {
       h("ul", {}, r.coverage.map((c) => h("li", { class: `c-${String(c.status).replace("/", "")}` }, h("b", {}, c.source), h("span", {}, STATUS[c.status] || c.status), c.note ? h("small", {}, c.note) : null)))),
     h("p", { class: "note cm-note" }, r.note));
   // drawn once the stage has a width; redrawn when it changes (a phone turned, a sidebar opened)
-  let lastW = 0;
-  const ro = new ResizeObserver(() => { const w = Math.round(stage.clientWidth); if (w && Math.abs(w - lastW) > 24) { lastW = w; draw(); } });
+  let lastW = 0, lastH = 0;
+  const ro = new ResizeObserver(() => {
+    const w = Math.round(stage.clientWidth), hh = compact ? Math.round(stage.clientHeight) : 0;
+    if (w && (Math.abs(w - lastW) > 24 || Math.abs(hh - lastH) > 24)) { lastW = w; lastH = hh; draw(); }
+  });
   ro.observe(stage);
   stopList.push(() => ro.disconnect());
   return () => stopList.forEach((f) => f());
@@ -194,11 +219,11 @@ function renderMap(box, r, { standalone }) {
 
 /** The Cluster map section for one coin. lazy: start reading when it scrolls near the screen. inset: no panel frame
  *  (inside the Gate result). link: a link to the full page. */
-export function clusterSection(address, { lazy = true, inset = false, link = true, standalone = false } = {}) {
+export function clusterSection(address, { lazy = true, inset = false, link = true, standalone = false, compact = false } = {}) {
   clusterCss();
-  const body = h("div", { class: "cm-out", "aria-live": "polite" }, h("div", { class: "cm-wait" }, h("span", { class: "cm-spin" }), h("span", {}, "Reading the largest holders, their funders, the dev side and the launch…")));
-  const el = h("section", { class: `cm ${inset ? "cm-inset" : "panel"}` },
-    h("div", { class: "panel-h cm-h" }, h("h2", {}, "Cluster map"), h("span", { class: "fine cm-sub" }, "who holds it, and which wallets are linked"),
+  const body = h("div", { class: "cm-out", "aria-live": "polite" }, h("div", { class: "cm-wait" }, h("span", { class: "cm-spin" }), h("span", {}, compact ? "Reading the largest holders and who is linked…" : "Reading the largest holders, their funders, the dev side and the launch…")));
+  const el = h("section", { class: `cm ${compact ? "cm-compact" : inset ? "cm-inset" : "panel"}` },
+    h("div", { class: "panel-h cm-h" }, h("h2", {}, "Cluster map"), h("span", { class: "fine cm-sub" }, compact ? "the 50 largest holders" : "who holds it, and which wallets are linked"),
       link ? h("a", { class: "link fine", href: `#/clusters/${address}` }, "Full map") : null),
     body);
   let tries = 0, stop = null, timer = 0, started = false;
@@ -215,7 +240,7 @@ export function clusterSection(address, { lazy = true, inset = false, link = tru
     if (!el.isConnected && tries > 1) return;
     stop?.();
     if (!r.holders?.length) clear(body, h("div", { class: "cm-empty" }, h("b", {}, r.summary || "No holders to draw yet."), h("p", { class: "fine" }, r.note || "")));
-    else stop = renderMap(body, r, { standalone });
+    else stop = renderMap(body, r, { standalone, compact, address });
     if (r.partial && tries < 8) timer = setTimeout(load, 12_000);
   };
   const start = () => { if (started) return; started = true; load(); };

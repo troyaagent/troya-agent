@@ -1217,7 +1217,8 @@ const T_CBUY = "0xec36bf571f136799e8dc0b0b8bea4b04d8bd3d43de838aab0d5fc21d4cbfc4
 const T_CSELL = "0x8113d738abdcb6b38357e9d53a54a7157861a09031b453651f0fe7fe151f59df";
 const T_V4SWAP = "0x40e9cecb9f5f1f1c5b9c97dec2917b7ee92e57ba5563708daca94dd84ad7112f";
 const IV_S = { "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400 };
-const CHAINC = new Map();      // token -> { curve, poolId, last, dec, trades: [[unix s, ETH per token, ETH volume]], busy }
+const CHAINC = new Map();      // token -> { curve, poolId, last, dec, pdec, coin0, quote, trades: [[unix s, price in the pair, pair volume]], busy }
+const ZERO_A = "0x0000000000000000000000000000000000000000";
 const BLOCK_TS = new Map();    // block -> unix s
 const rhHex = (n) => "0x" + n.toString(16);
 const s256 = (v) => (v >= 2n ** 255n ? v - 2n ** 256n : v);
@@ -1257,7 +1258,14 @@ async function chainTrades(a) {
     const { findLaunchTx } = await import("./ringradar.mjs");
     const l = await findLaunchTx(a).catch(() => null);
     const decHex = await rhRpc("robinhood", "eth_call", [{ to: a, data: "0x313ce567" }, "latest"]).catch(() => null);
-    c = { curve: ps.curve || null, poolId, last: l?.block ? l.block - 1 : Math.max(0, head0 - 8_000_000), dec: decHex && decHex !== "0x" ? Number(BigInt(decHex)) : 18, trades: [], busy: null };
+    // the pair the coin trades against: native ETH for most, but WETH, USDG or another token (a stock token: $ORBIO
+    // is paired with NVDA) too. Its decimals and its side of the v4 pool (currency0 is the lower address, native ETH
+    // is address 0) decide how a Swap reads; $ORBIO's chart read NVDA per coin upside down and times ETH's price
+    // (a $13.9M coin drawn as "$18,751T", 24 Nov 2026)
+    const pair = lc(ps.pair || ZERO_A), pdec = Number(ps.pairDecimals) || 18;
+    const quote = pair === ZERO_A || pair === lc(RH.weth) ? "eth" : pair === lc(RH.usdg) ? "usd" : { addr: pair, symbol: ps.pairSymbol || "pair" };
+    c = { curve: ps.curve || null, poolId, last: l?.block ? l.block - 1 : Math.max(0, head0 - 8_000_000), dec: decHex && decHex !== "0x" ? Number(BigInt(decHex)) : 18,
+      pdec, coin0: pair !== ZERO_A && BigInt(a) < BigInt(pair), quote, trades: [], busy: null };
     CHAINC.set(a, c);
     while (CHAINC.size > 400) CHAINC.delete(CHAINC.keys().next().value);
   }
@@ -1278,16 +1286,18 @@ async function chainTrades(a) {
       if (!t) continue;
       if (l.topics[0] === T_V4SWAP) {
         if (w.length < 3) continue;
-        const sq = Number(w[2]) / 2 ** 96, tokPerEth = sq * sq * 10 ** (18 - c.dec);
-        const eth = Math.abs(Number(s256(w[0]))) / 1e18;
-        if (tokPerEth > 0) c.trades.push([t, 1 / tokPerEth, eth]);
+        // sqrtPriceX96² = currency1 per currency0 in raw units; the coin's price in its pair from whichever side it is on
+        const sq = Number(w[2]) / 2 ** 96, raw = sq * sq, f = 10 ** (c.dec - c.pdec);
+        const px = c.coin0 ? raw * f : raw > 0 ? f / raw : 0;
+        const vq = Math.abs(Number(s256(c.coin0 ? w[1] : w[0]))) / 10 ** c.pdec;
+        if (px > 0 && isFinite(px)) c.trades.push([t, px, vq]);
         continue;
       }
       if (w.length < 4) continue;
       const buy = l.topics[0] === T_CBUY;
       const eth = buy ? w[0] - w[2] - w[3] : w[1] + w[2] + w[3], tok = buy ? w[1] : w[0];
       if (tok <= 0n || eth <= 0n) continue;
-      const ethF = Number(eth) / 1e18;
+      const ethF = Number(eth) / 10 ** c.pdec;   // in the pair's unit (ETH for most coins)
       c.trades.push([t, ethF / (Number(tok) / 10 ** c.dec), ethF]);
     }
     c.last = head;
@@ -1325,10 +1335,17 @@ function ethAt(list, t, step) {
 // candles in USD from 5-minute quote buckets: quiet stretches carry the last price forward to the current bar, so the
 // chart runs to now (300 bars at most). With them: how many trades the window holds, when the last trade was and at what
 // USD price, and the trade count of each interval's window (the page opens on the smallest one that has trades).
+// quote: "eth", "usd", or { addr, symbol } for a coin paired with another token (bars priced by that token's own chart)
+async function pairCloses(q, iv) {
+  const [tk, cd] = await Promise.all([getRobinhoodToken(q.addr).catch(() => null), getRobinhoodCandles(q.addr, iv).catch(() => null)]);
+  return { now: fnum(tk?.token?.priceUsd), list: (cd?.candles || []).filter((x) => x.close > 0).map((x) => [x.time, x.close]) };
+}
 async function buildCandles(b5, iv, { quote, lastTrade, covered = null }) {
   if (!b5.size) return null;
   const step = IV_S[iv], now = Math.floor(Date.now() / 1000), endB = Math.floor(now / step) * step;
-  const ethNow = quote === "eth" ? await getEthUsd().catch(() => null) : 1;
+  const tokQ = quote && typeof quote === "object";
+  const pq = tokQ ? await pairCloses(quote, iv) : null;
+  const ethNow = quote === "eth" ? await getEthUsd().catch(() => null) : tokQ ? pq.now || pq.list.at(-1)?.[1] || null : 1;
   if (!ethNow) return null;
   const by = new Map();
   for (const k of [...b5.values()].sort((x, y) => x.t - y.t)) {
@@ -1346,9 +1363,9 @@ async function buildCandles(b5, iv, { quote, lastTrade, covered = null }) {
     if (k) { if (prev != null) { k.open = prev; k.high = Math.max(k.high, prev); k.low = Math.min(k.low, prev); } q.push(k); prev = k.close; }
     else if (prev != null) q.push({ time: b, open: prev, high: prev, low: prev, close: prev, vq: 0, n: 0 });
   }
-  const eth = quote === "eth" ? await ethCloses(iv) : [];
-  const perBar = quote !== "eth" || eth.length > 0;
-  const usdAt = (t, last) => (quote !== "eth" ? 1 : last ? ethNow : ethAt(eth, t, step) ?? ethNow);
+  const eth = quote === "eth" ? await ethCloses(iv) : tokQ ? pq.list : [];
+  const perBar = quote === "usd" || eth.length > 0;
+  const usdAt = (t, last) => (quote === "usd" ? 1 : last ? ethNow : ethAt(eth, t, step) ?? ethNow);
   const candles = q.map((x, i) => {
     const e = usdAt(x.time, i === q.length - 1);
     return { time: x.time, open: x.open * e, high: x.high * e, low: x.low * e, close: x.close * e, volume: x.vq * e };
@@ -1360,7 +1377,7 @@ async function buildCandles(b5, iv, { quote, lastTrade, covered = null }) {
       e = ethAt(eth, lastTrade.t, step);
       // older than this interval's window: the daily ETH candles (90 days), else today's price
       if (e == null) { const d = await ethCloses("1d"); e = ethAt(d, lastTrade.t, 86400) ?? ethNow; }
-    }
+    } else if (tokQ) e = ethAt(eth, lastTrade.t, step) ?? ethNow;
     lastTradeUsd = lastTrade.px * e;
   }
   const windows = {};
@@ -1371,7 +1388,7 @@ async function buildCandles(b5, iv, { quote, lastTrade, covered = null }) {
     windows[k] = n;
   }
   return {
-    candles, interval: iv, unit: "USD", ethPriced: quote === "eth" ? (perBar ? "per bar" : "today") : null,
+    candles, interval: iv, unit: "USD", ethPriced: quote === "eth" ? (perBar ? "per bar" : "today") : null, pairPriced: tokQ ? (perBar ? "per bar" : "today") : null,
     tradesInWindow: q.reduce((s, x) => s + x.n, 0), windowHours: +(((endB + step - startB) / 3600).toFixed(2)),
     lastTradeAt: lastTrade ? lastTrade.t * 1000 : null, lastTradeUsd, windows, windowsFrom: covered, updatedAt: Date.now(),
   };
@@ -1572,10 +1589,10 @@ async function chainCandles(a, iv) {
   const b5 = new Map();
   c.trades.forEach(([t, px, eth], i) => addB5(b5, t, i, px, eth));
   const last = c.trades.reduce((m, x) => (!m || x[0] >= m[0] ? x : m), null);
-  const out = await buildCandles(b5, iv, { quote: "eth", lastTrade: last ? { t: last[0], px: last[1] } : null });
+  const out = await buildCandles(b5, iv, { quote: c.quote || "eth", lastTrade: last ? { t: last[0], px: last[1] } : null });
   if (!out) return null;
   const src = c.poolId ? (c.curve ? "On-chain: Pons curve + Uniswap v4 pool" : "On-chain: Uniswap v4 pool") : "On-chain: Pons curve";
-  out.source = `${src}${out.ethPriced === "today" ? ", USD at today's ETH price" : ""}`;
+  out.source = `${src}${out.ethPriced === "today" ? ", USD at today's ETH price" : out.pairPriced === "today" ? `, USD at today's ${c.quote.symbol} price` : ""}`;
   out.trades = c.trades.length;
   return out;
 }

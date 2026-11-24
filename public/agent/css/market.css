@@ -95,6 +95,21 @@ html[data-theme="light"] .mk-buy { color: var(--blue-3); border-color: rgba(10, 
 .tk-chart-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px 0; }
 .tk-chart-msg { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; color: var(--muted); font-size: 13px; gap: 4px; }
 .tk-chart-msg b { color: var(--fg); font-weight: 500; }
+/* the analysis card (community request, 24 Nov 2026): the chart and the Cluster map in one card, side by side when the
+   card is wide enough (60 / 40, equal height), stacked on a phone. Sized by the card's own width, not the screen's. */
+.tk-an { padding: 0; container-type: inline-size; }
+.tk-an-in { display: grid; grid-template-columns: minmax(0, 1fr); }
+.tk-an-chart { min-width: 0; display: flex; flex-direction: column; }
+.tk-an-cm { min-width: 0; display: flex; flex-direction: column; padding: 12px 14px 14px; border-top: 1px solid var(--line); }
+.tk-an .tk-chart { overflow: hidden; }
+@container (min-width: 640px) {
+  .tk-an-in { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+  .tk-an-cm { border-top: 0; border-left: 1px solid var(--line); }
+}
+@container (max-width: 639.98px) {
+  .tk2.tk2 .tk-an .tk-chart { height: 230px; min-height: 0; }
+  .tk-an-cm .cm-cbox { flex: none; height: 270px; }
+}
 .tk-stats { display: grid; grid-template-columns: 1fr 1fr; }
 .tk-stats > div { padding: 12px 14px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
 .tk-stats > div:nth-child(-n+2) { border-top: 0; }
@@ -202,6 +217,12 @@ html[data-theme="light"] .mk-buy { color: var(--blue-3); border-color: rgba(10, 
   .tk2.tk2 .tk-side > .tk2-gate { order: 2; }
   .tk2.tk2 .tk-side > .wt-trade { order: 3; }
   .tk2.tk2 .tk-chart { height: 260px; }
+  .tk2.tk2 .tk-an .tk-chart { height: 200px; min-height: 0; padding-top: 4px; }
+  .tk2.tk2 .tk-an .tk-chart-bar { padding: 10px 10px 0; }
+  .tk2.tk2 .tk-an .tk-chart-segs { flex-wrap: nowrap !important; gap: 6px !important; }
+  .tk2.tk2 .tk-an .tk-chart-segs .seg button { padding: 0 8px; font-size: 12px; }
+  .tk2.tk2 .tk-an-cm { padding: 10px 12px 12px; }
+  .tk2.tk2 .tk-an-cm .cm-cbox { height: 250px; }
   /* the sticky bar sits on the tab bar (60 px + the safe area); the page ends with room for it */
   .tk2.tk2 .tk-mbar { display: flex; align-items: center; gap: 6px; position: fixed; z-index: 69; left: 0; right: 0; bottom: calc(60px + env(safe-area-inset-bottom)); padding: 8px 16px;
     background: rgba(5, 9, 13, .94); border-top: 1px solid var(--line); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }

@@ -177,7 +177,12 @@ export async function mount(view, { parts, ask }) {
   const paintSrc = () => { chartSrc.textContent = chartSrcName ? `${chartSrcName} · ${chartIv} candles · ${unit === "mcap" ? "market cap in USD" : "priced in USD"}` : ""; };
   // a coin with no trades in the chart's window says so, with its last trade, instead of a flat row of identical bars
   const quietLine = h("p", { class: "fine muted tk-chart-quiet", hidden: true, style: { margin: "8px 0 0" } });
-  const chartPanel = h("section", { class: "panel" }, h("div", { class: "tk-chart-bar", style: { flexWrap: "wrap" } }, h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px" } }, unitSeg, ivSeg), chartSrc), chartBox, quietLine);
+  // one analysis card (community request, 24 Nov 2026: "divide the chart column by 2 with clusters"): the chart and the
+  // Cluster map side by side on a wide screen, stacked in the same card on a phone. Stock and core tokens have no map.
+  const clusterCard = stockish ? null : clusterSection(address, { compact: true });
+  const chartPanel = h("section", { class: `panel tk-an${clusterCard ? "" : " tk-an-solo"}` }, h("div", { class: "tk-an-in" },
+    h("div", { class: "tk-an-chart" }, h("div", { class: "tk-chart-bar", style: { flexWrap: "wrap" } }, h("div", { class: "tk-chart-segs", style: { display: "flex", flexWrap: "wrap", gap: "8px" } }, unitSeg, ivSeg), chartSrc), chartBox, quietLine),
+    clusterCard ? h("div", { class: "tk-an-cm" }, clusterCard) : null));
   const spanText = (hrs) => (hrs >= 48 ? `${Math.round(hrs / 24)} days` : `${Math.round(hrs)} h`);
   // tradesInWindow comes with on-chain candles; GeckoTerminal's are quiet when no bar carries volume
   const isQuiet = (c, list) => (c.tradesInWindow != null ? c.tradesInWindow === 0 : list.length > 1 && list.every((x) => !(x.volume > 0)));
@@ -186,7 +191,7 @@ export async function mount(view, { parts, ask }) {
     quietLine.hidden = !quiet;
     if (!quiet) { quietLine.textContent = ""; return; }
     const span = c.windowHours > 0 ? c.windowHours : ((rows.length ? rows[rows.length - 1].time - rows[0].time : 0) + (IV_SECS[chartIv] || 3600)) / 3600;
-    const px = c.lastTradeUsd > 0 ? `$${tiny(c.lastTradeUsd)}${unit === "mcap" && supplyK() ? ` (MC $${compact(c.lastTradeUsd * supplyK(), 2)})` : ""}` : null;
+    const px = c.lastTradeUsd > 0 ? `$${tiny(c.lastTradeUsd)}${unit === "mcap" && supplyK() ? ` (MC ${usdShort(c.lastTradeUsd * supplyK())})` : ""}` : null;
     quietLine.textContent = `No trades in the last ${spanText(span)}${c.lastTradeAt ? ` · last trade ${ago(c.lastTradeAt)} ago${px ? ` at ${px}` : ""}` : ""}`;
   };
   // the chart's colours follow the theme, as on the Desk: light keeps a darker blue and red and drops the scale borders
@@ -207,7 +212,17 @@ export async function mount(view, { parts, ask }) {
     return { ...r, priceRange: { minValue: mid * 0.97, maxValue: mid * 1.03 } };
   };
   const volBar = (x, l) => ({ time: x.time, value: x.volume || 0, color: x.close >= x.open ? (l ? "rgba(10,126,163,.22)" : "rgba(95,211,239,.28)") : (l ? "rgba(200,48,63,.2)" : "rgba(255,107,125,.28)") });
-  const fmtV = (p) => (p < 0 ? "" : unit === "mcap" ? `$${compact(p, 2)}` : p < 1e-15 ? "0" : tiny(p, 4));
+  // the price scale, the crosshair and the last-value label: market cap as compact USD ($20.0K, $1.2M, $3.4B) with as
+  // many decimals as the scale's label spacing needs (so neighbouring labels never print the same text), the price as
+  // USD with 4 significant digits ($0.0₅9065). The candles are USD; a wrong pair conversion on the server once drew a
+  // $13.9M coin as "$18751.03T" here (ORBIO, paired with NVDA): see chainTrades in server/market.mjs.
+  const labelStep = () => {
+    try {
+      const hgt = chartBox.clientHeight, a = candleSeries?.coordinateToPrice(0), b = candleSeries?.coordinateToPrice(hgt);
+      return a != null && b != null && hgt > 0 ? Math.abs(a - b) / Math.max(4, hgt / 40) : 0;
+    } catch { return 0; }
+  };
+  const fmtV = (p) => (p < 0 ? "" : unit === "mcap" ? usdShort(p, labelStep()) : p < 1e-15 ? "$0" : `$${tiny(p, 4)}`);
   const fmtOpts = () => ({ priceFormat: { type: "custom", formatter: fmtV, minMove: unit === "mcap" ? 0.01 : 1e-12 } });
   const bar = (x) => ({ time: x.time, open: x.open * chartK, high: x.high * chartK, low: x.low * chartK, close: x.close * chartK });
   const pt = (x) => (lineMode ? { time: x.time, value: x.close * chartK } : bar(x));
@@ -471,10 +486,8 @@ export async function mount(view, { parts, ask }) {
       [0.001, 0.005, 0.01].map((v) => h("a", { class: "tk-mbar-b", href: `#/swap?out=${address}&amount=${v}` }, `${v}`)),
       h("a", { class: "tk-mbar-s", href: `#/swap?in=${address}&out=ETH` }, "Sell")] : h("span", { class: "fine muted tk-mbar-l" }, "Not routed by Troya"),
     gChip("tk-mbar-g"));
-  // the Cluster map (24 Nov): the largest holders and which are linked; it reads when it scrolls near the screen
-  const clusterCard = stockish ? null : clusterSection(address);
   clear(view, back, head, actions,
-    h("div", { class: "tk-grid" }, h("div", { class: "tk-main" }, chartPanel, h("div", { class: "tk-tabs" }, tabsEl, tabBody), clusterCard), h("div", { class: "tk-side" }, tradeCard, gateCard, wfCard, trCard, orcCard, stats, info)), mbar);
+    h("div", { class: "tk-grid" }, h("div", { class: "tk-main" }, chartPanel, h("div", { class: "tk-tabs" }, tabsEl, tabBody)), h("div", { class: "tk-side" }, tradeCard, gateCard, wfCard, trCard, orcCard, stats, info)), mbar);
   renderTab(curTab);
   if (!stockish) loadCalls();
   // a young curve: the holder list says whether anyone but the curve holds it yet ("None yet" in the stats)
@@ -617,6 +630,18 @@ function socialRow(t) {
     a.append(label);
     return a;
   }));
+}
+
+// compact USD for a market cap: $950, $20.0K, $1.2M, $3.4B. step: the gap between two price-scale labels, which may
+// ask for more decimals ($19.62M beside $19.64M on a tight scale)
+const UNITS = [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "K"]];
+function usdShort(v, step = 0) {
+  if (v == null || !isFinite(v)) return "–";
+  const a = Math.abs(v), u = UNITS.find(([x]) => a >= x);
+  if (!u) return `$${a >= 100 ? v.toFixed(0) : a >= 1 ? v.toFixed(2) : tiny(v, 3)}`;
+  const n = v / u[0], sig = Math.abs(n) >= 100 ? 0 : 1;
+  const need = step > 0 ? Math.max(0, Math.ceil(-Math.log10((step / u[0]) * 1.0001))) : 0;
+  return `$${n.toFixed(Math.min(3, Math.max(sig, need)))}${u[1]}`;
 }
 
 const DEX = { "uniswap-v3": "Uniswap v3", "uniswap-v4": "Uniswap v4", "uniswap-v2": "Uniswap v2", "pons-v2": "Pons", pons: "Pons", metric: "Metric", ramses: "Ramses", kyberswap: "KyberSwap" };

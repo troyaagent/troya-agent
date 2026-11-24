@@ -120,3 +120,32 @@ html[data-theme="light"] .cm {
   .cm-sum { font-size: 13.5px; }
   .cm-list { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* compact: the token page's analysis card, beside the chart (below it on a phone). The map fills the pane; the details of
+   a hovered or tapped bubble float over its lower edge; the cluster list, notes and sources stay on the full page. */
+.cm-compact { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; }
+.cm-compact .cm-h { padding: 0; min-height: 0; }
+.cm-compact .cm-h h2 { font-size: 14px; }
+.cm-compact .cm-sub { font-size: 11.5px; }
+.cm-compact .cm-out { flex: 1; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.cm-compact .cm-sum-c { font-size: 12.5px; line-height: 1.4; color: var(--fg-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cm-cbox { position: relative; flex: 1; min-height: 200px; display: flex; }
+.cm-compact .cm-stage { flex: 1; min-height: 0; height: auto; }
+.tk-an-cm > .cm-compact { flex: 1; }
+.cm-compact .cm-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cm-compact .cm-detail { position: absolute; left: 8px; right: 8px; bottom: 8px; max-height: min(calc(100% - 16px), 260px); overflow: auto; pointer-events: none; z-index: 2;
+  border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, .45); }
+.cm-compact .cm-detail[hidden] { display: none; }
+.cm-compact .cm-detail.is-pinned { pointer-events: auto; }
+.cm-compact .cm-detail .cm-card { padding: 10px 34px 10px 12px; gap: 6px; background: var(--bg-2); }
+.cm-compact .cm-detail .cm-why li { font-size: 12px; }
+.cm-x { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; color: var(--muted); }
+.cm-x:hover, .cm-x:focus-visible { color: var(--fg); background: var(--line); }
+.cm-x svg { width: 13px; height: 13px; }
+html[data-theme="light"] .cm-compact .cm-detail { box-shadow: 0 12px 32px rgba(20, 40, 60, .16); }
+.cm-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
+.cm-legend-c { gap: 3px 10px; font-size: 11px; }
+.cm-legend-c .cm-k { width: 9px; height: 9px; }
+.cm-legend-c .cm-k-link { box-shadow: 7px 0 0 -2.5px var(--cm-2); margin-right: 5px; }
+.cm-more { white-space: nowrap; }
+.cm-compact .cm-wait { padding: 30px 0; justify-content: center; }

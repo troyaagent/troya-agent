@@ -203,7 +203,7 @@ async function raidBoard() {
   });
   // $TROYA on Fomo too (Roq, 24 Nov 2026: "any update on the fomo raids?"): one row to open the coin there and engage
   kb.push([{ text: "$TROYA on Fomo", url: "https://fomo.family/tokens/robinhood/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" }]);
-  return { text: `<b>Raid board · Troya on X</b>\n\n${rows.join("\n\n")}\n\n${RAID_STEPS}\n\nOn Fomo too: open $TROYA there, follow it and join the chat.`, markup: { inline_keyboard: kb }, board: true };
+  return { text: `<b>Raid board · Troya on X</b>\n\n${rows.join("\n\n")}\n\n${RAID_STEPS}\n\nOn Fomo too: open $TROYA there and share it with friends.`, markup: { inline_keyboard: kb }, board: true };
 }
 // → { text, markup, replyTo, board }: board = remember the message as this chat's raid board
 async function raidCmd(m, tg, arg) {

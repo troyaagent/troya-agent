@@ -383,6 +383,6 @@ export async function mount(view, ctx) {
       h("section", { class: "panel dk-how" }, h("div", { class: "panel-h" }, h("h2", {}, "What each check reads")),
         h("ol", {}, how.map(([t, d], i) => h("li", {}, h("span", { class: "dk-how-n" }, String(i + 1)), h("div", {}, h("b", {}, t), h("p", {}, d))))),
         h("p", { class: "note" }, "On Base and Arbitrum the same checks run, without the dev side-wallet and launch-ring checks (Robinhood Chain only); on Solana the Gate also reads the coin's mint and freeze authority."),
-        h("p", { class: "note" }, "Results are checks, never endorsements. ", h("a", { class: "link", href: "/risk-controls" }, "Risk controls"), " · ", h("a", { class: "link", href: "/badge" }, "Gate badge for your site"))))));
+        h("p", { class: "note" }, "Results are checks, never endorsements. ", h("a", { class: "link", href: "/risk-controls" }, "Risk controls"), " · ", h("a", { class: "link", href: "/badge" }, "Gate badge for your site"), " · ", h("a", { class: "link", href: "/gate-bot" }, "Gate in your Telegram group"))))));
   return () => g.stop();
 }

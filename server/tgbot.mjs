@@ -53,6 +53,7 @@ Or just write it: "long ETH $20 at 3x" gets you a ticket to confirm.
 /gas · live gas cost of a swap, approval or send
 /sentry · the latest launches through the Gate
 /badge 0x… · a coin's live Gate badge for its website
+Add me to any group for /gate there: troya.codes/gate-bot · admins: /gatebuttons off hides the Buy buttons in that group
 
 <b>Launch a coin</b> (open to everyone)
 On X: post "@Troyaagent launch Name $TICKER" with the coin's image · guide: troya.codes/launch-on-x
@@ -99,15 +100,42 @@ async function gate(arg) {
   const tools = await import("./tools.mjs");
   const [h, info] = await Promise.all([tools.runTool("analyze_token_health", { address: a }, { via: "telegram" }), tools.runTool("robinhood_token", { address: a }, { via: "telegram" }).catch(() => null)]);
   if (!h?.contract) return "There is no contract at that address on Robinhood Chain.";
+  // The Assay (up to 9 s) and, for a Pons coin, Ring Radar's launch ring (up to 4 s) run side by side, so the ring adds no
+  // wait of its own; a slow first ring read keeps going and fills the cache for the next ask (Xivor, 25 Nov 2026)
+  const [as, ring] = await Promise.all([
+    import("./assay.mjs").then((m) => m.assay(a, { deep: false, waitMs: 9000 })).catch(() => null),
+    h.pons ? import("./ringradar.mjs").then((m) => m.gateLine(a, { waitMs: 4000 })).catch(() => null) : null,
+  ]);
+  const assayFlags = as?.status === "done" ? (as.flags || []).filter((x) => x.key !== "partial") : [];
+  const ringSlow = ring?.status === "warn" && /still reading/i.test(ring.detail || "");
+  // The score is tokenHealth's bytecode heuristic (owner powers found in the contract code: mint, pause, blacklist, fee
+  // setters, proxy), so it is called "Bytecode", and the overall verdict comes first. A clean contract with a red launch
+  // ring reads as "contract code looks clean, but …", never as a pass.
+  const codeClean = h.score >= 80, codeRisky = h.score < 55;
+  const ringRed = ring?.status === "fail", ringAmber = ring?.status === "warn" && !ringSlow;
+  const assayRed = assayFlags.some((x) => x.level === "red"), assayAmber = assayFlags.some((x) => x.level === "amber");
+  const but = [ringRed && "the launch ring is red (Ring Radar: a rigged launch pattern)", assayRed && "The Assay found red flags in the holders and trading",
+    !ringRed && ringAmber && "the launch ring needs a closer look", !assayRed && assayAmber && "The Assay found amber flags"].filter(Boolean);
+  let verdict;
+  if (codeRisky) verdict = `🔴 <b>Verdict: high risk.</b> The contract code has owner controls that can hurt holders${but.length ? `, and ${but.join("; ")}` : ""}.`;
+  else if (ringRed || assayRed) verdict = `🔴 <b>Verdict: red flag.</b> ${codeClean ? "The contract code looks clean, but" : "The contract code has some owner controls, and"} ${but.join("; ")}.`;
+  else if (!codeClean || but.length) verdict = `🟠 <b>Verdict: caution.</b> ${codeClean ? `The contract code looks clean, but ${but.join("; ")}` : `Some owner controls exist in the contract code${but.length ? `, and ${but.join("; ")}` : ""}. Size small`}.`;
+  else verdict = `🟢 <b>Verdict: no red flags in these checks.</b> The contract code looks clean${ring && !ringSlow ? " and the launch ring is clear" : ""}${as?.status === "done" ? "; The Assay found no red or amber flags" : ""}.`;
   const lines = [];
   if (info?.symbol) lines.push(`<b>${esc(String(info.symbol).slice(0, 16))}</b> ${fpx(info.priceUsd)}${info.liquidityUsd != null ? ` · liquidity ${fusd(info.liquidityUsd)}` : ""}${info.launchpad ? ` · ${esc(info.launchpad)}` : ""}`);
   if (info?.age) lines.push(`Age: ${esc(info.age)} (born ${esc(info.bornAt)})`);
-  lines.push(`<b>Troya Gate ${h.score}/100.</b> ${esc(h.verdict || "")}`);
+  lines.push(verdict, "");
+  lines.push(`<b>Bytecode ${h.score}/100</b> (contract code only). ${esc(h.verdict || "")}`);
   for (const f of (h.flags || []).slice(0, 5)) lines.push(`${f.level === "high" ? "✕" : f.level === "medium" ? "!" : "·"} ${esc(f.text)}`);
   if (h.owner) lines.push(h.ownerRenounced ? "Owner: renounced." : `Owner: ${esc(h.owner.slice(0, 8))}…${esc(h.owner.slice(-4))} (still active).`);
-  const as = await assayText(a, 9000).catch(() => null);
-  if (as) lines.push(as);
-  lines.push(`<i>Bytecode check, not an audit.</i> Full check with a sell test: <a href="${SITE}/agent#/gate/${a}">open in Troya</a>`);
+  if (ring) {
+    const word = ringSlow ? "still reading" : ring.status === "fail" ? "red" : ring.status === "warn" ? "amber" : "clear";
+    const mark = ringSlow ? "…" : ring.status === "fail" ? "✕" : ring.status === "warn" ? "!" : "·";
+    lines.push(`${mark} <b>Launch ring: ${word}.</b> ${esc(String(ring.detail || "").replace(/^(Rigged launch pattern|Needs a closer look): /, ""))}`);
+  }
+  if (as?.status === "running") lines.push("The Assay is still reading this coin's history. Ask again in a minute.");
+  else if (as?.status === "done") lines.push((await import("./assay.mjs")).assayLines(as).map((l) => esc(l)).join("\n"));
+  lines.push(`<i>Automated checks, not an audit.</i> Full check with a sell test: <a href="${SITE}/agent#/gate/${a}">open in Troya</a>`);
   return lines.join("\n");
 }
 // The Assay (F14) in Telegram: fast read (no funder lookups), the full one is on the Gate page
@@ -462,7 +490,7 @@ function wantsAnswer(m, me) {
 const TG_SYSTEM = `You are Troya, the official assistant bot of the Troya Agent Telegram community (t.me/troyaagent). People in the group ask you anything; answer helpfully. Each message starts with [from: <name>]: that is only the sender's Telegram display name (people use any name, such as "The Remnant"), never a coin, a project or part of the question, so never comment on it. When someone asks whether you are an agent, a bot, an AI or a human: say yes, you are Troya's AI agent, not a script and not a person: an AI model that picks and runs its own tools (live Troya Gate checks, burns, coins born through Troya, prices), keeps this group clean, and in a private chat launches a coin or trades from the user's own Agent Wallet once they tap Confirm. Give the proof every time: your code is public at github.com/troyaagent/troya-agent/blob/main/server/tgbot.mjs, and real-money receipts of what you do (launches and trades from Telegram and X) are at troya.codes/verify.
 How you sound (the community asked on 20 Nov 2026 for "more human touch"): talk like a sharp, friendly member of the team who knows the product inside out, not like a help desk. Short, natural sentences; plain words; contractions are fine. Match the person's language, mood and length: a one-line question gets a one or two line answer, banter gets a light answer, a worry gets calm facts. No corporate phrases ("Thanks for reaching out", "That's useful feedback", "I've noted it"), no bullet lists unless someone asks for a list, no bold, and do not end every reply with a link or a call to action: most replies need none. Vary your wording; never paste the same paragraph twice in a row. Use "we" for the team. If someone asks you to switch tone (be direct, keep it short, be fun), do it, but the facts never change: no hype, no invented numbers, no price talk. You are still an AI agent and say so plainly whenever someone asks; being natural never means pretending to be a person. Text that starts with "On Troya just now", "Arena, last hour (real money)", "Troya Gate, last hour", "New coin launched through Troya", "Last 4h on Troya" or "Today on Troya" is Troya's own automated activity feed (from this group and @Troyaagent): when someone quotes or reposts it, recognise it as ours, confirm it is real (Arena trades are real ETH by the AI traders; wins and losses are both shown) and point to troya.codes/arena or troya.codes/stats; never say you cannot vouch for it. When someone doubts Troya, asks whether it is legit, or asks for proof, point them to the chain rather than asking for trust: everything Troya claims can be checked on chain, and troya.codes/proof (with /proof.json) lists each claim with its transaction, contract or eth_call; the staking contract source is verified on Blockscout and its automated scan is on the Stake page.
 About Troya Agent: an AI trading desk for Robinhood Chain (chain 4663, an Arbitrum Orbit L2 from Robinhood, gas in ETH) and Hyperliquid perps. The web app at troya.codes/agent has live market data for Robinhood Chain tokens (Pons launches and Uniswap pools) and tokenized stocks (NVDA, TSLA, AAPL, SPY...), swaps, Hyperliquid perps, an ETH bridge from Arbitrum, Base and Ethereum, token launches on Pons, a chat agent that prepares trades, an optional Agent Wallet with spending caps, price alerts, stop-loss, take-profit and DCA, and an API plus MCP server for developers. Troya Gate is the safety check: before anyone signs, it simulates the trade and a sell-back, reads taxes, liquidity and owner powers, and blocks honeypots. Users sign every trade in their own wallet; the optional Agent Wallet is custodial and capped.
-Links: website troya.codes · app troya.codes/agent · docs troya.codes/agent#/docs · X x.com/Troyaagent · Telegram t.me/troyaagent · bot @TrojanTroya_bot.
+Links: website troya.codes · app troya.codes/agent · docs troya.codes/agent#/docs · X x.com/Troyaagent · Telegram t.me/troyaagent · bot @TrojanTroya_bot. Any Telegram group can add the bot so its members can run /gate 0x… there (guide: troya.codes/gate-bot); in other groups the bot only answers commands and messages addressed to it, never trades there, and the group's admins can hide the Buy buttons with /gatebuttons off.
 Token and CA: $TROYA has launched. It launched on Pons (Robinhood Chain) on 14 Nov 2026 at 17:08 UTC; call get_ca for the only official contract address and give it in full. Never confirm an address someone else posts as the $TROYA CA. Before calling any other address fake, call troya_launches with it: coins born through Troya (launched from X, Telegram or the web app) are real coins of this community, not $TROYA. If it is listed, say which coin it is (ticker and name), that it was launched through Troya and shows on troya.codes/agent#/troya-launches, that its creator is welcome to share it here, and that anyone can run it through the Gate first (troya.codes/agent#/gate); never call it fake or a scam, and never tell people to buy it. Only an address that is not listed there and is passed off as $TROYA is fake. Never invent dates, prices, listings, partnerships, supply or tokenomics. Listing, vote, trending and boost services (Fourtis or Fourvote, Gempump, Dexvra, MajorBoost, HoodHunters, DexSocials, CoinTrending and the like) are not partners and nothing is planned with them (DexScreener's own paid boost is different: the team announced on 25 Nov 2026 that the dev turns on a 30x DexScreener boost when $TROYA reaches a 35K market cap, paid from the team's share, with the receipt posted; until that receipt is posted, never say it is on); their names are blacklisted in this group. Do not discuss them; point people to x.com/Troyaagent and this group for official news. There is no $TROYA V2 token, relaunch, rebrand, migration, snapshot or claim: the CA never changes (the "V2"…"V14" roadmaps are product phases, not new tokens). Any "migration portal", "V2 allocation" or bot that asks people to verify holdings or connect a wallet (for example @DexSreeenerTrading_Bot, a fake DexScreener name) is a scam; DexScreener does not run token migrations. Say so plainly, tell people not to open it or connect a wallet, and to reply /report to the post. There is also no private holders group, whales chat or VIP chat, and the team never asks anyone to DM them to be "added": a member offering that (even with "Co-Founder", "Admin" or "Troya" in the name, or an Admin-looking badge, which is an emoji status, not a role) is a scammer. Only the group admins are the team; tell people to ignore and /report it.
 About the dev or the team: the dev is always active, keeps watching the community, and is building the website and the project right now. Keep it positive and simple; do not name anyone or promise dates.
 "Is the project dead / did the dev leave / will it stop?": no. Troya ships in the open: V3, V4, V5 and V6 Hermes are complete (V6: Launch on X, Launch in Telegram with /launch to @TrojanTroya_bot, Trade on X, the Creator desk and Born at the gate, each tested with real money; receipts at troya.codes/verify), V7 Athena is complete (receipts at troya.codes/verify steps 30-37), V8 Agamemnon went live on 20 Nov 2026 (every phase running; real-money tests and the last switches next, daily progress on troya.codes/roadmap#v8), a full audit of the app ran on 20 Nov and its fixes are shipping in waves, and V9 to V14 are named on the roadmap. Point to troya.codes/roadmap, the public code at github.com/troyaagent/troya-agent and troya.codes/safety, where the latest shipped work is shown live. Never promise dates or prices.
@@ -683,6 +711,53 @@ const WELCOME = (name) => `Welcome to Troya Agent, ${name}.\nStart with the pinn
 // buy buttons for any Robinhood Chain coin a reply is about: Troya Swap (through the Gate), Fomo, the chart
 const coinKb = (a) => ({ inline_keyboard: [[{ text: "Buy through Troya Gate", url: `${SITE}/agent#/swap?in=eth&out=${a}` }, { text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${a}` }], [{ text: "Chart", url: `${SITE}/agent#/token/${a}` }, { text: "DexScreener", url: `https://dexscreener.com/robinhood/${a}` }]] });
 const coinOf = (s) => (String(s || "").match(/0x[0-9a-fA-F]{40}/) || [])[0] || null;
+
+/* ---------- the Gate in other groups (Xivor, 25 Nov 2026) ---------- */
+// Any group may add the bot for /gate. The community's own tools stay at home: the join check, moderation, the chat log and
+// unprompted AI answers run only in the community group (TG_COMMUNITY_CHAT, plus TG_HOME_CHATS: ids or @usernames,
+// comma-separated). In another group the bot answers commands, and the AI only when someone @mentions it or replies to it.
+// Per group (data/telegram-gategroups.json): buttons = false after an admin's /gatebuttons off (coin replies then carry no
+// Buy or chart buttons), told = when the group got its one hello naming /gatebuttons.
+const HOME = new Set([COMMUNITY_CHAT, ...String(process.env.TG_HOME_CHATS || "").split(",")].map((s) => String(s).trim().replace(/^@/, "").toLowerCase()).filter(Boolean));
+const isHome = (chat) => !!chat && (HOME.has(String(chat.id)) || (!!chat.username && HOME.has(String(chat.username).toLowerCase())));
+const GG_FILE = "telegram-gategroups.json";
+let gg = null;
+async function ggAll() { if (!gg) gg = gStore ? await gStore.readJson(GG_FILE, {}).catch(() => ({})) || {} : {}; return gg; }
+async function groupCfg(chatId) { return (await ggAll())[String(chatId)] || {}; }
+async function setGroupCfg(chatId, patch) {
+  const k = String(chatId), all = await ggAll();
+  all[k] = { ...(all[k] || {}), ...patch };
+  if (gStore) await gStore.update(GG_FILE, {}, (s) => ({ ...s, [k]: { ...(s[k] || {}), ...patch } })).catch(() => {});
+}
+// a group admin, or an anonymous admin posting as the group itself
+async function chatAdmin(m, tg) {
+  if (m.sender_chat && String(m.sender_chat.id) === String(m.chat.id)) return true;
+  return m.from?.id ? isAdmin(tg, m.chat.id, m.from.id) : false;
+}
+const GROUP_HELLO = (me) => `<b>Troya Gate is in this group</b>
+Send <code>/gate 0x…</code> with a Robinhood Chain coin address for a quick read: the verdict first, then the contract code check, the launch ring for Pons coins (snipe-tax exempt wallets, first-block buys) and The Assay on holders.
+I'm a bot. I never trade in groups and never ask anyone for keys, seed phrases or DMs.
+Admins: coin replies carry Buy and chart buttons. <code>/gatebuttons off</code> hides them in this group, <code>/gatebuttons on</code> brings them back.
+More: <a href="${SITE}/gate-bot">troya.codes/gate-bot</a>${botUser(me) ? ` · other bots here too? Use <code>/gate@${botUser(me)} 0x…</code>` : ""}`;
+const GATEBUTTONS_HINT = `\n\n<i>Admins: /gatebuttons off hides the Buy buttons in this group.</i> <a href="${SITE}/gate-bot">How the Gate bot works</a>`;
+async function gateButtonsCmd(m, tg, arg, isGroup, cfg) {
+  if (!isGroup) return "This one is for groups: a group admin sends <code>/gatebuttons off</code> there to hide the Buy and chart buttons under coin replies in that group, and <code>/gatebuttons on</code> to show them again.";
+  const a = String(arg || "").trim().toLowerCase();
+  const want = /^(off|hide|no|0|false)\b/.test(a) ? false : /^(on|show|yes|1|true)\b/.test(a) ? true : null;
+  const now = cfg.buttons !== false;
+  if (want === null) return `Buy buttons under coin replies in this group: <b>${now ? "on" : "off"}</b>.\nAdmins: <code>/gatebuttons off</code> hides them, <code>/gatebuttons on</code> shows them again.`;
+  if (!(await chatAdmin(m, tg))) return "Only this group's admins can switch the Buy buttons.";
+  await setGroupCfg(m.chat.id, { buttons: want, by: m.from?.id || null, at: Date.now(), told: cfg.told || Date.now(), title: String(m.chat.title || "").slice(0, 80) });
+  return want
+    ? "Buy buttons are <b>on</b> in this group: /gate and the other coin replies carry Buy and chart buttons again."
+    : "Buy buttons are <b>off</b> in this group: /gate and the other coin replies now come as text only, with no Buy or chart buttons. <code>/gatebuttons on</code> brings them back.";
+}
+async function groupHello(m, tg, me) {
+  const cfg = await groupCfg(m.chat.id);
+  if (cfg.told && Date.now() - cfg.told < 10 * 60_000) return;   // the join notice and /start gate from the same add
+  await setGroupCfg(m.chat.id, { told: Date.now(), title: String(m.chat.title || "").slice(0, 80) });
+  await tg("sendMessage", { chat_id: m.chat.id, text: GROUP_HELLO(me), parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+}
 const WELCOME_KB = { inline_keyboard: [[{ text: 'Open Troya', url: `${SITE}/agent` }, { text: 'Troya Sentry', url: 'https://t.me/troyasentry' }]] }
 
 export async function guardJoin (m, tg, me) {
@@ -766,16 +841,22 @@ export async function handleBotMessage(m, tg, me) {
     tg = (method, b) => raw(method, /^send/.test(method) && b && String(b.chat_id) === String(chatId) && !b.message_thread_id ? { ...b, message_thread_id: thread } : b);
   }
   const isGroup = m.chat.type === "group" || m.chat.type === "supergroup";
-  if (isGroup) logChat({ id: m.message_id, from: String(m.from?.first_name || "").slice(0, 40), user: m.from?.username || null, uid: m.from?.id, bot: !!m.from?.is_bot, text: String(m.text || m.caption || (m.new_chat_members ? "[joined]" : m.photo ? "[photo]" : m.sticker ? "[sticker]" : m.video ? "[video]" : "")).slice(0, 800), reply: m.reply_to_message?.message_id || null });
+  const home = isGroup && isHome(m.chat);   // the community group; any other group only gets the commands (see isHome)
+  if (home) logChat({ id: m.message_id, from: String(m.from?.first_name || "").slice(0, 40), user: m.from?.username || null, uid: m.from?.id, bot: !!m.from?.is_bot, text: String(m.text || m.caption || (m.new_chat_members ? "[joined]" : m.photo ? "[photo]" : m.sticker ? "[sticker]" : m.video ? "[video]" : "")).slice(0, 800), reply: m.reply_to_message?.message_id || null });
 
-  if (isGroup && m.new_chat_members?.length) { await guardJoin(m, tg, me); return }
-  if (isGroup && m.from && pendingFor(chatId, m.from.id)) { await tg("deleteMessage", { chat_id: chatId, message_id: m.message_id }).catch(() => {}); return }
+  if (isGroup && m.new_chat_members?.length) {
+    if (home) { await guardJoin(m, tg, me); return }
+    // another group just added the bot: one short hello that names /gate and /gatebuttons
+    if (me?.id && m.new_chat_members.some((u) => u.id === me.id)) await groupHello(m, tg, me).catch((e) => console.warn("[telegram gate group]", e.message));
+    return
+  }
+  if (home && m.from && pendingFor(chatId, m.from.id)) { await tg("deleteMessage", { chat_id: chatId, message_id: m.message_id }).catch(() => {}); return }
   // moderation: promo for other coins, call ads, forwarded ads and /report (warn first, ban on the second or plain spam)
-  if (isGroup && (await import("./tgmod.mjs").then((x) => x.screen(m, tg, me)).catch((e) => { console.warn("[mod]", e.message); return false; }))) return;
+  if (home && (await import("./tgmod.mjs").then((x) => x.screen(m, tg, me)).catch((e) => { console.warn("[mod]", e.message); return false; }))) return;
 
   // feedback for the team inbox (Desk → Social → Reports); never forwarded to anyone's personal chat
   const fb = /^\/(bug|idea|suggest|feedback|report)(?:@([A-Za-z0-9_]+))?(?:\s+([\s\S]*))?$/i.exec(String(m.text || m.caption || "").trim());
-  if (fb && !(fb[2] && me?.username && fb[2].toLowerCase() !== me.username.toLowerCase())) {
+  if (fb && !(fb[2] && me?.username && fb[2].toLowerCase() !== me.username.toLowerCase()) && !(isGroup && !home && fb[1].toLowerCase() === "report")) {
     const k = fb[1].toLowerCase(), words = String(fb[3] || "").trim();
     const kind = k === "bug" ? "bug" : k === "report" ? "scam" : "idea";
     const photo = Array.isArray(m.photo) && m.photo.length ? m.photo[m.photo.length - 1] : null;
@@ -796,19 +877,24 @@ export async function handleBotMessage(m, tg, me) {
   const CA_ASK = /^(?:@\w+\s+)?(?:(?:what(?:'s|\s+is)|wen|where(?:'s|\s+is)|drop|send|give(?:\s+me)?|pls|please)\s+)?(?:the\s+)?(?:ca|c\.a\.?|contract(?:\s+address)?|token\s+address)(?:\s+(?:pls|please|plz|bro|sir|ser|dev|admin|of\s+troya|troya))*\s*[?!.]*$/i;
   const cm = CA_ASK.test(rawText) ? [rawText, "ca", undefined, ""] : /^\/([a-z_]+)(?:@([A-Za-z0-9_]+))?(?:\s+([\s\S]*))?$/i.exec(rawText);
   if (!cm) {
-    if (wantsAnswer(m, me)) await aiAnswer(m, tg, me).catch((e) => console.warn("[telegram ai]", e.message));
+    // in another group the AI speaks only when spoken to: an @mention or a reply to the bot
+    const spokenTo = !isGroup || home || (me?.username && String(m.text || m.caption || "").toLowerCase().includes("@" + me.username.toLowerCase())) || (me?.id && m.reply_to_message?.from?.id === me.id);
+    if (spokenTo && wantsAnswer(m, me)) await aiAnswer(m, tg, me).catch((e) => console.warn("[telegram ai]", e.message));
     return;
   }
   const [, cmdRaw, at, arg = ""] = cm;
   if (at && me?.username && at.toLowerCase() !== me.username.toLowerCase()) return;
   const cmd = cmdRaw.toLowerCase();
-  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "oath", "aegis", "smart", "raid", "persona", "personas", "rules", "sentry", "badge", "perks", "reports", "flywheel", "lesson"].includes(cmd)) return;
+  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "oath", "aegis", "smart", "raid", "persona", "personas", "rules", "sentry", "badge", "perks", "reports", "flywheel", "lesson", "gatebuttons"].includes(cmd)) return;
   // one answer per person every 3 s keeps the group readable
   const who = `${chatId}:${m.from?.id}`;
   if (Date.now() - (lastReply.get(who) || 0) < 3000) return;
   lastReply.set(who, Date.now());
 
   let text, markup, replyTo = null, board = false;
+  // Buy and chart buttons under coin replies, unless this group's admins switched them off (/gatebuttons off)
+  const cfg = isGroup ? await groupCfg(chatId).catch(() => ({})) : {};
+  const kb = (a) => (a && cfg.buttons !== false ? coinKb(a) : undefined);
   try {
     if (cmd === "start" && m.chat.type === "private" && /^rep_[0-9a-f]{16}$/.test(arg.trim())) {
       const r = await import("./community.mjs").then((c) => c.bindReportsChat(arg.trim().slice(4), m.chat, m.from)).catch(() => ({ ok: false }));
@@ -867,25 +953,33 @@ A screenshot helps: send the image with the command and a line as its caption. Y
 Nobody from Troya DMs first or asks for a seed phrase or private key.` });
       return;
     }
-    if (cmd === "start" && m.chat.type === "private") { await tg("sendMessage", { chat_id: chatId, text: DM_WELCOME, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: DM_WELCOME_KB }); return; }
+    if (cmd === "start" && m.chat.type === "private") { await tg("sendMessage", { chat_id: chatId, text: DM_WELCOME, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: dmWelcomeKb(me) }); return; }
+    if (cmd === "start" && isGroup && !home && /^gate\b/i.test(arg.trim())) { await groupHello(m, tg, me); return; }
     if (cmd === "start" || cmd === "help") text = HELP;
     else if (cmd === "sentry") ({ text, markup } = await sentryText());
     else if (cmd === "badge") ({ text, markup } = await badgeText(arg));
     else if (cmd === "perks") text = await perksText();
     else if (cmd === "links") text = LINKS;
     else if (cmd === "rules") text = (await import("./tgmod.mjs")).rulesText(siteCa());
-    else if (cmd === "ca") { const ca = siteCa(); if (ca) markup = coinKb(ca); text = ca ? `<b>Troya Agent CA</b> (Robinhood Chain)\n<code>${ca}</code>` : "The CA is not live yet. It will be announced here and on X at launch. Any address posted before that is fake."; }
-    else if (cmd === "price" || cmd === "p") { text = await price(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
+    else if (cmd === "ca") { const ca = siteCa(); markup = kb(ca); text = ca ? `<b>Troya Agent CA</b> (Robinhood Chain)\n<code>${ca}</code>` : "The CA is not live yet. It will be announced here and on X at launch. Any address posted before that is fake."; }
+    else if (cmd === "price" || cmd === "p") { text = await price(arg); markup = kb(coinOf(arg)); }
     else if (cmd === "gas") text = await gasText();
-    else if (cmd === "assay") { text = await assayCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
-    else if (cmd === "ring") { text = await ringCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
-    else if (cmd === "council") { text = await councilCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
-    else if (cmd === "oath") { text = await oathCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
-    else if (cmd === "aegis") { text = await aegisCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
-    else if (cmd === "smart") { text = await smartCmd(arg); if (coinOf(arg)) markup = coinKb(coinOf(arg)); }
+    else if (cmd === "assay") { text = await assayCmd(arg); markup = kb(coinOf(arg)); }
+    else if (cmd === "ring") { text = await ringCmd(arg); markup = kb(coinOf(arg)); }
+    else if (cmd === "council") { text = await councilCmd(arg); markup = kb(coinOf(arg)); }
+    else if (cmd === "oath") { text = await oathCmd(arg); markup = kb(coinOf(arg)); }
+    else if (cmd === "aegis") { text = await aegisCmd(arg); markup = kb(coinOf(arg)); }
+    else if (cmd === "smart") { text = await smartCmd(arg); markup = kb(coinOf(arg)); }
     else if (cmd === "raid") { const r = await raidCmd(m, tg, arg); text = r.text; if (r.markup) markup = r.markup; replyTo = r.replyTo || null; board = !!r.board; }
     else if (cmd === "persona" || cmd === "personas") { const r = await personaCmd(m, tg, arg); text = r.text; if (r.markup) markup = r.markup; replyTo = r.replyTo || null; }
-    else { text = await gate(arg); if (coinOf(arg) && !/no contract|Usage/i.test(text)) markup = coinKb(coinOf(arg)); }
+    else if (cmd === "gatebuttons") text = await gateButtonsCmd(m, tg, arg, isGroup, cfg);
+    else {
+      text = await gate(arg);
+      const ok = coinOf(arg) && !/no contract|Usage/i.test(text);
+      if (ok) markup = kb(coinOf(arg));
+      // the first /gate in another group that never got the hello (added before 25 Nov 2026): name /gatebuttons once
+      if (ok && isGroup && !home && !cfg.told && cfg.buttons !== false) { text += GATEBUTTONS_HINT; await setGroupCfg(chatId, { told: Date.now(), title: String(m.chat.title || "").slice(0, 80) }); }
+    }
   } catch (e) { text = `Could not read that right now (${esc(String(e.message || e).slice(0, 80))}). Try again in a moment.`; }
   const sent = await tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: replyTo || m.message_id, allow_sending_without_reply: true }, ...(markup ? { reply_markup: markup } : {}) });
   if (board) raidMark(chatId, sent?.result?.message_id);
@@ -906,13 +1000,21 @@ The AI trading desk for Robinhood Chain. Troya Gate simulates every trade before
 <b>Ask me anything</b>
 Prices, Gate checks, Pons launches, tokenized stocks. Commands: /help
 
+<b>The Gate in your group</b>
+Add me to any Telegram group and members there can send /gate 0x… for a coin check. I never trade in groups and never ask for keys. How it works: troya.codes/gate-bot
+
 Admins never DM first. Never share your seed phrase.`;
-const DM_WELCOME_KB = { inline_keyboard: [
+// the bot's own username from getMe (TG_BOT_USERNAME, then the known name, when getMe has not answered)
+const botUser = (me) => (/^[A-Za-z0-9_]{5,32}$/.test(me?.username || "") ? me.username : process.env.TG_BOT_USERNAME || "TrojanTroya_bot");
+// startgroup deep link (Xivor, 25 Nov 2026: spread /gate to other groups): Telegram asks which group to add the bot to
+const addToGroupUrl = (me) => `https://t.me/${botUser(me)}?startgroup=gate`;
+const dmWelcomeKb = (me) => ({ inline_keyboard: [
   [{ text: "Start in 60 seconds", url: `${SITE}/agent#/start` }],
   [{ text: "Open Troya", url: `${SITE}/agent` }, { text: "Link Telegram", url: `${SITE}/agent#/settings` }],
+  [{ text: "Add the Gate to your group", url: addToGroupUrl(me) }],
   [{ text: "Troya Sentry", url: "https://t.me/troyasentry" }, { text: "Community", url: "https://t.me/troyaagent" }],
   [{ text: "Gate badge for devs", url: `${SITE}/badge` }],
-] };
+] });
 const ago = (t) => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 90 ? "just now" : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
 const VERDICT = { passed: "Passed", caution: "Caution", failed: "Failed" };
 async function sentryText() {

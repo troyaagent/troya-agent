@@ -48,6 +48,7 @@ const ROUTES = {
   "/roadmap": "/roadmap.html",
   "/launch-on-x": "/launch-on-x.html",
   "/badge": "/badge.html",
+  "/gate-bot": "/gate-bot.html",
   "/stats": "/stats.html",
   "/swap": "/swap.html",
   "/stake": "/stake.html",

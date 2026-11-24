@@ -15,7 +15,7 @@ const BIG = [["Troya", "/"], ["Open the desk", "/agent"], ["Capabilities", PAGE(
 export const NAV = [
   ["Product", [["Desk", "/agent"], ["Swap", "/agent#/swap"], ["Perps", "/agent#/perps"], ["Stocks", "/agent#/stocks"], ["Launch", "/agent#/launch"], ["Bridge", "/agent#/bridge"], ["Launch on X", PAGE("launch-on-x")]]],
   ["Proof", [["Proof", PAGE("proof")], ["Verify", PAGE("verify")], ["The Record", PAGE("record")], ["Seal", PAGE("seal")], ["Arena", PAGE("arena")], ["Oath", PAGE("oath")], ["Flywheel", PAGE("flywheel")], ["Agent Wallet changelog", "/changelog/agent-wallet"]]],
-  ["Build", [["API and MCP", PAGE("api-and-mcp")], ["Gate badge", PAGE("badge")], ["Gate in MetaMask", PAGE("snap")], ["llms.txt", "/llms.txt"], ["Docs", "/agent#/docs"]]],
+  ["Build", [["API and MCP", PAGE("api-and-mcp")], ["Gate badge", PAGE("badge")], ["Gate in your group", PAGE("gate-bot")], ["Gate in MetaMask", PAGE("snap")], ["llms.txt", "/llms.txt"], ["Docs", "/agent#/docs"]]],
   ["Company", [["Roadmap", PAGE("roadmap")], ["Community", PAGE("community")], ["Stake $TROYA", "/stake"], ["Plans", PAGE("plans")], ["Capabilities", PAGE("capabilities")], ["Philosophy", PAGE("philosophy")], ["Market analysis", PAGE("market-analysis")], ["Insights", PAGE("insights")], ["Risk controls", PAGE("risk-controls")], ["Safety", PAGE("safety")], ["Privacy Policy", PAGE("privacy")], ["Terms of Use", PAGE("terms")]]],
 ];
 // The same groups as HTML: one <div> per group with a small label, used by both menus and both footers.

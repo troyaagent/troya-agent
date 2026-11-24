@@ -365,4 +365,4 @@ export async function register(r, ctx) {
     return v;
   }, { perMin: 4 });
 }
-export { check as _check, siteRead as _siteRead, tgRead as _tgRead, xRead as _xRead };
+export { check as _check, siteRead as _siteRead, tgRead as _tgRead, xRead as _xRead, safeUrl };

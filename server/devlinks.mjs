@@ -642,7 +642,10 @@ export function analyze(F, cut = F.end, { now = null, balNow = null } = {}) {
     bornAt: F.bornAt, at: nowMs,
     coverage: { fromBlock: F.launch.block, toBlock: cut, transfers: tr.length, partial: !!F.partial, deep: !!F.deep, people: (F.people || []).length, funded: Object.keys(F.pfund || {}).length, notes: (F.errors || []).slice(0, 3) },
     note: "Facts from the chain, not a judgement of people: a wallet counts as tied to the dev only through coins or ETH that moved between them, a small shared funder, or trades through one private contract. Wallets a dev keeps fully apart (funded from an exchange, trading through public apps) stay hidden.",
+    // sells / got: every sale by the dev side with its time, and what the dev side got (Sentry Autopilot's optional
+    // "dev didn't sell early" rule sums the sales in a coin's first minutes against it, autopilot-rules.mjs)
     _set: { linked: new Set(linked), devs, loose: new Set(looseWallets), relays: [...venue].filter((v) => !PUBLIC.has(v) && v !== F.curve),
+      sells: sells.map((x) => ({ at: x.at, v: x.v, dev: x.dev })), got,
       edges: edges.filter((x) => x.v * 10_000n >= supply).slice(-4000).map((x) => ({ from: x.from, to: x.to, v: x.v, tx: x.tx, block: x.block })), supply },
   };
 }

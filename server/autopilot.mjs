@@ -6,11 +6,16 @@
 //   Exits are checked every 60 s: take-profit at takeProfitX, stop at -stopPct %, and anything still open after 7 days.
 //   Telegram (via tgterm.mjs): /autopilot · on|off · practice|live · set min 1 buy 0.01 tp 2 sl 30 max 3
 //   Web: Agent → Sentry Autopilot. Phase 9 reads the closed results of users who opted into the leaderboard.
+//   Optional extra rules (24 Nov 2026, community request), all off by default (autopilot-rules.mjs): X check (the coin's
+//   own X account is verified and shows its CA), site up, the dev side did not sell in the first minutes, and a buy in
+//   USD converted to ETH at the live price. Each check's pass or fail is kept in the activity (data/autopilot-activity.json)
+//   and sent with the buy or skip DM.   /autopilot set xcheck on site on devsell 1m 0% buy $10
 import { randomBytes } from "node:crypto";
 import { quoteSwap } from "./tools.mjs";
 import { getAgentWallet, executeForUser, findLot, onLots } from "./agentwallet.mjs";
 import { getBalances } from "./robinhood.mjs";
 import { getPolicy } from "./policy.mjs";
+import * as R from "./autopilot-rules.mjs";
 
 const LIVE_OK = process.env.AUTOPILOT_LIVE === "1";
 const TG = process.env.TELEGRAM_BOT_TOKEN || "";
@@ -19,8 +24,9 @@ const MAX_AGE = 7 * 86400e3;
 // a live trade the trust ladder holds for the owner's yes (Approve, the default since 20 Nov 2026) is an inbox item and a
 // Telegram message each time: a held exit is asked again at most every half hour, not on every 60 s tick
 const ASK_AGAIN_MS = 30 * 60_000;
-export const DEFAULTS = { minRaisedEth: 1, buyEth: 0.01, takeProfitX: 2, stopPct: 30, maxOpen: 3, maxBuysPerDay: 5 };
-const LIMITS = { minRaisedEth: [0, 4.2], buyEth: [0.001, 0.5], takeProfitX: [1.05, 50], stopPct: [5, 95], maxOpen: [1, 10], maxBuysPerDay: [1, 30] };
+// the extra rules (R.EXTRA_DEFAULTS) are all off: a user who never sets one keeps exactly the rules of before
+export const DEFAULTS = { minRaisedEth: 1, buyEth: 0.01, takeProfitX: 2, stopPct: 30, maxOpen: 3, maxBuysPerDay: 5, ...R.EXTRA_DEFAULTS };
+const LIMITS = { minRaisedEth: [0, 4.2], buyEth: [0.001, 0.5], takeProfitX: [1.05, 50], stopPct: [5, 95], maxOpen: [1, 10], maxBuysPerDay: [1, 30], ...R.EXTRA_LIMITS };
 let store = null, ticking = false, sender = null;
 
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -41,7 +47,7 @@ function trunc(s, sig = 15) {
   return f ? `${i}.${f.slice(0, keep)}`.replace(/\.?0+$/, "") || "0" : i;
 }
 export function useSender(fn) { sender = fn; }
-export function init(st) { store = store || st; }
+export function init(st) { store = store || st; R.initRules(store); }
 async function tg(method, payload) {
   if (sender) return sender(method, payload);
   if (!TG) return { ok: false };
@@ -56,11 +62,18 @@ export function cleanRules(input = {}, base = DEFAULTS) {
   const out = { ...DEFAULTS, ...base };
   for (const [k, [lo, hi]] of Object.entries(LIMITS)) if (input[k] != null && isFinite(Number(input[k]))) out[k] = Math.min(hi, Math.max(lo, Number(input[k])));
   out.maxOpen = Math.round(out.maxOpen); out.maxBuysPerDay = Math.round(out.maxBuysPerDay);
+  for (const k of R.BOOL_KEYS) out[k] = input[k] != null ? input[k] === true || input[k] === "true" || input[k] === 1 : !!out[k];
+  out.devEarlyMin = Math.round(out.devEarlyMin);
+  // a dollar buy: 0 is off (the ETH amount), otherwise $1 to $1,000 in cents
+  out.buyUsd = out.buyUsd > 0 ? Math.min(1000, Math.max(1, Math.round(out.buyUsd * 100) / 100)) : 0;
   return out;
 }
 // "min 1 buy 0.01 tp 2 sl 30 max 3", or plain words: "above 1 ETH raised, 0.01 ETH each, take profit at 2x, stop at -30%"
 export function parseRules(text) {
-  const t = String(text || "").toLowerCase();
+  // the extra rules (xcheck on, site on, devsell 1m 0%, buy $10) are read first and taken out, so "devsell 2 min" never
+  // reads as a 2 ETH minimum and "buy 10 usd" never as 10 ETH
+  const ex = R.parseExtra(text);
+  const t = ex.rest;
   const num = (re) => { const m = re.exec(t); return m ? Number(m[1]) : null; };
   const r = {
     minRaisedEth: num(/(?:min(?:imum)?|above|over|raised)\s*(?:of\s*)?(\d*\.?\d+)\s*(?:eth)?/) ?? num(/(\d*\.?\d+)\s*eth\s*raised/),
@@ -69,6 +82,7 @@ export function parseRules(text) {
     stopPct: num(/(?:sl|stop(?:\s*loss)?)(?:\s*at)?\s*-?\s*(\d*\.?\d+)\s*%?/),
     maxOpen: num(/max(?:imum)?\s*(?:open\s*)?(\d+)/),
     maxBuysPerDay: num(/(\d+)\s*(?:buys?\s*)?(?:a|per)\s*day/),
+    ...ex.rules,
   };
   return Object.fromEntries(Object.entries(r).filter(([, v]) => v != null));
 }
@@ -120,31 +134,114 @@ async function savePosition(pos) {
 }
 
 /* ---------- entries: called by Sentry for every launch result ---------- */
+const raisedOf = (r) => (r?.pons && !r.pons.graduated && (r.pons.pair?.address === "native" || /ETH/i.test(r.pons.pair?.symbol || "")) ? Number(r.pons.raised) : null);
 export async function onLaunch(r) {
   if (!store || r?.v !== "passed" || !r.token) return [];
-  const raised = r.pons && !r.pons.graduated && (r.pons.pair?.address === "native" || /ETH/i.test(r.pons.pair?.symbol || "")) ? Number(r.pons.raised) : null;
+  const raised = raisedOf(r);
   if (raised == null) return [];
   const s = await store.readJson(STATE, blank());
   const opened = [];
   for (const [address, u] of Object.entries(s.users || {})) {
     if (!u.on) continue;
-    const rules = cleanRules(u.rules || {});
-    if (raised < rules.minRaisedEth) continue;
-    const mine = (s.positions || []).filter((p) => p.address === address);
-    // a buy held for the owner's yes counts like a buy: one ask per coin, and inside the day's buys
-    const asked = (s.asked || []).filter((a) => a.address === address);
-    if (mine.some((p) => p.token.toLowerCase() === r.token.toLowerCase()) || asked.some((a) => a.token === r.token.toLowerCase())) continue;   // one buy per coin, ever (Sentry re-checks quiet launches)
-    if (mine.filter((p) => p.status === "open").length >= rules.maxOpen) continue;
-    if (mine.filter((p) => p.openedAt > Date.now() - 86400e3).length + asked.filter((a) => a.at > Date.now() - 86400e3).length >= rules.maxBuysPerDay) continue;
-    const pos = await open(address, u.mode === "live" && LIVE_OK ? "live" : "practice", r, rules).catch((e) => { console.warn("[autopilot] open", address.slice(0, 8), e.message); return null; });
+    // waiting out a coin's first minutes for the extra dev rule: the newer result is kept for the look after the wait
+    const w = waits.get(`${address}:${r.token.toLowerCase()}`);
+    if (w) { w.r = r; continue; }
+    const pos = await consider(address, u, r, s, raised);
     if (pos) opened.push(pos);
   }
   return opened;
 }
-async function open(address, mode, r, rules) {
+// one user and one coin: the rules of before, then (only when the user switched one on) the extra checks, then the buy
+async function consider(address, u, r, s, raised, { attempt = 0 } = {}) {
+  const rules = cleanRules(u.rules || {});
+  if (raised < rules.minRaisedEth) return null;
+  const mine = (s.positions || []).filter((p) => p.address === address);
+  // a buy held for the owner's yes counts like a buy: one ask per coin, and inside the day's buys
+  const asked = (s.asked || []).filter((a) => a.address === address);
+  if (mine.some((p) => p.token.toLowerCase() === r.token.toLowerCase()) || asked.some((a) => a.token === r.token.toLowerCase())) return null;   // one buy per coin, ever (Sentry re-checks quiet launches)
+  if (mine.filter((p) => p.status === "open").length >= rules.maxOpen) return null;
+  if (mine.filter((p) => p.openedAt > Date.now() - 86400e3).length + asked.filter((a) => a.at > Date.now() - 86400e3).length >= rules.maxBuysPerDay) return null;
+  const mode = u.mode === "live" && LIVE_OK ? "live" : "practice";
+  let checks = [], buy = rules;
+  if (R.anyCheck(rules)) {
+    const born = r.ageMs != null && r.at ? r.at - r.ageMs : null;
+    const ev = await R.evaluate(r, rules, { born, attempt }).catch((e) => ({ verdict: "fail", checks: [{ key: "rules", label: "Extra rules", status: "fail", detail: `The checks could not run (${String(e.message).slice(0, 80)}), so no buy` }] }));
+    checks = ev.checks;
+    if (ev.verdict === "wait") { waitFor(address, r, ev.waitUntil, attempt); await note(address, r, "waiting", checks, mode); return null; }
+    if (ev.verdict !== "pass") { await note(address, r, "skipped", checks, mode); return null; }
+  }
+  if (rules.buyUsd > 0) {
+    const z = await R.usdToEth(rules.buyUsd, LIMITS.buyEth);
+    checks = [...checks, z.check];
+    if (!z.ok) { await note(address, r, "skipped", checks, mode); return null; }
+    buy = { ...rules, buyEth: z.eth, usd: { usd: rules.buyUsd, px: z.px } };
+  }
+  const pos = await open(address, mode, r, buy, checks).catch((e) => { console.warn("[autopilot] open", address.slice(0, 8), e.message); return null; });
+  if (checks.length) await note(address, r, pos ? "bought" : "not bought", checks, mode, { dm: false });
+  return pos;
+}
+
+/* ---------- the wait: a coin seen before its first minutes passed (the extra dev rule) ---------- */
+// Kept in memory only: after a restart a waiting coin is simply not bought (the safe side), unless Sentry's own re-check
+// of a quiet launch brings it here again. The look after the wait reads the curve again and runs every rule again.
+const waits = new Map();          // `${address}:${token}` → { r, attempt, timer }
+function waitFor(address, r, until, attempt) {
+  const k = `${address}:${r.token.toLowerCase()}`;
+  if (waits.has(k)) return;
+  const ms = Math.max(5_000, Math.min(16 * 60_000, (until || Date.now() + 60_000) - Date.now()));
+  const w = { r, attempt };
+  w.timer = setTimeout(() => { waits.delete(k); lookAgain(address, w.r, attempt + 1).catch((e) => console.warn("[autopilot] wait", e.message)); }, ms);
+  w.timer.unref?.();
+  waits.set(k, w);
+}
+async function lookAgain(address, r, attempt) {
+  const s = await store.readJson(STATE, blank());
+  const u = s.users?.[address];
+  if (!u?.on) return null;
+  const pons = await R.deps.pons(r.token).catch(() => null);
+  const r2 = pons ? { ...r, pons } : r;
+  const raised = raisedOf(r2);
+  if (raised == null) { await note(address, r2, "skipped", [{ key: "curve", label: "Curve", status: "fail", detail: pons?.graduated ? "The coin graduated while Autopilot waited" : "The curve could not be read again after the wait" }], u.mode === "live" && LIVE_OK ? "live" : "practice"); return null; }
+  return consider(address, u, r2, s, raised, { attempt });
+}
+// tests: the waiting coins, and a look after the wait run now instead of on its timer
+export const _waits = waits;
+export async function _lookAgainNow(address, token) {
+  const k = `${address.toLowerCase()}:${token.toLowerCase()}`, w = waits.get(k);
+  if (!w) return null;
+  clearTimeout(w.timer); waits.delete(k);
+  return lookAgain(address.toLowerCase(), w.r, w.attempt + 1);
+}
+
+/* ---------- the activity: each extra check's pass or fail, for the app and the DMs ---------- */
+const ACTIVITY = "autopilot-activity.json";
+const SKIP_DMS_A_DAY = 12;
+const MARK = { pass: "pass", fail: "FAIL", wait: "wait", "not-run": "not run" };
+const checkLines = (checks) => checks.map((c) => `${MARK[c.status] || c.status} · ${esc(c.label)}: ${esc(c.detail)}`).join("\n");
+async function note(address, r, outcome, checks, mode, { dm: sendDm = true } = {}) {
+  const token = r.token.toLowerCase(), symbol = r.symbol || "?";
+  let tell = false;
+  await store.update(ACTIVITY, {}, (a) => {
+    const list = a[address] || [];
+    const top = list[0];
+    // the same coin with the same answer again (Sentry's re-checks): the newest row is refreshed, not repeated
+    if (top && top.token === token && top.outcome === outcome && JSON.stringify(top.checks.map((c) => [c.status, c.detail])) === JSON.stringify(checks.map((c) => [c.status, c.detail]))) { top.at = Date.now(); top.seen = (top.seen || 1) + 1; return a; }
+    // one skip DM per coin, and at most SKIP_DMS_A_DAY a day: the rest are in the app's activity
+    tell = sendDm && outcome === "skipped" && !list.some((x) => x.token === token && x.dm) && list.filter((x) => x.dm && x.at > Date.now() - 86400e3).length < SKIP_DMS_A_DAY;
+    list.unshift({ at: Date.now(), token, symbol, outcome, mode, checks: checks.map(({ key, label, status, detail }) => ({ key, label, status, detail })), ...(tell ? { dm: true } : {}) });
+    a[address] = list.slice(0, 40);
+    return a;
+  });
+  if (tell) await dm(address, `<b>Sentry Autopilot${mode === "practice" ? " (practice)" : ""} skipped $${esc(symbol)}</b>: it passed Troya Gate, but not your extra rules.\n${checkLines(checks)}\n<code>${r.token}</code>`);
+}
+export async function activityOf(address) { return ((await store.readJson(ACTIVITY, {}))[address.toLowerCase()] || []).slice(0, 40); }
+
+async function open(address, mode, r, rules, checks = []) {
   const q = await quoteSwap({ tokenIn: "ETH", tokenOut: r.token, amountIn: rules.buyEth, slippagePct: 3 });
   if (!(q.amountOut > 0)) throw new Error("no quote");
   const pos = { id: randomBytes(6).toString("hex"), address, mode, token: r.token, symbol: r.symbol || q.tokenOut?.symbol || "?", amountEth: rules.buyEth, tokens: q.amountOut, entryPriceEth: rules.buyEth / q.amountOut, raisedAtEntry: r.pons?.raised ?? null, rules: { takeProfitX: rules.takeProfitX, stopPct: rules.stopPct }, openedAt: Date.now(), status: "open" };
+  if (rules.usd) { pos.amountUsd = rules.usd.usd; pos.ethUsd = rules.usd.px; }
+  if (checks.length) pos.checks = checks.map((c) => ({ key: c.key, status: c.status }));
   if (mode === "live") {
     const awPre = await getAgentWallet(address);
     const pre = Number((await tokenBal(awPre.address, r.token))?.amount || 0);
@@ -167,7 +264,7 @@ async function open(address, mode, r, rules) {
     pos.txBuy = (ex.result?.steps || []).at(-1)?.hash || null;
   }
   await savePosition(pos);
-  await dm(address, `<b>Sentry Autopilot${mode === "practice" ? " (practice)" : ""} bought $${esc(pos.symbol)}</b>\n${eth(pos.amountEth)} at ${Number(r.pons?.raised || 0).toFixed(2)} ETH raised. Troya Gate passed.\nTake profit at ${rules.takeProfitX}x, stop at -${rules.stopPct}%.${mode === "practice" ? "\nPlay money at real prices: nothing was sent." : ""}\n<code>${r.token}</code>`);
+  await dm(address, `<b>Sentry Autopilot${mode === "practice" ? " (practice)" : ""} bought $${esc(pos.symbol)}</b>\n${eth(pos.amountEth)}${pos.amountUsd ? ` ($${pos.amountUsd} at $${Math.round(pos.ethUsd)} per ETH)` : ""} at ${Number(r.pons?.raised || 0).toFixed(2)} ETH raised. Troya Gate passed.${checks.length ? `\n${checkLines(checks)}` : ""}\nTake profit at ${rules.takeProfitX}x, stop at -${rules.stopPct}%.${mode === "practice" ? "\nPlay money at real prices: nothing was sent." : ""}\n<code>${r.token}</code>`);
   return pos;
 }
 
@@ -285,12 +382,16 @@ export async function statusText(address) {
   const st = stats(list);
   const r = u.rules;
   const L = [`<b>Sentry Autopilot · ${u.on ? "on" : "off"} · ${u.mode === "live" ? "live (Agent Wallet)" : "practice (play money)"}</b>`,
-    `Buys every Pons launch that passes Troya Gate with at least ${r.minRaisedEth} ETH raised: ${r.buyEth} ETH each, take profit at ${r.takeProfitX}x, stop at -${r.stopPct}%, at most ${r.maxOpen} open and ${r.maxBuysPerDay} buys a day.`];
+    `Buys every Pons launch that passes Troya Gate with at least ${r.minRaisedEth} ETH raised: ${r.buyUsd > 0 ? `$${r.buyUsd} each (in ETH at the live price)` : `${r.buyEth} ETH each`}, take profit at ${r.takeProfitX}x, stop at -${r.stopPct}%, at most ${r.maxOpen} open and ${r.maxBuysPerDay} buys a day.`];
+  // the extra rules, only when one is on (the status reads exactly as before otherwise)
+  const ex = R.extraText(r);
+  if (ex.length) L.push(`Extra rules: ${ex.join("; ")}. A check that cannot be read counts as a no.`);
   const open = list.filter((p) => p.status === "open");
   if (open.length) { L.push("", "<b>Open</b>"); for (const p of open.slice(0, 8)) L.push(`$${esc(p.symbol)} · in ${eth(p.amountEth)} · now ${eth(p.lastValueEth)}${p.lastValueEth ? ` (${((p.lastValueEth / p.amountEth - 1) * 100).toFixed(1)}%)` : ""}${p.mode === "practice" ? " · practice" : ""}`); }
   const fmt = (x) => `${x.closed} closed · ${x.pnlEth >= 0 ? "+" : ""}${eth(x.pnlEth)}${x.winRate != null ? ` · ${(x.winRate * 100).toFixed(0)}% won` : ""}`;
   L.push("", `Practice: ${fmt(st.practice)}`, `Live: ${fmt(st.live)}`);
   L.push("", `/autopilot ${u.on ? "off" : "on"} · /autopilot set min 1 buy 0.01 tp 2 sl 30 max 3${u.liveAvailable ? ` · /autopilot ${u.mode === "live" ? "practice" : "live"}` : ""}`);
+  L.push("Optional: /autopilot set xcheck on · site on · devsell 1m 0% · buy $10 (each one off again with off, usd off for the ETH amount)");
   if (!u.liveAvailable) L.push("Live mode opens after it passes real-money tests. Practice runs at real prices meanwhile.");
   return L.join("\n");
 }
@@ -298,8 +399,10 @@ export async function command(address, arg) {
   const a = String(arg || "").trim();
   if (/^(on|off)$/i.test(a)) { await setUser(address, { on: /on/i.test(a) }); return statusText(address); }
   if (/^(live|practice)$/i.test(a)) { await setUser(address, { mode: a.toLowerCase() }); return statusText(address); }
-  if (/^set\b/i.test(a) || /\d/.test(a)) {
+  if (/^set\b/i.test(a) || /\d/.test(a) || /\b(?:x\s*-?\s*check|blue\s*-?\s*check|site|website|dev\s*-?\s*sell|devsell|dev\s*early|usd)\b/i.test(a)) {
     const rules = parseRules(a);
+    // an ETH amount set on its own switches a dollar buy back to the ETH amount
+    if (rules.buyEth != null && rules.buyUsd == null) rules.buyUsd = 0;
     if (!Object.keys(rules).length) return "Tell me the rules, like: /autopilot set min 1 buy 0.01 tp 2 sl 30 max 3";
     await setUser(address, { rules });
     return statusText(address);
@@ -309,7 +412,7 @@ export async function command(address, arg) {
 
 /* ---------- web ---------- */
 export async function register(r, ctx) {
-  store = ctx.store;
+  store = ctx.store; R.initRules(store);
   // the Agent Wallet's lot ledger reports this job's lots: a held buy approved later becomes a position; a lot closed by
   // someone else (Aegis, or a held exit approved later) closes its position at once. Its own direct exits close() handles.
   onLots("autopilot", {
@@ -324,7 +427,7 @@ export async function register(r, ctx) {
   r.get("/api/autopilot", async ({ req }) => {
     const s = requireSession(req);
     const list = await positionsOf(s.address);
-    return { settings: await userOf(s.address), defaults: DEFAULTS, limits: LIMITS, positions: list.sort((a, b) => (b.closedAt || b.openedAt) - (a.closedAt || a.openedAt)).slice(0, 100), stats: stats(list) };
+    return { settings: await userOf(s.address), defaults: DEFAULTS, limits: LIMITS, activity: await activityOf(s.address), xBudget: await R.xBudgetToday(), positions: list.sort((a, b) => (b.closedAt || b.openedAt) - (a.closedAt || a.openedAt)).slice(0, 100), stats: stats(list) };
   });
   r.post("/api/autopilot/settings", async ({ req, body }) => {
     const s = requireSession(req);

@@ -1207,7 +1207,7 @@ function mountAegis(box) {
    ===================================================================================== */
 // a guest sees the rules as a template (the starting rules every wallet gets, server/autopilot.mjs DEFAULTS), and the
 // results and positions as empty Example rows: no invented PnL, no invented trades
-const SENTRY_TEMPLATE = [["Curve raised at least", "1 ETH"], ["Buy per coin", "0.01 ETH"], ["Take profit at", "2x"], ["Stop at", "30% down"], ["Open at once", "3"], ["Buys a day", "5"]];
+const SENTRY_TEMPLATE = [["Curve raised at least", "1 ETH"], ["Buy per coin", "0.01 ETH"], ["Take profit at", "2x"], ["Stop at", "30% down"], ["Open at once", "3"], ["Buys a day", "5"], ["Extra checks", "Off (X check, site up, dev early sale, buy in USD)"]];
 function guestSentry() {
   const example = [
     h("div", { class: "panel ag-panel" },
@@ -1244,7 +1244,7 @@ function mountSentryAuto(box) {
   // the results and the positions, never a field someone is typing in
   let d = null, gen = 0;
   const head = h("div", { class: "ag-auto-h" }), formBox = h("div", { style: { display: "grid", gap: "12px" } });
-  const resultsP = h("div", { class: "panel ag-panel" }), openP = h("div", { class: "panel ag-panel" }), closedP = h("div", { class: "panel ag-panel" });
+  const resultsP = h("div", { class: "panel ag-panel" }), openP = h("div", { class: "panel ag-panel" }), closedP = h("div", { class: "panel ag-panel" }), actP = h("div", { class: "panel ag-panel" });
   // returns whether it saved; a failed save leaves typed rules as they are, and the refresh puts the switches back
   const save = async (patch, rules = false) => {
     let ok = true;
@@ -1257,9 +1257,28 @@ function mountSentryAuto(box) {
     const s = d.settings, r = s.rules;
     const f = (key, label, step, suffix) => h("label", { class: "field" }, h("span", {}, label), h("div", { class: "row" }, h("input", { class: "input", type: "number", step, min: d.limits[key][0], max: d.limits[key][1], value: r[key], name: key }), suffix ? h("span", { class: "faint" }, suffix) : null));
     const form = h("div", { class: "ag-grid3" }, f("minRaisedEth", "Curve raised at least", "0.1", "ETH"), f("buyEth", "Buy per coin", "0.001", "ETH"), f("takeProfitX", "Take profit at", "0.1", "x"), f("stopPct", "Stop at", "1", "% down"), f("maxOpen", "Open at once", "1", ""), f("maxBuysPerDay", "Buys a day", "1", ""));
-    const saveRules = h("button", { class: "btn primary", type: "button", onclick: () => save({ rules: Object.fromEntries([...form.querySelectorAll("input")].map((i) => [i.name, Number(i.value)])) }, true) }, "Save rules");
+    // the optional extra checks (server/autopilot-rules.mjs), all off until switched on here or in Telegram
+    const box = (key, title, text) => h("label", { class: "ap-x" }, h("input", { type: "checkbox", name: key, checked: !!r[key] }), h("span", {}, h("b", {}, title), h("span", { class: "faint" }, text)));
+    const small = (key, step, suffix) => h("span", { class: "ap-num" }, h("input", { class: "input", type: "number", step, min: d.limits[key]?.[0], max: d.limits[key]?.[1], value: r[key], name: key, "aria-label": suffix }), h("span", { class: "faint" }, suffix));
+    const extra = h("div", { class: "ap-extra" },
+      h("div", { class: "ap-extra-h" }, h("b", {}, "Extra checks"), h("span", { class: "faint" }, "Optional, off by default. A check that cannot be read counts as a no: no buy.")),
+      box("xCheck", "X check", "The coin's own X account (from its Pons profile) has a verified badge and shows this coin's contract address in its bio, pinned post or 5 newest posts."),
+      box("siteUp", "Site up", "The coin's website (from its Pons profile) answers HTTP 200 within 5 seconds."),
+      h("div", { class: "ap-x" }, h("input", { type: "checkbox", name: "devEarly", checked: !!r.devEarly, id: "ap-dev" }),
+        h("span", {}, h("label", { for: "ap-dev" }, h("b", {}, "Dev didn't sell early")),
+          h("span", { class: "faint ap-inline" }, "Skip if the dev or wallets tied to it sold more than ", small("devEarlyPct", "1", "%"), " of what they got in the first ", small("devEarlyMin", "1", "min")),
+          h("span", { class: "faint ap-inline" }, "0% means any sale. A coin seen before that time is checked once it has passed, never bought earlier."))),
+      h("div", { class: "ap-x" }, h("span", { class: "ap-x-pad" }), h("span", {}, h("b", {}, "Buy in USD"),
+        h("span", { class: "faint ap-inline" }, "Buy ", small("buyUsd", "1", "USD"), " per coin, in ETH at the live price when it buys. 0 uses the ETH amount above."))));
+    const collect = () => {
+      const out = {};
+      for (const i of [...form.querySelectorAll("input"), ...extra.querySelectorAll("input[type=number]")]) out[i.name] = Number(i.value);
+      for (const i of extra.querySelectorAll("input[type=checkbox]")) out[i.name] = i.checked;
+      return out;
+    };
+    const saveRules = h("button", { class: "btn primary", type: "button", onclick: () => save({ rules: collect() }, true) }, "Save rules");
     const pub = h("label", { class: "row" }, h("input", { type: "checkbox", checked: s.public, onchange: async (e) => { const want = e.target.checked; if (!(await save({ public: want }))) e.target.checked = !want; } }), "Show my results on the leaderboard (address shortened)");
-    clear(formBox, form, h("div", { class: "row", style: { justifyContent: "space-between", flexWrap: "wrap", gap: "10px" } }, pub, saveRules));
+    clear(formBox, form, extra, h("div", { class: "row", style: { justifyContent: "space-between", flexWrap: "wrap", gap: "10px" } }, pub, saveRules));
   }
   // a pressed control (the switch, a Close button) keeps its focus through the repaint (data-k)
   function paintLive() {
@@ -1274,13 +1293,25 @@ function mountSentryAuto(box) {
     const line = (x) => `${x.closed} closed · ${x.pnlEth >= 0 ? "+" : ""}${ethf(x.pnlEth)}${x.winRate != null ? ` · ${(x.winRate * 100).toFixed(0)}% won` : ""}`;
     const open = d.positions.filter((p) => p.status === "open"), closed = d.positions.filter((p) => p.status === "closed");
     const row = (p) => h("div", { class: "ap-row" },
-      h("div", { class: "grow" }, h("b", {}, `$${p.symbol}`), h("span", { class: "faint" }, ` · ${p.mode} · in ${ethf(p.amountEth)} at ${p.raisedAtEntry != null ? Number(p.raisedAtEntry).toFixed(2) : "–"} ETH raised · ${ago(p.openedAt)} ago`)),
+      h("div", { class: "grow" }, h("b", {}, `$${p.symbol}`), h("span", { class: "faint" }, ` · ${p.mode} · in ${ethf(p.amountEth)}${p.amountUsd ? ` ($${p.amountUsd})` : ""} at ${p.raisedAtEntry != null ? Number(p.raisedAtEntry).toFixed(2) : "–"} ETH raised · ${ago(p.openedAt)} ago`)),
       p.status === "open"
         ? h("div", { class: "row" }, h("span", {}, p.lastValueEth != null ? `${ethf(p.lastValueEth)} (${((p.lastValueEth / p.amountEth - 1) * 100).toFixed(1)}%)` : "checking…"), h("button", { class: "btn sm", type: "button", "data-k": `close-${p.id}`, onclick: async (e) => { e.currentTarget.disabled = true; try { await api.post("autopilot/close", { id: p.id }); toast("Closed", "ok"); } catch (er) { toast(er.message, "error"); } refresh(); } }, "Close"))
         : h("span", { class: (p.pnlEth || 0) >= 0 ? "up" : "down" }, `${(p.pnlEth || 0) >= 0 ? "+" : ""}${ethf(p.pnlEth)} · ${p.reason}`));
     clear(resultsP, h("h3", {}, "Results"), h("div", { class: "rows" }, h("div", {}, h("span", {}, "Practice"), h("span", {}, line(st.practice))), h("div", {}, h("span", {}, "Live"), h("span", {}, line(st.live))), h("div", {}, h("span", {}, "Open now"), h("span", {}, String(st.open)))),
       h("a", { class: "link", href: "#/leaderboard" }, "See the leaderboard"));
     keepFocus(openP, () => clear(openP, h("h3", {}, `Open (${open.length})`), open.length ? h("div", { class: "ap-list" }, open.map(row)) : h("p", { class: "faint", style: { margin: 0 } }, s.on ? "Waiting for the next launch that passes your rules." : "Switch it on to start.")));
+    // each extra check's pass or fail, per coin (only users with an extra rule on have rows)
+    const acts = d.activity || [];
+    const r0 = s.rules, anyX = r0.xCheck || r0.siteUp || r0.devEarly || r0.buyUsd > 0;
+    show(actP, acts.length > 0 || anyX);
+    const ST = { pass: "pass", fail: "fail", wait: "wait", "not-run": "not run" };
+    const OUT = { bought: "Bought", skipped: "Skipped", waiting: "Waiting", "not bought": "Not bought" };
+    clear(actP, h("h3", {}, "Extra checks: activity"),
+      acts.length ? h("div", { class: "ap-list" }, acts.slice(0, 20).map((a) => h("div", { class: "ap-act" },
+        h("div", { class: "ap-act-h" }, h("b", {}, `$${a.symbol}`), h("span", { class: `ap-out o-${a.outcome.replace(/\s/g, "-")}` }, OUT[a.outcome] || a.outcome), h("span", { class: "faint" }, `${a.mode || "practice"} · ${ago(a.at)} ago${a.seen > 1 ? ` · seen ${a.seen}x` : ""}`)),
+        h("ul", { class: "ap-chk" }, a.checks.map((c) => h("li", {}, h("span", { class: `ap-st s-${c.status}` }, ST[c.status] || c.status), h("span", {}, h("b", {}, c.label), ` ${c.detail}`)))))))
+        : h("p", { class: "faint", style: { margin: 0 } }, "Each coin your extra checks look at shows here with every check's result and reason, and a skip is also sent to you on Telegram."),
+      d.xBudget && r0.xCheck ? h("p", { class: "note", style: { margin: "8px 0 0" } }, `X lookups by Autopilot today: ${d.xBudget.used} of ${d.xBudget.of} (shared by all users; each coin is looked up once). When they run out, X check says no.`) : null);
     show(closedP, closed.length > 0);
     clear(closedP, closed.length ? [h("h3", {}, "Closed"), h("div", { class: "ap-list" }, closed.slice(0, 30).map(row))] : null);
   }
@@ -1296,8 +1327,8 @@ function mountSentryAuto(box) {
     clear(main,
       h("div", { class: "ag-intro" }, h("h2", {}, "Sentry Autopilot"), h("p", {}, "Every Pons launch goes through Troya Gate about 90 seconds in, and again at 5, 15 and 60 minutes while it is quiet. When one passes and its curve has raised what you set, Autopilot buys, then sells at your take-profit or stop, or after 7 days. Practice mode uses play money at real prices; live mode trades from your Agent Wallet inside its caps.")),
       h("div", { class: "panel ag-panel" }, head, h("hr", { class: "hr" }), h("h3", {}, "Your rules"), formBox,
-        h("p", { class: "note", style: { margin: 0 } }, "Same rules in Telegram: /autopilot set min 1 buy 0.01 tp 2 sl 30 max 3")),
-      resultsP, openP, closedP);
+        h("p", { class: "note", style: { margin: 0 } }, "Same rules in Telegram: /autopilot set min 1 buy 0.01 tp 2 sl 30 max 3 · extra checks: /autopilot set xcheck on site on devsell 1m 0% buy $10")),
+      resultsP, actP, openP, closedP);
     paintForm();
     paintLive();
   }

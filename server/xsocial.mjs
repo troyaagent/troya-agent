@@ -514,6 +514,42 @@ export async function userProfile(username) {
   for (const x of u.entities?.description?.urls || []) if (x.url && x.expanded_url) bio = bio.split(x.url).join(x.expanded_url);
   return { handle: u.username, name: u.name, bio, followers: u.public_metrics?.followers_count || 0, following: u.public_metrics?.following_count || 0, posts: u.public_metrics?.tweet_count || 0, created: u.created_at || null, website: u.entities?.url?.urls?.[0]?.expanded_url || u.url || null, protected: !!u.protected };
 }
+// Sentry Autopilot's optional X check (autopilot-rules.mjs; community request, 24 Nov 2026): is the coin's own X account
+// verified, and does it show the coin's contract address? The cheapest reads first: ONE user lookup (the "users" budget)
+// returns the badge, the bio and the pinned post together; only when the address is in neither are the account's 5 newest
+// posts read (the "reads" budget, counted by the posts X returns). Over a cap, nothing is read and the answer says which
+// cap (the rule then fails closed). needle: the address, lower case. Never posts anything.
+export async function accountCheck(username, needle) {
+  if (!store) return { error: "X is not ready" };
+  if (!/^[A-Za-z0-9_]{1,15}$/.test(String(username || ""))) return { error: "not an X account link" };
+  const bot = await botTokens().catch(() => null);
+  const call = bot?.access ? (p) => xApi(p, { token: bot.access }) : process.env.X_BEARER_TOKEN ? (p) => appApi(p) : null;
+  if (!call) return { error: "Troya is not connected to X" };
+  if (!(await spend("users"))) return { capped: "users" };
+  const want = lc(needle);
+  const expand = (text, urls) => { let t = String(text || ""); for (const x of urls || []) if (x?.url && x.expanded_url) t = t.split(x.url).join(x.expanded_url); return t; };
+  let p;
+  try { p = await call(`/2/users/by/username/${username}?user.fields=verified,verified_type,description,entities,pinned_tweet_id,protected&expansions=pinned_tweet_id&tweet.fields=entities`); }
+  catch (e) { return { error: String(e.message || e).slice(0, 120) }; }
+  const u = p?.data;
+  if (!u?.id) return { notFound: true, handle: username };
+  const vt = String(u.verified_type || (u.verified ? "blue" : "none")).toLowerCase();
+  const out = { handle: u.username, id: u.id, verified: u.verified === true || ["blue", "business", "government"].includes(vt), verifiedType: vt, protected: !!u.protected, where: null, recentRead: 0, capped: null };
+  const bio = `${expand(u.description, u.entities?.description?.urls)} ${(u.entities?.url?.urls || []).map((x) => x.expanded_url || "").join(" ")}`;
+  if (lc(bio).includes(want)) { out.where = "bio"; return out; }
+  const pin = (p.includes?.tweets || []).find((t) => t.id === u.pinned_tweet_id);
+  if (pin && lc(expand(pin.text, pin.entities?.urls)).includes(want)) { out.where = "pinned post"; return out; }
+  if (out.protected) return out;
+  if ((await left("reads")) < 5) { out.capped = "reads"; return out; }
+  try {
+    const r = await call(`/2/users/${u.id}/tweets?max_results=5&exclude=retweets&tweet.fields=entities`);
+    const posts = r?.data || [];
+    await spend("reads", Math.max(1, posts.length));
+    out.recentRead = posts.length;
+    if (posts.some((t) => lc(expand(t.text, t.entities?.urls)).includes(want))) out.where = "a recent post";
+  } catch (e) { out.error = String(e.message || e).slice(0, 120); }
+  return out;
+}
 async function compose(name, text) {
   const llm = await import("./llm.mjs");
   if (!llm.llmOn() || !(await llm.underCap())) throw new Error("the AI is off or over its daily cap");

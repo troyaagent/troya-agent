@@ -326,7 +326,7 @@ export async function assay(token, { deep = true, waitMs = 20000 } = {}) {
   const key = `${t}:${deep ? 1 : 0}`;
   const hit = cache.get(key);
   // a busy coin (history capped) takes minutes to read, so it is kept for an hour; others for 15 minutes
-  if (hit && Date.now() - hit.at < (hit.coverage?.partial ? 60 * 60e3 : CACHE_MS)) return hit;
+  if (hit && Date.now() - hit.at < (hit.coverage?.partial ? 60 * 60e3 : CACHE_MS)) return withDevSide(hit, deep);
   if (!inflight.has(key)) {
     inflight.set(key, oneAtATime(() => measure(t, { deep })).then((r) => { cache.set(key, r); if (cache.size > 500) cache.delete(cache.keys().next().value); return r; })
       .catch((e) => ({ token: t, status: "error", error: e.message, at: Date.now() })).finally(() => inflight.delete(key)));

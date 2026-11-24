@@ -232,7 +232,10 @@ async function handleMention(t, { users, media, bot, m, L }) {
   // people learning to launch or trade ask several questions in a row: guide them (owner, 18 Nov), still capped
   else if (recent >= (HELP_Q.test(text) ? 12 : 6)) entry.why = `${recent} answers to this account in 6 hours`;
   else {
-    const reply = await compose(u.username || "someone", text).catch((e) => { entry.why = e.message; return null; });
+    // a reply under a post ("what does this mean?") is answered with that post in view (24 Nov 2026)
+    const parent = await parentText(t).catch(() => null);
+    if (parent) entry.parent = parent.slice(0, 200);
+    const reply = await compose(u.username || "someone", text, parent).catch((e) => { entry.why = e.message; return null; });
     if (reply) {
       entry.reply = reply;
       if (m === "live" && (await spend("posts"))) {
@@ -550,7 +553,19 @@ export async function accountCheck(username, needle) {
   } catch (e) { out.error = String(e.message || e).slice(0, 120); }
   return out;
 }
-async function compose(name, text) {
+// the post a mention replies to: Troya's own posts from the log first, else one read with the app bearer (the "reads" budget)
+async function parentText(t) {
+  const pid = (t.referenced_tweets || []).find((x) => x.type === "replied_to")?.id;
+  if (!pid) return null;
+  const log = await store.readJson("x-log.json", []).catch(() => []);
+  const own = log.find((e) => String(e.replyId || "") === String(pid) && e.reply);
+  if (own) return String(own.reply);
+  if (!process.env.X_BEARER_TOKEN || !(await spend("reads"))) return null;
+  const r = await fetch(`${API}/2/tweets/${pid}?tweet.fields=text`, { headers: { authorization: `Bearer ${process.env.X_BEARER_TOKEN}` }, signal: AbortSignal.timeout(10_000) }).catch(() => null);
+  const j = r?.ok ? await r.json().catch(() => null) : null;
+  return j?.data?.text ? String(j.data.text) : null;
+}
+async function compose(name, text, parent = null) {
   const llm = await import("./llm.mjs");
   if (!llm.llmOn() || !(await llm.underCap())) throw new Error("the AI is off or over its daily cap");
   const tg = await import("./tgbot.mjs");
@@ -558,7 +573,8 @@ async function compose(name, text) {
   const system = `${tg.TG_SYSTEM}${facts}
 
 NOW YOU ARE ON X, not Telegram: you are replying publicly as @Troyaagent to a post that mentions you. Rules on X: answer in the language of the post (English if unsure); one short reply, at most 260 characters; no hashtags, no emojis, no markdown, never tag anyone; the only links you may give are troya.codes pages, t.me/troyaagent and x.com/Troyaagent; live numbers only from tools; never predict prices or tell anyone to buy or sell; sound like a real, friendly member of the team, not a help desk: short natural sentences, no corporate phrases, vary your wording, and do not end every reply with a link; a compliment, a cheer or a gm is worth answering: thank them warmly in your own words, and only sometimes add one thing to try on Troya with its link; if asked, say plainly you are Troya's AI agent; worries about safety or about the project stopping get the plain facts and troya.codes/safety; Telegram commands such as /raid or /persona only work in Telegram (t.me/troyaagent): on X, give the post link or the page instead; if the post is spam, a scam or an insult, or it is a promoter or marketer offering their services, asking you to DM or inbox them, asking for a follow back, or pitching a collab, reply with exactly SKIP (the team ignores those). Current time: ${new Date().toISOString().slice(0, 16)} UTC.`;
-  const out = await llm.chatWithTools({ system, history: [], user: `${String(name).slice(0, 30)} on X: <untrusted>${text.slice(0, 500)}</untrusted>`, tools: tg.TG_TOOLS, exec: tg.tgExec, maxSteps: 3 });
+  const ctx = parent ? `They are replying to this post: <untrusted>${parent.replace(/https?:\/\/t\.co\/\S+/g, "").slice(0, 500)}</untrusted>\n` : "";
+  const out = await llm.chatWithTools({ system, history: [], user: `${ctx}${String(name).slice(0, 30)} on X: <untrusted>${text.slice(0, 500)}</untrusted>`, tools: tg.TG_TOOLS, exec: tg.tgExec, maxSteps: 3 });
   const s = tidy(out);
   if (!s || /^SKIP\b/i.test(s)) throw new Error("nothing worth answering");
   return s;

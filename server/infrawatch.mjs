@@ -71,6 +71,10 @@ async function readings() {
     const j = await fetch("https://openrouter.ai/api/v1/credits", { headers: { authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` }, signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null);
     if (j?.data) out.openrouter = { left: +(Number(j.data.total_credits) - Number(j.data.total_usage)).toFixed(2) };
   }
+  // Pons: a protocol-owner proposal to redirect the $TROYA creator fees (3-day timelock); Troya's model runs on those fees
+  const pend = await R.rpc("robinhood", "eth_call", [{ to: "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e", data: "0x9beacf4a" + "1fa81ddaaac83240803b3f2d20595e40edc1a074".padStart(64, "0") }, "latest"], { timeoutMs: 10_000 }).catch(() => null);
+  const w = typeof pend === "string" ? pend.slice(2).match(/.{64}/g) || [] : [];
+  if (w.length >= 3) out.ponsRedirect = BigInt("0x" + w[0]) === 0n ? null : { to: "0x" + w[0].slice(24), effectiveAt: Number(BigInt("0x" + w[1])) };
   // the server
   const mem = Object.fromEntries((await readFile("/proc/meminfo", "utf8").catch(() => "")).split("\n").filter(Boolean).map((l) => { const [k, v] = l.split(":"); return [k, parseInt(v) / 1024]; }));
   out.server = { memFreeMb: Math.round(mem.MemAvailable || 0), swapUsedMb: Math.round((mem.SwapTotal || 0) - (mem.SwapFree || 0)) };
@@ -98,6 +102,7 @@ async function tick() {
     for (const [mod, t] of Object.entries(r.rpc429 || {})) {
       if (t.lastHour > RL_HOUR) add(`rl:${mod}`, t.lastHour > RL_HOUR * 4, `${t.lastHour > RL_HOUR * 4 ? "🔴" : "🟠"} Modul ${mod} kena limit RPC (429) ${t.lastHour}x dalam 1 jam terakhir (batas ${RL_HOUR}); ${t.gaveUp} bacaan gagal setelah dicoba ulang sejak server jalan. Kurangi frekuensi modul itu atau arahkan bacaannya ke node Chainstack.`);
     }
+    if (r.ponsRedirect) add(`pons:${r.ponsRedirect.to}:${r.ponsRedirect.effectiveAt}`, true, `🔴 Pons mengajukan pengalihan creator fee $TROYA ke ${r.ponsRedirect.to}, bisa dieksekusi mulai ${new Date(r.ponsRedirect.effectiveAt * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC. Cek troya.codes/proof#claim-pons-fee-redirect dan hubungi Pons sekarang.`);
     const s = r.server;
     if (s.memFreeMb < 200) add("mem", true, `🔴 RAM server tinggal ${s.memFreeMb} MB. Server bisa melambat atau proses mati: naikkan Hetzner ke 4 GB.`);
     if (s.swapUsedMb > 1500) add("swap", false, `🟠 Server memakai swap ${s.swapUsedMb} MB (RAM kurang). Pertimbangkan naik ke Hetzner 4 GB.`);

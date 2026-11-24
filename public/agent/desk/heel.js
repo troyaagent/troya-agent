@@ -128,6 +128,7 @@ export async function mount(view, ctx) {
         r.guard?.alt ? h("a", { class: "btn", href: r.guard.alt.href }, icon("shield"), r.guard.alt.label) : null,
         r.kind === "coin" ? h("a", { class: "btn sm", href: `#/token/${a}` }, "Token page") : null,
         r.kind === "coin" ? h("a", { class: "btn sm", href: `#/clusters/${a}`, title: "Its largest holders as bubbles, and which wallets are linked, with the transactions behind each link" }, "Cluster map") : null,
+        r.kind !== "coin" ? h("a", { class: "btn sm", href: `#/chiron/${a}`, title: "V9 Chiron: the one trading habit that cost this wallet most, read from its own swaps" }, "Its trading habits") : null,
         ctx.ask ? h("button", { class: "btn sm", type: "button", onclick: () => ctx.ask(`Explain this Heel in plain words, and what I should do: ${r.heel} (${a})`) }, icon("spark"), "Ask Troya") : null),
       r.partial ? h("p", { class: "fine hl-partial" }, h("span", { class: "hl-spin" }), "Some sources are still reading; this answer updates by itself.") : null,
       passportEl(r.passport, r.kind),

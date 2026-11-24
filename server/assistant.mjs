@@ -14,7 +14,7 @@ import { liveFacts, glossaryBlock, featuresIn, linkOf, workBlock } from "./botfa
 import { initPersonas, personaBlock, personaForAddress } from "./personas.mjs";
 // a guest (not signed in) gets the answer; tickets are only stored for a signed-in wallet
 const propose = (ctx, p) => (ctx.guest ? Promise.resolve({ id: `guest-${Date.now().toString(36)}`, ...p, guest: true }) : createProposal(ctx.address, p));
-import { checkAction, operatorPolicy } from "./policy.mjs";
+import { checkAction, operatorPolicy, swapSide } from "./policy.mjs";
 import { logAction } from "./journal.mjs";
 
 let store;
@@ -85,7 +85,7 @@ async function swapTicket(ctx, { tin, tout, amount }, lang, text) {
   const gate = await gateSwap(q);
   const ep = (await ethUsd()) || 0;
   const usd = q.tokenIn.native ? q.amountIn * ep : (q.tokenIn.priceUsd || 0) * q.amountIn;
-  const pc = ctx.guest ? { ok: true, reasons: [] } : await checkAction(ctx.address, { kind: "swap", usd, token: q.tokenOut.native ? q.tokenIn.address : q.tokenOut.address });
+  const pc = ctx.guest ? { ok: true, reasons: [] } : await checkAction(ctx.address, { kind: "swap", usd, token: q.tokenOut.native ? q.tokenIn.address : q.tokenOut.address, side: await swapSide(q) });
   gate.checks.push({ name: "Your limits", status: pc.ok ? "pass" : "fail", detail: pc.ok ? "Inside your caps" : pc.reasons.join(" ") });
   const fails = gate.checks.filter((c) => c.status === "fail");
   const lines = [

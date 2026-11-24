@@ -143,7 +143,9 @@ export async function getBudget(address, pol = null) {
 }
 
 // kind: swap | perp | send | withdraw | bridge | launch | watch
-export async function checkAction(address, { kind, usd = 0, leverage = 1, market, token } = {}) {
+// side: "buy" for a swap that buys a coin with ETH, WETH or USDG (V9 F48 Chiron's rules apply to buys only; a sell is never
+// held back by them). Callers that leave it out get exactly the checks of before.
+export async function checkAction(address, { kind, usd = 0, leverage = 1, market, token, side } = {}) {
   const p = await getPolicy(address);
   const e = p.effective;
   const reasons = [];
@@ -160,7 +162,20 @@ export async function checkAction(address, { kind, usd = 0, leverage = 1, market
     if (e.blockedTokens.map((x) => String(x).toLowerCase()).includes(t)) reasons.push("This token is blocked by the operator.");
     if (e.allowedTokens.length && !e.allowedTokens.map((x) => String(x).toLowerCase()).includes(t)) reasons.push("This token is not on the operator's allowed list.");
   }
+  // V9 F48 Chiron: the owner's own habit rules (no buys in a coin's first N seconds, at most N buys a day). A rule that
+  // cannot be checked says no: a buy never goes out without it.
+  if (kind === "swap" && side === "buy" && address) {
+    const ch = await import("./chiron.mjs").then((m) => m.ruleCheck(address, { token })).catch((err) => ({ reasons: [`Your Chiron rules could not be checked just now (${String(err.message || err).slice(0, 80)}), so no buy without them.`] }));
+    reasons.push(...(ch.reasons || []));
+  }
   return { ok: reasons.length === 0, reasons, effective: e, usedTodayUsd: p.usedTodayUsd };
+}
+/** V9 F48 Chiron: does this swap buy a coin (ETH, WETH or USDG in, any other token out)? q: a quoteSwap result */
+export async function swapSide(q) {
+  const { isQuote } = await import("./chiron.mjs");
+  const inQ = q?.tokenIn?.native || (await isQuote(q?.tokenIn?.address));
+  const outQ = q?.tokenOut?.native || (await isQuote(q?.tokenOut?.address));
+  return inQ && !outQ ? "buy" : !inQ && outQ ? "sell" : "swap";
 }
 
 export async function register(r, ctx) {

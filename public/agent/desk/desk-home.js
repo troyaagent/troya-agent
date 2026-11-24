@@ -258,7 +258,7 @@ export async function mount(view, { go, ask: askDrawer }) {
   /* ---------- quick tiles ---------- */
   const tile = (ic) => h("span", { class: "d2-tile" }, chromeIcon(ic));
   const quick = h("section", { class: "d2-quick" },
-    [["market", "Buy a coin", "Every coin on Robinhood Chain", "#/market"], ["gate", "Gate a coin", "Eight checks before you buy", "#/gate"],
+    [["market", "Buy a coin", "Every coin on Robinhood Chain", "#/market"], ["gate", "Gate a coin", "Nine checks before you buy", "#/gate"],
      ["launch", "Launch", "Create a coin with the Gate on it", "#/create"], ["perps", "Perps", "Crypto, stocks and metals", "#/perps"]]
       .map(([ic, t, d, href]) => h("a", { class: "d2-q", href }, tile(ic), h("span", {}, h("b", {}, t), h("small", {}, d)))));
 

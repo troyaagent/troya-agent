@@ -54,6 +54,7 @@ const SI = {
   expand: "M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7",
   spark: "M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8",
   heel: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 1v4M12 19v4M1 12h4M19 12h4",
+  chiron: "M6 3c4.5 2.3 7 5.6 7 9s-2.5 6.7-7 9M6 3v18M3 12h17M17 8.5l3.5 3.5-3.5 3.5",   // V9 F48 Chiron: the centaur's bow
   swift: "M3 7h9M3 12h13M3 17h9M14 5l6 7-6 7",
   clusters: "M7 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM9 20a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM9.6 7.6l3.7 1M8 9.8l.6 5.2M14.5 11.4l-4 4.4",   // Cluster map
   phoenix: "M12 21c-3.9 0-6.5-2.7-6.5-6.2 0-3.4 2.6-5.2 3.4-8.8 1.9 1.5 2.9 3.4 3 5.4 1-.9 1.7-2.2 1.9-3.8 2.5 2 4.7 4.8 4.7 7.6 0 3.3-2.8 5.8-6.5 5.8zM12 21c-1.6 0-2.7-1.1-2.7-2.6 0-1.6 1.4-2.6 2.7-4.4 1.3 1.8 2.7 2.8 2.7 4.4 0 1.5-1.1 2.6-2.7 2.6z",   // V9 F57 Phoenix
@@ -74,7 +75,7 @@ export function si(name, cls = "") {
 // No route was removed in the regroup: every old address still resolves through ROUTES below.
 export const GROUPS = [
   [null, [["Home", "#/", "desk"]]],
-  ["Discover", [["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["All Robinhood coins", "#/launch", "launch"], ["Gate a coin", "#/gate", "gate"], ["Find the weak spot", "#/heel", "heel"], ["Leaderboard", "#/leaderboard", "leaderboard"]]],
+  ["Discover", [["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["All Robinhood coins", "#/launch", "launch"], ["Gate a coin", "#/gate", "gate"], ["Find the weak spot", "#/heel", "heel"], ["Trader habits", "#/chiron", "chiron"], ["Leaderboard", "#/leaderboard", "leaderboard"]]],
   ["Trade", [["Swift", "#/swift", "swift"], ["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Stock desk", "#/stocks", "stocks"], ["Liquidity desk", "#/liquidity", "liquidity"], ["Lighter perps", "#/lighter", "lighter"], ["Bridge", "#/bridge", "bridge"]]],
   ["Launch", [["Create coin", "#/create", "create"], ["My coins & fees", "#/creator", "creator"]]],
   // Autopilot keeps its place until the owner decides where it belongs
@@ -98,13 +99,14 @@ const ROUTES = {
   herald: "herald", treasury: "treasury",                    // V8 F42: /agent/js/pages/herald.js
   stake: "stake",                                            // $TROYA staking (21 Nov): /agent/js/pages/stake.js
   heel: "heel",                                              // V9 F47 Heel: ./heel.js (loads its own heel.css)
+  chiron: "chiron",                                          // V9 F48 Chiron: ./chiron.js (loads its own chiron.css)
   clusters: "clusters",                                      // Cluster map (24 Nov): ./clusters.js (loads its own clusters.css)
   swift: "swift",                                            // V9 F49 Swift: ./swift.js (loads its own swift.css)
   about: "about",                                            // About Troya (23 Nov): ./about.js, the intro that used to open the Desk
   phoenix: "phoenix",                                        // V9 F57 Phoenix: ./phoenix.js (loads its own phoenix.css)
   u: "portfolio",                                            // profiles (21 Nov): #/u/<username> → a wallet's public page
 };
-const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", clusters: "./clusters.js", swift: "./swift.js", about: "./about.js", phoenix: "./phoenix.js" };
+const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", chiron: "./chiron.js", clusters: "./clusters.js", swift: "./swift.js", about: "./about.js", phoenix: "./phoenix.js" };
 // The sheets each page asks for with useCss at mount. route() requests them together with the module, so the stylesheet
 // is not one more round trip after the code. The boot script in /agent/index.html keeps a copy of this table and of the
 // routes above to start the same downloads before this file has even arrived: change both together.
@@ -217,7 +219,7 @@ async function route() {
 const LOST = [
   ["Swap", "#/swap", "swap", "Coins and stock tokens, checked by the Gate"],
   ["Market", "#/market", "market", "Every coin on Robinhood Chain with a real pool"],
-  ["Gate a coin", "#/gate", "gate", "Eight checks before you buy"],
+  ["Gate a coin", "#/gate", "gate", "Nine checks before you buy"],
   ["Troya Launches", "#/troya-launches", "hippodrome", "Coins born through Troya"],
 ];
 function notFound(r) {
@@ -584,7 +586,7 @@ function openAsk(prefill = "") {
     const pageFirst = q && !/\s/.test(q) && pages.some((p) => p.title.toLowerCase().startsWith(q));
     if (pageFirst && pages.length) out.push(goTo);
     if (ca) out.push(["Check this coin", [
-      { kind: "page", title: `Run Troya Gate on ${short(ca)}`, hint: "Eight checks: route, impact, depth, fees, simulation, test sell, tax", icon: "gate", target: `#/gate/${ca}` },
+      { kind: "page", title: `Run Troya Gate on ${short(ca)}`, hint: "Nine checks: route, impact, depth, fees, simulation, test sell, tax", icon: "gate", target: `#/gate/${ca}` },
       { kind: "page", title: `Find the weak spot of ${short(ca)}`, hint: "Heel: a coin, a dev wallet or an agent, in one sentence with proof", icon: "heel", target: `#/heel/${ca}` },
       { kind: "page", title: `Cluster map of ${short(ca)}`, hint: "Its largest holders as bubbles, and which wallets are linked, with proof", icon: "clusters", target: `#/clusters/${ca}` },
       { kind: "page", title: `Open the token page`, hint: "Price, chart, pools and trades", icon: "market", target: `#/token/${ca}` },
@@ -609,7 +611,7 @@ function openAsk(prefill = "") {
       const t = coins[0];
       if (t && t.address !== "native" && swapOk(t)) rows.splice(1, 0,
         { kind: "page", title: `Open the ${t.symbol} page`, hint: "Price, chart, holders and trades", icon: "market", target: `#/token/${t.address}` },
-        ...(quickOk(t) ? [{ kind: "page", title: `Gate ${t.symbol}`, hint: "Eight checks before you buy", icon: "gate", target: `#/gate/${t.address}` }] : []));
+        ...(quickOk(t) ? [{ kind: "page", title: `Gate ${t.symbol}`, hint: "Nine checks before you buy", icon: "gate", target: `#/gate/${t.address}` }] : []));
       coinSec.push(["Coins", rows]);
     }
     if (perps.length && fresh) {

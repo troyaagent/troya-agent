@@ -1230,6 +1230,10 @@ export async function gateCheck({ tokenIn, tokenOut, amountIn, amountInRaw, from
   const coinOut = isAddress(String(tokenOut || "")) && !majors.includes(lower(tokenOut)) && !STOCKS.some((s) => lower(s.address) === lower(tokenOut)) ? tokenOut : null;
   const devlinks = coinOut && (isNative(tokenIn) || majors.includes(lower(tokenIn)))
     ? import("./devlinks.mjs").then((m) => m.gateLine(coinOut, { waitMs: DEVLINKS_WAIT_MS })).catch(() => null) : null;
+  // V9 Ring Radar in the Gate (Xivor, 24 Nov 2026): snipe-tax exemptions set at launch and the dev + exempt share of the
+  // first blocks, for a buy of any Pons coin; a red launch fails the buy (a sell never gets this line). Read beside the quote.
+  const ring = coinOut && (isNative(tokenIn) || majors.includes(lower(tokenIn)))
+    ? import("./ringradar.mjs").then((m) => m.gateLine(coinOut, { waitMs: Math.max(DEVLINKS_WAIT_MS, 4000) })).catch(() => null) : null;
   let q;
   try { q = await sharedQuote({ tokenIn, tokenOut, amountIn, amountInRaw, slippageBps, from }); add("route", "pass", "Route", q.route.label); }
   catch (e) { add("route", "fail", "Route", e.message); return { pass: false, checks }; }
@@ -1284,6 +1288,7 @@ export async function gateCheck({ tokenIn, tokenOut, amountIn, amountInRaw, from
       }
     } catch (e) { add("sell", "warn", "Test sell", e.message); add("tax", "skip", "Transfer tax", "Not measured"); }
   }
+  if (ring && q.side === "buy") { const l = await ring; if (l) add("ring", l.status, l.name, l.detail); }
   if (devlinks && q.side === "buy") { const l = await devlinks; if (l) add(l.key, l.status, l.label, l.detail); }
   // a Kyber route is simulated above, but nobody gets its calldata to sign until KYBER_LIVE is on
   if (q.venue === "kyberswap" && !KYBER_LIVE) tx = null;

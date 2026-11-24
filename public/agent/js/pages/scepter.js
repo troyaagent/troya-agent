@@ -126,8 +126,9 @@ export function mountScepter(box) {
       api.get("policy").catch(() => null), api.get("agent-wallet").catch(() => null), api.get("inbox/proposals").catch(() => ({ items: [] })),
       api.get("agent-wallet/activity").catch(() => ({ items: [] })), api.get("autopilot").catch(() => null), api.get("aegis/me").catch(() => null), api.get("watches").catch(() => null),
       api.get("champions/me").catch(() => null)]);
+    const chi = await api.get("chiron/rules").catch(() => null);   // V9 F48 Chiron: the owner's habit rules
     const bal = aw?.address ? await api.get("agent-wallet/balances").catch(() => null) : null;
-    if (!stop && my === seq && wallet.session) { dirty = false; render({ pol, aw, bal, props: (props?.items || []).filter((p) => p.status === "pending" && p.expiresAt > Date.now()), act: act?.items || [], ap, ag, wa, ch }); }
+    if (!stop && my === seq && wallet.session) { dirty = false; render({ pol, aw, bal, props: (props?.items || []).filter((p) => p.status === "pending" && p.expiresAt > Date.now()), act: act?.items || [], ap, ag, wa, ch, chi }); }
   };
 
   // Budget: the numbers that really apply (server/policy.mjs getBudget: the strictest of the Agent Wallet caps, the user's
@@ -189,6 +190,23 @@ export function mountScepter(box) {
       edit);
   }
 
+  // V9 F48 Chiron: habit rules made from a trader's own history (#/chiron). The enforced ones block buys from the Agent
+  // Wallet on the server (policy.mjs checkAction); reminders are only shown here. Remove takes a rule off at once.
+  function chironPanel(x) {
+    const rules = x.chi?.rules || [];
+    return h("section", { class: "panel sc-chi" },
+      h("div", { class: "panel-h" }, h("h2", {}, "Habit rules"), h("a", { class: "link fine", href: "#/chiron" }, "Chiron: read a wallet's habits")),
+      rules.length ? h("ul", { class: "sc-list" }, rules.map((r) => h("li", {},
+        h("div", {}, h("b", {}, r.text), h("div", { class: "fine muted" }, `${r.enforced ? "Enforced on every buy from your Agent Wallet" : "A reminder: not enforced"} · set ${ago(r.at)} ago${r.from ? ` from ${short(r.from, 4)}'s habits` : ""}${r.kind === "daily-buys" ? ` · ${x.chi.buysToday ?? 0} buys today` : ""}`)),
+        h("div", { class: "sc-acts" }, h("span", { class: `sc-st${r.enforced ? " on" : ""}` }, r.enforced ? "enforced" : "reminder"),
+          h("button", { class: "btn sm", type: "button", onclick: async () => {
+            try { await api.post("chiron/rule", { kind: r.kind, habit: r.habit, on: false }); toast("Rule removed.", "ok"); } catch (err) { toast(err.message, "error"); }
+            load();
+          } }, "Remove"))))) :
+        h("p", { class: "fine muted sc-pad" }, "No habit rules yet. Chiron reads any trader wallet's swaps and turns the habit that cost it most into a rule: no buys in a coin's first 60 seconds, or at most a few buys a day."),
+      rules.some((r) => r.enforced) ? h("p", { class: "fine muted sc-pad" }, x.chi.enforcedOn) : null);
+  }
+
   function render(x) {
     const e = x.pol?.effective || {};
     const b = x.pol?.budget || {};
@@ -236,7 +254,7 @@ export function mountScepter(box) {
         h("p", { class: "fine muted sc-pad" }, "No actions yet. Every trade your agents make, or are stopped from making, lands here with its reason."));
     // a repaint gives the keyboard back to the field or button that had it (data-k)
     const k = wrap.contains(document.activeElement) ? document.activeElement.dataset?.k : null;
-    clear(wrap, intro(), budgetPanel(x), ladder, h("div", { class: "sc-grid" }, jobs, wait), rec);
+    clear(wrap, intro(), budgetPanel(x), ladder, h("div", { class: "sc-grid" }, jobs, wait), chironPanel(x), rec);
     if (k) wrap.querySelector(`[data-k="${k}"]`)?.focus();
   }
   // onWallet calls back at once with the current wallet: that first call is the load. After that it reloads only when the

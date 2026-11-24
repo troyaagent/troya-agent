@@ -132,10 +132,10 @@
   <section class="ip" aria-labelledby="gate-h">
     <div class="eyebrow-line"><span>04 / Troya Gate</span></div>
     <div class="split" style="margin-bottom:48px">
-      <h2 id="gate-h" class="h2 words" data-words>Eight checks before every swap</h2>
+      <h2 id="gate-h" class="h2 words" data-words>Nine checks before every swap</h2>
       <p class="lead rv">Troya Gate is the pre-trade check. It runs before a proposal is shown to you and again before the Agent Wallet signs. If any check fails, the order is not offered, and you see which check failed and the number behind it. The same checks as JSON: <a class="ulink" href="/api/swap/gate?tokenIn=ETH&amp;tokenOut=0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074&amp;amountIn=0.01" target="_blank" rel="noopener">Gate on $TROYA</a>.</p>
     </div>
-    <div class="checks rv">
+    <div class="checks nine rv">
       <div class="c"><span>01</span><b>Route</b><p>Is the path real, through a pool or Pons curve that exists on the chain right now? No route, no order.</p></div>
       <div class="c"><span>02</span><b>Price impact</b><p>How far this order moves the price. Above 5% is a warning; above 15% the order is not offered.</p></div>
       <div class="c"><span>03</span><b>Pool depth</b><p>ETH behind the quote. Under 0.5 ETH is a warning; under 0.05 ETH the order is not offered.</p></div>
@@ -144,6 +144,7 @@
       <div class="c"><span>06</span><b>Test sell</b><p>A simulated sell straight after the buy. If the token cannot be sold back, the order is not offered.</p></div>
       <div class="c"><span>07</span><b>Transfer tax</b><p>What the test sell loses on transfer. Above 0.5% is a warning; above 10% the order is not offered.</p></div>
       <div class="c"><span>08</span><b>Dev side wallets</b><p>On Robinhood Chain, the wallets tied to the dev and what they hold and sold. A dev side holding 30% across two or more linked wallets, or selling now while it still holds 10%, is not offered.</p></div>
+      <div class="c"><span>09</span><b>Launch ring</b><p>For a Pons coin, the wallets freed from the snipe tax at launch and the share the dev and those wallets took in the first blocks. A rigged launch pattern is not offered; a sell is never blocked by it.</p></div>
     </div>
   </section>
 

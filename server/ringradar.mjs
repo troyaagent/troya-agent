@@ -67,6 +67,15 @@ export async function launchCall(txHash) {
     firstBuyRecipient: d?.firstBuyRecipient && d.firstBuyRecipient !== ZERO ? lc(d.firstBuyRecipient) : null, from: lc(tx.from), decoded: !!d };
 }
 export async function findLaunchTx(token) {
+  // any age: Blockscout PRO's log index finds the TokenLaunched log in one call (Xivor, 24 Nov 2026: every Pons coin, not only
+  // the last two days); without the key, or when it does not answer, the RPC search below covers the last ~2 days
+  const key = process.env.BLOCKSCOUT_API_KEY || "";
+  if (key) {
+    const u = `https://api.blockscout.com/4663/api?module=logs&action=getLogs&address=${ADDR.ponsFactory}&topic0=${LAUNCH_TOPIC}&topic1=${zeroPadValue(token, 32).toLowerCase()}&topic0_1_opr=and&fromBlock=0&toBlock=latest&apikey=${key}`;
+    const j = await fetch(u, { signal: AbortSignal.timeout(15_000) }).then((r) => r.json()).catch(() => null);
+    const g = Array.isArray(j?.result) ? j.result[0] : null;
+    if (g?.transactionHash) return { tx: g.transactionHash, block: Number(BigInt(g.blockNumber)) };
+  }
   // the TokenLaunched log carries the coin as topic 1; search back in 30k-block steps (the official RPC's range) up to ~2 days
   const head = Number(BigInt(await rpc("robinhood", "eth_blockNumber", [])));
   const pad = zeroPadValue(token, 32);
@@ -98,7 +107,7 @@ export async function ringCheck(token, launch = null) {
   const hit = memo.get(t);
   if (hit && Date.now() - hit.at < 10 * 60_000) return hit.res;
   const l = launch?.tx ? launch : await findLaunchTx(t);
-  if (!l) return { token: getAddress(t), verdict: "unknown", reasons: ["Not a Pons V2 launch found in the last ~2 days, so Ring Radar has nothing to read."], at: Date.now() };
+  if (!l) { const res = { token: getAddress(t), verdict: "unknown", reasons: ["No Pons V2 launch found for this coin, so Ring Radar has nothing to read."], at: Date.now() }; memo.set(t, { at: Date.now(), res }); return res; }
   const tx = await rpc("robinhood", "eth_getTransactionByHash", [l.tx], { timeoutMs: 15_000 });
   let d = decodeLaunch(tx?.to, tx?.input) || (await traceInner(l.tx));
   const deployer = lc(d?.deployer || tx?.from);
@@ -125,7 +134,9 @@ export async function ringCheck(token, launch = null) {
   // every curve sale to an exempt wallet in the first seconds, bundled or not
   const exemptSet = new Set(exempt);
   let exemptBought = 0n;
-  for (const e of byTx.values()) for (const [w, a] of e.to) if (exemptSet.has(w)) exemptBought += a;
+  const insiders = new Set([...exempt, deployer, creator].filter(Boolean));
+  let insiderBought = 0n;
+  for (const e of byTx.values()) for (const [w, a] of e.to) { if (exemptSet.has(w)) exemptBought += a; if (insiders.has(w)) insiderBought += a; }
   const bundles = [];
   for (const e of byTx.values()) {
     if (e.to.size < 3) continue;
@@ -175,6 +186,7 @@ export async function ringCheck(token, launch = null) {
     token: getAddress(t), symbol, verdict, reasons, at: Date.now(),
     launch: { tx: l.tx, block: l.block, via: d?.via || "unknown", deployer: deployer ? getAddress(deployer) : null },
     exemptions: { count: exempt.length, besidesDev: exemptOthers.length, wallets: exempt.slice(0, 32).map((w) => getAddress(w)), boughtPct: pct(exemptBought, supply), holdPct: exemptPct },
+    insidersFirstBlocksPct: pct(insiderBought, supply),                    // the dev, the fee recipient and the exempt wallets, first ~120 blocks
     bundles: bundles.slice(0, 10).map((b) => ({ tx: b.tx, block: b.block, contract: b.contract ? getAddress(b.contract) : null, wallets: b.wallets.length, pctOfSupply: pct(b.amount, supply) })),
     groupHoldPct: holdPct, reusedBundlers: reused.map((c) => getAddress(c)), decoys: decoys.slice(0, 5).map((x) => ({ token: getAddress(x.token), at: x.at })),
   };
@@ -185,6 +197,21 @@ export async function ringCheck(token, launch = null) {
 }
 
 /** Ring Radar flags in The Assay's shape, from the cache only (never computes), for the Gate API and the app. */
+/** One Troya Gate line for a Pons coin (Xivor, 24 Nov 2026): how many snipe-tax exemptions were set at launch and how much of
+ *  the supply the dev plus those wallets took in the first blocks, flagged above Ring Radar's thresholds. A red launch fails
+ *  the Gate for a buy; a sell is never blocked by it. Waits at most waitMs; a slow first read keeps going and fills the cache. */
+export async function gateLine(token, { selling = false, waitMs = 6000 } = {}) {
+  const run = ringCheck(token).catch(() => null);
+  const res = await Promise.race([run, new Promise((r) => setTimeout(() => r("slow"), waitMs).unref?.())]);
+  if (res === "slow") return { name: "Launch ring", status: "warn", detail: "Ring Radar is still reading this launch (exempt wallets, first-block buys). Check again in a minute." };
+  if (!res || res.verdict === "unknown") return null;
+  const ex = res.exemptions || {};
+  const nums = `${ex.count || 0} snipe-tax exempt wallet${ex.count === 1 ? "" : "s"} set at launch (${ex.besidesDev || 0} besides the dev); the dev and exempt wallets bought ${res.insidersFirstBlocksPct ?? ex.boughtPct ?? 0}% of the supply in the first blocks${res.groupHoldPct ? ` and they still hold ${res.groupHoldPct}%` : ""}`;
+  if (res.verdict === "clear") return { name: "Launch ring", status: "pass", detail: `${nums}. No ring pattern.` };
+  const why = (res.reasons || []).slice(0, 2).join("; ");
+  if (res.verdict === "red") return { name: "Launch ring", status: selling ? "warn" : "fail", detail: `Rigged launch pattern: ${nums}. ${why}${selling ? ". Selling is still allowed" : ""}.` };
+  return { name: "Launch ring", status: "warn", detail: `Needs a closer look: ${nums}. ${why}.` };
+}
 export function ringFlags(token) {
   const hit = memo.get(lc(token));
   if (!hit || hit.res.verdict === "clear" || hit.res.verdict === "unknown") return [];

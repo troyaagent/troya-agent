@@ -11,7 +11,7 @@ import { id as keccakId, isAddress, getAddress, formatUnits } from "ethers";
 import { HttpError } from "./api.mjs";
 import { getSession } from "./auth.mjs";
 import { optionalApiToken, idempotent } from "./apitokens.mjs";
-import { checkAction, getPolicy } from "./policy.mjs";
+import { checkAction, getPolicy, swapSide } from "./policy.mjs";
 import { logAction } from "./journal.mjs";
 import * as chain from "./robinhood.mjs";
 
@@ -283,6 +283,8 @@ export async function gateSwap(q) {
         const tax = hth.flags.find((f) => f.key === "fees");
         const pt = hth.pons?.fees?.creatorTaxBps;
         c("Transfer tax", tax ? "warn" : pt > 500 ? "warn" : "pass", tax ? "Fee setters found: tax may apply or change" : pt != null ? `Pons coin: 1% fee + ${(pt / 100).toFixed(2)}% creator tax, fixed at launch` : (q.feePct != null ? `Route fees ${q.feePct.toFixed(2)}%, no token tax functions` : "No tax functions found"));
+        // Ring Radar (Xivor, 24 Nov 2026): snipe-tax exemptions set at launch and the dev + exempt share of the first blocks
+        if (hth.pons) { const rl = await import("./ringradar.mjs").then((m) => m.gateLine(tok.address, { selling })).catch(() => null); if (rl) checks.push(rl); }
       } catch (e) { c("Contract", "warn", `Could not read the contract: ${e.message}`); }
     }
     if (q.executable && q.quote?.venue !== "wrap") {
@@ -418,7 +420,7 @@ export const TOOLS = [
       const gate = await gateSwap(q);
       const ep = await ethUsd();
       const usd = q.tokenIn.native ? q.amountIn * (ep || 0) : (q.tokenIn.priceUsd || 0) * q.amountIn;
-      const pc = await checkAction(ctx.address, { kind: "swap", usd, token: q.tokenOut.native ? q.tokenIn.address : q.tokenOut.address });
+      const pc = await checkAction(ctx.address, { kind: "swap", usd, token: q.tokenOut.native ? q.tokenIn.address : q.tokenOut.address, side: await swapSide(q) });
       gate.checks.push({ name: "Your limits", status: pc.ok ? "pass" : "fail", detail: pc.ok ? "Inside your caps" : pc.reasons.join(" ") });
       gate.pass = gate.pass && pc.ok && q.executable;
       if (!gate.pass) return { ok: false, gate, quote: { ...q, quote: { ...q.quote, plan: undefined } } };

@@ -257,6 +257,15 @@ async function ponsPrices(tokens, ethUsd) {
   return out;
 }
 
+/** V9 F48 Chiron: the Pons facts of these coins (curve, pair, pair decimals, v4 pool id, token sorts first), read once and
+ *  cached as above; coins that are not Pons launches are left out. slot0 of a pool id: ponsSlot0Of. */
+export async function ponsInfo(tokens) {
+  const list = [...new Set(tokens.map(lc))];
+  await ponsStatic(list);
+  return new Map(list.map((t) => [t, PONS.get(t)]).filter(([, s]) => s && !s.none));
+}
+export const ponsSlot0Of = (poolId) => slot0Of(poolId);
+
 /* ---------- prices ---------- */
 async function priced(list) {
   const ethUsd = await getEthUsd().catch(() => null);

@@ -252,6 +252,9 @@ body.site { overflow-x: hidden; }
   .checks.seven .c:nth-child(n+5) { border-top: 1px solid var(--line-2); }
   .checks.seven .c:nth-child(4) { border-bottom: 1px solid var(--line-2); margin-bottom: -1px; }
   .checks.seven .c:last-child { grid-column: span 2; }   /* 7 checks in 4 columns: the last one fills the row, no empty cell */
+  .checks.nine .c:nth-child(6) { border-left: 0; }
+  .checks.nine .c:nth-child(n+6) { border-top: 1px solid var(--line-2); }
+  .checks.nine .c:last-child { grid-column: span 2; }    /* 9 checks in 5 columns: 5 + 4, the last one fills the row */
   .plans.three { grid-template-columns: 1.3fr 1fr 1fr; }
 }
 

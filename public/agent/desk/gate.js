@@ -129,7 +129,7 @@ function athenaBox(addr) {
     h("div", { class: "dk-assay-b" }, dl), h("div", { class: "dk-gate-a" }, councilBtn, h("a", { class: "btn sm", href: "#/agent/aegis" }, icon("shield"), "Guard my coins")), council);
   const get = (u) => api.get(u).catch((e) => ({ error: e.message }));
   setTimeout(async () => {
-    get(`/api/ring/${addr}`).then((r) => set("ring", r.error ? h("span", { class: "fine" }, "unavailable") : r.verdict === "unknown" ? h("span", { class: "fine" }, "not a recent Pons launch") : h("span", { class: `af-${r.verdict === "red" ? "red" : r.verdict === "amber" ? "amber" : "clear"}` }, h("b", {}, r.verdict), ` · ${(r.reasons || []).slice(0, 2).join("; ")}`)));
+    get(`/api/ring/${addr}`).then((r) => set("ring", r.error ? h("span", { class: "fine" }, "unavailable") : r.verdict === "unknown" ? h("span", { class: "fine" }, "not a Pons V2 launch") : h("span", { class: `af-${r.verdict === "red" ? "red" : r.verdict === "amber" ? "amber" : "clear"}` }, h("b", {}, r.verdict), ` · ${(r.reasons || []).slice(0, 2).join("; ")}`)));
     get(`/api/radar/app/${addr}`).then((x) => set("app", h("span", {}, x.error ? "unavailable" : x.listed ? h("b", {}, x.tradable ? "tradable in the Robinhood app" : "shown in the Robinhood app (price only)") : "not in the Robinhood app")));
     get(`/api/oath/${addr}`).then((o) => set("oath", o.status === "none" || o.error ? h("span", { class: "fine" }, "no Oath taken · ", h("a", { class: "link", href: "/oath" }, "devs sign here")) : h("span", {}, h("b", {}, o.status === "kept" ? "kept" : "broken"), ` · max ${o.pledge.maxSellPctPerDay}% a day${o.pledge.feeLockDays ? `, fees locked ${o.pledge.feeLockDays}d` : ""}${o.breaches?.length ? ` · ${o.breaches.length} breach${o.breaches.length > 1 ? "es" : ""}` : ""}`)));
     get(`/api/radar/smart/${addr}`).then((s) => set("smart", h("span", {}, s.summary || s.note || "unavailable")));
@@ -350,7 +350,7 @@ export function gatePanel({ go, ask, compact = false, start = "", chain: startCh
 
   const el = h("section", { class: `panel dk-gate ${compact ? "compact" : ""}` },
     h("div", { class: "panel-h" }, h("h2", {}, "Troya Gate"), compact ? h("a", { class: "link fine", href: "#/gate" }, "Open the Gate") : h("a", { class: "link fine", href: "/risk-controls" }, "How the checks work")),
-    h("p", { class: "dk-gate-sub" }, "Eight checks before you can buy: route, price impact, depth, fees and taxes, a simulation, a test sell, transfer tax and the dev's side wallets. Fail one, no order."),
+    h("p", { class: "dk-gate-sub" }, "Nine checks before you can buy: route, price impact, depth, fees and taxes, a simulation, a test sell, transfer tax, the dev's side wallets and, for Pons coins, the launch ring. Fail one, no order."),
     h("div", { class: "dk-gate-form" }, inputBox, runBtn),
     out);
 
@@ -372,6 +372,7 @@ export async function mount(view, ctx) {
     ["Test sell", "Selling back is simulated too, so a coin that cannot be sold is caught."],
     ["Transfer tax", "A token that skims transfers shows up here."],
     ["Dev side wallets", "On Robinhood Chain: the wallets tied to the dev (named in the launch, funded by the same wallets, bundled at launch), what they still hold and what they sold. Two or more linked wallets holding 30% with the dev, or a dev side selling now while it still holds 10%, fails a buy."],
+    ["Launch ring", "For a Pons coin: how many wallets the creator freed from the snipe tax at launch, how much of the supply the dev and those wallets took in the first blocks, and what they still hold. A rigged launch pattern fails a buy; a sell is never blocked by it."],
   ];
   clear(view, h("div", { class: "dk dk-gatepage" },
     h("header", { class: "dk-pagehead" },
@@ -381,7 +382,7 @@ export async function mount(view, ctx) {
     h("div", { class: "dk-row r75" }, g.el,
       h("section", { class: "panel dk-how" }, h("div", { class: "panel-h" }, h("h2", {}, "What each check reads")),
         h("ol", {}, how.map(([t, d], i) => h("li", {}, h("span", { class: "dk-how-n" }, String(i + 1)), h("div", {}, h("b", {}, t), h("p", {}, d))))),
-        h("p", { class: "note" }, "On Base and Arbitrum the same checks run, without the dev side-wallet check (Robinhood Chain only); on Solana the Gate also reads the coin's mint and freeze authority."),
+        h("p", { class: "note" }, "On Base and Arbitrum the same checks run, without the dev side-wallet and launch-ring checks (Robinhood Chain only); on Solana the Gate also reads the coin's mint and freeze authority."),
         h("p", { class: "note" }, "Results are checks, never endorsements. ", h("a", { class: "link", href: "/risk-controls" }, "Risk controls"), " · ", h("a", { class: "link", href: "/badge" }, "Gate badge for your site"))))));
   return () => g.stop();
 }

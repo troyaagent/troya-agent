@@ -18,7 +18,7 @@ export async function mount(view, ctx = {}) {
       P("Troya Agent is a trading desk for Robinhood Chain (chain 4663) and Hyperliquid perps, with an assistant in front of it. You ask in plain words; Troya reads live data, runs checks, and hands you a ticket. Nothing moves until you sign it, or until your optional Agent Wallet acts inside the caps you set."),
       UL([
         [h("b", {}, "Desk: "), "the app's home at ", L("#/", "troya.codes/agent"), ": the next setup step, live prices, the Gate, your agent's status, the brief, signals and Sentry on one page. The sidebar groups every tool (Trade, Discover, Agent, You, Help), and Ask Troya or Cmd K opens the agent beside any page; paste a coin there to gate it."],
-        [h("b", {}, "Gate a coin: "), "paste any Robinhood Chain address on ", L("#/gate", "Gate a coin"), " and see the eight checks, the same ones that run before every order."],
+        [h("b", {}, "Gate a coin: "), "paste any Robinhood Chain address on ", L("#/gate", "Gate a coin"), " and see the nine checks, the same ones that run before every order."],
         [h("b", {}, "Market: "), "Robinhood Chain coins and tokenized stocks from GeckoTerminal pools and Pons on chain (Long.xyz, Bankr, Frontier.fun, Abyss, Goo, Clank.trade, o1 and Virtuals included), plus every Hyperliquid perp and spot pair."],
         [h("b", {}, "Swap: "), "any pair on Robinhood Chain through Pons curves and Uniswap v3/v4 pools, and coins from the other Robinhood Chain launchpads (Long.xyz, Bankr, Frontier.fun, Abyss, Virtuals and more) through KyberSwap. You sign in your own wallet."],
         [h("b", {}, "Perps: "), "Hyperliquid orders with leverage, take-profit and stop-loss, signed by a trade-only key you approve once."],

@@ -7,7 +7,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { Wallet, JsonRpcProvider, Interface, parseUnits, formatUnits, getAddress } from "ethers";
 import { requireSession, makeChallenge, consumeChallenge } from "./auth.mjs";
 import { HttpError } from "./api.mjs";
-import { checkAction, recordUsage, getPolicy, operatorPolicy, usedTodayBy, AUTO_JOBS } from "./policy.mjs";
+import { checkAction, recordUsage, getPolicy, operatorPolicy, usedTodayBy, AUTO_JOBS, swapSide } from "./policy.mjs";
 import { logAction } from "./journal.mjs";
 import { RPC, getBalances, quoteSwap, gateSwap, simulatePerp, gatePerp, ethUsd } from "./tools.mjs";
 import { buildSwapTx, hlFundQuote } from "./robinhood.mjs";
@@ -403,14 +403,21 @@ async function execute(owner, { kind, params = {}, rationale = "", source = "app
     }
   }
   const ep = (await ethUsd()) || 0;
-  let usd = 0, gate = null, summary = "", result = null, lotOut = null;
+  let usd = 0, gate = null, summary = "", result = null, lotOut = null, side = null;
   try {
     if (kind === "swap") {
       const q = await quoteSwap({ tokenIn: params.tokenIn === "native" ? "ETH" : params.tokenIn || "ETH", tokenOut: params.tokenOut === "native" ? "ETH" : params.tokenOut, amountIn: params.amountIn, slippagePct: params.slippagePct });
       gate = await gateSwap(q);
       usd = q.tokenIn.native ? q.amountIn * ep : (q.tokenIn.priceUsd || 0) * q.amountIn;
       summary = `Swap ${q.amountIn} ${q.tokenIn.symbol} → ${q.tokenOut.symbol}`;
-      const pc = await checkAction(owner, { kind: "swap", usd, token: q.tokenOut.native ? q.tokenIn.address : q.tokenOut.address });
+      side = await swapSide(q);           // V9 F48 Chiron: the owner's habit rules apply to buys
+      // a creator buying its own coin launched through Troya (the initial buy, the dev panel) is not a trade on someone
+      // else's launch: Chiron's rules leave it alone, and it is not counted towards "buys a day"
+      if (side === "buy" && (params.initialBuy || params.creatorBuy)) {
+        const own = (await store.readJson("launches.json", [])).find((x) => lcs(x.token) === lcs(q.tokenOut.address) && lcs(x.owner) === lcs(owner) && lcs(x.wallet) === lcs(r.address));
+        if (own) side = "own-launch";
+      }
+      const pc = await checkAction(owner, { kind: "swap", usd, token: q.tokenOut.native ? q.tokenIn.address : q.tokenOut.address, side });
       const cap = await capCheck(owner, r, usd, source);
       let gateFails = gate.pass ? [] : gate.checks.filter((c) => c.status === "fail");
       // V6 initial buy: this Agent Wallet buying the coin it launched through Troya minutes ago. Its curve is empty by
@@ -617,6 +624,8 @@ async function execute(owner, { kind, params = {}, rationale = "", source = "app
   }
   const broadcast = result?.broadcast !== false && !(result?.steps || []).some((s) => s.broadcast === false);
   if (broadcast && usd > 0) { await recordUsage(owner, usd, source); await addSpent(owner, usd); }
+  // V9 F48 Chiron: a buy that went out counts towards the owner's "at most N buys a day" rule
+  if (broadcast && kind === "swap" && side === "buy") await import("./chiron.mjs").then((m) => m.noteBuy(owner)).catch((e) => console.warn("[agent-wallet] chiron count:", e.message));
   const status = broadcast ? "executed" : "built";
   await logAction({ address: owner, kind: `agent-wallet.${kind}`, summary, rationale, data: { params, gate, result }, status, source });
   if (proposalId) await markProposal(owner, proposalId, broadcast ? "done" : "built", result);

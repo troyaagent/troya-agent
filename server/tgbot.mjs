@@ -727,6 +727,11 @@ const lastReply = new Map();
 export async function handleBotMessage(m, tg, me) {
   const chatId = m.chat?.id;
   if (!chatId) return;
+  // forum group (Topics on): anything the bot says back lands in the topic the member wrote in, not in General
+  if (m.is_topic_message && m.message_thread_id) {
+    const raw = tg, thread = m.message_thread_id;
+    tg = (method, b) => raw(method, /^send/.test(method) && b && String(b.chat_id) === String(chatId) && !b.message_thread_id ? { ...b, message_thread_id: thread } : b);
+  }
   const isGroup = m.chat.type === "group" || m.chat.type === "supergroup";
   if (isGroup) logChat({ id: m.message_id, from: String(m.from?.first_name || "").slice(0, 40), user: m.from?.username || null, uid: m.from?.id, bot: !!m.from?.is_bot, text: String(m.text || m.caption || (m.new_chat_members ? "[joined]" : m.photo ? "[photo]" : m.sticker ? "[sticker]" : m.video ? "[video]" : "")).slice(0, 800), reply: m.reply_to_message?.message_id || null });
 

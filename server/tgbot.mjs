@@ -233,6 +233,36 @@ async function raidCmd(m, tg, arg) {
   }
   return raidBoard();
 }
+// automatic raid call (James in the group, 24 Nov 2026: "a raid bot that sends a raid every now and then"): the /raid board
+// posted to the community group at the UTC hours in RAID_AUTO_HOURS (e.g. "6,11,16"; empty = off), only when Troya has a
+// post on X the last call did not show, or 12 hours have passed. Driven by sweep() every 15 seconds.
+const RAID_AUTO = String(process.env.RAID_AUTO_HOURS || "").split(",").map((x) => parseInt(x, 10)).filter((h) => h >= 0 && h < 24);
+let raidAutoBusy = false;
+async function raidAuto(tg) {
+  if (!RAID_AUTO.length || !gStore || raidAutoBusy) return;
+  const now = new Date(), h = now.getUTCHours();
+  if (!RAID_AUTO.includes(h) || now.getUTCMinutes() > 20) return;
+  const slot = `${now.toISOString().slice(0, 10)}T${h}`;
+  const st = await gStore.readJson(RAID_FILE, {}).catch(() => ({}));
+  if (st.autoSlot === slot) return;
+  raidAutoBusy = true;
+  try {
+    await gStore.update(RAID_FILE, {}, (s) => ({ ...s, autoSlot: slot }));
+    const posts = await raidPosts();
+    const ids = posts.map((p) => String(p.id)).sort().join(",");
+    const fresh = ids && ids !== st.autoIds;
+    if (!posts.length || (!fresh && Date.now() - (st.autoAt || 0) < 12 * 3600_000)) return;
+    const b = await raidBoard();
+    const sent = await tg("sendMessage", { chat_id: COMMUNITY_CHAT, text: `<b>Raid time</b>: a few taps from everyone helps more people find Troya.
+
+${b.text}`, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: b.markup });
+    if (sent?.ok) {
+      raidMark(sent.result.chat.id, sent.result.message_id);
+      await gStore.update(RAID_FILE, {}, (s) => ({ ...s, autoIds: ids, autoAt: Date.now() }));
+      console.log(`[raid] automatic board posted (${posts.length} posts)`);
+    }
+  } catch (e) { console.warn("[raid] auto:", e.message); } finally { raidAutoBusy = false; }
+}
 function raidMark(chatId, msg) {
   raidAt.set(String(chatId), { at: Date.now(), msg: msg || null });
   if (raidAt.size > 500) raidAt.delete(raidAt.keys().next().value);
@@ -717,6 +747,7 @@ export async function sweep (tg) {
   const now = Date.now(); let changed = false
   for (const [k, st] of pend) if (st.deadline < now) { pend.delete(k); changed = true; await expel(tg, st).catch(() => {}) }
   if (changed) save()
+  await raidAuto(tg).catch(() => {})
 }
 export const pendingFor = (chat, user) => pend.has(`${chat}:${user}`)
 

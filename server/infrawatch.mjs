@@ -75,6 +75,14 @@ async function readings() {
   const pend = await R.rpc("robinhood", "eth_call", [{ to: "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e", data: "0x9beacf4a" + "1fa81ddaaac83240803b3f2d20595e40edc1a074".padStart(64, "0") }, "latest"], { timeoutMs: 10_000 }).catch(() => null);
   const w = typeof pend === "string" ? pend.slice(2).match(/.{64}/g) || [] : [];
   if (w.length >= 3) out.ponsRedirect = BigInt("0x" + w[0]) === 0n ? null : { to: "0x" + w[0].slice(24), effectiveAt: Number(BigInt("0x" + w[1])) };
+  // TroyaFeeRouter: who owns it and what is pending (Xivor, 24 Nov 2026: an ownership transfer is immediate, so the team
+  // must hear about any change at once to act inside the 7-day timelock)
+  const ROUTER = "0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B";
+  const rc = (data) => R.rpc("robinhood", "eth_call", [{ to: ROUTER, data }, "latest"], { timeoutMs: 10_000 }).catch(() => null);
+  const [rOwner, rPendOwner, rCfgEta, rPendRec] = await Promise.all([rc("0x8da5cb5b"), rc("0xe30c3978"), rc("0xac679bf5"), rc("0xaa0d276a")]);
+  const addr = (h) => (typeof h === "string" && h.length >= 66 ? "0x" + h.slice(-40).toLowerCase() : null);
+  const num = (h) => (typeof h === "string" && h.length >= 66 ? Number(BigInt(h)) : null);
+  if (rOwner) out.router = { owner: addr(rOwner), pendingOwner: addr(rPendOwner), configEta: num(rCfgEta), pendingRecipient: addr(rPendRec) };
   // $TROYA market cap (feesplit's hourly median), for the 35K boost promise of 25 Nov 2026
   const fs2 = await fetch(`http://127.0.0.1:${process.env.PORT || 9270}/api/feesplit`, { signal: AbortSignal.timeout(8000) }).then((x) => x.json()).catch(() => null);
   if (fs2?.now?.mcUsd > 0) out.mcUsd = fs2.now.mcUsd;
@@ -106,6 +114,23 @@ async function tick() {
       if (t.lastHour > RL_HOUR) add(`rl:${mod}`, t.lastHour > RL_HOUR * 4, `${t.lastHour > RL_HOUR * 4 ? "🔴" : "🟠"} Modul ${mod} kena limit RPC (429) ${t.lastHour}x dalam 1 jam terakhir (batas ${RL_HOUR}); ${t.gaveUp} bacaan gagal setelah dicoba ulang sejak server jalan. Kurangi frekuensi modul itu atau arahkan bacaannya ke node Chainstack.`);
     }
     if (r.ponsRedirect) add(`pons:${r.ponsRedirect.to}:${r.ponsRedirect.effectiveAt}`, true, `🔴 Pons mengajukan pengalihan creator fee $TROYA ke ${r.ponsRedirect.to}, bisa dieksekusi mulai ${new Date(r.ponsRedirect.effectiveAt * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC. Cek troya.codes/proof#claim-pons-fee-redirect dan hubungi Pons sekarang.`);
+    // TroyaFeeRouter changes: the first owner seen is remembered; any new owner, pending owner, pending rule change or
+    // pending recipient move is told at once (red), each state once
+    if (r.router?.owner) {
+      const zero = "0x0000000000000000000000000000000000000000";
+      const ro = r.router, known = d.routerOwner || ro.owner;
+      if (!d.routerOwner) await store.update(FILE, {}, (x) => { x.routerOwner = ro.owner; return x; });
+      const flags = [];
+      if (ro.owner !== known) flags.push(`pemilik router BERUBAH ke ${ro.owner} (sebelumnya ${known})`);
+      if (ro.pendingOwner && ro.pendingOwner !== zero) flags.push(`ada calon pemilik baru: ${ro.pendingOwner}`);
+      if (ro.configEta) flags.push(`ada usulan perubahan aturan, berlaku mulai ${new Date(ro.configEta * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC`);
+      if (ro.pendingRecipient && ro.pendingRecipient !== zero) flags.push(`ada usulan memindah penerima fee ke ${ro.pendingRecipient}`);
+      const key = flags.join("|");
+      if (flags.length && d.routerAlertKey !== key) {
+        alerts.push(`🔴 TroyaFeeRouter: ${flags.join("; ")}. Kalau ini bukan dari tim, segera hubungi dev: jeda 7 hari adalah waktu untuk membatalkan atau meminta Pons mengalihkan creator fee (jeda 3 hari).`);
+        await store.update(FILE, {}, (x) => { x.routerAlertKey = key; return x; });
+      } else if (!flags.length && d.routerAlertKey) await store.update(FILE, {}, (x) => { x.routerAlertKey = ""; return x; });
+    }
     // owner, 25 Nov 2026: at a 35K market cap the dev turns on a 30x DexScreener boost (announced in the group and on X);
     // told once, the moment it is reached, so the boost and its receipt go out fast
     if (r.mcUsd >= 35_000 && !d.mc35Told) {

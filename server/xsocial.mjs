@@ -441,7 +441,7 @@ export async function postTweet(text, { mediaIds = [], replyTo = null } = {}) {
   const body = { text: String(text), ...(mediaIds.length ? { media: { media_ids: mediaIds.map(String) } } : {}), ...(replyTo ? { reply: { in_reply_to_tweet_id: String(replyTo) } } : {}) };
   const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body });
   const id = p?.data?.id || p?.id || null;      // X accepted it (xApi throws otherwise), even when no id comes back
-  await store.update("x-log.json", [], (l) => [...l, { id: id || "post", at: Date.now(), author: "(team post)", text: "", status: "posted", reply: String(text), replyId: id, manual: true }].slice(-300));
+  await store.update("x-log.json", [], (l) => [...l, { id: id || "post", at: Date.now(), author: "(team post)", text: "", status: "posted", reply: String(text), replyId: id, manual: true, ...(replyTo ? { replyTo: String(replyTo) } : {}) }].slice(-300));
   return id;
 }
 // /raid in Telegram: Troya's own latest posts (no replies, no reposts), one read every 10 minutes at most; the raid board
@@ -480,7 +480,8 @@ export async function pinnedPost({ maxAgeMs = 10 * 60_000 } = {}) {
 export async function loggedPosts(n = 5) {
   if (!store) return [];
   const log = await store.readJson("x-log.json", []).catch(() => []);
-  return (Array.isArray(log) ? log : []).filter((e) => e?.author === "(team post)" && e.status === "posted" && /^\d{5,25}$/.test(String(e.replyId || "")))
+  // a team reply under its own post (replyTo) is not a post to raid: the raid board points at the post itself
+  return (Array.isArray(log) ? log : []).filter((e) => e?.author === "(team post)" && e.status === "posted" && !e.replyTo && /^\d{5,25}$/.test(String(e.replyId || "")))
     .sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, n)
     .map((e) => ({ id: String(e.replyId), text: String(e.reply || ""), at: e.at || null, likes: null, reposts: null, replies: null, logged: true }));
 }

@@ -14,7 +14,9 @@
 // Accrued bonuses are owed: feesplit.mjs keeps them out of the room it pays the next shares and the burn from.
 // "Active" = the staking wallet, its Troya Agent Wallet, or (when the staking wallet is an Agent Wallet) its owner made an
 // executed trade through Troya worth at least STAKE_ACTIVE_MIN_USD (default $5, against wash trading), or launched a coin
-// through Troya, in the window:
+// through Troya, in the window. From the daily share for 30 Nov 2026 (ACTIVE_V2_FROM: the run at 01:00 UTC on 1 Dec, whose
+// window opens 30 Nov 01:00 UTC; community review by Xivor, owner 25 Nov 2026) the minimum is STAKE_ACTIVE_MIN_USD_V2
+// (default $20). activeMinUsd(asOf) picks it from the share's day, so a day already settled or running keeps its rule:
 //   · Agent Wallet swaps, perps and closes, from any source but the Arena (the app, Telegram, X, Autopilot, playbooks,
 //     Champions, Aegis): data/journal.jsonl entries the server wrote itself, status "executed", the swap's last transaction
 //     confirmed, a perp filled. Entries the browser reports (POST /api/journal, source "reported by app") never count.
@@ -48,7 +50,17 @@ const short = (a) => (a ? `${lc(a).slice(0, 6)}…${lc(a).slice(-4)}` : "");
 let store = null;
 
 export const activeDays = () => { const v = Number(process.env.STAKE_ACTIVE_DAYS); return process.env.STAKE_ACTIVE_DAYS && v > 0 && v <= 30 && isFinite(v) ? v : 1; };
-export const activeMinUsd = () => { const v = Number(process.env.STAKE_ACTIVE_MIN_USD); return process.env.STAKE_ACTIVE_MIN_USD && v >= 0 && isFinite(v) ? v : 5; };
+const envUsd = (k, def) => { const v = Number(process.env[k]); return process.env[k] && v >= 0 && isFinite(v) ? v : def; };
+export const ACTIVE_V2_FROM = Date.parse("2026-11-30T00:00:00Z");   // the first share day at the $20 minimum (paid 1 Dec 01:00 UTC)
+export const activeMinUsdOld = () => envUsd("STAKE_ACTIVE_MIN_USD", 5);
+export const activeMinUsdNew = () => envUsd("STAKE_ACTIVE_MIN_USD_V2", 20);
+/** The daily share a trade at `ms` counts toward is paid at 01:00 UTC (feesplit.mjs RUN_HOUR_UTC): today's if not yet, else tomorrow's. */
+export const nextShareAt = (ms = Date.now()) => { const t = Math.floor(ms / DAY) * DAY + HOUR; return ms < t ? t : t + DAY; };
+/** The UTC day (its 00:00) that the share paid at `asOf` (01:00 UTC) settles: the day before. */
+export const shareDayOf = (asOf) => Math.floor((asOf - HOUR) / DAY) * DAY - DAY;
+/** The $ floor of a qualifying trade for the share paid at `asOf` (default: the next share): $5 for days up to 29 Nov 2026, $20 from 30 Nov. */
+export const activeMinUsd = (asOf = nextShareAt()) => (shareDayOf(asOf) >= ACTIVE_V2_FROM ? activeMinUsdNew() : activeMinUsdOld());
+export const MIN_USD_RULE = () => `The qualifying trade is $${activeMinUsdOld()} or more for daily shares up to 29 Nov 2026 and $${activeMinUsdNew()} or more from 30 Nov 2026 (the share paid 1 Dec 01:00 UTC onward).`;
 export const windowMs = (days = activeDays()) => Math.round(days * DAY);
 /** "once a day", "once every 12 hours", "once every 3 days" */
 export function freqText(days = activeDays()) {
@@ -60,7 +72,7 @@ export function freqText(days = activeDays()) {
 export const windowText = (days = activeDays()) => (days === 1 || days < 1 || !Number.isInteger(days) ? `${Math.round(days * 24)} hours` : `${days} days`);
 export const ACTIVE_LINE = (days = activeDays()) => `Trade through Troya at least ${freqText(days)} to earn 2x.`;
 export const ACTIVE_HOW = (days = activeDays(), minUsd = activeMinUsd()) =>
-  `A staker who made a trade of $${minUsd} or more through Troya (the Swap page on Robinhood Chain, the Agent Wallet, trades in Telegram or on X, or a coin launched through Troya) in the ${windowText(days)} before the daily share counts double in it: each staked $TROYA weighs 2 instead of 1. The contract pays everyone the 1x part; the extra part is sent straight to the wallet in ETH from the creator wallet once it adds up to at least the smallest payment. Team and test wallets keep 1x.`;
+  `A staker who made a trade of $${minUsd} or more through Troya (the Swap page on Robinhood Chain, the Agent Wallet, trades in Telegram or on X, or a coin launched through Troya) in the ${windowText(days)} before the daily share counts double in it: each staked $TROYA weighs 2 instead of 1. The contract pays everyone the 1x part; the extra part is sent straight to the wallet in ETH from the creator wallet once it adds up to at least the smallest payment. Team and test wallets keep 1x. ${MIN_USD_RULE()}`;
 
 /* ---------------- pure parts (tools/stakebonus-test.mjs feeds them fixtures) ---------------- */
 
@@ -101,7 +113,7 @@ export function splitRecord(sp, { snapshot, asOf, active } = {}) {
     notifyEth: r6(ethOf(sp.notifyWei)), bonusEth: r6(ethOf(sp.bonusWei)), payEth: r6(ethOf(sp.P)),
     stakers: sp.wallets.length, activeStakers: sp.wallets.filter((w) => w.active).length,
     stakedTokens: Math.round(ethOf(sp.S)), activeTokens: Math.round(ethOf(sp.A)), weightTokens: Math.round(ethOf(sp.W)),
-    activeDays: activeDays(), minUsd: activeMinUsd(), asOf: asOf || null, block: snapshot?.block ?? null,
+    activeDays: activeDays(), minUsd: asOf ? activeMinUsd(asOf) : activeMinUsd(), asOf: asOf || null, block: snapshot?.block ?? null,
     bonusStatus: sp.bonusWei > 0n ? "planned" : "none",
     wallets: sp.wallets.slice(0, 1000).map((w) => ({ address: w.address, tokens: r6(ethOf(w.raw)), active: w.active, weight: w.weight,
       lastTradeAt: active?.get(w.address)?.lastTradeAt ?? null, contractEth: r6(ethOf(w.contractWei)), bonusEth: r6(ethOf(w.bonusWei)), totalEth: r6(ethOf(w.totalWei)), bonusWei: w.bonusWei.toString() })),
@@ -224,7 +236,7 @@ async function eventsNow() {
  * lastTradeAt is the newest trade of at least the $ floor (or a launch) by the wallet, its Agent Wallet or its owner, at or
  * before asOf (within 30 days); active when it is inside the window that ends at asOf.
  */
-export async function activeFor(addresses, { asOf = Date.now(), win = windowMs(), events = null, minUsd = activeMinUsd() } = {}) {
+export async function activeFor(addresses, { asOf = Date.now(), win = windowMs(), events = null, minUsd = activeMinUsd(asOf) } = {}) {
   const ex = excluded(), am = await agentMap();
   const evs = (events || await loadEvents(asOf, Math.max(win, HORIZON))).filter((e) => e.t <= asOf);
   const by = new Map();
@@ -496,7 +508,8 @@ export async function walletView(address) {
   const k = lc(address), now = Date.now(), win = windowMs();
   const fs = await import("./feesplit.mjs");
   const next = fs.nextRunAt(now);
-  const a = (await activeFor([k], { asOf: now, win: HORIZON, events: await eventsNow() })).get(k);
+  // the $ floor of the next share (activeMinUsd: $5 for days up to 29 Nov 2026, $20 from 30 Nov)
+  const a = (await activeFor([k], { asOf: now, win: HORIZON, events: await eventsNow(), minUsd: activeMinUsd(next) })).get(k);
   const last = a?.lastTradeAt ?? null;
   // the 2x applies to the next daily share when the last trade is inside the window that ends at that share
   const active = !a?.excluded && countsAt(last, next, win);
@@ -513,7 +526,8 @@ export async function walletView(address) {
   return {
     active, weight: active ? 2 : 1, lastTradeAt: last, lastTrade: a?.last || null, via: a?.via || null, excluded: !!a?.excluded,
     activeUntil: last != null ? last + win : null, nextShareAt: next, startsCountingAt: next - win,
-    activeRule: ACTIVE_LINE(), activeHow: ACTIVE_HOW(), activeDays: activeDays(), activeMinUsd: activeMinUsd(),
+    activeRule: ACTIVE_LINE(), activeHow: ACTIVE_HOW(activeDays(), activeMinUsd(next)), activeDays: activeDays(), activeMinUsd: activeMinUsd(next),
+    activeMinUsdOld: activeMinUsdOld(), activeMinUsdNew: activeMinUsdNew(), activeMinUsdFrom: ACTIVE_V2_FROM,
     bonusAccrued: r6(ethOf(w.accruedWei)), bonusAccruedWei: String(w.accruedWei || "0"), bonusEarned: r6(ethOf(w.earnedWei)),
     bonusPaid: r6(ethOf(w.paidWei)), bonusPaidWei: String(w.paidWei || "0"), bonusPayments: pays,
     bonusMinSendEth: fs.minSendEth(), bonusNote: w.lastError && now - (w.lastErrorAt || 0) < 7 * DAY ? w.lastError : null,

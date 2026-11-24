@@ -20,6 +20,16 @@
 //     (the list stats.mjs uses, plus the creator wallet and LEADERBOARD_EXCLUDE). A wallet and its Agent Wallet count as one.
 //     Wash-trading guard: a round trip of the same coin (a buy and a sell, either order) within 5 minutes counts only its
 //     larger leg; and no wallet counts for more than 40% of the week's total counted volume (all wallets, before the cap).
+//     From the week of Monday 30 Nov 2026 (RULES_V2_FROM; community review by Xivor, owner 25 Nov 2026), set by the week's
+//     start so a week never changes rules midway (rulesFor):
+//       - the round-trip window is 24 hours instead of 5 minutes;
+//       - wallets linked by their funding count TOGETHER under the 40% cap (linkGroups): one ranked wallet paid another
+//         its first ETH, or two ranked wallets got their first ETH straight from the same small wallet. Read from cached
+//         first-funder reads only (devlinks-cache.json funders, assay-funders.json: the Cluster map's and The Assay's
+//         caches), never a new API call. Conservative: only a direct first ETH counts (not one through a bridge or a
+//         contract); a funder that first-funded more than LINK_MAX_FUNDEES wallets in those caches (an exchange, bridge or
+//         bot app) links nobody, and neither do team or system wallets (the excluded list, the gas sponsor). A group over
+//         the cap is scaled down pro rata, each wallet keeping its own row; why each group was formed is recorded.
 //     Each trade's USD value is stamped once, near the time it is first read (data/prize-trades.json), so standings do not
 //     move with later prices: the value the Agent Wallet logged when it has one, else ETH × the ETH price of that hour.
 //   · the prizes: the top 10 share the pool 30/20/15/10/7/6/4/3/3/2 %. With fewer than 10 traders the unpaid shares stay with
@@ -47,9 +57,18 @@ export const DEFAULT_START_BLOCK = 119_990_898;   // the owner's fee-split start
 export const CREATOR_BPS = 260;                   // the creator wallet's 2.6% of $TROYA volume
 export const SPLIT_PCT = [30, 20, 15, 10, 7, 6, 4, 3, 3, 2];
 export const MIN_TRADE_USD = 5;
-export const ROUND_TRIP_MS = 5 * 60_000;
+export const ROUND_TRIP_MS = 5 * 60_000;           // weeks before RULES_V2_FROM
 export const CAP_PCT = 40;
 const HOUR = 3_600_000, DAY = 86_400_000, WEEK = 7 * DAY;
+// the hardened rules (community review by Xivor, owner 25 Nov 2026): from the prize week that starts Monday 30 Nov 2026
+export const RULES_V2_FROM = Date.parse("2026-11-30T00:00:00Z");
+export const ROUND_TRIP_MS_V2 = 24 * HOUR;
+export const LINK_MAX_FUNDEES = 20;                 // a funder of more cached wallets than this is a hub: it links nobody
+/** The rules of the week that starts at `weekStart`: the round-trip window, and whether linked wallets share the cap. */
+export function rulesFor(weekStart) {
+  const v2 = weekStart >= RULES_V2_FROM;
+  return { version: v2 ? 2 : 1, roundTripMs: v2 ? ROUND_TRIP_MS_V2 : ROUND_TRIP_MS, linkedCap: v2 };
+}
 const TEST_WALLETS = ["0x12a05719851c8375342de65c9105329c81f57054"];   // the team's real-money test wallet (as stats.mjs)
 const EXPLORER = "https://robinhoodchain.blockscout.com/tx/";
 const lc = (s) => String(s || "").toLowerCase();
@@ -185,11 +204,13 @@ export function assemble(cands, vals, ownerOf = new Map()) {
 
 /**
  * The week's standings from its legs: in the window, $5 and up, not excluded, one count per hash (or entry); then the
- * round-trip guard (same coin, opposite sides, within 5 minutes: only the larger leg counts, a tie drops the later one), and
- * the cap (no wallet above capPct % of the total counted volume of all wallets, taken before the cap). Order: counted USD,
- * then who reached it first, then the address (a stable order for wallets tied at the cap).
+ * round-trip guard (same coin, opposite sides, within windowMs: 5 minutes, or 24 hours from the week of 30 Nov 2026; only
+ * the larger leg counts, a tie drops the later one), and the cap (no wallet above capPct % of the total counted volume of
+ * all wallets, taken before the cap). `groups` (linked wallets, from the week of 30 Nov 2026): [[owner, …], …], each
+ * group's wallets together capped at capPct %, scaled down pro rata when over it. Order: counted USD, then who reached it
+ * first, then the address (a stable order for wallets tied at the cap).
  */
-export function rankWeek(legs, { start = -Infinity, end = Infinity, minUsd = MIN_TRADE_USD, capPct = CAP_PCT, windowMs = ROUND_TRIP_MS, exclude = new Set() } = {}) {
+export function rankWeek(legs, { start = -Infinity, end = Infinity, minUsd = MIN_TRADE_USD, capPct = CAP_PCT, windowMs = rulesFor(start).roundTripMs, exclude = new Set(), groups = [] } = {}) {
   const seen = new Set(), by = new Map();
   for (const x of [...legs].sort((a, b) => a.t - b.t || String(a.id).localeCompare(String(b.id)))) {
     if (!(x.t >= start && x.t < end) || !x.owner || exclude.has(x.owner) || exclude.has(x.addr) || !(x.usd >= minUsd)) continue;
@@ -219,16 +240,60 @@ export function rankWeek(legs, { start = -Infinity, end = Infinity, minUsd = MIN
     rows.push({ owner, rawUsd: raw, trades: list.filter((x) => x.counted > 0).length, washed: list.filter((x) => x.washed).length, list });
   }
   const total = rows.reduce((s, r) => s + r.rawUsd, 0), cap = (total * capPct) / 100;
+  // linked wallets: a group's wallets share one cap (each wallet keeps its own row, scaled down pro rata)
+  const rowOf = new Map(rows.map((r) => [r.owner, r])), groupOut = [];
+  for (const g of groups || []) {
+    const members = [...new Set(g || [])].map((o) => rowOf.get(o)).filter((r) => r && !r.group);
+    if (members.length < 2) continue;
+    const id = `g${groupOut.length + 1}`, raw = members.reduce((s, r) => s + r.rawUsd, 0), k = raw > cap + 1e-9 ? cap / raw : 1;
+    for (const r of members) { r.group = id; r.groupFactor = k; }
+    groupOut.push({ id, owners: members.map((r) => r.owner), rawUsd: raw, usd: Math.min(raw, cap), capped: k < 1 });
+  }
   for (const r of rows) {
-    r.usd = Math.min(r.rawUsd, cap);
-    r.capped = r.rawUsd > cap + 1e-9;
+    r.usd = r.group ? r.rawUsd * r.groupFactor : Math.min(r.rawUsd, cap);
+    r.capped = r.group ? r.groupFactor < 1 : r.rawUsd > cap + 1e-9;
+    delete r.groupFactor;
     let cum = 0;
     r.reachedAt = r.list.find((x) => (cum += x.counted) >= r.usd - 1e-9)?.t ?? r.list.at(-1).t;
     r.firstAt = r.list[0].t;
     delete r.list;
   }
   rows.sort((a, b) => b.usd - a.usd || a.reachedAt - b.reachedAt || (a.owner < b.owner ? -1 : 1));
-  return { totalUsd: total, capUsd: cap, rows: rows.map((r, i) => ({ rank: i + 1, ...r })) };
+  return { totalUsd: total, capUsd: cap, groups: groupOut, rows: rows.map((r, i) => ({ rank: i + 1, ...r })) };
+}
+
+/**
+ * Linked wallets for the shared cap, from cached first-funder reads only. owners: the ranked owners; members: Map owner →
+ * its addresses (itself and its Agent Wallet); firstEth: Map address → { funder, tx } (a direct first ETH only); fundees:
+ * Map funder → how many cached wallets it first-funded; ownerOf: Map Agent Wallet → owner; noLink: addresses that never
+ * link anyone (team and system wallets). Two owners are linked when one of their wallets paid the other's its first ETH,
+ * or both got their first ETH from the same funder that is not a hub (fundees ≤ maxFundees).
+ * → [{ owners: [...], why: [{ type: "funded" | "shared-funder", funder, wallets: [...], txs: [...] }] }]
+ */
+export function linkGroups(owners, { members = new Map(), firstEth = new Map(), fundees = new Map(), ownerOf = new Map(), noLink = new Set(), maxFundees = LINK_MAX_FUNDEES } = {}) {
+  const set = new Set([...owners].map(lc)), parent = new Map([...set].map((o) => [o, o]));
+  const find = (x) => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
+  const union = (a, b) => { const x = find(a), y = find(b); if (x !== y) parent.set(y, x); };
+  const ownerAt = new Map();
+  for (const o of set) for (const a of [o, ...(members.get(o) || [])].map(lc)) ownerAt.set(a, o);
+  const why = [], shared = new Map();
+  for (const [a, o] of ownerAt) {
+    const f = firstEth.get(a), F = lc(f?.funder);
+    if (!isAddr(F) || F === a || noLink.has(F) || (fundees.get(F) || 0) > maxFundees) continue;
+    const fo = ownerAt.get(F) || (set.has(ownerOf.get(F)) ? ownerOf.get(F) : null);
+    if (fo === o) continue;                                    // its own wallet or Agent Wallet
+    if (fo) { union(o, fo); why.push({ type: "funded", funder: F, wallets: [F, a], txs: [f.tx || null], owners: [fo, o] }); continue; }
+    (shared.get(F) || shared.set(F, []).get(F)).push({ o, a, tx: f.tx || null });
+  }
+  for (const [F, list] of shared) {
+    const os = [...new Set(list.map((x) => x.o))];
+    if (os.length < 2) continue;
+    for (const o of os.slice(1)) union(os[0], o);
+    why.push({ type: "shared-funder", funder: F, wallets: list.map((x) => x.a), txs: list.map((x) => x.tx), owners: os });
+  }
+  const by = new Map();
+  for (const o of set) { const r = find(o); (by.get(r) || by.set(r, []).get(r)).push(o); }
+  return [...by.values()].filter((g) => g.length > 1).map((g) => ({ owners: g.sort(), why: why.filter((w) => w.owners.some((o) => g.includes(o))) }));
 }
 
 /** The prizes of a pool (BigInt wei) for ranked rows: ranks with no trader and prizes under minSend stay with the owner. */
@@ -268,6 +333,32 @@ async function wallets() {
   for (const [a, o] of ownerOf) if (exclude.has(o)) exclude.add(a);
   walletMemo = { at: Date.now(), v: { ownerOf, exclude } };
   return walletMemo.v;
+}
+
+// First funders already read by the Cluster map / dev side (devlinks-cache.json funders) and The Assay (assay-funders.json):
+// read from disk only, never fetched here. Only a direct first ETH is kept (not one through a bridge or another contract).
+let funderMemo = null;
+async function funderBook() {
+  if (funderMemo && D.now() - funderMemo.at < 30 * 60_000) return funderMemo.v;
+  const [dl, as] = await Promise.all([store.readJson("devlinks-cache.json", {}).catch(() => ({})), store.readJson("assay-funders.json", {}).catch(() => ({}))]);
+  const firstEth = new Map(), fundees = new Map();
+  const add = (w, r, src) => { if (isAddr(w) && r && isAddr(r.funder) && (!r.how || r.how === "direct")) firstEth.set(lc(w), { funder: lc(r.funder), tx: r.tx || null, src }); };
+  for (const [w, r] of Object.entries(as || {})) add(w, r, "assay");
+  for (const [w, r] of Object.entries(dl?.funders || {})) add(w, r, "devlinks");
+  for (const { funder } of firstEth.values()) fundees.set(funder, (fundees.get(funder) || 0) + 1);
+  const sponsor = lc((await store.readJson("gas-sponsor.json", {}).catch(() => ({})))?.address);
+  funderMemo = { at: D.now(), v: { firstEth, fundees, system: new Set([sponsor].filter(isAddr)) } };
+  return funderMemo.v;
+}
+/** The linked groups among a week's ranked owners, with what was checked (for the week's record). */
+async function linksFor(owners) {
+  const { ownerOf, exclude } = await wallets();
+  const fb = await funderBook();
+  const members = new Map();
+  for (const [a, o] of ownerOf) (members.get(o) || members.set(o, []).get(o)).push(a);
+  const groups = linkGroups(owners, { members, firstEth: fb.firstEth, fundees: fb.fundees, ownerOf, noLink: new Set([...exclude, ...fb.system]) });
+  const addrs = [...owners].flatMap((o) => [o, ...(members.get(o) || [])]);
+  return { groups, checked: owners.length, withFunder: addrs.filter((a) => fb.firstEth.has(a)).length, wallets: addrs.length, cachedFunders: fb.firstEth.size };
 }
 
 // The journal is read a slice at a time (only the new bytes on each pass), like herald.mjs: a long journal is read once
@@ -427,13 +518,33 @@ async function standingsFor(w, { fresh = false } = {}) {
   const cands = [...J.list, ...(await webSwapCands())].filter((c) => c.t >= w.start && c.t < w.end);
   const { vals, pending } = await valuate(cands);
   const { ownerOf, exclude } = await wallets();
-  const r = rankWeek(assemble(cands, vals, ownerOf), { start: w.start, end: w.end, exclude });
+  const rules = rulesFor(w.start), legs = assemble(cands, vals, ownerOf);
+  let r = rankWeek(legs, { start: w.start, end: w.end, exclude, windowMs: rules.roundTripMs }), links = null;
+  if (rules.linkedCap && r.rows.length > 1) {
+    links = await linksFor(r.rows.map((x) => x.owner)).catch((e) => ({ error: e.message, groups: [] }));
+    if (links.groups.length) r = rankWeek(legs, { start: w.start, end: w.end, exclude, windowMs: rules.roundTripMs, groups: links.groups.map((g) => g.owners) });
+  }
   const cr = await credits();
   const pool = poolOf(cr.hours, w.start, w.end);
-  const v = { week: w, ...r, pool, readUpTo: cr.readUpTo, pending };
+  const v = { week: w, rules, ...r, links, pool, readUpTo: cr.readUpTo, pending };
   memo.set(w.key, { at: D.now(), v });
   if (memo.size > 6) memo.delete(memo.keys().next().value);
   return v;
+}
+
+// what a week's record keeps of its rules and of the linked wallets (why each group was formed, with its evidence)
+const ruleRecord = (x) => ({ version: x.version, roundTripMinutes: x.roundTripMs / 60_000, linkedCap: x.linkedCap, capPct: CAP_PCT, minTradeUsd: MIN_TRADE_USD });
+function linkRecord(st) {
+  const L = st.links;
+  if (!L) return null;
+  return { checked: L.checked, wallets: L.wallets ?? null, withFunder: L.withFunder ?? null, cachedFunders: L.cachedFunders ?? null, maxFundees: LINK_MAX_FUNDEES, error: L.error || null,
+    source: "cached first-funder reads (devlinks-cache.json, assay-funders.json); no new API calls",
+    groups: (st.groups || []).map((g) => {
+      const meta = (L.groups || []).find((x) => x.owners.includes(g.owners[0]));
+      return { id: g.id, owners: g.owners, rawUsd: r2(g.rawUsd), usd: r2(g.usd), capped: g.capped,
+        why: (meta?.why || []).map((w) => ({ type: w.type, funder: w.funder, wallets: w.wallets, txs: w.txs.filter(Boolean),
+          text: w.type === "funded" ? `${short(w.wallets[1])} got its first ETH from ${short(w.funder)}, another ranked wallet` : `${w.wallets.length} ranked wallets got their first ETH from ${short(w.funder)}` })) };
+    }) };
 }
 
 const nameOf = async (a) => { const c = await D.cardOf(a).catch(() => null); return c?.username || null; };
@@ -450,11 +561,35 @@ export const RULES = () => [
   `The pool is ${poolBps() / 100}% of all $TROYA trading volume in the week (Monday 00:00 to Monday 00:00 UTC). The $TROYA creator wallet earns 2.6% of every $TROYA trade, so the pool is ${poolBps()}/260 of the creator fees that come in that week, and it grows as people trade.`,
   "Ranked by the dollar value of your trades made through Troya that week: web Swap, Agent Wallet swaps and perps (including Telegram and X trades), perps tickets on the Perps page, and the first buy of a coin you launch through Troya.",
   `Only trades of $${MIN_TRADE_USD} or more count. Your wallet and your Agent Wallet count as one trader.`,
-  "A quick round trip (buying and selling the same coin within 5 minutes) counts only its larger side, and no wallet counts for more than 40% of the week's total.",
+  `A round trip (buying and selling the same coin, in either order) counts only its larger side: within ${ROUND_TRIP_MS / 60_000} minutes until 29 Nov 2026, within ${ROUND_TRIP_MS_V2 / HOUR} hours from the week of 30 Nov 2026. No wallet counts for more than ${CAP_PCT}% of the week's total; from the week of 30 Nov 2026, wallets linked by their funding (one paid the other its first ETH, or both got their first ETH from the same small wallet) count together toward that ${CAP_PCT}%.`,
   `The top 10 share the pool: ${SPLIT_PCT.map((p) => `${p}%`).join(", ")}. Prizes are paid in ETH on Robinhood Chain from the creator wallet every Monday, after the Herald payouts.`,
   `With fewer than 10 traders the unused shares stay with the team, as does any prize under ${minSendEth()} ETH. Team, admin, test and Arena wallets are not ranked.`,
   "Prizes depend on trading volume and are not a promised reward.",
 ];
+
+/** The rules as cards for the leaderboard page (icon names are ui.js line icons): the pool, the split, the floor, the
+ *  round trip and the cap (each with the change from the week of 30 Nov 2026), the left-out wallets, the payout. */
+export const RULE_CARDS = (bps = poolBps()) => {
+  const v2 = new Date(RULES_V2_FROM).toUTCString().slice(5, 16), last = new Date(RULES_V2_FROM - DAY).toUTCString().slice(5, 16);
+  return [
+    { key: "pool", icon: "pool", title: "Pool size", text: `${bps / 100}% of all $TROYA trading volume in the week (Monday 00:00 to Monday 00:00 UTC): ${bps}/260 of the creator fees that come in that week, so it grows as people trade.` },
+    { key: "split", icon: "menu", title: "Top 10 split", text: `The 10 wallets with the most volume through Troya share the pool ${SPLIT_PCT.join("/")}%. Unfilled ranks and prizes under ${minSendEth()} ETH stay with the team.`, split: SPLIT_PCT },
+    { key: "min", icon: "check", title: `$${MIN_TRADE_USD} minimum`, text: `A trade counts only at $${MIN_TRADE_USD} or more, once per transaction. Your wallet and your Agent Wallet count as one trader.` },
+    { key: "roundtrip", icon: "loop", title: "Round trips", text: `A buy and a sell of the same coin by one wallet count only the larger side when they are within ${ROUND_TRIP_MS / 60_000} minutes (until ${last}) or within ${ROUND_TRIP_MS_V2 / HOUR} hours (from the week of ${v2}).`,
+      before: `${ROUND_TRIP_MS / 60_000} minutes`, after: `${ROUND_TRIP_MS_V2 / HOUR} hours`, from: RULES_V2_FROM },
+    { key: "cap", icon: "shield", title: `${CAP_PCT}% cap`, text: `No wallet counts for more than ${CAP_PCT}% of the week's total volume. From the week of ${v2}, wallets linked by their funding on Robinhood Chain (one paid the other its first ETH, or both got their first ETH from the same small wallet) count together toward that ${CAP_PCT}%.`,
+      before: "each wallet on its own", after: "linked wallets together", from: RULES_V2_FROM },
+    { key: "excluded", icon: "eye", title: "Not ranked", text: "Team, admin, test and Arena wallets, and the $TROYA creator wallet, are left out of the ranking." },
+    { key: "payout", icon: "clock", title: "Payout", text: "Paid in ETH on Robinhood Chain from the creator wallet every Monday from 01:00 UTC, right after the Herald payouts (03:00 UTC at the latest), for the week that just closed. Prizes depend on volume and are not a promised reward." },
+  ];
+};
+// the staking 2x rule, from stakebonus.mjs, for the line under the rules ($5 until 29 Nov 2026, $20 from 30 Nov)
+async function stakingLine() {
+  const sb = await import("./stakebonus.mjs").catch(() => null);
+  if (!sb?.activeMinUsd) return null;
+  return { href: "#/stake", minUsdNow: sb.activeMinUsd(), minUsdOld: sb.activeMinUsdOld(), minUsdNew: sb.activeMinUsdNew(), from: sb.ACTIVE_V2_FROM,
+    text: `Staking 2x: stakers who make one trade through Troya in the 24 hours before the 01:00 UTC daily share count double in it. The trade must be $${sb.activeMinUsdOld()} or more until 29 Nov 2026, and $${sb.activeMinUsdNew()} or more from 30 Nov 2026.` };
+}
 
 let viewMemo = null;
 async function view(me) {
@@ -477,17 +612,21 @@ async function view(me) {
     const history = await Promise.all(Object.values(led.weeks || {}).sort((a, b) => b.start - a.start).slice(0, 8).map(async (x) => ({ key: x.key, status: x.status, poolEth: x.poolEth, traders: x.traders ?? null,
       paidEth: r6((x.items || []).filter((i) => i.status === "paid").reduce((s, i) => s + ethOf(i.wei), 0)), winner: x.items?.[0] ? (await nameOf(x.items[0].to)) || short(x.items[0].to) : null })));
     const poolEth = ethOf(cur.pool.poolWei), plan = prizeItems(cur.pool.poolWei, cur.rows);
-    const rows = await Promise.all(cur.rows.slice(0, 50).map(async (r, i) => ({ rank: r.rank, owner: r.owner, name: await nameOf(r.owner), trader: short(r.owner), usd: r2(r.usd), trades: r.trades, capped: r.capped, washed: r.washed,
+    const rows = await Promise.all(cur.rows.slice(0, 50).map(async (r, i) => ({ rank: r.rank, owner: r.owner, name: await nameOf(r.owner), trader: short(r.owner), usd: r2(r.usd), trades: r.trades, capped: r.capped, washed: r.washed, linked: !!r.group,
       prizePct: SPLIT_PCT[i] ?? null, prizeEth: plan.items[i] ? plan.items[i].eth : null, prizeUsd: plan.items[i] && ethUsd ? r2(plan.items[i].eth * ethUsd) : null, tooSmall: plan.items[i]?.status === "too-small" })));
     const warmup = w.start < fromTs();
+    const wr = rulesFor(w.start), nr = rulesFor(w.end);
     viewMemo = { at: now, v: {
       name: "Weekly prize pool", mode,
       week: { key: w.key, start: w.start, end: w.end, endsIn: Math.max(0, w.end - now), warmup, firstWeekStart: fromTs(), firstPayoutAt: fromTs() + WEEK + HOUR },
       pool: { eth: r6(poolEth), usd: ethUsd ? r2(poolEth * ethUsd) : null, creditedEth: r6(ethOf(cur.pool.creditedWei)), credits: cur.pool.credits, volumeBps: cur.pool.bps, pctOfVolume: cur.pool.bps / 100, readUpTo: cur.readUpTo || null,
         line: `${warmup ? "Warm-up week pool (not paid)" : "This week's prize pool"}: ${r6(poolEth)} ETH (${cur.pool.bps / 100}% of $TROYA volume)` },
-      split: SPLIT_PCT, minTradeUsd: MIN_TRADE_USD, capPct: CAP_PCT, roundTripMinutes: ROUND_TRIP_MS / 60_000, minSendEth: minSendEth(),
+      split: SPLIT_PCT, minTradeUsd: MIN_TRADE_USD, capPct: CAP_PCT, roundTripMinutes: wr.roundTripMs / 60_000, linkedCap: wr.linkedCap, minSendEth: minSendEth(),
+      // this week's rules and the next week's, and when the hardened ones start (the week of 30 Nov 2026)
+      weekRules: { version: wr.version, roundTripMinutes: wr.roundTripMs / 60_000, linkedCap: wr.linkedCap }, nextWeekRules: { version: nr.version, roundTripMinutes: nr.roundTripMs / 60_000, linkedCap: nr.linkedCap }, rulesV2From: RULES_V2_FROM,
+      links: cur.links ? { groups: (cur.groups || []).length, linkedWallets: (cur.groups || []).reduce((s, g) => s + g.owners.length, 0) } : null,
       totals: { traders: cur.rows.length, usd: r2(cur.rows.reduce((s, r) => s + r.usd, 0)), pending: cur.pending },
-      rows, lastWeek: last, history, rules: RULES(),
+      rows, lastWeek: last, history, rules: RULES(), ruleCards: RULE_CARDS(cur.pool.bps), staking2x: await stakingLine().catch(() => null),
       status: mode === "live" ? "Prizes are paid every Monday." : mode === "dry" ? `Test mode: the standings and prizes are worked out but not sent yet. The first payout is planned for Monday ${new Date(fromTs() + WEEK).toUTCString().slice(5, 11)}.` : "Prize payouts are off right now; the standings still count.",
       botLine: botLine({ mode, poolEth, bps: cur.pool.bps, warmup }),
     } };
@@ -506,7 +645,7 @@ async function view(me) {
 /** One sentence for the bots (botfacts.mjs reads it from GET /api/leaderboard/prizes), true to the mode. */
 export function botLine({ mode = modeOf(), poolEth = null, bps = poolBps(), warmup = false } = {}) {
   const first = new Date(fromTs() + WEEK).toUTCString().slice(5, 16);
-  const how = `${bps / 100}% of all $TROYA trading volume each week (Monday 00:00 to Monday 00:00 UTC) is a prize pool for the 10 wallets with the most trading volume made through Troya (web Swap, Agent Wallet swaps and perps, Telegram and X trades, Perps page tickets, launch first buys), split ${SPLIT_PCT.join("/")}%, paid in ETH on Robinhood Chain every Monday. Trades under $${MIN_TRADE_USD} do not count, a round trip of the same coin within 5 minutes counts once, no wallet counts for more than ${CAP_PCT}% of the week's volume, and team wallets are left out. It depends on volume and is not a promised reward.`;
+  const how = `${bps / 100}% of all $TROYA trading volume each week (Monday 00:00 to Monday 00:00 UTC) is a prize pool for the 10 wallets with the most trading volume made through Troya (web Swap, Agent Wallet swaps and perps, Telegram and X trades, Perps page tickets, launch first buys), split ${SPLIT_PCT.join("/")}%, paid in ETH on Robinhood Chain every Monday. Trades under $${MIN_TRADE_USD} do not count, a buy and a sell of the same coin by one wallet count only the larger one when they are within 5 minutes (from the week of 30 Nov 2026: within 24 hours), no wallet counts for more than ${CAP_PCT}% of the week's volume (from the week of 30 Nov 2026, wallets linked by their funding count together toward that ${CAP_PCT}%), and team, admin, test and Arena wallets are left out. Paid every Monday from 01:00 UTC, after the Herald payouts. It depends on volume and is not a promised reward.`;
   const pool = poolEth != null ? ` ${warmup ? "Warm-up pool so far (not paid)" : "This week's pool so far"}: ${r6(poolEth)} ETH.` : "";
   if (mode === "off") return `Weekly prize pool (troya.codes/agent#/leaderboard): paused right now; the leaderboard still shows volume standings. When on: ${how}`;
   if (mode === "dry") return `Weekly prize pool (troya.codes/agent#/leaderboard), being tested: the standings are live but no prize has been paid yet; the first payout is planned for ${first}, once the team switches payouts on. ${how}${pool}`;
@@ -652,7 +791,8 @@ export async function weeklyRun({ reason = "schedule", dry = false, deps = {} } 
       rec = { key: w.key, start: w.start, end: w.end, mode: live ? "live" : "dry", status: live ? "paying" : "dry", frozen: live, at: now, reason,
         creditedEth: r6(ethOf(st.pool.creditedWei)), credits: st.pool.credits, volumeBps: st.pool.bps, poolWei: st.pool.poolWei.toString(), poolEth: r6(ethOf(st.pool.poolWei)),
         totalUsd: r2(st.totalUsd), capUsd: r2(st.capUsd), traders: st.rows.length, ethUsd, unvalued: st.pending || 0,
-        standings: st.rows.slice(0, 25).map((r) => ({ rank: r.rank, owner: r.owner, usd: r2(r.usd), rawUsd: r2(r.rawUsd), trades: r.trades, washed: r.washed, capped: r.capped })),
+        rules: ruleRecord(st.rules), links: linkRecord(st),
+        standings: st.rows.slice(0, 25).map((r) => ({ rank: r.rank, owner: r.owner, usd: r2(r.usd), rawUsd: r2(r.rawUsd), trades: r.trades, washed: r.washed, capped: r.capped, ...(r.group ? { group: r.group } : {}) })),
         items: plan.items, dueWei: plan.dueWei.toString(), ownerKeepsWei: plan.ownerKeepsWei.toString(), ownerKeepsEth: r6(ethOf(plan.ownerKeepsWei)),
         note: !plan.items.length ? "Nobody traded $5 or more through Troya that week." : null };
       if (live && !plan.items.some((x) => x.status === "due")) rec.status = "paid";        // nothing to send: closed as paid
@@ -738,6 +878,6 @@ export async function register(r, ctx) {
 }
 
 export const _test = {
-  setStore: (st) => { store = st; memo.clear(); viewMemo = null; walletMemo = null; J.pos = 0; J.list = []; J.ids.clear(); },
+  setStore: (st) => { store = st; memo.clear(); viewMemo = null; walletMemo = null; funderMemo = null; J.pos = 0; J.list = []; J.ids.clear(); },
   setDeps: (d) => Object.assign(D, d), deps: D, standingsFor, view, tick, recover, payOne, statusOf,
 };

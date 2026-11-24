@@ -710,7 +710,9 @@ export async function feeSplitView() {
   const firstPay = c.live && c.deployedAt ? firstPayAt(c.deployedAt) + RUN_HOUR_UTC * HOUR : null;
   const v = {
     name: "$TROYA fee split", mode: modeOf(), wording: WORDING, paid: PAID_DAILY, noStakers: NO_STAKERS, rule: RULE,
-    active: { line: bonus.ACTIVE_LINE(), how: bonus.ACTIVE_HOW(), days: bonus.activeDays(), minUsd: bonus.activeMinUsd(), totals: await bonus.bonusTotals().catch(() => null) },
+    // minUsd: the floor for the next daily share ($5 for days up to 29 Nov 2026, $20 from 30 Nov: stakebonus.mjs activeMinUsd)
+    active: { line: bonus.ACTIVE_LINE(), how: bonus.ACTIVE_HOW(), days: bonus.activeDays(), minUsd: bonus.activeMinUsd(), minUsdRule: bonus.MIN_USD_RULE(),
+      minUsdOld: bonus.activeMinUsdOld(), minUsdNew: bonus.activeMinUsdNew(), minUsdFrom: bonus.ACTIVE_V2_FROM, totals: await bonus.bonusTotals().catch(() => null) },
     tiers: TIERS.map((t) => ({ key: t.key, name: t.name, minMcUsd: t.minMc, stakersPctOfVolume: t.stakerBps / 100, burnPctOfVolume: t.burnBps / 100, stakersShareOfCreatorFees: t.stakerBps / CREATOR_BPS, burnShareOfCreatorFees: t.burnBps / CREATOR_BPS })),
     start: { block: st.startBlock, from: st.from },
     schedule: { every: "day", hourUtc: RUN_HOUR_UTC, nextRunAt: nextRunAt(now), firstPayAt: firstPay, minSendEth: minSendEth(), firstPayDays: FIRST_PAY_DAYS },

@@ -88,6 +88,31 @@
 .pz-tx { text-align: right; font-size: 12.5px; }
 .pz-tx small { color: var(--muted); }
 .pz-rl { margin: 0; padding-left: 18px; display: grid; gap: 7px; color: var(--fg-2); font-size: 13px; line-height: 1.5; }
+/* The prize pool rules (25 Nov 2026): one card per rule from GET /api/leaderboard/prizes ruleCards, line icons, and for a rule
+   that changes from the week of 30 Nov 2026 both versions side by side, the one in force this week marked. */
+.pz-grid-1 { grid-template-columns: minmax(0, 1fr); }
+.pz-rh { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.pz-rh h3 { margin: 0; }
+.pz-rv { font-size: 12px; color: var(--warn); }
+.pz-rc { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); gap: 10px; }
+.pz-card { display: flex; gap: 11px; align-items: flex-start; min-width: 0; padding: 12px 13px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-1); }
+.pz-ic { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line-3); color: var(--warn); }
+.pz-ic svg { width: 16px; height: 16px; }
+.pz-ct { min-width: 0; display: grid; gap: 4px; }
+.pz-ct b { font-size: 13.5px; font-weight: 600; }
+.pz-ct p { margin: 0; color: var(--fg-2); font-size: 12.5px; line-height: 1.5; }
+.pz-split { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.pz-split li { display: grid; justify-items: center; padding: 4px 0; border-radius: 6px; background: var(--bg-2); font-variant-numeric: tabular-nums; }
+.pz-split small { color: var(--muted); font-size: 10.5px; }
+.pz-split b { font-size: 12px; }
+.pz-chg { margin-top: 4px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.pz-chg-i { display: grid; gap: 1px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line-2); font-size: 12px; min-width: 0; }
+.pz-chg-i small { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; }
+.pz-chg-i b { font-size: 12.5px; font-weight: 600; }
+.pz-chg-i em { font-style: normal; font-size: 10.5px; color: var(--warn); }
+.pz-chg-i.now { border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: var(--warn-bg); }
+.pz-stk { display: flex; gap: 11px; align-items: center; margin-top: 12px; padding: 11px 13px; border-radius: 10px; border: 1px dashed var(--line-3); }
+.pz-stk p { margin: 0; color: var(--fg-2); font-size: 12.5px; line-height: 1.5; }
 .lb-sec h2 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
 .lb-sec p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
 @media (max-width: 860px) { .pz-grid { grid-template-columns: minmax(0, 1fr); } }

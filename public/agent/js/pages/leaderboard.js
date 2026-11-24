@@ -3,7 +3,7 @@
 // standings with each rank's estimated prize, last week's winners with their transactions, and the rules in plain words.
 // Below (Phase 9): the Sentry Autopilot leaderboard, opted-in traders ranked by return on closed positions, live results
 // ahead of practice, and a button that copies a trader's rules into your own Autopilot.
-import { h, clear, pageHead, toast, useCss, seg, usd } from "../ui.js";
+import { h, clear, pageHead, toast, useCss, seg, usd, icon } from "../ui.js";
 import { api } from "../api.js";
 import { wallet, openConnect, signIn } from "../wallet.js";
 
@@ -28,7 +28,7 @@ export async function mount(view) {
   const pick = seg([{ value: 1, label: "24h" }, { value: 7, label: "7 days" }, { value: 30, label: "30 days" }], days, (v) => { days = v; load(); });
   clear(view,
     pageHead("Leaderboard", "A weekly prize pool for the most active traders on Troya, paid in ETH, and the Sentry Autopilot results traders chose to show."),
-    prizeBox, h("div", { class: "pz-grid" }, lastBox, rulesBox),
+    prizeBox, rulesBox, h("div", { class: "pz-grid pz-grid-1" }, lastBox),
     h("div", { class: "lb-sec" }, h("h2", {}, "Sentry Autopilot results"), h("p", {}, "Ranked by return on closed positions. Live results rank ahead of practice.")),
     h("div", { class: "lb-top" }, pick, h("a", { class: "link", href: "#/agent/sentry" }, "Your Sentry Autopilot")), box);
 
@@ -50,7 +50,8 @@ export async function mount(view) {
           h("div", { class: "pz-row pz-h", role: "row" }, ["#", "Trader", "Volume", "Trades", "Est. prize"].map((x) => h("span", { role: "columnheader" }, x))),
           d.rows.map((r) => h("div", { class: `pz-row ${r.mine ? "mine" : ""} ${r.prizePct ? "paid" : ""}`, role: "row" },
             h("span", { class: "pz-rank" }, String(r.rank)),
-            h("span", { class: "pz-who" }, who(r), r.mine ? h("span", { class: "badge-s blue" }, "you") : null, r.capped ? h("span", { class: "badge-s", title: "Counted at 40% of the week's total volume, the most one wallet can count for" }, "capped") : null),
+            h("span", { class: "pz-who" }, who(r), r.mine ? h("span", { class: "badge-s blue" }, "you") : null, r.capped ? h("span", { class: "badge-s", title: r.linked ? `Linked wallets (by their funding) are counted together at up to ${d.capPct}% of the week's total volume` : `Counted at ${d.capPct}% of the week's total volume, the most one wallet can count for` }, "capped") : null,
+              r.linked && !r.capped ? h("span", { class: "badge-s", title: `Linked to another ranked wallet by its funding: they count together toward the ${d.capPct}% cap` }, "linked") : null),
             h("span", { class: "pz-usd" }, dollars(r.usd)),
             h("span", { class: "pz-n" }, String(r.trades)),
             h("span", { class: "pz-prize" }, r.prizePct ? [h("b", {}, r.tooSmall ? "under the minimum" : ethTxt(r.prizeEth)), h("small", {}, `${r.prizePct}%${r.prizeUsd != null && !r.tooSmall ? ` · ≈ ${usd(r.prizeUsd)}` : ""}`)] : h("small", {}, "–")))))
@@ -73,9 +74,26 @@ export async function mount(view) {
         : h("p", { class: "pz-sub" }, l.note || "Nobody traded through Troya that week."),
       l.note && l.items.length ? h("p", { class: "pz-foot" }, l.note) : null);
   }
+  // the rules, read from the API (server/prizes.mjs RULE_CARDS): one card per rule, line icons; a rule that changes from the
+  // week of 30 Nov 2026 shows both versions with the one in force this week marked. The staking 2x line links to #/stake.
   function paintRules(d) {
     rulesBox.hidden = false;
-    clear(rulesBox, h("h3", {}, "How it works"), h("ul", { class: "pz-rl" }, d.rules.map((x) => h("li", {}, x))));
+    const cards = Array.isArray(d.ruleCards) ? d.ruleCards : null;
+    if (!cards) { clear(rulesBox, h("h3", {}, "How it works"), h("ul", { class: "pz-rl" }, (d.rules || []).map((x) => h("li", {}, x)))); return; }
+    const v2now = d.weekRules?.version >= 2, from = d.rulesV2From;
+    const change = (c) => (c.from && c.before && c.after ? h("div", { class: "pz-chg" },
+      h("span", { class: `pz-chg-i ${v2now ? "" : "now"}` }, h("small", {}, `Until ${day(c.from - 86_400_000).slice(5)}`), h("b", {}, c.before), v2now ? null : h("em", {}, "this week")),
+      h("span", { class: `pz-chg-i ${v2now ? "now" : ""}` }, h("small", {}, `From ${day(c.from).slice(5)}`), h("b", {}, c.after), v2now ? h("em", {}, "this week") : null)) : null);
+    const split = (c) => (Array.isArray(c.split) ? h("ol", { class: "pz-split", "aria-label": "Prize split by rank" }, c.split.map((p, i) => h("li", {}, h("small", {}, `#${i + 1}`), h("b", {}, `${p}%`)))) : null);
+    const s2 = d.staking2x;
+    clear(rulesBox,
+      h("div", { class: "pz-rh" }, h("h3", {}, "Prize pool rules"),
+        from && !v2now ? h("span", { class: "pz-rv" }, `Round trips and the cap tighten from the week of ${day(from).slice(5)}`) : null),
+      h("div", { class: "pz-rc" }, cards.map((c) => h("div", { class: "pz-card" },
+        h("span", { class: "pz-ic" }, icon(c.icon || "info")),
+        h("div", { class: "pz-ct" }, h("b", {}, c.title), h("p", {}, c.text), split(c), change(c))))),
+      s2 ? h("div", { class: "pz-stk" }, h("span", { class: "pz-ic" }, icon("bolt")),
+        h("p", {}, s2.text, " ", h("a", { class: "link", href: s2.href || "#/stake" }, "Open the stake page"))) : null);
   }
   async function loadPrizes() {
     let d;

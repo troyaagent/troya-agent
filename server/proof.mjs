@@ -34,6 +34,9 @@ const PASS = "0x439EBc38c756f4F729c1474ED8DE337cFe3Aa77E";
 const SPLIT_FACTORY = "0x266323d6ce63E4dfE62cC87bD14cA6C97BB2F525";
 const SPLIT_DEPLOY_TX = "0x828c0679ad91873334c85853edbfba8e85697352b6a956f2a0632676163e95e8";
 const OATH_VAULT = "0x6Bb959367a71d07F5bBCb91eb41b62949440a4e8";
+const FEE_ROUTER = "0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B";       // TroyaFeeRouter, deployed 24 Nov 2026 (contracts/docs/fee-router-plan.md)
+const FEE_ROUTER_TX = "0x9431ae1486efb2020851f4978fb42981813a63398d8e7c1b66ea3b2705abe741";
+const PONS_FACTORY = "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e";     // Pons v2 launch factory (Pons's contract)
 const ESCROW = "0xd3AFEB2a57f70eF218Aa82451c51B2fb0416Ac9e";             // Pons fee escrow (Pons's contract)
 const LAUNCH_TX = "0xf5e33fcd6b28c87ec4bd25b0d7b35477d019a0ed2386963f8089265b294cad2e";
 const LP_BURN_TX = "0xfe7f12591df9b9f53a0366a31cf36d1cf00b8200b6ae05fb8eeb7989afc24ea0";
@@ -43,7 +46,8 @@ const GITHUB = "https://github.com/troyaagent/troya-agent";
 const SRC = `${GITHUB}/blob/main/contracts/src`;
 const BS = "https://robinhoodchain.blockscout.com";
 const RPC_PUBLIC = "https://rpc.mainnet.chain.robinhood.com";
-const SEL = { totalSupply: "0x18160ddd", balanceOf: "0x70a08231", owner: "0x8da5cb5b", ownerOf: "0x6352211e", token: "0xfc0c546a", cooldown: "0xa2724a4d", burn: "0x42966c68" };
+const SEL = { totalSupply: "0x18160ddd", balanceOf: "0x70a08231", owner: "0x8da5cb5b", ownerOf: "0x6352211e", token: "0xfc0c546a", cooldown: "0xa2724a4d", burn: "0x42966c68",
+  pendingOwner: "0xe30c3978", timelock: "0x7aadef8b", pendingConfigEta: "0xac679bf5", pendingRecipient: "0xaa0d276a", getLaunchedToken: "0x3cf28b5a" };
 const lc = (s) => String(s || "").toLowerCase();
 const isHash = (h) => /^0x[0-9a-fA-F]{64}$/.test(String(h || ""));
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(String(a || ""));
@@ -213,6 +217,14 @@ async function contractFacts() {
     Promise.all(locked.map((id) => probe(POSM, SEL.ownerOf + pad(id)).then((r) => ({ id, owner: r === "reverts" ? null : getAddress("0x" + String(r).slice(-40)) })))),
   ]);
   const src = await sourcifyOf([TROYA, STAKE, PASS, SPLIT_FACTORY, OATH_VAULT]);
+  // TroyaFeeRouter, and who Pons pays the $TROYA creator fees to: getLaunchedToken(TROYA) returns a static tuple, word 3 is creatorFeeRecipient
+  const recipientCall = { to: PONS_FACTORY, data: SEL.getLaunchedToken + word(TROYA) };
+  const [rOwner, rPendingOwner, rTimelock, rPendingEta, rPendingTo, rCode, launched] = await Promise.all([
+    probe(FEE_ROUTER, SEL.owner), probe(FEE_ROUTER, SEL.pendingOwner), probe(FEE_ROUTER, SEL.timelock), probe(FEE_ROUTER, SEL.pendingConfigEta), probe(FEE_ROUTER, SEL.pendingRecipient),
+    chain().then((m) => m.rpc("robinhood", "eth_getCode", [FEE_ROUTER, "latest"])).then((c) => (String(c || "0x").length - 2) / 2).catch(() => null),
+    probe(recipientCall.to, recipientCall.data),
+  ]);
+  const feeRecipient = launched !== "reverts" && String(launched || "").length >= 2 + 64 * 4 ? getAddress("0x" + String(launched).slice(2 + 64 * 3 + 24, 2 + 64 * 4)) : null;
   const addrOf = (r) => (r === "reverts" || !r ? null : getAddress("0x" + String(r).slice(-40)));
   const noOwner = (r) => (r === "reverts" ? "owner() reverts: the contract has no owner function" : `owner() returns ${addrOf(r)}`);
   const ownerCall = (to) => ({ rpc: RPC_PUBLIC, body: { jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data: SEL.owner }, "latest"] } });
@@ -226,6 +238,14 @@ async function contractFacts() {
     { name: "TroyaFeeSplitter factory", address: SPLIT_FACTORY, by: "Troya", source: `${SRC}/TroyaFeeSplitter.sol`, url: addrUrl(SPLIT_FACTORY), codeBytes: codes[2], tx: SPLIT_DEPLOY_TX,
       facts: [noOwner(factoryOwner) + (lc(addrOf(factoryOwner)) === lc(TEAM_WALLET) ? " (the team wallet)" : ""), "the owner can only change where Troya's share goes (setTreasury); a coin's split is fixed when its splitter is created, Troya's share is capped at 20%, and the creator's share can never be redirected", ver(SPLIT_FACTORY)],
       checks: [ownerCall(SPLIT_FACTORY)], sourcify: src[SPLIT_FACTORY] || null },
+    { name: "TroyaFeeRouter", address: FEE_ROUTER, by: "Troya (deployed by the creator wallet)", source: `${BS}/address/${FEE_ROUTER}?tab=contract`, url: addrUrl(FEE_ROUTER), codeBytes: rCode, tx: FEE_ROUTER_TX,
+      owner: addrOf(rOwner), pendingOwner: addrOf(rPendingOwner), timelockSeconds: rTimelock === "reverts" ? null : Number(BigInt(rTimelock)),
+      pendingConfigEta: rPendingEta === "reverts" ? null : Number(BigInt(rPendingEta)), pendingRecipient: BigInt(rPendingTo === "reverts" || !rPendingTo ? 0 : rPendingTo) ? addrOf(rPendingTo) : null, ponsFeeRecipient: feeRecipient, routerIsRecipient: !!feeRecipient && lc(feeRecipient) === lc(FEE_ROUTER),
+      facts: [noOwner(rOwner) + (lc(addrOf(rOwner)) === lc(CREATOR) ? " (the creator wallet)" : ""), `TIMELOCK() = ${rTimelock === "reverts" ? "–" : `${Number(BigInt(rTimelock)) / 86400} days`} before any rule change or recipient move`,
+        !feeRecipient ? "Pons fee recipient for $TROYA: could not be read" : lc(feeRecipient) === lc(FEE_ROUTER) ? "Pons fee recipient for $TROYA: this router" : `Pons fee recipient for $TROYA: still ${feeRecipient}${lc(feeRecipient) === lc(CREATOR) ? " (the creator wallet)" : ""}, not switched to the router yet`,
+        "source verified on Blockscout (full match)"],
+      checks: [ownerCall(FEE_ROUTER), { rpc: RPC_PUBLIC, body: { jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: FEE_ROUTER, data: SEL.timelock }, "latest"] } },
+        { rpc: RPC_PUBLIC, body: { jsonrpc: "2.0", id: 1, method: "eth_call", params: [recipientCall, "latest"] } }], sourcify: null },
     { name: "TroyaOathVault", address: OATH_VAULT, by: "Troya (deployed by the test wallet)", source: `${SRC}/TroyaOathVault.sol`, url: addrUrl(OATH_VAULT), codeBytes: codes[3], facts: [noOwner(vaultOwner), ver(OATH_VAULT)], checks: [ownerCall(OATH_VAULT)], sourcify: src[OATH_VAULT] || null },
     ...owners.map((o) => ({ name: `Uniswap v4 LP position #${o.id}`, address: POSM, tokenId: o.id, by: "Uniswap v4 PositionManager", url: `${BS}/token/${POSM}/instance/${o.id}`,
       facts: [o.owner ? `ownerOf(${o.id}) = ${o.owner}${lc(o.owner) === lc(DEAD) ? " (0x…dEaD: nobody can remove this liquidity)" : ""}` : "ownerOf could not be read"],
@@ -376,6 +396,30 @@ export async function claimsView() {
       ...ran.flatMap((x) => x.runs.map((r) => ev.page(`${SITE}${r.raw.text}`, `${x.tool} ${x.version} raw output${x.runs.length > 1 ? `, ${r.pass}` : ""}`))),
       ev.page(`${SITE}/agent#/stake`, "the Stake page, How it works on-chain"),
     ], { checkedAt: Date.parse(scan.scannedAt?.["slither pass 1"] || scan.date) || now });
+  }
+  // TroyaFeeRouter: deployed 24 Nov 2026; the fees go through it only once Pons's creator-fee recipient for $TROYA is the router, read live from the Pons factory
+  const fr = cOf("TroyaFeeRouter");
+  if (fr?.codeBytes > 0) {
+    const days = fr.timelockSeconds ? fr.timelockSeconds / 86400 : null;
+    const pend = fr.pendingConfigEta === 0 && !fr.pendingRecipient ? "No rule change or recipient move is pending." : fr.pendingConfigEta || fr.pendingRecipient ? `Pending on chain:${fr.pendingConfigEta ? ` a rule change executable from ${when(fr.pendingConfigEta * 1000)}` : ""}${fr.pendingRecipient ? `${fr.pendingConfigEta ? ";" : ""} a recipient move to ${fr.pendingRecipient}` : ""}.` : "";
+    const rec = !fr.ponsFeeRecipient ? "The Pons fee recipient for $TROYA could not be read just now."
+      : fr.routerIsRecipient ? `Switched: Pons getLaunchedToken($TROYA).creatorFeeRecipient is the router, so the $TROYA creator fees are split by this contract.`
+      : `Not switched yet: Pons getLaunchedToken($TROYA).creatorFeeRecipient is still ${fr.ponsFeeRecipient}${lc(fr.ponsFeeRecipient) === lc(CREATOR) ? " (the creator wallet)" : ""}, so no creator fees go through the router yet.`;
+    add("fee-router", `TroyaFeeRouter ${FEE_ROUTER}: a contract that, once it is the $TROYA creator-fee recipient at Pons, splits the creator fees by its own code (stakers, free gas, buy-and-burn, team), at most once per period of its rule (one day today), run by anyone. owner() = ${fr.owner || "–"}${lc(fr.owner) === lc(CREATOR) ? " (the creator wallet, a single key, not a Safe yet)" : ""}; every rule change or recipient move is proposed on chain and can be executed only after TIMELOCK() = ${days == null ? "–" : `${days} days`}; no pause, upgrade or ETH rescue. ${pend} ${rec}`.replace(/ +/g, " ").trim(), st(fr.routerIsRecipient), [
+      ev.contract(FEE_ROUTER, "the router"), { type: "source", url: fr.source, what: "verified source on Blockscout" },
+      ev.call(fr.checks[0].body, "owner()", fr.owner ? "0x" + word(fr.owner) : null), ev.call(fr.checks[2].body, "getLaunchedToken($TROYA) on the Pons factory: word 3 is creatorFeeRecipient"),
+      ev.call(fr.checks[1].body, "TIMELOCK()", fr.timelockSeconds != null ? "0x" + pad(fr.timelockSeconds) : null), ev.tx(FEE_ROUTER_TX, "deployment"),
+    ], { checkedAt: c.at, ...(fr.routerIsRecipient ? {} : { note: "planned: the router splits the fees once the Pons recipient is switched to it" }) });
+  }
+  let rscan = null;
+  try { rscan = JSON.parse(await readFile(join(root, "public", "security", "troyafeerouter-scan.json"), "utf8")); } catch { /* not published */ }
+  if (rscan && rscan.contract?.address?.toLowerCase() === FEE_ROUTER.toLowerCase()) {
+    const ran = rscan.tools.filter((x) => x.status !== "not run"), a = rscan.counts.afterTriage;
+    add("fee-router-scan", `TroyaFeeRouter was scanned on ${rscan.date} with ${ran.map((x) => `${x.tool} ${x.version}`).join(" and ")} (free static analyzers) on the exact verified source: ${rscan.counts.beforeTriage.total} results before triage, ${a.real} real issues after it (${a.informational} informational, ${a.falsePositive} false positives), each explained. Automated scan only; independent audit: not yet.`, "live", [
+      ev.page(`${SITE}/security/troyafeerouter-scan.json`, "the summary: tools, versions, commands, every result with its verdict"),
+      ...ran.flatMap((x) => x.runs.map((r) => ev.page(`${SITE}${r.raw.text}`, `${x.tool} ${x.version} raw output${x.runs.length > 1 ? `, ${r.pass}` : ""}`))),
+      ev.page(`${SITE}${rscan.contract.matchEvidence}`, "the verified source compared file by file, and the bytecode with the chain"),
+    ], { checkedAt: Date.parse(rscan.scannedAt?.["slither pass 1"] || rscan.date) || now });
   }
   const pass = cOf("Troya Holder Pass (soulbound)"), fac = cOf("TroyaFeeSplitter factory"), vault = cOf("TroyaOathVault");
   if (pass) add("holder-pass", `Troya Holder Pass ${PASS}: a soulbound NFT for wallets holding 1,000,000 $TROYA, used for signed pass votes. ${pass.facts[0]}.`, "live", [ev.contract(PASS), ev.call(pass.checks[0].body, "owner()"), { type: "source", url: pass.source }, ev.api("/api/pass")]);

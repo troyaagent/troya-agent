@@ -1,0 +1,108 @@
+# Wake 4.22.2 on TroyaFeeRouter.sol: all 26 detectors, every impact and confidence level, on the deployed source, unchanged (sha256 812e5db2...1c9bda, commit 2c9b906)
+# started: 2026-11-24T08:35:50Z (UTC)
+# command, run in contracts/: wake detect --export json all --min-impact info --min-confidence low
+# exit code: 3 (Wake exits 3 when it reports detections)
+# solc 0.8.24+commit.e11b9ed9 (downloaded by Wake itself), Python 3.12.13
+# run in a scratch copy of contracts/ holding only src/TroyaFeeRouter.sol, lib/ and foundry.toml; local paths shortened to contracts/, nothing else changed
+# config: troyafeerouter-wake.toml (troyastake-wake.toml with the other Troya contracts in detectors.exclude_paths; none of them was in the scratch copy anyway)
+# ---- raw output below ----
+[08:35:51] Found 1 *.sol files in 0.08 s                                                                   detect.py:731
+           Failed to load previous build artifacts                                                       compiler.py:908
+[08:35:52] Compiled 16 files using 1 solc runs in 1.35 s                                                compiler.py:1305
+[08:35:53] Processed compilation results in 0.35 s                                                      compiler.py:1558
+           Wrote build artifacts in 0.10 s                                                              compiler.py:1686
+
+
+╭─ [HIGH][LOW] Possible reentrancy in `TroyaFeeRouter._pay(address,uint256)` [reentrancy] ─────────────────────────────╮
+│   584     /// @dev Pays `amount` ETH to `to`; if `to` refuses it, keeps it for `to` (see withdrawOwed) so the split  │
+│   585     function _pay(address to, uint256 amount) private {                                                        │
+│   586         if (amount == 0) return;                                                                               │
+│ ❱ 587         (bool ok,) = to.call{value: amount}("");                                                               │
+│   588         if (!ok) {                                                                                             │
+│   589             owed[to] += amount;                                                                                │
+│   590             totalOwed += amount;                                                                               │
+╰─ src/TroyaFeeRouter.sol ─────────────────────────────────────────────────────────────────────────────────────────────╯
+├── ╭─ Exploitable from `TroyaFeeRouter.distribute()` ─────────────────────────────────────────────────────────────────╮
+│   │   313         emit Distributed(number, s.tier, s.mcWei, amount, s.toStakers, s.toGas, s.toBurn, s.toTeam, s.tota │
+│   │   314                                                                                                            │
+│   │   315         if (s.toStakers != 0) stake.notifyReward{value: s.toStakers}();                                    │
+│   │ ❱ 316         _pay(c.gasWallet, s.toGas);                                                                        │
+│   │   317         _pay(c.team, s.toTeam);                                                                            │
+│   │   318         _buyAndBurn(c);                                                                                    │
+│   │   319     }                                                                                                      │
+│   ╰─ src/TroyaFeeRouter.sol ─────────────────────────────────────────────────────────────────────────────────────────╯
+└── ╭─ Exploitable from `TroyaFeeRouter.distribute()` ──────────────────────────────╮
+    │   314                                                                         │
+    │   315         if (s.toStakers != 0) stake.notifyReward{value: s.toStakers}(); │
+    │   316         _pay(c.gasWallet, s.toGas);                                     │
+    │ ❱ 317         _pay(c.team, s.toTeam);                                         │
+    │   318         _buyAndBurn(c);                                                 │
+    │   319     }                                                                   │
+    │   320                                                                         │
+    ╰─ src/TroyaFeeRouter.sol ──────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────────────────────────────────────╮
+│   296         if (lastDistribution != 0 && block.timestamp / period <= uint256(lastDistribution) / period) { │
+│   297             revert TooSoon((uint256(lastDistribution) / period + 1) * period);                         │
+│   298         }                                                                                              │
+│ ❱ 299         _observe();                                                                                    │
+│   300         if (escrow.balanceOf(address(this)) != 0) escrow.claim();                                      │
+│   301         uint256 amount = _free();                                                                      │
+│   302         if (amount == 0) revert NothingToDistribute();                                                 │
+╰─ src/TroyaFeeRouter.sol ─────────────────────────────────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────────────╮
+│   297             revert TooSoon((uint256(lastDistribution) / period + 1) * period); │
+│   298         }                                                                      │
+│   299         _observe();                                                            │
+│ ❱ 300         if (escrow.balanceOf(address(this)) != 0) escrow.claim();              │
+│   301         uint256 amount = _free();                                              │
+│   302         if (amount == 0) revert NothingToDistribute();                         │
+│   303         s = _split(amount, c);                                                 │
+╰─ src/TroyaFeeRouter.sol ─────────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────────────────────────────────────────────╮
+│   315         if (s.toStakers != 0) stake.notifyReward{value: s.toStakers}();                                        │
+│   316         _pay(c.gasWallet, s.toGas);                                                                            │
+│   317         _pay(c.team, s.toTeam);                                                                                │
+│ ❱ 318         _buyAndBurn(c);                                                                                        │
+│   319     }                                                                                                          │
+│   320                                                                                                                │
+│   321     /// @notice Spends the burn reserve on $TROYA in its own pool and burns what it bought, if the price is wi │
+╰─ src/TroyaFeeRouter.sol ─────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ───────────────────────────────╮
+│   323     /// @return spent ETH spent. @return burned $TROYA burned.                            │
+│   324     function buyAndBurn() external nonReentrant returns (uint256 spent, uint256 burned) { │
+│   325         if (_isUnlocked()) revert PoolManagerUnlocked();                                  │
+│ ❱ 326         _observe();                                                                       │
+│   327         return _buyAndBurn(_config);                                                      │
+│   328     }                                                                                     │
+│   329                                                                                           │
+╰─ src/TroyaFeeRouter.sol ────────────────────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ───────────────────────╮
+│   367         int128 a1 = int128(delta);                                                │
+│   368         uint256 spent = a0 < 0 ? uint256(uint128(-a0)) : 0;                       │
+│   369         uint256 bought = a1 > 0 ? uint256(uint128(a1)) : 0;                       │
+│ ❱ 370         if (spent != 0) poolManager.settle{value: spent}();                       │
+│   371         if (bought != 0) poolManager.take(address(troya), address(this), bought); │
+│   372         return abi.encode(spent, bought);                                         │
+│   373     }                                                                             │
+╰─ src/TroyaFeeRouter.sol ────────────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][MEDIUM] Not all execution paths have assigned return values [missing-return] ─────────────────────────────╮
+│   485                                                                                                                │
+│   486     /// @notice The median sqrtPriceX96 of the hourly reads of the last 24 hours and how many there are; 0 wit │
+│   487     /// than 12. (For an even count it is the mean of the middle two square-root prices.)                      │
+│ ❱ 488     function medianSqrtPrice() public view returns (uint160 median, uint256 n) {                               │
+│   489         uint256 nowHour = block.timestamp / 1 hours;                                                           │
+│   490         uint256[] memory v = new uint256[](OBSERVATIONS);                                                      │
+│   491         for (uint256 i; i < OBSERVATIONS; ++i) {                                                               │
+╰─ src/TroyaFeeRouter.sol ─────────────────────────────────────────────────────────────────────────────────────────────╯

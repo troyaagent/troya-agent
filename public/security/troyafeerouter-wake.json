@@ -1,0 +1,206 @@
+[
+  {
+    "detector_name": "reentrancy",
+    "impact": "high",
+    "confidence": "low",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/reentrancy",
+    "detection": {
+      "message": "Possible reentrancy in `TroyaFeeRouter._pay(address,uint256)`",
+      "location": {
+        "path": "contracts/src/TroyaFeeRouter.sol",
+        "relative_path": "src/TroyaFeeRouter.sol",
+        "contract": "TroyaFeeRouter",
+        "source_start_line": 584,
+        "source_unit_name": "src/TroyaFeeRouter.sol",
+        "start_offset": 28631,
+        "end_offset": 28638,
+        "start_line": 587,
+        "start_col": 22,
+        "end_line": 587,
+        "end_col": 29,
+        "source": "    /// @dev Pays `amount` ETH to `to`; if `to` refuses it, keeps it for `to` (see withdrawOwed) so the split goes on.\n    function _pay(address to, uint256 amount) private {\n        if (amount == 0) return;\n        (bool ok,) = to.call{value: amount}(\"\");\n        if (!ok) {\n            owed[to] += amount;\n            totalOwed += amount;"
+      },
+      "subdetections": [
+        {
+          "message": "Exploitable from `TroyaFeeRouter.distribute()`",
+          "location": {
+            "path": "contracts/src/TroyaFeeRouter.sol",
+            "relative_path": "src/TroyaFeeRouter.sol",
+            "contract": "TroyaFeeRouter",
+            "source_start_line": 313,
+            "source_unit_name": "src/TroyaFeeRouter.sol",
+            "start_offset": 15392,
+            "end_offset": 15418,
+            "start_line": 316,
+            "start_col": 9,
+            "end_line": 316,
+            "end_col": 35,
+            "source": "        emit Distributed(number, s.tier, s.mcWei, amount, s.toStakers, s.toGas, s.toBurn, s.toTeam, s.totalStaked, s.stakeTarget);\n\n        if (s.toStakers != 0) stake.notifyReward{value: s.toStakers}();\n        _pay(c.gasWallet, s.toGas);\n        _pay(c.team, s.toTeam);\n        _buyAndBurn(c);\n    }"
+          }
+        },
+        {
+          "message": "Exploitable from `TroyaFeeRouter.distribute()`",
+          "location": {
+            "path": "contracts/src/TroyaFeeRouter.sol",
+            "relative_path": "src/TroyaFeeRouter.sol",
+            "contract": "TroyaFeeRouter",
+            "source_start_line": 314,
+            "source_unit_name": "src/TroyaFeeRouter.sol",
+            "start_offset": 15428,
+            "end_offset": 15450,
+            "start_line": 317,
+            "start_col": 9,
+            "end_line": 317,
+            "end_col": 31,
+            "source": "\n        if (s.toStakers != 0) stake.notifyReward{value: s.toStakers}();\n        _pay(c.gasWallet, s.toGas);\n        _pay(c.team, s.toTeam);\n        _buyAndBurn(c);\n    }"
+          }
+        }
+      ]
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "unchecked-return-value",
+    "impact": "warning",
+    "confidence": "high",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/unchecked-return-value",
+    "detection": {
+      "message": "Unchecked return value",
+      "location": {
+        "path": "contracts/src/TroyaFeeRouter.sol",
+        "relative_path": "src/TroyaFeeRouter.sol",
+        "contract": "TroyaFeeRouter",
+        "source_start_line": 296,
+        "source_unit_name": "src/TroyaFeeRouter.sol",
+        "start_offset": 14682,
+        "end_offset": 14692,
+        "start_line": 299,
+        "start_col": 9,
+        "end_line": 299,
+        "end_col": 19,
+        "source": "        if (lastDistribution != 0 && block.timestamp / period <= uint256(lastDistribution) / period) {\n            revert TooSoon((uint256(lastDistribution) / period + 1) * period);\n        }\n        _observe();\n        if (escrow.balanceOf(address(this)) != 0) escrow.claim();\n        uint256 amount = _free();\n        if (amount == 0) revert NothingToDistribute();"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "unchecked-return-value",
+    "impact": "warning",
+    "confidence": "high",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/unchecked-return-value",
+    "detection": {
+      "message": "Unchecked return value",
+      "location": {
+        "path": "contracts/src/TroyaFeeRouter.sol",
+        "relative_path": "src/TroyaFeeRouter.sol",
+        "contract": "TroyaFeeRouter",
+        "source_start_line": 297,
+        "source_unit_name": "src/TroyaFeeRouter.sol",
+        "start_offset": 14744,
+        "end_offset": 14758,
+        "start_line": 300,
+        "start_col": 51,
+        "end_line": 300,
+        "end_col": 65,
+        "source": "            revert TooSoon((uint256(lastDistribution) / period + 1) * period);\n        }\n        _observe();\n        if (escrow.balanceOf(address(this)) != 0) escrow.claim();\n        uint256 amount = _free();\n        if (amount == 0) revert NothingToDistribute();\n        s = _split(amount, c);"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "unchecked-return-value",
+    "impact": "warning",
+    "confidence": "high",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/unchecked-return-value",
+    "detection": {
+      "message": "Unchecked return value",
+      "location": {
+        "path": "contracts/src/TroyaFeeRouter.sol",
+        "relative_path": "src/TroyaFeeRouter.sol",
+        "contract": "TroyaFeeRouter",
+        "source_start_line": 315,
+        "source_unit_name": "src/TroyaFeeRouter.sol",
+        "start_offset": 15460,
+        "end_offset": 15474,
+        "start_line": 318,
+        "start_col": 9,
+        "end_line": 318,
+        "end_col": 23,
+        "source": "        if (s.toStakers != 0) stake.notifyReward{value: s.toStakers}();\n        _pay(c.gasWallet, s.toGas);\n        _pay(c.team, s.toTeam);\n        _buyAndBurn(c);\n    }\n\n    /// @notice Spends the burn reserve on $TROYA in its own pool and burns what it bought, if the price is within"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "unchecked-return-value",
+    "impact": "warning",
+    "confidence": "high",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/unchecked-return-value",
+    "detection": {
+      "message": "Unchecked return value",
+      "location": {
+        "path": "contracts/src/TroyaFeeRouter.sol",
+        "relative_path": "src/TroyaFeeRouter.sol",
+        "contract": "TroyaFeeRouter",
+        "source_start_line": 323,
+        "source_unit_name": "src/TroyaFeeRouter.sol",
+        "start_offset": 15938,
+        "end_offset": 15948,
+        "start_line": 326,
+        "start_col": 9,
+        "end_line": 326,
+        "end_col": 19,
+        "source": "    /// @return spent ETH spent. @return burned $TROYA burned.\n    function buyAndBurn() external nonReentrant returns (uint256 spent, uint256 burned) {\n        if (_isUnlocked()) revert PoolManagerUnlocked();\n        _observe();\n        return _buyAndBurn(_config);\n    }"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "unchecked-return-value",
+    "impact": "warning",
+    "confidence": "high",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/unchecked-return-value",
+    "detection": {
+      "message": "Unchecked return value",
+      "location": {
+        "path": "contracts/src/TroyaFeeRouter.sol",
+        "relative_path": "src/TroyaFeeRouter.sol",
+        "contract": "TroyaFeeRouter",
+        "source_start_line": 367,
+        "source_unit_name": "src/TroyaFeeRouter.sol",
+        "start_offset": 18229,
+        "end_offset": 18263,
+        "start_line": 370,
+        "start_col": 25,
+        "end_line": 370,
+        "end_col": 59,
+        "source": "        int128 a1 = int128(delta);\n        uint256 spent = a0 < 0 ? uint256(uint128(-a0)) : 0;\n        uint256 bought = a1 > 0 ? uint256(uint128(a1)) : 0;\n        if (spent != 0) poolManager.settle{value: spent}();\n        if (bought != 0) poolManager.take(address(troya), address(this), bought);\n        return abi.encode(spent, bought);\n    }"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "missing-return",
+    "impact": "warning",
+    "confidence": "medium",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/missing-return",
+    "detection": {
+      "message": "Not all execution paths have assigned return values",
+      "location": {
+        "path": "contracts/src/TroyaFeeRouter.sol",
+        "relative_path": "src/TroyaFeeRouter.sol",
+        "contract": "TroyaFeeRouter",
+        "source_start_line": 485,
+        "source_unit_name": "src/TroyaFeeRouter.sol",
+        "start_offset": 23839,
+        "end_offset": 24615,
+        "start_line": 488,
+        "start_col": 5,
+        "end_line": 506,
+        "end_col": 6,
+        "source": "\n    /// @notice The median sqrtPriceX96 of the hourly reads of the last 24 hours and how many there are; 0 with fewer\n    /// than 12. (For an even count it is the mean of the middle two square-root prices.)\n    function medianSqrtPrice() public view returns (uint160 median, uint256 n) {\n        uint256 nowHour = block.timestamp / 1 hours;\n        uint256[] memory v = new uint256[](OBSERVATIONS);\n        for (uint256 i; i < OBSERVATIONS; ++i) {"
+      }
+    },
+    "suppressed": false
+  }
+]

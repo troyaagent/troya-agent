@@ -1,0 +1,670 @@
+{
+ "name": "TroyaFeeRouter automated security scan",
+ "label": "Automated scan; independent audit not done yet",
+ "date": "2026-11-24",
+ "scannedAt": {
+  "slither pass 1": "2026-11-24T08:32:32Z",
+  "wake": "2026-11-24T08:35:50Z",
+  "blockscout source fetched": "2026-11-24T08:31Z"
+ },
+ "contract": {
+  "name": "TroyaFeeRouter",
+  "address": "0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B",
+  "chainId": 4663,
+  "network": "Robinhood Chain",
+  "source": "contracts/src/TroyaFeeRouter.sol",
+  "commit": "2c9b906628f88bb0189c4c791bffaa3846bf8e50",
+  "commitNote": "This commit is not on the public GitHub repo yet; until it is, the public copy of the source is the verified one on Blockscout.",
+  "sourceUrl": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract",
+  "sourceSha256": "812e5db29243f76fad9f9cb61e45d6a02d4b04b12566d80de24adeb2291c9bda",
+  "compiler": "solc 0.8.24+commit.e11b9ed9, optimizer on, 500 runs, evm shanghai",
+  "deployTx": "0x9431ae1486efb2020851f4978fb42981813a63398d8e7c1b66ea3b2705abe741",
+  "matchesDeployed": "Blockscout reports the contract fully verified (is_fully_verified true). Its verified source was fetched from the Blockscout PRO API and all 16 files (TroyaFeeRouter.sol and 15 OpenZeppelin 5.1.0 files) are byte-identical to the files scanned. The scanned source, compiled locally with the same settings, gives runtime bytecode identical to eth_getCode at the address (20,106 bytes, CBOR metadata included, the 39 constructor-set immutable slots masked).",
+  "matchEvidence": "/security/troyafeerouter-source-match.txt",
+  "blockscout": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+ },
+ "scope": "Findings limited to src/TroyaFeeRouter.sol. The scan ran in a copy of contracts/ holding only that file, OpenZeppelin 5.1.0 (lib/) and foundry.toml, so no test, mock or other Troya contract was compiled or counted. OpenZeppelin is outside the findings, except the one pragma result that lists its version ranges.",
+ "tools": [
+  {
+   "tool": "Slither",
+   "by": "Trail of Bits",
+   "version": "0.11.6",
+   "url": "https://github.com/crytic/slither",
+   "detectors": 102,
+   "install": "pip install slither-analyzer==0.11.6 solc-select==1.2.0 (Python 3.12 venv), solc-select install 0.8.24",
+   "runs": [
+    {
+     "pass": "pass 1",
+     "what": "the deployed source, unchanged",
+     "command": "slither . --foundry-compile-all --include-paths \"src/TroyaFeeRouter.sol\" --json troyafeerouter-slither.json",
+     "startedAt": "2026-11-24T08:32:32Z",
+     "counts": {
+      "high": 4,
+      "medium": 9,
+      "low": 10,
+      "informational": 4,
+      "optimization": 0
+     },
+     "raw": {
+      "text": "/security/troyafeerouter-slither.txt",
+      "json": "/security/troyafeerouter-slither.json"
+     },
+     "note": "Slither built its IR for every function without errors (the TroyaStake scan needed a second pass for that; this one did not), so one pass covers everything."
+    }
+   ]
+  },
+  {
+   "tool": "Wake",
+   "by": "Ackee Blockchain",
+   "version": "4.22.2",
+   "url": "https://github.com/ack3-ai/wake",
+   "detectors": 26,
+   "install": "pip install eth-wake==4.22.2 (separate Python 3.12 venv); Wake downloads solc 0.8.24 itself",
+   "runs": [
+    {
+     "pass": "all detectors",
+     "what": "the deployed source, unchanged; every impact and confidence level",
+     "command": "wake detect --export json all --min-impact info --min-confidence low",
+     "startedAt": "2026-11-24T08:35:50Z",
+     "counts": {
+      "high": 1,
+      "medium": 0,
+      "low": 0,
+      "warning": 6,
+      "info": 0
+     },
+     "raw": {
+      "text": "/security/troyafeerouter-wake.txt",
+      "json": "/security/troyafeerouter-wake.json",
+      "config": "/security/troyafeerouter-wake.toml"
+     },
+     "note": "Wake reports impact and confidence separately: the one high-impact result is marked low confidence, the six warnings are high (5) and medium (1) confidence."
+    }
+   ]
+  },
+  {
+   "tool": "Aderyn",
+   "by": "Cyfrin",
+   "version": null,
+   "status": "not run",
+   "url": "https://github.com/Cyfrin/aderyn",
+   "reason": "Cyfrin has retired Aderyn and withdrawn its downloads, so it can no longer be installed (checked for the TroyaStake scan on 2026-11-21). Wake was run in its place."
+  }
+ ],
+ "counts": {
+  "beforeTriage": {
+   "total": 34,
+   "bySeverity": {
+    "high": 5,
+    "medium": 9,
+    "low": 10,
+    "warning": 6,
+    "informational": 4,
+    "optimization": 0
+   },
+   "byTool": {
+    "Slither": 27,
+    "Wake": 7
+   }
+  },
+  "afterTriage": {
+   "real": 0,
+   "informational": 8,
+   "falsePositive": 26
+  }
+ },
+ "findings": [
+  {
+   "id": "S1",
+   "detector": "weak-prng",
+   "toolSeverity": "High",
+   "confidence": "Medium",
+   "function": "_observe()",
+   "line": 578,
+   "code": "_observations[hour % OBSERVATIONS] = Observation(p,uint64(hour))",
+   "verdict": "false-positive",
+   "reason": "Nothing random is drawn here: hour % 24 picks which of the 24 slots of the hourly price ring buffer this hour's read goes into. Slither flags any modulo of a value derived from block.timestamp.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S2",
+   "detector": "reentrancy-eth",
+   "toolSeverity": "High",
+   "confidence": "Medium",
+   "function": "distribute()",
+   "line": 317,
+   "code": "_pay(c.team,s.toTeam) -> owed[to] += amount; totalOwed += amount",
+   "verdict": "false-positive",
+   "reason": "Every split total, burnReserve and lastDistribution are written before any ETH leaves; owed/totalOwed are written after the call only when the payee refused it, and a refused call has no effects of its own. distribute(), buyAndBurn(), poke(), withdrawOwed(), rescueToken(), executeConfig() and executeRecipientMove() share one nonReentrant lock, so a payee that calls back cannot enter any of them. The unguarded functions it could reach are owner-only (propose/cancel) or PoolManager-only (unlockCallback).",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S3",
+   "detector": "reentrancy-eth",
+   "toolSeverity": "High",
+   "confidence": "Medium",
+   "function": "distribute()",
+   "line": 316,
+   "code": "_pay(c.gasWallet,s.toGas) -> totalOwed += amount",
+   "verdict": "false-positive",
+   "reason": "Same pattern as S2 for the gas wallet's share: the only state written after the call is the record of a refused payment, under the shared nonReentrant lock.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S4",
+   "detector": "reentrancy-eth",
+   "toolSeverity": "High",
+   "confidence": "Medium",
+   "function": "distribute() -> _buyAndBurn()",
+   "line": 566,
+   "code": "burnReserve = ethIn - spent",
+   "verdict": "false-positive",
+   "reason": "burnReserve is updated after PoolManager.unlock() returns, but during the unlock the only code that runs is the PoolManager, its unlockCallback into this contract (refused from anyone but the PoolManager) and the Pons hook; distribute() and buyAndBurn() are locked by nonReentrant and also refuse to run while the PoolManager is unlocked. spent can never exceed ethIn (exact-input swap, and the Pons hook only takes its cut from the $TROYA side), so the subtraction cannot underflow.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S5",
+   "detector": "incorrect-equality",
+   "toolSeverity": "Medium",
+   "confidence": "High",
+   "function": "distribute()",
+   "line": 302,
+   "code": "amount == 0",
+   "verdict": "false-positive",
+   "reason": "amount is the ETH free to split (balance minus burnReserve minus totalOwed), and the check only refuses an empty distribution. Sending ETH to the contract cannot steal or block anything: it is split like a fee, and fees credited later in the day wait in the escrow for the next run.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S6",
+   "detector": "incorrect-equality",
+   "toolSeverity": "Medium",
+   "confidence": "High",
+   "function": "_pay()",
+   "line": 586,
+   "code": "amount == 0",
+   "verdict": "false-positive",
+   "reason": "Skips a zero payment. Not a balance comparison anyone can game.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S7",
+   "detector": "incorrect-equality",
+   "toolSeverity": "Medium",
+   "confidence": "High",
+   "function": "_buyAndBurn()",
+   "line": 549,
+   "code": "ethIn == 0 || ethIn < c.minBurnWei",
+   "verdict": "false-positive",
+   "reason": "Skips the buy-back while the burn reserve is empty or below the minimum. The reserve is this contract's own accounting, not its raw balance, so sent ETH does not change it.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S8",
+   "detector": "incorrect-equality",
+   "toolSeverity": "Medium",
+   "confidence": "High",
+   "function": "nextDistributionAt()",
+   "line": 469,
+   "code": "lastDistribution == 0",
+   "verdict": "false-positive",
+   "reason": "A read-only view: lastDistribution is 0 only before the first distribution (it is set from block.timestamp afterwards).",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S9",
+   "detector": "incorrect-equality",
+   "toolSeverity": "Medium",
+   "confidence": "High",
+   "function": "_observe()",
+   "line": 575,
+   "code": "hour == lastObservedHour",
+   "verdict": "false-positive",
+   "reason": "The once-per-hour guard on an hour number (block.timestamp / 1 hours), not a balance.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S10",
+   "detector": "reentrancy-no-eth",
+   "toolSeverity": "Medium",
+   "confidence": "Medium",
+   "function": "distribute()",
+   "line": 305,
+   "code": "escrow.claim() then lastDistribution = uint64(block.timestamp)",
+   "verdict": "false-positive",
+   "reason": "escrow is the immutable Pons fee escrow; claim() pays this contract's receive(), which does nothing. Even a re-entering escrow would hit the nonReentrant lock, and the once-per-period check has already passed for this call only.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S11",
+   "detector": "reentrancy-no-eth",
+   "toolSeverity": "Medium",
+   "confidence": "Medium",
+   "function": "_buyAndBurn()",
+   "line": 566,
+   "code": "poolManager.unlock(...) then burnReserve = ethIn - spent",
+   "verdict": "false-positive",
+   "reason": "Same as S4: guarded by nonReentrant and by the refusal to run while the PoolManager is unlocked.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S12",
+   "detector": "unused-return",
+   "toolSeverity": "Medium",
+   "confidence": "Medium",
+   "function": "unlockCallback()",
+   "line": 370,
+   "code": "poolManager.settle{value: spent}()",
+   "verdict": "false-positive",
+   "reason": "In Uniswap v4, settle() for native ETH returns msg.value, i.e. exactly spent. Not reading it loses nothing: if the debt were not fully paid, the PoolManager reverts the whole unlock with CurrencyNotSettled, _buyAndBurn catches that revert and the reserve stays untouched for the next try (BurnSkipped). The same holds if anyone left a token synced earlier in the transaction (settle then reverts with NonzeroNativeValue).",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S13",
+   "detector": "unused-return",
+   "toolSeverity": "Medium",
+   "confidence": "Medium",
+   "function": "distribute()",
+   "line": 300,
+   "code": "escrow.claim()",
+   "verdict": "false-positive",
+   "reason": "The split uses this contract's ETH balance after the claim (minus burnReserve and totalOwed), not the number claim() returns, so whatever the escrow actually paid is what is split.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S14",
+   "detector": "reentrancy-benign",
+   "toolSeverity": "Low",
+   "confidence": "Medium",
+   "function": "_buyAndBurn()",
+   "line": 567,
+   "code": "totalBurnEthSpent += spent; totalTroyaBurned += burned",
+   "verdict": "false-positive",
+   "reason": "Lifetime counters written after the guarded unlock (see S4). Read-only statistics.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S15",
+   "detector": "reentrancy-benign",
+   "toolSeverity": "Low",
+   "confidence": "Medium",
+   "function": "_pay()",
+   "line": 589,
+   "code": "owed[to] += amount; totalOwed += amount",
+   "verdict": "false-positive",
+   "reason": "Written only when the payee refused the ETH, so the payee's own call had no effect; see S2.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S16",
+   "detector": "reentrancy-benign",
+   "toolSeverity": "Low",
+   "confidence": "Medium",
+   "function": "distribute()",
+   "line": 305,
+   "code": "escrow.claim() then the split totals",
+   "verdict": "false-positive",
+   "reason": "Same call as S10; the counters are written before any ETH leaves the contract.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S17",
+   "detector": "timestamp",
+   "toolSeverity": "Low",
+   "confidence": "Medium",
+   "function": "distribute()",
+   "line": 296,
+   "code": "block.timestamp / period <= uint256(lastDistribution) / period",
+   "verdict": "informational",
+   "reason": "The once-per-period rule (default: once per UTC day) is meant to use the block time. Robinhood Chain is an Arbitrum Orbit chain whose sequencer sets block time within Arbitrum's bounds (at most about an hour ahead); that can only shift when a run is allowed, not who is paid.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S18",
+   "detector": "timestamp",
+   "toolSeverity": "Low",
+   "confidence": "Medium",
+   "function": "_matured()",
+   "line": 597,
+   "code": "block.timestamp < eta; block.timestamp > eta + EXECUTION_WINDOW",
+   "verdict": "informational",
+   "reason": "This is the 7-day timelock and its 7-day execution window, so the block time is intended. A sequencer clock off by up to about an hour against 604,800 seconds is noise.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S19",
+   "detector": "timestamp",
+   "toolSeverity": "Low",
+   "confidence": "Medium",
+   "function": "nextDistributionAt()",
+   "line": 469,
+   "code": "lastDistribution == 0",
+   "verdict": "false-positive",
+   "reason": "Same check as S8: asks whether a distribution ever ran, not whether time passed. Read-only.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S20",
+   "detector": "timestamp",
+   "toolSeverity": "Low",
+   "confidence": "Medium",
+   "function": "cancelConfig()",
+   "line": 403,
+   "code": "pendingConfigEta == 0",
+   "verdict": "false-positive",
+   "reason": "Asks whether a proposal is pending (eta is 0 when none is), not whether time passed. Owner-only.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S21",
+   "detector": "timestamp",
+   "toolSeverity": "Low",
+   "confidence": "Medium",
+   "function": "medianSqrtPrice()",
+   "line": 493,
+   "code": "o.hour != 0 && uint256(o.hour) + OBSERVATIONS > nowHour",
+   "verdict": "informational",
+   "reason": "Keeps only the hourly reads of the last 24 hours, so the block time is intended. See S17 for how far the chain's clock can drift.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S22",
+   "detector": "timestamp",
+   "toolSeverity": "Low",
+   "confidence": "Medium",
+   "function": "proposeConfig()",
+   "line": 383,
+   "code": "pendingConfigEta != 0",
+   "verdict": "false-positive",
+   "reason": "Asks whether a proposal is pending, to emit ConfigCancelled for the one being replaced. Owner-only.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S23",
+   "detector": "timestamp",
+   "toolSeverity": "Low",
+   "confidence": "Medium",
+   "function": "_observe()",
+   "line": 575,
+   "code": "hour == lastObservedHour",
+   "verdict": "informational",
+   "reason": "Same line as S9: one price read per clock hour is the design.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S24",
+   "detector": "pragma",
+   "toolSeverity": "Informational",
+   "confidence": "High",
+   "function": "whole project",
+   "line": 2,
+   "code": "pragma solidity 0.8.24;",
+   "verdict": "informational",
+   "reason": "OpenZeppelin 5.1.0 uses ^0.8.20, the router pins 0.8.24. The deployed contract was compiled with exactly solc 0.8.24 (Blockscout full verification, and the runtime bytecode matches a local build), so the ranges change nothing on chain.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S25",
+   "detector": "cyclomatic-complexity",
+   "toolSeverity": "Informational",
+   "confidence": "High",
+   "function": "_check()",
+   "line": 601,
+   "code": "cyclomatic complexity 13",
+   "verdict": "informational",
+   "reason": "_check is a flat list of bound checks on a proposed rule, each one a revert; it has no loops over user data and no state changes. test_ConfigBounds in test/TroyaFeeRouter.t.sol checks that 12 out-of-bounds proposals are refused (not every single bound has its own case); all 39 router unit tests pass on this exact source.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S26",
+   "detector": "low-level-calls",
+   "toolSeverity": "Informational",
+   "confidence": "High",
+   "function": "_pay()",
+   "line": 587,
+   "code": "to.call{value: amount}(\"\")",
+   "verdict": "informational",
+   "reason": "call is the recommended way to send ETH. It never reverts the split: a payee that refuses is recorded in owed and can withdraw later, so a refusing payee cannot block the stakers. Payees are only the team and gas wallets of the rule (changed only through the 7-day timelock); a payee contract that burned all forwarded gas could make distribute() run out of gas until the rule is changed, but the ETH would stay in the contract, not be lost. Both payees are plain wallets today.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "S27",
+   "detector": "low-level-calls",
+   "toolSeverity": "Informational",
+   "confidence": "High",
+   "function": "withdrawOwed()",
+   "line": 346,
+   "code": "to.call{value: amount}(\"\")",
+   "verdict": "informational",
+   "reason": "Pays only what is recorded for msg.sender, after owed and totalOwed are cleared, under nonReentrant, and the whole call reverts if the payment fails, so the record is restored and nothing can be paid twice.",
+   "tool": "Slither",
+   "passes": [
+    "pass 1"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "W1",
+   "detector": "reentrancy",
+   "toolSeverity": "High",
+   "confidence": "Low",
+   "function": "_pay()",
+   "line": 587,
+   "code": "to.call{value: amount}(\"\") from distribute() lines 316 and 317",
+   "verdict": "false-positive",
+   "reason": "Same as Slither S2/S3/S15. Wake marks its own confidence low; the call is under the shared nonReentrant lock and the only state written after it records a refused payment.",
+   "tool": "Wake",
+   "passes": [
+    "all detectors"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "W2",
+   "detector": "unchecked-return-value",
+   "toolSeverity": "Warning",
+   "confidence": "High",
+   "function": "distribute()",
+   "line": 299,
+   "code": "_observe();",
+   "verdict": "false-positive",
+   "reason": "An internal call whose bool only says whether this hour already had a read; distribute() records one if it can and needs nothing else from it.",
+   "tool": "Wake",
+   "passes": [
+    "all detectors"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "W3",
+   "detector": "unchecked-return-value",
+   "toolSeverity": "Warning",
+   "confidence": "High",
+   "function": "distribute()",
+   "line": 300,
+   "code": "escrow.claim();",
+   "verdict": "false-positive",
+   "reason": "Same as Slither S13: the split reads the ETH balance after the claim.",
+   "tool": "Wake",
+   "passes": [
+    "all detectors"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "W4",
+   "detector": "unchecked-return-value",
+   "toolSeverity": "Warning",
+   "confidence": "High",
+   "function": "distribute()",
+   "line": 318,
+   "code": "_buyAndBurn(c);",
+   "verdict": "false-positive",
+   "reason": "An internal call; it returns (spent, burned) for callers of buyAndBurn(), but it already updates burnReserve and the totals and emits BoughtAndBurned or BurnSkipped itself.",
+   "tool": "Wake",
+   "passes": [
+    "all detectors"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "W5",
+   "detector": "unchecked-return-value",
+   "toolSeverity": "Warning",
+   "confidence": "High",
+   "function": "buyAndBurn()",
+   "line": 326,
+   "code": "_observe();",
+   "verdict": "false-positive",
+   "reason": "Same as W2.",
+   "tool": "Wake",
+   "passes": [
+    "all detectors"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "W6",
+   "detector": "unchecked-return-value",
+   "toolSeverity": "Warning",
+   "confidence": "High",
+   "function": "unlockCallback()",
+   "line": 370,
+   "code": "poolManager.settle{value: spent}();",
+   "verdict": "false-positive",
+   "reason": "Same call as Slither S12. Uniswap v4 settle() returns the amount paid, which for native ETH is msg.value; an unpaid debt reverts the whole unlock (CurrencyNotSettled), which _buyAndBurn catches, keeping the reserve. Nothing can be lost by not reading it.",
+   "tool": "Wake",
+   "passes": [
+    "all detectors"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  },
+  {
+   "id": "W7",
+   "detector": "missing-return",
+   "toolSeverity": "Warning",
+   "confidence": "Medium",
+   "function": "medianSqrtPrice()",
+   "line": 488,
+   "code": "returns (uint160 median, uint256 n)",
+   "verdict": "false-positive",
+   "reason": "Both paths return: with fewer than 12 reads it returns (0, n) explicitly, otherwise median is assigned on the last line and n holds the count (it is incremented inside v[n++], which Wake does not see as an assignment). Solidity starts named return values at 0, and 0 is the documented 'not enough reads' answer, which marketCap() turns into the lowest tier.",
+   "tool": "Wake",
+   "passes": [
+    "all detectors"
+   ],
+   "source": "https://robinhoodchain.blockscout.com/address/0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B?tab=contract"
+  }
+ ],
+ "notFound": "Neither tool reported unchecked token transfers, arbitrary ETH or token sends, tx.origin, uninitialised storage, shadowing, selfdestruct, delegatecall, unsafe ERC-20 calls or locked ether.",
+ "checkedByHand": [
+  "Uniswap v4: the pool key, pool id, the PoolManager storage slot read for the price (POOLS_SLOT 6) and the unlocked flag slot match v4-core; the Pons hook address flags allow only beforeInitialize, afterSwap and afterSwap-returns-delta, so the hook's cut is taken from the $TROYA side and the ETH spent by a buy-back can never exceed the reserve offered.",
+  "Every wei is accounted for: after each distribution the free balance is exactly 0 (stakers + gas + burn + team = amount, refused payments move to owed), so burnReserve and totalOwed are always covered by the balance.",
+  "Trust assumptions, not scanner results: the owner (today the creator wallet, a single key, not yet a Safe or hardware wallet) can propose a new rule or a recipient move, each visible on chain for 7 days before anyone can execute it, within hard limits in the code (stakers at least 0.1% of volume in every tier, gas at most 0.5%). distribute() depends on the Pons escrow's claim() and on TroyaStake.notifyReward(); if either reverted for good, the ETH would wait in the router (it has no ETH rescue by design).",
+  "Live state read on 2026-11-24 around 08:31 UTC: owner() = creator wallet 0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4, pendingOwner() = 0, TIMELOCK() = 604,800 s (7 days), no pending rule or recipient move, 0 distributions, 0 hourly reads. The $TROYA creator fee recipient at Pons (factory getLaunchedToken) is still the creator wallet, so no fees flow through the router yet."
+ ],
+ "howToRerun": "In a copy of contracts/ with only src/TroyaFeeRouter.sol, lib/ and foundry.toml: the commands above, with solc 0.8.24. Slither: pip install slither-analyzer solc-select. Wake: pip install eth-wake, then use troyafeerouter-wake.toml as wake.toml."
+}

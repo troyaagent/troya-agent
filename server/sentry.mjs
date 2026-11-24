@@ -382,14 +382,23 @@ async function sendPhoto(chat, logo, caption, markup) {
   if (logo.fileId) fileIds.delete(logo.cid);
   return null;
 }
+// lynx in the group, 24 Nov 2026: "just move the Sentry here": every channel post is also forwarded into the community
+// group's Sentry topic (SENTRY_GROUP + SENTRY_GROUP_THREAD; unset = off), so members see each call without leaving the group
+const GROUP = process.env.SENTRY_GROUP || "@troyaagent", GROUP_THREAD = Number(process.env.SENTRY_GROUP_THREAD || 0) || null;
+async function mirror(j) {
+  if (!GROUP_THREAD || !j?.ok || !j.result?.message_id) return;
+  await tg("forwardMessage", { chat_id: GROUP, message_thread_id: GROUP_THREAD, from_chat_id: CHANNEL, message_id: j.result.message_id, disable_notification: true })
+    .then((r) => { if (!r.ok) console.warn("[sentry] group mirror:", r.description); }).catch(() => {});
+}
 async function send(chat, text, markup, logo = null) {
   if (MODE === "dry") { await store.append("sentry-preview.jsonl", { t: Date.now(), chat, text, markup, logo: logo?.cid || null }); return { ok: true, dry: true }; }
   const wait = lastPost + 4000 - Date.now();
   if (wait > 0) await new Promise((x) => setTimeout(x, wait));
   lastPost = Date.now();
   const once = async () => (logo && text.length <= 1024 && (await sendPhoto(chat, logo, text, markup))) || tg("sendMessage", { chat_id: chat, text, parse_mode: "HTML", reply_markup: markup, link_preview_options: { is_disabled: true } });
-  const j = await once();
-  if (!j.ok && j.parameters?.retry_after) { await new Promise((x) => setTimeout(x, (j.parameters.retry_after + 1) * 1000)); return once(); }
+  let j = await once();
+  if (!j.ok && j.parameters?.retry_after) { await new Promise((x) => setTimeout(x, (j.parameters.retry_after + 1) * 1000)); j = await once(); }
+  if (chat === CHANNEL) mirror(j);
   return j;
 }
 

@@ -5,6 +5,7 @@ import { h, clear, icon, useCss, short, ago, tokenIcon, toast, chainLogo } from 
 import { api } from "/agent/js/api.js";
 import { coinSuggest, findCoin } from "/agent/js/coinsearch.js";
 import { verdictOf, tallyOf } from "/agent/js/verdict.js";
+import { clusterSection } from "./clusters.js";
 
 // token age on the Gate (community request, 20 Nov 2026): how long ago the coin was created, from its creation block.
 // /api/token-age reads Robinhood Chain only, so a coin checked on Base, Arbitrum or Solana shows no age rather than the
@@ -278,7 +279,8 @@ export function gatePanel({ go, ask, compact = false, start = "", chain: startCh
   // the Assay and Athena read Robinhood Chain history; they are kept while the same coin is checked at another size
   function extrasFor(a, example) {
     const key = `${a.toLowerCase()}|${example ? "ex" : ""}`;
-    if (extras?.key !== key) extras = { key, nodes: [assayBox(a, compact), compact || example ? null : athenaBox(a)] };
+    // the Cluster map (24 Nov): the full Gate page only; the Desk card links to it instead
+    if (extras?.key !== key) extras = { key, nodes: [assayBox(a, compact), compact || example ? null : athenaBox(a), compact || example ? null : clusterSection(a, { inset: true })] };
     return extras.nodes;
   }
 
@@ -335,6 +337,7 @@ export function gatePanel({ go, ask, compact = false, start = "", chain: startCh
         rh && has("fomo") ? h("a", { class: "btn sm dk-fomo", href: `https://fomo.family/tokens/robinhood/${a}`, target: "_blank", rel: "noopener" }, h("img", { src: "/img/logos/fomo.png", alt: "", width: 18, height: 18 }), "Buy on Fomo") : null,
         rh && has("token") ? h("a", { class: "btn sm", href: `#/token/${a}` }, "Token page") : null,
         rh && !example ? h("a", { class: "btn sm", href: `#/heel/${a}`, title: "V9 Heel: its one weak spot in a sentence, with the transactions behind it" }, "Find its weak spot") : null,
+        rh && !example && compact ? h("a", { class: "btn sm", href: `#/clusters/${a}`, title: "Its largest holders as bubbles, and which wallets are linked" }, "Cluster map") : null,
         ask && has("ask") ? h("button", { class: "btn sm", type: "button", onclick: () => ask(`Is this token safe? ${a}${rh ? "" : ` (on ${net.name})`}`) }, icon("spark"), "Ask Troya") : null,
         ask && has("explain") ? h("button", { class: "btn sm", type: "button", onclick: () => ask(`Why did the Troya Gate block ${r.symbol ? "$" + r.symbol : a} (${a}) on ${net.name}? Explain it in plain words.`) }, icon("spark"), "Ask why") : null,
         rh && has("badge") ? h("a", { class: "btn sm", href: `/badge?ca=${a}`, target: "_blank", rel: "noopener" }, icon("shield"), "Get the badge") : null));

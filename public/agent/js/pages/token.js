@@ -3,6 +3,7 @@
 import { h, clear, useCss, icon, tokenIcon, padLogo, tiny, price, usd, compact, pctEl, short, ago, copyText, tabs, seg, emptyState } from "../ui.js";
 import { api, cached } from "../api.js";
 import { padName, ethAmount, ageText } from "../marketlib.js";
+import { clusterSection } from "/agent/desk/clusters.js";
 import { startBoard, watchfirePanel, tradePanel, renderTrades, renderEarly, chartMarks, tagEl, renderCallouts, calloutLayer, tributePanel, panelTitle, snapTime } from "./wartable.js";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
@@ -470,8 +471,10 @@ export async function mount(view, { parts, ask }) {
       [0.001, 0.005, 0.01].map((v) => h("a", { class: "tk-mbar-b", href: `#/swap?out=${address}&amount=${v}` }, `${v}`)),
       h("a", { class: "tk-mbar-s", href: `#/swap?in=${address}&out=ETH` }, "Sell")] : h("span", { class: "fine muted tk-mbar-l" }, "Not routed by Troya"),
     gChip("tk-mbar-g"));
+  // the Cluster map (24 Nov): the largest holders and which are linked; it reads when it scrolls near the screen
+  const clusterCard = stockish ? null : clusterSection(address);
   clear(view, back, head, actions,
-    h("div", { class: "tk-grid" }, h("div", { class: "tk-main" }, chartPanel, h("div", { class: "tk-tabs" }, tabsEl, tabBody)), h("div", { class: "tk-side" }, tradeCard, gateCard, wfCard, trCard, orcCard, stats, info)), mbar);
+    h("div", { class: "tk-grid" }, h("div", { class: "tk-main" }, chartPanel, h("div", { class: "tk-tabs" }, tabsEl, tabBody), clusterCard), h("div", { class: "tk-side" }, tradeCard, gateCard, wfCard, trCard, orcCard, stats, info)), mbar);
   renderTab(curTab);
   if (!stockish) loadCalls();
   // a young curve: the holder list says whether anyone but the curve holds it yet ("None yet" in the stats)
@@ -594,7 +597,7 @@ export async function mount(view, { parts, ask }) {
   const onVis = () => { if (!document.hidden) { refreshPx(); refreshChart(); } };
   document.addEventListener("visibilitychange", onVis);
   return () => {
-    chartStop = true; stopBoard(); clearInterval(callsT); clearInterval(pxT); clearInterval(atT); clearInterval(chT);
+    chartStop = true; stopBoard(); clusterCard?.stop?.(); clearInterval(callsT); clearInterval(pxT); clearInterval(atT); clearInterval(chT);
     document.removeEventListener("visibilitychange", onVis); themeObs.disconnect(); placeCalls?.stop?.(); offClass();
     try { chart?.remove(); } catch {}
   };

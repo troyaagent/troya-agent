@@ -86,6 +86,7 @@ const MODULES = [
   "./feesplit.mjs",    // $TROYA fee split (21 Nov): creator fees split by the hourly market cap (stakers, burn, owner); sent weekly by payouts.mjs (STAKE_REWARDS)
   "./atlas.mjs",       // V9 F49 Swift: one buy box, every venue Troya reaches quoted at once (Troya Atlas), ranked after fees and gas
   "./heel.mjs",        // V9 F47 Heel: paste a coin, dev or agent → its one weak spot in a sentence, with on-chain evidence and a Guard
+  "./clusters.mjs",    // Cluster map (community request, 24 Nov): a coin's 50 largest holders and which are linked (dev side, shared funders, transfers, bundles), each link with its proof
   "./activity.mjs",    // activity feed (22 Nov): real launches, stakers, agents, Gate use, graduations, payouts → the Telegram group + an X digest (ACTIVITY_FEED / ACTIVITY_X, dry by default)
 ];
 

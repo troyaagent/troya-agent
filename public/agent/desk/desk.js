@@ -55,6 +55,7 @@ const SI = {
   spark: "M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8",
   heel: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 1v4M12 19v4M1 12h4M19 12h4",
   swift: "M3 7h9M3 12h13M3 17h9M14 5l6 7-6 7",
+  clusters: "M7 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM9 20a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM9.6 7.6l3.7 1M8 9.8l.6 5.2M14.5 11.4l-4 4.4",   // Cluster map
   phoenix: "M12 21c-3.9 0-6.5-2.7-6.5-6.2 0-3.4 2.6-5.2 3.4-8.8 1.9 1.5 2.9 3.4 3 5.4 1-.9 1.7-2.2 1.9-3.8 2.5 2 4.7 4.8 4.7 7.6 0 3.3-2.8 5.8-6.5 5.8zM12 21c-1.6 0-2.7-1.1-2.7-2.6 0-1.6 1.4-2.6 2.7-4.4 1.3 1.8 2.7 2.8 2.7 4.4 0 1.5-1.1 2.6-2.7 2.6z",   // V9 F57 Phoenix
 };
 export function si(name, cls = "") {
@@ -84,7 +85,7 @@ export const GROUPS = [
 ];
 // not in the sidebar, still found by Search (⌘K): the Inbox has the bell and the Portfolio badge; Verify and The Record sit under Safety
 // About Troya has its own link at the foot of the sidebar, just above the $TROYA chip (community request, 23 Nov 2026)
-const SEARCH_ONLY = [["Portfolio", [["Inbox", "#/portfolio/inbox", "inbox"]]], ["More", [["About Troya", "#/about", "about"], ["Verify", "/verify", "proof"], ["The Record", "/record", "record"]]]];
+const SEARCH_ONLY = [["Discover", [["Cluster map", "#/clusters", "clusters"]]], ["Portfolio", [["Inbox", "#/portfolio/inbox", "inbox"]]], ["More", [["About Troya", "#/about", "about"], ["Verify", "/verify", "proof"], ["The Record", "/record", "record"]]]];
 const COLLAPSED_DEFAULT = { Agent: true, More: true };   // with these two shut the sidebar fits a 900 px screen
 const NAV_KEY = "troya.navGroups";
 const navState = (() => { try { return { ...COLLAPSED_DEFAULT, ...JSON.parse(localStorage.getItem(NAV_KEY) || "{}") }; } catch { return { ...COLLAPSED_DEFAULT }; } })();
@@ -97,12 +98,13 @@ const ROUTES = {
   herald: "herald", treasury: "treasury",                    // V8 F42: /agent/js/pages/herald.js
   stake: "stake",                                            // $TROYA staking (21 Nov): /agent/js/pages/stake.js
   heel: "heel",                                              // V9 F47 Heel: ./heel.js (loads its own heel.css)
+  clusters: "clusters",                                      // Cluster map (24 Nov): ./clusters.js (loads its own clusters.css)
   swift: "swift",                                            // V9 F49 Swift: ./swift.js (loads its own swift.css)
   about: "about",                                            // About Troya (23 Nov): ./about.js, the intro that used to open the Desk
   phoenix: "phoenix",                                        // V9 F57 Phoenix: ./phoenix.js (loads its own phoenix.css)
   u: "portfolio",                                            // profiles (21 Nov): #/u/<username> → a wallet's public page
 };
-const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", swift: "./swift.js", about: "./about.js", phoenix: "./phoenix.js" };
+const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", clusters: "./clusters.js", swift: "./swift.js", about: "./about.js", phoenix: "./phoenix.js" };
 // The sheets each page asks for with useCss at mount. route() requests them together with the module, so the stylesheet
 // is not one more round trip after the code. The boot script in /agent/index.html keeps a copy of this table and of the
 // routes above to start the same downloads before this file has even arrived: change both together.
@@ -584,6 +586,7 @@ function openAsk(prefill = "") {
     if (ca) out.push(["Check this coin", [
       { kind: "page", title: `Run Troya Gate on ${short(ca)}`, hint: "Seven checks: route, impact, depth, fees, simulation, test sell, tax", icon: "gate", target: `#/gate/${ca}` },
       { kind: "page", title: `Find the weak spot of ${short(ca)}`, hint: "Heel: a coin, a dev wallet or an agent, in one sentence with proof", icon: "heel", target: `#/heel/${ca}` },
+      { kind: "page", title: `Cluster map of ${short(ca)}`, hint: "Its largest holders as bubbles, and which wallets are linked, with proof", icon: "clusters", target: `#/clusters/${ca}` },
       { kind: "page", title: `Open the token page`, hint: "Price, chart, pools and trades", icon: "market", target: `#/token/${ca}` },
       { kind: "ask", title: `Ask Troya about ${short(ca)}`, hint: "Is it safe to buy? The agent reads the checks and explains", icon: "spark", target: `Is this token safe? ${ca}` },
       { kind: "page", title: `Swap into it`, hint: "Opens Swap with the coin selected", icon: "swap", target: `#/swap?out=${ca}` },

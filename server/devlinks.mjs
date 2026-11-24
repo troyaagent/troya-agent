@@ -139,7 +139,7 @@ async function firstFunder(w) {
   if (d.funders[w]) return d.funders[w];
   if (!assayF || Date.now() - assayF.at > 10 * 60_000) assayF = { at: Date.now(), v: (await store?.readJson("assay-funders.json", {}).catch(() => null)) || {} };
   const a = assayF.v[w];
-  if (a?.funder) return (d.funders[w] = { funder: lc(a.funder), block: a.block ?? null, how: "direct", src: "assay" });
+  if (a?.funder) return (d.funders[w] = { funder: lc(a.funder), block: a.block ?? null, tx: a.tx || null, how: "direct", src: "assay" });
   const asc = await bs(`/addresses/${w}/transactions?sort=block_number&order=asc`);
   if (!asc) return null;
   const items = (asc.items || []).filter(ok).map((t) => tx(t, "tx"));
@@ -379,11 +379,11 @@ async function facts(token, { deep = true, toBlock = null } = {}) {
   const fset = new Map();
   if (bsOn) for (const d of devWallets.slice(0, 2)) {
     const ff = await firstFunder(d).catch(() => null);
-    if (ff?.funder) fset.set(ff.funder, { funder: ff.funder, why: "its first ETH", block: ff.block, at: ff.at });
-    else if (ff?.how === "contract" && ff.viaFrom && ff.viaFrom !== d) fset.set(ff.viaFrom, { funder: ff.viaFrom, why: `its first ETH, through ${short(ff.via)}`, block: ff.block, at: ff.at, via: ff.via });
+    if (ff?.funder) fset.set(ff.funder, { funder: ff.funder, why: "its first ETH", block: ff.block, at: ff.at, tx: ff.tx || null });
+    else if (ff?.how === "contract" && ff.viaFrom && ff.viaFrom !== d) fset.set(ff.viaFrom, { funder: ff.viaFrom, why: `its first ETH, through ${short(ff.via)}`, block: ff.block, at: ff.at, via: ff.via, tx: ff.tx || null });
     for (const i of F.eth[d]?.in || []) {
       if (i.fromContract || !i.from || devs.includes(i.from) || i.block > launch.block || i.at < F.bornAt - DAY_S * 1000) continue;
-      if (!fset.has(i.from)) fset.set(i.from, { funder: i.from, why: "sent it ETH in the day before the launch", block: i.block, at: i.at });
+      if (!fset.has(i.from)) fset.set(i.from, { funder: i.from, why: "sent it ETH in the day before the launch", block: i.block, at: i.at, tx: i.tx });
     }
   }
   for (const f of [...fset.values()].slice(0, 3)) {
@@ -394,7 +394,7 @@ async function facts(token, { deep = true, toBlock = null } = {}) {
     if (!f.hub) {
       const out = (await bsPages(`/addresses/${f.funder}/transactions?filter=from`, { pages: 3 }).catch(() => [])).filter(ok).map((x) => tx(x, "tx"))
         .filter((x) => x.value > 0n && x.to && !x.toContract && !devs.includes(x.to));
-      f.paid = out.filter((x) => f.txs <= SMALL_TXS || Math.abs(x.at - (f.at || x.at)) <= DAY_S * 1000).map((x) => ({ to: x.to, block: x.block, at: x.at, eth: Number(x.value) / 1e18 }));
+      f.paid = out.filter((x) => f.txs <= SMALL_TXS || Math.abs(x.at - (f.at || x.at)) <= DAY_S * 1000).map((x) => ({ to: x.to, block: x.block, at: x.at, eth: Number(x.value) / 1e18, tx: x.tx }));
     }
     F.funders.push(f);
   }
@@ -437,7 +437,7 @@ async function facts(token, { deep = true, toBlock = null } = {}) {
       const ws = [...new Set(legs.map((l) => l.w))];
       if (ws.length < 3) continue;
       contracts.add(via);
-      F.coTrades.push({ block: g.block, at: b?.at || F.tsOf(g.block), side: g.side, via, wallets: ws, amount: legs.reduce((s, l) => s + l.v, 0n), oneTx: new Set(legs.map((l) => l.tx)).size === 1 });
+      F.coTrades.push({ block: g.block, at: b?.at || F.tsOf(g.block), side: g.side, via, wallets: ws, amount: legs.reduce((s, l) => s + l.v, 0n), oneTx: new Set(legs.map((l) => l.tx)).size === 1, tx: legs[0].tx });
     }
   }
   // how busy each of those contracts and routers is: a public app's crowd is a herd, a private contract's is a cluster
@@ -491,13 +491,15 @@ export function analyze(F, cut = F.end, { now = null, balNow = null } = {}) {
   const touched = (w) => S.has(w) || balOf(w) > 0n;
 
   const L = new Map();   // wallet → { hop, cats: Set, why: [] }
-  const link = (w, hop, cat, why) => {
+  // ev: what proves the link ({ type: "tx" | "address" | "block", ref }), kept next to its reason (the Cluster map shows it)
+  const link = (w, hop, cat, why, ev = null) => {
     if (!w || devs.has(w) || venue.has(w) || burn(w) || contract(w)) return false;
     const e = L.get(w);
-    if (e) { e.cats.add(cat); if (!e.why.includes(why) && e.why.length < 4) e.why.push(why); e.hop = Math.min(e.hop, hop); return false; }
-    L.set(w, { hop, cats: new Set([cat]), why: [why] });
+    if (e) { e.cats.add(cat); if (!e.why.includes(why) && e.why.length < 4) { e.why.push(why); e.ev.push(ev); } e.hop = Math.min(e.hop, hop); return false; }
+    L.set(w, { hop, cats: new Set([cat]), why: [why], ev: [ev] });
     return true;
   };
+  const evTx = (hash) => (hash ? { type: "tx", ref: hash } : null), evAddr = (a) => (a ? { type: "address", ref: getAddress(a) } : null);
   const side = (w) => devs.has(w) || L.has(w);
   // the dev's circle: wallets that moved ETH both ways with the dev (an exchange's hot wallet only pays out), and its own
   // funders when they are small. They need not touch the coin: the wallets they first funded join the dev side
@@ -509,26 +511,26 @@ export function analyze(F, cut = F.end, { now = null, balNow = null } = {}) {
   for (const f of F.funders || []) if ((f.block == null || f.block <= cut) && !f.contract && f.txs != null && f.txs <= HUB_TXS) circle.add(f.funder);
 
   // the launch call: wallets the dev freed from the snipe tax, and where its first buy went
-  for (const w of F.launch.call?.exemptions || []) link(lc(w), 1, CAT.exempt, "freed from the snipe tax by the dev in the launch");
-  if (F.launch.call?.firstBuyRecipient) link(F.launch.call.firstBuyRecipient, 1, CAT.exempt, "got the dev's first buy in the launch");
+  for (const w of F.launch.call?.exemptions || []) link(lc(w), 1, CAT.exempt, "freed from the snipe tax by the dev in the launch", evTx(F.launch.tx));
+  if (F.launch.call?.firstBuyRecipient) link(F.launch.call.firstBuyRecipient, 1, CAT.exempt, "got the dev's first buy in the launch", evTx(F.launch.tx));
   // coins to and from the dev, also through a contract inside the same transaction
-  const fromDev = new Map();
+  const fromDev = new Map(), fromDevTx = new Map();
   for (const x of edges) {
-    if (devs.has(x.from)) fromDev.set(x.to, (fromDev.get(x.to) || 0n) + x.v);
-    if (devs.has(x.to) && !devs.has(x.from)) link(x.from, 1, CAT.toDev, "sent coins to the dev");
-    if (devs.has(x.from) && contract(x.to)) for (const y of byTx.get(x.tx) || []) if (y.from === x.to && !venue.has(y.to) && !burn(y.to)) fromDev.set(y.to, (fromDev.get(y.to) || 0n) + y.v);
+    if (devs.has(x.from)) { fromDev.set(x.to, (fromDev.get(x.to) || 0n) + x.v); if (!fromDevTx.has(x.to)) fromDevTx.set(x.to, x.tx); }
+    if (devs.has(x.to) && !devs.has(x.from)) link(x.from, 1, CAT.toDev, "sent coins to the dev", evTx(x.tx));
+    if (devs.has(x.from) && contract(x.to)) for (const y of byTx.get(x.tx) || []) if (y.from === x.to && !venue.has(y.to) && !burn(y.to)) { fromDev.set(y.to, (fromDev.get(y.to) || 0n) + y.v); if (!fromDevTx.has(y.to)) fromDevTx.set(y.to, y.tx); }
   }
-  for (const [w, v] of fromDev) link(w, 1, CAT.fromDev, `got ${r2(pct(v, supply))}% of the supply from the dev`);
+  for (const [w, v] of fromDev) link(w, 1, CAT.fromDev, `got ${r2(pct(v, supply))}% of the supply from the dev`, evTx(fromDevTx.get(w)));
   // ETH: paid by the dev, or paid the dev
   for (const e of Object.values(F.eth || {})) {
-    for (const o of e.out) if (o.block <= cut && o.value >= 10n ** 15n && touched(o.to)) link(o.to, 1, CAT.ethDev, o.kind === "batch" ? "got ETH from the dev through a batch sender" : `got ${r2(Number(o.value) / 1e18)} ETH from the dev`);
-    for (const i of e.in) if (i.block <= cut && !i.fromContract && touched(i.from)) link(i.from, 1, CAT.ethDev, `sent ${r2(Number(i.value) / 1e18)} ETH to the dev`);
+    for (const o of e.out) if (o.block <= cut && o.value >= 10n ** 15n && touched(o.to)) link(o.to, 1, CAT.ethDev, o.kind === "batch" ? "got ETH from the dev through a batch sender" : `got ${r2(Number(o.value) / 1e18)} ETH from the dev`, evTx(o.tx));
+    for (const i of e.in) if (i.block <= cut && !i.fromContract && touched(i.from)) link(i.from, 1, CAT.ethDev, `sent ${r2(Number(i.value) / 1e18)} ETH to the dev`, evTx(i.tx));
   }
   // the dev's funders and the other wallets they paid
   for (const f of F.funders || []) {
     if (f.block != null && f.block > cut) continue;
-    if (touched(f.funder)) link(f.funder, 1, CAT.funder, `funded the dev (${f.why})`);
-    for (const p of f.paid || []) if (p.block <= cut && touched(p.to)) link(p.to, 2, CAT.sameFunder, `paid by ${short(f.funder)}, which also funded the dev`);
+    if (touched(f.funder)) link(f.funder, 1, CAT.funder, `funded the dev (${f.why})`, evTx(f.tx) || evAddr(f.funder));
+    for (const p of f.paid || []) if (p.block <= cut && touched(p.to)) link(p.to, 2, CAT.sameFunder, `paid by ${short(f.funder)}, which also funded the dev`, evTx(p.tx) || evAddr(f.funder));
   }
 
   // clusters: gathered into one wallet, first funded by one small wallet, or trading in one block through a private contract
@@ -540,7 +542,7 @@ export function analyze(F, cut = F.end, { now = null, balNow = null } = {}) {
     // three or more different wallets sending it coins within about 5 seconds (50 blocks)
     let best = 0;
     for (let i = 0, j = 0; i < xs.length; i++) { while (xs[i].block - xs[j].block > 50) j++; best = Math.max(best, new Set(xs.slice(j, i + 1).map((x) => x.from)).size); }
-    if (best >= 3) { const ss = [...new Set(xs.map((x) => x.from))]; clusters.push({ kind: "gathered", why: `${ss.length} wallets sent their coins to ${short(z)}`, wallets: [z, ...ss], at: xs[0].ts }); }
+    if (best >= 3) { const ss = [...new Set(xs.map((x) => x.from))]; clusters.push({ kind: "gathered", why: `${ss.length} wallets sent their coins to ${short(z)}`, wallets: [z, ...ss], at: xs[0].ts, ev: evTx(xs[0].tx) }); }
   }
   const groups = new Map();
   for (const [w, r] of Object.entries(F.pfund || {})) {
@@ -548,28 +550,28 @@ export function analyze(F, cut = F.end, { now = null, balNow = null } = {}) {
     const k = r.funder || (r.viaFrom && r.viaFrom !== w ? r.viaFrom : null);
     if (!k) continue;
     if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push({ w, at: r.at || 0 });
+    groups.get(k).push({ w, at: r.at || 0, tx: r.tx || null });
   }
   for (const [k, ms] of groups) {
-    if (side(k) || circle.has(k)) { for (const m of ms) link(m.w, 2, CAT.fundedSide, `first funded by ${devs.has(k) ? "the dev" : circle.has(k) ? `${short(k)}, which ${(F.funders || []).some((f) => f.funder === k) ? "funded the dev" : "moved ETH both ways with the dev"}` : `${short(k)}, a dev-side wallet`}`); continue; }
-    if ((F.funders || []).some((f) => f.funder === k && !f.hub)) { for (const m of ms) link(m.w, 2, CAT.sameFunder, `first funded by ${short(k)}, which also funded the dev`); continue; }
+    if (side(k) || circle.has(k)) { for (const m of ms) link(m.w, 2, CAT.fundedSide, `first funded by ${devs.has(k) ? "the dev" : circle.has(k) ? `${short(k)}, which ${(F.funders || []).some((f) => f.funder === k) ? "funded the dev" : "moved ETH both ways with the dev"}` : `${short(k)}, a dev-side wallet`}`, evTx(m.tx) || evAddr(k)); continue; }
+    if ((F.funders || []).some((f) => f.funder === k && !f.hub)) { for (const m of ms) link(m.w, 2, CAT.sameFunder, `first funded by ${short(k)}, which also funded the dev`, evTx(m.tx) || evAddr(k)); continue; }
     const fi = F.funderInfo?.[k];
     if (ms.length < 3 || !fi || fi.contract || fi.txs == null || fi.txs > HUB_TXS) continue;
     const ats = ms.map((m) => m.at).filter(Boolean).sort((a, b) => a - b);
     if (fi.txs > SMALL_TXS && ats.length >= 3 && ats.at(-1) - ats[0] > DAY_S * 1000) continue;
-    clusters.push({ kind: "funded", why: `${ms.length} of the biggest or earliest wallets got their first ETH from ${short(k)}`, wallets: ms.map((m) => m.w), funder: k });
+    clusters.push({ kind: "funded", why: `${ms.length} of the biggest or earliest wallets got their first ETH from ${short(k)}`, wallets: ms.map((m) => m.w), funder: k, ev: evAddr(k), evOf: Object.fromEntries(ms.filter((m) => m.tx).map((m) => [m.w, evTx(m.tx)])) });
   }
   // wallets that sold through the same private router (its own contract, not a public app), at any time
   for (const r of F.routers || []) {
     const v = F.via?.[r];
     if (!v || v.public || v.unknown || v.txs > OWN_TXS) continue;
     const ws = [...new Set(tr.filter((x) => x.to === r && !venue.has(x.from) && x.from !== ZERO).map((x) => x.from))];
-    if (ws.length >= 3) clusters.push({ kind: "one router", why: `${ws.length} wallets traded through the same private contract ${short(r)}${v.txs != null ? ` (${v.txs} transactions)` : ""}`, wallets: ws, via: r });
+    if (ws.length >= 3) clusters.push({ kind: "one router", why: `${ws.length} wallets traded through the same private contract ${short(r)}${v.txs != null ? ` (${v.txs} transactions)` : ""}`, wallets: ws, via: r, ev: evAddr(r) });
   }
   for (const c of F.coTrades || []) {
     if (c.block > cut) continue;
     const v = F.via?.[c.via];
-    const row = { kind: c.side === "buy" ? "bought together" : "sold together", block: c.block, at: c.at, via: c.via, wallets: c.wallets, pctOfSupply: r2(pct(c.amount, supply)) };
+    const row = { kind: c.side === "buy" ? "bought together" : "sold together", block: c.block, at: c.at, via: c.via, wallets: c.wallets, pctOfSupply: r2(pct(c.amount, supply)), ev: evTx(c.tx) || { type: "block", ref: String(c.block) } };
     if (!v || v.public || v.unknown) { herds.push({ ...row, why: `${c.wallets.length} wallets ${c.side === "buy" ? "bought" : "sold"} in one block through ${short(c.via)}, ${v?.unknown ? "a contract not checked" : `a busy public contract${v?.txs ? ` (${v.txs.toLocaleString("en-US")} transactions)` : ""}`}: a crowd, not a link` }); continue; }
     clusters.push({ ...row, why: `${c.wallets.length} wallets ${c.side === "buy" ? "bought" : "sold"} in one block through the same contract ${short(c.via)}${c.oneTx ? " in one transaction" : ""}` });
   }
@@ -577,10 +579,10 @@ export function analyze(F, cut = F.end, { now = null, balNow = null } = {}) {
   for (let round = 0; round < 3; round++) {
     let grew = false;
     for (const x of edges) if (x.v * 2000n >= supply) {
-      if (L.get(x.from)?.hop <= 2 && !side(x.to)) grew = link(x.to, L.get(x.from).hop + 1, CAT.hop, `got coins from ${short(x.from)}, a dev-side wallet`) || grew;
-      if (L.get(x.to)?.hop <= 2 && !side(x.from) && touched(x.from)) grew = link(x.from, L.get(x.to).hop + 1, CAT.hop, `sent coins to ${short(x.to)}, a dev-side wallet`) || grew;
+      if (L.get(x.from)?.hop <= 2 && !side(x.to)) grew = link(x.to, L.get(x.from).hop + 1, CAT.hop, `got coins from ${short(x.from)}, a dev-side wallet`, evTx(x.tx)) || grew;
+      if (L.get(x.to)?.hop <= 2 && !side(x.from) && touched(x.from)) grew = link(x.from, L.get(x.to).hop + 1, CAT.hop, `sent coins to ${short(x.to)}, a dev-side wallet`, evTx(x.tx)) || grew;
     }
-    for (const c of clusters) if (!c.joined && c.wallets.some(side)) { c.joined = true; for (const w of c.wallets) grew = link(w, 3, CAT.cluster, c.why) || grew; }
+    for (const c of clusters) if (!c.joined && c.wallets.some(side)) { c.joined = true; for (const w of c.wallets) grew = link(w, 3, CAT.cluster, c.why, c.evOf?.[w] || c.ev || null) || grew; }
     if (!grew) break;
   }
 
@@ -621,7 +623,7 @@ export function analyze(F, cut = F.end, { now = null, balNow = null } = {}) {
   if (loose.length && P.looseHold >= 1) why.push(`${loose.length} other cluster${loose.length === 1 ? "" : "s"} (not tied to the dev) hold${loose.length === 1 ? "s" : ""} ${r2(P.looseHold)}%`);
   const label = status === "fail" ? (P.recent >= RULES.failSellingNow ? "Dev side is selling now" : "Dev side holds most of the supply") : null;
   const sale = (s) => (s ? { at: s.at, block: s.block, tx: s.tx, wallet: getAddress(s.wallet), dev: s.dev } : null);
-  const view = (w) => { const s = S.get(w); return { wallet: getAddress(w), why: L.get(w).why, hop: L.get(w).hop, holdsPct: r2(pct(balOf(w), supply)), boughtPct: r2(pct(s?.bought || 0n, supply)),
+  const view = (w) => { const s = S.get(w); return { wallet: getAddress(w), why: L.get(w).why, evidence: L.get(w).ev, hop: L.get(w).hop, holdsPct: r2(pct(balOf(w), supply)), boughtPct: r2(pct(s?.bought || 0n, supply)),
     gotPct: r2(pct(s?.gotIn || 0n, supply)), soldPct: r2(pct(s?.sold || 0n, supply)), firstSale: s?.sells?.[0] ? { at: s.sells[0].at, tx: s.sells[0].tx } : null, lastSale: s?.sells?.length ? { at: s.sells.at(-1).at, tx: s.sells.at(-1).tx } : null }; };
   return {
     token: getAddress(F.token), symbol: F.symbol, status, verdict: status === "fail" ? "red" : status === "warn" ? "amber" : "clear", label,
@@ -633,13 +635,15 @@ export function analyze(F, cut = F.end, { now = null, balNow = null } = {}) {
     funders: (F.funders || []).filter((f) => f.block == null || f.block <= cut).map((f) => ({ wallet: getAddress(f.funder), why: f.why, transactions: f.txs, followed: !f.hub, paid: (f.paid || []).filter((p) => p.block <= cut).length })),
     circle: [...circle].slice(0, 10).map((w) => getAddress(w)),
     wallets: linked.sort((a, b) => (balOf(b) > balOf(a) ? 1 : -1)).slice(0, 60).map(view),
-    clusters: loose.slice(0, 8).map((c) => ({ kind: c.kind, why: c.why, wallets: c.wallets.length, holdsPct: r2(pct(holdOf(c.wallets.filter((w) => !contract(w) && !venue.has(w))), supply)), via: c.via ? getAddress(c.via) : undefined, at: c.at || undefined })),
+    clusters: loose.slice(0, 8).map((c) => ({ kind: c.kind, why: c.why, wallets: c.wallets.length, holdsPct: r2(pct(holdOf(c.wallets.filter((w) => !contract(w) && !venue.has(w))), supply)), via: c.via ? getAddress(c.via) : undefined, at: c.at || undefined,
+      members: c.wallets.filter((w) => !contract(w) && !venue.has(w)).slice(0, 40).map((w) => getAddress(w)), evidence: c.ev || null, memberEvidence: c.evOf ? Object.fromEntries(Object.entries(c.evOf).map(([w, e]) => [getAddress(w), e])) : undefined })),
     herds: herds.slice(0, 6).map((h) => ({ why: h.why, side: h.kind, wallets: h.wallets.length, pctOfSupply: h.pctOfSupply, via: getAddress(h.via), at: h.at })),
     relays: [...venue].filter((v) => !PUBLIC.has(v) && v !== F.curve && !(F.pools || []).includes(v)).slice(0, 10).map((v) => getAddress(v)),
     bornAt: F.bornAt, at: nowMs,
     coverage: { fromBlock: F.launch.block, toBlock: cut, transfers: tr.length, partial: !!F.partial, deep: !!F.deep, people: (F.people || []).length, funded: Object.keys(F.pfund || {}).length, notes: (F.errors || []).slice(0, 3) },
     note: "Facts from the chain, not a judgement of people: a wallet counts as tied to the dev only through coins or ETH that moved between them, a small shared funder, or trades through one private contract. Wallets a dev keeps fully apart (funded from an exchange, trading through public apps) stay hidden.",
-    _set: { linked: new Set(linked), devs, loose: new Set(looseWallets), relays: [...venue].filter((v) => !PUBLIC.has(v) && v !== F.curve) },
+    _set: { linked: new Set(linked), devs, loose: new Set(looseWallets), relays: [...venue].filter((v) => !PUBLIC.has(v) && v !== F.curve),
+      edges: edges.filter((x) => x.v * 10_000n >= supply).slice(-4000).map((x) => ({ from: x.from, to: x.to, v: x.v, tx: x.tx, block: x.block })), supply },
   };
 }
 
@@ -726,6 +730,9 @@ export function devLinkFlags(token) {
   if (!r || (r.status !== "fail" && r.status !== "warn")) return [];
   return [{ key: "devlinks", level: r.status === "fail" ? "red" : "amber", title: r.status === "fail" ? `Dev side wallets: ${r.label.toLowerCase()}` : "Dev side wallets", detail: r.text }];
 }
+
+/** The Cluster map (clusters.mjs) reads first funders, address counters and births through the same caches. */
+export { firstFunder, infoOf, launchOf };
 
 /** Tests and audits: read the facts once (up to a block) and replay the analysis at other blocks. Nothing is cached. */
 export async function _facts(token, opts) { return facts(lc(token), opts); }

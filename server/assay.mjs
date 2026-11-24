@@ -188,7 +188,9 @@ async function measure(token, { deep = true } = {}) {
   const holders = [...bal.entries()].filter(([a, v]) => v > 0n && a !== DEAD && !venue(a)).sort((a, b) => (b[1] > a[1] ? 1 : -1));
   const inContracts = [...bal.entries()].filter(([a, v]) => v > 0n && venue(a) && a !== DEAD).sort((a, b) => (b[1] > a[1] ? 1 : -1));
   const walletsTotal = holders.reduce((s, x) => s + x[1], 0n);
-  const top10 = holders.slice(0, 10).reduce((s, x) => s + x[1], 0n);
+  // top 10 counts wallets only, as the Cluster map does: contracts (TroyaStake, lockers, vaults, smart contracts) are left out
+  // (Xivor, 24 Nov 2026: 47.9% with contracts vs 28.08% without made the Concentrated flag meaningless)
+  const top10 = holders.filter(([a]) => !isCode.get(a)).slice(0, 10).reduce((s, x) => s + x[1], 0n);
 
   // dev: the Pons deployer and fee recipient, or whoever sent the transaction that created the coin
   const devs = new Set();
@@ -331,14 +333,32 @@ export async function assay(token, { deep = true, waitMs = 20000 } = {}) {
   }
   const p = inflight.get(key);
   const r = await Promise.race([p, new Promise((ok) => setTimeout(() => ok(null), waitMs))]);
-  return r || { token: t, status: "running", note: "Reading the coin's history and who funded its wallets. Ask again in a few seconds." };
+  return (await withDevSide(r)) || { token: t, status: "running", note: "Reading the coin's history and who funded its wallets. Ask again in a few seconds." };
+}
+// the dev's sales counted with its side wallets (devlinks.mjs, cache only), as the Gate's Dev side check reports them: the dev
+// wallet alone can show 0% sold while the wallets tied to it sold most of what they got (Xivor, 24 Nov 2026). Cache only:
+// the Gate and Sentry already start that read, the Assay never adds one
+async function withDevSide(r) {
+  if (!r || r.status !== "done") return r;
+  const D = await import("./devlinks.mjs").catch(() => null);
+  if (!D) return r;
+  const ds = D.devLinksCached(r.token)?.devSide;
+  if (!ds || ds.soldOfGotPct == null) return r;
+  const devSide = { soldOfGotPct: ds.soldOfGotPct, holdsPct: ds.holdsPct, gotPct: ds.gotPct };
+  let flags = r.flags || [];
+  const lvl = ds.soldOfGotPct >= 50 ? "red" : ds.soldOfGotPct >= 20 ? "amber" : null;
+  if (lvl && ds.soldOfGotPct > (r.dev?.soldPct || 0)) {
+    flags = [...flags.filter((f) => f.key !== "dev-sold"), { level: lvl, key: "dev-sold", title: lvl === "red" ? "Dev side sold" : "Dev side sold some", detail: `The dev and the wallets tied to it sold ${Math.round(ds.soldOfGotPct)}% of the coins they received (the dev wallet itself ${Math.round(r.dev?.soldPct || 0)}%).` }];
+  }
+  return { ...r, devSide, flags };
 }
 
 const p1 = (x) => (x == null ? "–" : `${x > 0 && x < 0.1 ? x.toFixed(2) : x.toFixed(1)}%`);
 // plain text, for Telegram: one line of facts, then the flags
 export function assayLines(d) {
   if (!d || d.status !== "done") return [];
-  const facts = [d.dev?.wallets?.length ? `dev holds ${p1(d.dev.holdsPct)}${d.dev.soldPct ? `, sold ${p1(d.dev.soldPct)}` : ""}` : null, `top 10 wallets ${p1(d.holders?.top10Pct)}`,
+  const sold = d.devSide?.soldOfGotPct != null ? `, dev side sold ${p1(d.devSide.soldOfGotPct)} of what it got` : d.dev?.soldPct ? `, sold ${p1(d.dev.soldPct)}` : "";
+  const facts = [d.dev?.wallets?.length ? `dev holds ${p1(d.dev.holdsPct)}${sold}` : null, `top 10 wallets ${p1(d.holders?.top10Pct)}`,
     d.launch?.earlyBuyers ? `first 30 s buyers hold ${p1(d.launch.earlyHoldPct)}` : null].filter(Boolean).join(" · ");
   const out = [`Assay: ${facts}`];
   const f = (d.flags || []).filter((x) => x.key !== "partial");

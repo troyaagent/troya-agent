@@ -84,7 +84,7 @@ function assayBox(addr, compact) {
     if (d.status !== "done") { clear(body, h("span", { class: "fine" }, d.status === "running" ? "Still reading. Open the Gate again in a minute." : `The Assay could not run: ${d.error || "try again later"}.`)); return; }
     const flags = d.flags || [];
     const lines = [
-      ["Dev", d.dev?.wallets?.length ? `holds ${pc(d.dev.holdsPct)} · sold ${pc(d.dev.soldPct)} of what it received${d.dev.liquidityAddedPct > 1 ? ` · put ${pc(d.dev.liquidityAddedPct)} into liquidity` : ""}` : "not identified"],
+      ["Dev", d.dev?.wallets?.length ? `holds ${pc(d.dev.holdsPct)} · ${d.devSide?.soldOfGotPct != null ? `with its side wallets, sold ${pc(d.devSide.soldOfGotPct)} of what they received (the dev wallet itself ${pc(d.dev.soldPct)})` : `sold ${pc(d.dev.soldPct)} of what it received`}${d.dev.liquidityAddedPct > 1 ? ` · put ${pc(d.dev.liquidityAddedPct)} into liquidity` : ""}` : "not identified"],
       ["Top 10 wallets", `${pc(d.holders?.top10Pct)} of supply${d.holders?.count != null ? ` · ${d.holders.count.toLocaleString("en-US")} holders` : ""}`],
       ["First 30 seconds", `${d.launch?.earlyBuyers ?? 0} buyers · still hold ${pc(d.launch?.earlyHoldPct)}`],
       ["Round-trip trading", d.wash?.trades ? `${pc(d.wash.washPct)} of ${d.wash.trades.toLocaleString("en-US")} trades` : "no trades yet"],
@@ -350,7 +350,7 @@ export function gatePanel({ go, ask, compact = false, start = "", chain: startCh
 
   const el = h("section", { class: `panel dk-gate ${compact ? "compact" : ""}` },
     h("div", { class: "panel-h" }, h("h2", {}, "Troya Gate"), compact ? h("a", { class: "link fine", href: "#/gate" }, "Open the Gate") : h("a", { class: "link fine", href: "/risk-controls" }, "How the checks work")),
-    h("p", { class: "dk-gate-sub" }, "Seven checks before you can buy: route, price impact, depth, fees and taxes, a simulation, a test sell and transfer tax. Fail one, no order."),
+    h("p", { class: "dk-gate-sub" }, "Eight checks before you can buy: route, price impact, depth, fees and taxes, a simulation, a test sell, transfer tax and the dev's side wallets. Fail one, no order."),
     h("div", { class: "dk-gate-form" }, inputBox, runBtn),
     out);
 
@@ -380,7 +380,7 @@ export async function mount(view, ctx) {
     h("div", { class: "dk-row r75" }, g.el,
       h("section", { class: "panel dk-how" }, h("div", { class: "panel-h" }, h("h2", {}, "What each check reads")),
         h("ol", {}, how.map(([t, d], i) => h("li", {}, h("span", { class: "dk-how-n" }, String(i + 1)), h("div", {}, h("b", {}, t), h("p", {}, d))))),
-        h("p", { class: "note" }, "On Base and Arbitrum the same seven checks run; on Solana the Gate also reads the coin's mint and freeze authority."),
+        h("p", { class: "note" }, "On Base and Arbitrum the same checks run, without the dev side-wallet check (Robinhood Chain only); on Solana the Gate also reads the coin's mint and freeze authority."),
         h("p", { class: "note" }, "Results are checks, never endorsements. ", h("a", { class: "link", href: "/risk-controls" }, "Risk controls"), " · ", h("a", { class: "link", href: "/badge" }, "Gate badge for your site"))))));
   return () => g.stop();
 }

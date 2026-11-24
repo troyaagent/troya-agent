@@ -217,7 +217,7 @@ async function route() {
 const LOST = [
   ["Swap", "#/swap", "swap", "Coins and stock tokens, checked by the Gate"],
   ["Market", "#/market", "market", "Every coin on Robinhood Chain with a real pool"],
-  ["Gate a coin", "#/gate", "gate", "Seven checks before you buy"],
+  ["Gate a coin", "#/gate", "gate", "Eight checks before you buy"],
   ["Troya Launches", "#/troya-launches", "hippodrome", "Coins born through Troya"],
 ];
 function notFound(r) {
@@ -584,7 +584,7 @@ function openAsk(prefill = "") {
     const pageFirst = q && !/\s/.test(q) && pages.some((p) => p.title.toLowerCase().startsWith(q));
     if (pageFirst && pages.length) out.push(goTo);
     if (ca) out.push(["Check this coin", [
-      { kind: "page", title: `Run Troya Gate on ${short(ca)}`, hint: "Seven checks: route, impact, depth, fees, simulation, test sell, tax", icon: "gate", target: `#/gate/${ca}` },
+      { kind: "page", title: `Run Troya Gate on ${short(ca)}`, hint: "Eight checks: route, impact, depth, fees, simulation, test sell, tax", icon: "gate", target: `#/gate/${ca}` },
       { kind: "page", title: `Find the weak spot of ${short(ca)}`, hint: "Heel: a coin, a dev wallet or an agent, in one sentence with proof", icon: "heel", target: `#/heel/${ca}` },
       { kind: "page", title: `Cluster map of ${short(ca)}`, hint: "Its largest holders as bubbles, and which wallets are linked, with proof", icon: "clusters", target: `#/clusters/${ca}` },
       { kind: "page", title: `Open the token page`, hint: "Price, chart, pools and trades", icon: "market", target: `#/token/${ca}` },
@@ -609,7 +609,7 @@ function openAsk(prefill = "") {
       const t = coins[0];
       if (t && t.address !== "native" && swapOk(t)) rows.splice(1, 0,
         { kind: "page", title: `Open the ${t.symbol} page`, hint: "Price, chart, holders and trades", icon: "market", target: `#/token/${t.address}` },
-        ...(quickOk(t) ? [{ kind: "page", title: `Gate ${t.symbol}`, hint: "Seven checks before you buy", icon: "gate", target: `#/gate/${t.address}` }] : []));
+        ...(quickOk(t) ? [{ kind: "page", title: `Gate ${t.symbol}`, hint: "Eight checks before you buy", icon: "gate", target: `#/gate/${t.address}` }] : []));
       coinSec.push(["Coins", rows]);
     }
     if (perps.length && fresh) {

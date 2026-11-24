@@ -54,6 +54,7 @@ const ROUTES = {
   "/zero": "/zero.html",
   "/safety": "/safety.html",
   "/proof": "/proof.html",
+  "/changelog/agent-wallet": "/changelog/agent-wallet.html",
   "/agent": "/agent/index.html",
 };
 

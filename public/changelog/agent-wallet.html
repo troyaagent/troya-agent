@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | Agent Wallet changelog</title>
+<meta name="description" content="Every change to the code that decides or signs Agent Wallet trades: the date, what changed, which files, how it was tested and the commit.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | Agent Wallet changelog">
+<meta property="og:description" content="Changes to Agent Wallet signing code ship only with tests and an entry here.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/changelog/agent-wallet">
+<meta property="og:url" content="https://troya.codes/changelog/agent-wallet">
+<meta property="og:image" content="https://troya.codes/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
+<meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<meta name="theme-color" content="#0d0c0b">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<link rel="preload" href="/home/fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/home/pages.css">
+<link rel="stylesheet" href="/css/buybar.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+<style>
+  .cl-rule { max-width: 780px; margin: 0 auto 40px; padding: 18px 22px; border: 1px solid var(--line-2); border-left: 2px solid var(--accent); border-radius: var(--radius); background: var(--panel); }
+  .cl-rule b { display: block; font-size: 17px; font-weight: 600; color: var(--fg); letter-spacing: -0.01em; }
+  .cl-rule p { margin: 8px 0 0; color: var(--fg-2); font-size: 14px; line-height: 1.6; }
+  .legal .cl-when { display: block; margin: 0 0 6px; font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .02em; }
+  .legal dl.cl-meta { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px 18px; margin: 14px 0 12px; font-size: 14px; line-height: 1.6; }
+  .legal dl.cl-meta dt { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; padding-top: 2px; }
+  .legal dl.cl-meta dd { margin: 0; color: var(--fg-2); min-width: 0; overflow-wrap: anywhere; }
+  .legal dl.cl-meta code { font-family: var(--mono); font-size: 12.5px; color: var(--fg); }
+  .legal dl.cl-meta ul { margin: 0; padding-left: 18px; }
+  @media (max-width: 560px) { .legal dl.cl-meta { grid-template-columns: 1fr; gap: 2px; } .legal dl.cl-meta dd { margin-bottom: 10px; } }
+</style>
+</head>
+<body class="site pn">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="pn-nav" data-pn-nav>
+  <a class="pn-logo" href="/" aria-label="Troya Agent home"><span>Troya</span><b>Agent</b><small>MMXXVI</small></a>
+  <div class="pn-r">
+    <nav class="bb-soc" aria-label="Troya elsewhere"><a class="bb-com" href="/proof">Proof</a><a class="bb-com" href="/roadmap">Roadmap</a><a class="bb-com" href="/community">Community</a><a class="bb-com" href="/stake">Stake</a><a href="https://x.com/Troyaagent" target="_blank" rel="noopener" aria-label="Troya on X" title="X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.12z"/></svg></a><a href="https://t.me/troyaagent" target="_blank" rel="noopener" aria-label="Troya on Telegram" title="Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg></a><a href="https://github.com/troyaagent/troya-agent" target="_blank" rel="noopener" aria-label="Troya on GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg></a></nav>
+    <div class="bb-buy" data-bb><button class="bb-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="bb-menu" data-bb-btn><img src="/img/logo-3d-128.png" alt="" width="24" height="24">Buy<span class="bb-t">$TROYA</span><svg class="bb-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button><div class="bb-menu" id="bb-menu" hidden data-bb-menu><a class="bb-i bb-main" href="/agent/#/swap?out=0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="/agent/#/swap?out={ca}"><img src="/img/logo-3d-128.png" alt="" width="36" height="36"><span><b>Troya Swap</b><small>Our own desk. The Gate checks $TROYA first, then Troya routes the best price on Robinhood Chain.</small></span><em>Best</em></a><a class="bb-i" href="https://ponsfamily.com/launchpad/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://ponsfamily.com/launchpad/{ca}" target="_blank" rel="noopener"><img src="/img/logos/pons.svg" alt="" width="36" height="36"><span><b>Pons</b><small>The launchpad where $TROYA started</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><a class="bb-i" href="https://fomo.family/tokens/robinhood/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://fomo.family/tokens/robinhood/{ca}" target="_blank" rel="noopener"><img src="/img/logos/fomo.png" alt="" width="36" height="36"><span><b>Fomo</b><small>The social trading app, on web and phone</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><a class="bb-i" href="https://dexscreener.com/robinhood/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://dexscreener.com/robinhood/{ca}" target="_blank" rel="noopener"><img src="/img/logos/dexscreener.png" alt="" width="36" height="36"><span><b>DexScreener</b><small>Live chart, pools and trades</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><button class="bb-ca" type="button" data-bb-ca><span>CA</span><code data-bb-ca-full>0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074</code><b>Copy</b></button></div></div>
+    <a class="pn-pill" href="/agent">Open app</a>
+    <button class="pn-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="pn-menu" data-pn-burger><i></i><i></i></button>
+  </div>
+</header>
+<nav class="pn-menu" id="pn-menu" aria-label="Site" data-pn-menu></nav>
+
+<main id="main">
+  <section class="page-hero short" aria-labelledby="ph">
+    <canvas class="rain" data-rain aria-hidden="true"></canvas>
+    <span class="eyebrow"><i class="dot"></i>Changelog</span>
+    <h1 id="ph">Agent Wallet changelog</h1>
+    <p class="lead">Every change to the code that decides or signs Agent Wallet trades, newest first: the date, what changed, which files, how it was tested and the commit.</p>
+    <div class="hero-act"><a class="ulink" href="/verify">Real-money tests on Verify</a><a class="ulink" href="/risk-controls">Risk controls</a></div>
+  </section>
+
+  <section class="ip">
+    <div class="cl-rule" role="note">
+      <b>Changes to Agent Wallet signing code ship only with tests and an entry here.</b>
+      <p>Signing code means the files that decide whether an Agent Wallet trade goes out and that sign it: server/agentwallet.mjs, server/policy.mjs, and the Gate checks those files call before a buy (server/tools.mjs, server/robinhood.mjs). The rule starts with this page on 24 Nov 2026. The earlier entries below are taken from the repository history and say how each change was tested at the time, including where no automated test was committed. Commit hashes refer to the Troya source repository.</p>
+    </div>
+
+    <div class="legal">
+      <p class="updated">Last updated 24 November 2026</p>
+
+      <section id="2026-11-24-chiron">
+        <h2>Chiron rules on Agent Wallet buys</h2>
+        <span class="cl-when">24 Nov 2026</span>
+        <p>The owner's own Chiron habit rules (no buys in a coin's first N seconds, at most N buys a day) are now checked on every Agent Wallet buy. They apply to buys only; a sell is never held back by them. A rule that cannot be checked refuses the buy instead of letting it through.</p>
+        <dl class="cl-meta">
+          <dt>Changed</dt>
+          <dd><ul>
+            <li><code>checkAction</code> takes a <code>side</code>. For a swap with side <code>buy</code> it calls <code>chiron.ruleCheck</code> and adds its reasons; a caller that leaves the side out gets exactly the checks of before.</li>
+            <li>New <code>swapSide</code>: ETH, WETH or USDG in and any other coin out is a buy, the reverse is a sell.</li>
+            <li>The Agent Wallet works out the side before <code>checkAction</code>. A creator buying the coin it launched through Troya from the same Agent Wallet (the initial buy, the dev panel) is not counted as a buy for these rules.</li>
+            <li>A buy that was broadcast counts towards the "buys a day" rule (<code>chiron.noteBuy</code>).</li>
+          </ul></dd>
+          <dt>Files</dt>
+          <dd><code>server/policy.mjs</code>, <code>server/agentwallet.mjs</code>, <code>server/chiron.mjs</code> (new), <code>server/tools.mjs</code> (the prepare-swap tool passes the side)</dd>
+          <dt>Tested</dt>
+          <dd><code>tools/chiron-test.mjs</code>, 24 unit checks with the chain mocked, among them: no rule set lets a buy pass as before; a coin younger than 60 seconds is blocked and an hour-old one passes; an age that cannot be read fails closed; a sell is never held back; after two buys the third is blocked when the rule is two a day. Re-run on 24 Nov 2026: 24 of 24 pass. No real-money test of this change is listed on Verify.</dd>
+          <dt>Commit</dt>
+          <dd><code>f3448cf</code></dd>
+        </dl>
+      </section>
+
+      <section id="2026-11-24-launch-ring">
+        <h2>Launch ring check in the Gate</h2>
+        <span class="cl-when">24 Nov 2026</span>
+        <p>Asked for by Xivor. For a buy of any Pons coin, the Gate adds a Launch ring line from Ring Radar: how many wallets were freed from the snipe tax at launch and how much of the supply the dev and those wallets took in the first blocks. A red launch fails the Gate for a buy, so the Agent Wallet does not sign it. A sell is never blocked by it: on a sell the same finding is a warning.</p>
+        <dl class="cl-meta">
+          <dt>Changed</dt>
+          <dd><ul>
+            <li><code>gateCheck</code> reads the Ring Radar line beside the quote and adds it only when the swap is a buy.</li>
+            <li><code>gateSwap</code> adds it for Pons coins, passing whether the swap sells.</li>
+            <li>The line itself (<code>ringradar.gateLine</code>): red is a fail on a buy and a warning on a sell; a read still running after the wait is a warning; a coin with no Pons launch found gets no line. The launch is now found at any age through the Blockscout log index, with the RPC search of the last two days as the fallback.</li>
+          </ul></dd>
+          <dt>Files</dt>
+          <dd><code>server/robinhood.mjs</code>, <code>server/tools.mjs</code>, <code>server/ringradar.mjs</code></dd>
+          <dt>Tested</dt>
+          <dd>No automated test was committed with this change.</dd>
+          <dt>Commit</dt>
+          <dd><code>f3448cf</code></dd>
+        </dl>
+      </section>
+
+      <section id="2026-11-21-coin-withdraw">
+        <h2>Coin withdrawals from the Agent Wallet</h2>
+        <span class="cl-when">21 Nov 2026</span>
+        <p>Coins bought by Sentry Autopilot, Champions, the War Table or Aegis can be withdrawn. Before this, only ETH could leave, so those coins were stuck.</p>
+        <dl class="cl-meta">
+          <dt>Changed</dt>
+          <dd><ul>
+            <li>An ERC-20 transfer whose recipient is always the owner's own address, never an address from the request.</li>
+            <li>"all", or no amount, sends the whole balance; a typed amount is cut at the coin's decimals and never above what is held.</li>
+            <li>Withdrawals to the owner do not count against the trading caps.</li>
+          </ul></dd>
+          <dt>Files</dt>
+          <dd><code>server/agentwallet.mjs</code></dd>
+          <dt>Tested</dt>
+          <dd>No automated test was committed with this change.</dd>
+          <dt>Commit</dt>
+          <dd><code>bb060d8</code></dd>
+        </dl>
+      </section>
+
+      <section id="2026-11-21-lot-ledger">
+        <h2>Lot ledger and one Budget</h2>
+        <span class="cl-when">21 Nov 2026</span>
+        <p>The Agent Wallet keeps a lot ledger: which automated job holds which coins and how each lot closed, so a job's sell is sized to its own coins and its result is measured in ETH. The caps that apply are shown as one Budget.</p>
+        <dl class="cl-meta">
+          <dt>Changed</dt>
+          <dd><ul>
+            <li>One lot-aware swap at a time per owner, so two jobs exiting the same coin cannot both read the balance before either sold.</li>
+            <li>Sell amounts are kept to 15 significant digits, cut and never rounded up, so a sell never asks for more than the wallet holds.</li>
+            <li>A balance below the open lots is read again before any coins are counted as sold elsewhere (a public RPC can be a block behind right after a buy).</li>
+            <li><code>getBudget</code> (read-only): the strictest of the operator caps, the user's own limits and the wallet's caps, and which one binds. It changes no limit.</li>
+          </ul></dd>
+          <dt>Files</dt>
+          <dd><code>server/agentwallet.mjs</code>, <code>server/policy.mjs</code></dd>
+          <dt>Tested</dt>
+          <dd>No automated test was committed with this change.</dd>
+          <dt>Commit</dt>
+          <dd><code>3e6150b</code></dd>
+        </dl>
+      </section>
+
+      <section id="2026-11-20-approve-default">
+        <h2>Trust ladder: Approve by default, held proposals stay held</h2>
+        <span class="cl-when">20 Nov 2026</span>
+        <p>A wallet that never picked a trust step now starts on Approve: every automated trade waits for the owner's yes. Before, an unset ladder meant Auto.</p>
+        <dl class="cl-meta">
+          <dt>Changed</dt>
+          <dd><ul>
+            <li><code>DEFAULT_TRUST</code> is <code>approve</code>; an explicit choice is kept as it is.</li>
+            <li>A held proposal carried by an automated job (the browser-tab Autopilot) goes through only on Auto. Before, a proposal id skipped the ladder, so the tab could execute the trades Approve had just held.</li>
+            <li>The job a request speaks for keeps its name all the way down, so the ladder and that job's own daily cap apply to it; only the owner's own tap counts as "app".</li>
+          </ul></dd>
+          <dt>Files</dt>
+          <dd><code>server/agentwallet.mjs</code>, <code>server/policy.mjs</code></dd>
+          <dt>Tested</dt>
+          <dd>No automated test was committed with this change.</dd>
+          <dt>Commit</dt>
+          <dd><code>ff228f5</code></dd>
+        </dl>
+      </section>
+
+      <section id="2026-11-20-balances">
+        <h2>Balances read every coin the wallet holds</h2>
+        <span class="cl-when">20 Nov 2026</span>
+        <p>Found by the first War Table real-money test: the balance reader listed only WETH and USDG, so the Sell buttons saw nothing to sell and a wallet holding only memecoins counted as empty for the delete guard.</p>
+        <dl class="cl-meta">
+          <dt>Changed</dt>
+          <dd><ul>
+            <li>The balance read asks for the coins named in the request too (the War Table's sell buttons ask for the coin on the page).</li>
+            <li>The delete guard counts every coin the wallet holds, from the same token list Portfolio shows.</li>
+          </ul></dd>
+          <dt>Files</dt>
+          <dd><code>server/agentwallet.mjs</code></dd>
+          <dt>Tested</dt>
+          <dd>Real money, 20 Nov 2026: a test Agent Wallet bought $TROYA with 0.008 ETH and sold all of it back (<a href="/verify#wartable-trade">Verify, step 38</a>).</dd>
+          <dt>Commit</dt>
+          <dd><code>fa566ee</code></dd>
+        </dl>
+      </section>
+
+      <section id="2026-11-20-scepter">
+        <h2>Scepter: trust ladder and per-job daily caps</h2>
+        <span class="cl-when">20 Nov 2026</span>
+        <p>Automated jobs (Autopilot, playbooks, Aegis and the rest) follow a trust ladder: on Watch they only alert, on Approve they ask first, on Auto they act inside the caps. A trade the owner taps or confirms is never held back by the ladder.</p>
+        <dl class="cl-meta">
+          <dt>Changed</dt>
+          <dd><ul>
+            <li>The ladder is enforced in the Agent Wallet for the named automated jobs (<code>AUTO_JOBS</code>).</li>
+            <li>Each job has its own daily cap inside the wallet's caps, with what each job spent today counted per job.</li>
+          </ul></dd>
+          <dt>Files</dt>
+          <dd><code>server/agentwallet.mjs</code>, <code>server/policy.mjs</code></dd>
+          <dt>Tested</dt>
+          <dd>Real money, 20 Nov 2026: with the ladder on Auto, a DCA job bought and a TWAP job sold in two slices, each through the Gate and the caps; one slice reverted on chain and was logged (<a href="/verify#scepter-auto">Verify, step 39</a>).</dd>
+          <dt>Commit</dt>
+          <dd><code>29b109e</code></dd>
+        </dl>
+      </section>
+
+      <section id="2026-11-19-perp-funded">
+        <h2>Perps: fund the missing margin, then open</h2>
+        <span class="cl-when">19 Nov 2026</span>
+        <p>Asked for in the community. When the owner's Hyperliquid account is short of margin, the Agent Wallet funds the shortfall from Robinhood Chain to the owner's own Hyperliquid account, and the order opens by itself once the USDC lands.</p>
+        <dl class="cl-meta">
+          <dt>Changed</dt>
+          <dd><ul>
+            <li>New action <code>perp_funded</code> with a pending opener. The order runs through the normal perp path when it opens, so the Gate, the caps and the kill switch apply again at that moment.</li>
+            <li>The pending opener gives up after 20 minutes and says so in the inbox; it never runs twice.</li>
+            <li>The funding itself does not count against the caps; the perp counts when it opens.</li>
+          </ul></dd>
+          <dt>Files</dt>
+          <dd><code>server/agentwallet.mjs</code></dd>
+          <dt>Tested</dt>
+          <dd>Dry run, nothing sent: <code>tools/perp-funded-test.mjs</code>, 9 of 9 at the time. Real money, 19 Nov 2026: funded 5.96 USDC and opened and closed a 5x long (<a href="/verify#perps-fund-open">Verify, step 36</a>).</dd>
+          <dt>Commit</dt>
+          <dd><code>988aa18</code></dd>
+        </dl>
+      </section>
+    </div>
+  </section>
+</main>
+
+<footer class="pn-foot" data-pn-foot></footer>
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/home/pages.js"></script>
+<script src="/js/buybar.js" defer></script>
+<script src="/home/rain.js" defer></script>
+</body>
+</html>

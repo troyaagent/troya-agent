@@ -38,6 +38,7 @@ export async function mount(view) {
       : h("section", { class: "panel ts-you" },
         h("div", {}, h("small", { class: "fine muted" }, "Your tier"), h("h2", {}, you?.name || "Visitor",
           // $TROYA staking: the staker's tier badge, sent only once the stake perks are on
+          you?.guardBadge ? h("span", { class: "badge-s kg-badge", style: { marginLeft: "10px" }, title: "King's Guard: the top holder tier" }, icon("shield"), "King's Guard") : null,
           you?.stakeBadge ? h("span", { class: `badge-s stk-badge t-${you.stakeBadge}`, style: { marginLeft: "10px" }, title: "Your $TROYA staking tier" }, `${you.stakeBadge[0].toUpperCase()}${you.stakeBadge.slice(1)} staker`) : null),
           h("p", { class: "fine muted" }, you?.known ? `${compact(you.balance || 0, 2)} $TROYA counted.${you.next ? ` ${compact(you.next.min - you.balance, 2)} more for ${you.next.name}.` : " The top tier."}` : "Your balance could not be read right now.")),
         you?.next ? h("div", { class: "ts-bar", title: `${you.name} → ${you.next.name}` }, h("i", { style: { width: `${Math.max(2, Math.min(100, ((you.balance || 0) / you.next.min) * 100)).toFixed(1)}%` } })) : null,
@@ -48,7 +49,8 @@ export async function mount(view) {
         h("tbody", {}, t.tiers.map((x) => h("tr", { class: you?.tier === x.key ? "ts-on" : "" },
           h("td", { class: "l" }, h("b", {}, x.name)), h("td", {}, x.min ? `${compact(x.min, 1)} $TROYA` : "–"),
           h("td", {}, String(x.watchfirePins)), h("td", {}, x.gateChecksPerDay != null ? String(x.gateChecksPerDay) : "–"),
-          h("td", { class: "l" }, x.perks ? h("span", { class: "wt-tag t-whale" }, "Yes") : h("span", { class: "fine muted" }, "–"))))))),
+          h("td", { class: "l" }, x.perks ? h("span", { class: "wt-tag t-whale" }, "Yes") : h("span", { class: "fine muted" }, "–"),
+            x.key === "guard" ? h("div", { class: "fine muted", style: { marginTop: "4px" } }, "Earliest Sentry calls (60 s ahead), King's Guard badge") : null)))))),
       h("p", { class: "fine ts-pad" }, t.perks));
     const pinIn = h("input", { class: "wt-in", type: "text", placeholder: "Paste a Robinhood Chain coin address (0x…)", "aria-label": "Coin address to pin" });
     const pinBox = h("section", { class: "panel" }, h("div", { class: "panel-h" }, h("h2", {}, "Watchfire pins"), h("span", { class: "fine muted" }, pins ? `${pins.pins.length} of ${pins.max}` : "")),

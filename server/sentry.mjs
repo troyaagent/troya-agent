@@ -643,7 +643,7 @@ async function holderDms(r, logo, skip = null, text = formatPost(r), kb = r.sour
   }
 }
 
-/* ---------- the staker lead (owner, 21 Nov 2026) ----------
+/* ---------- the staker and King's Guard lead (owner, 21 and 24 Nov 2026) ----------
    $TROYA stakers with a tier (server/stake.mjs stakerChats: only once the stake perks are on, only linked wallets) get a
    channel post by private message first: Gold 30 s, Silver 15 s, Bronze 5 s before the public channel (never more than
    LEAD_MAX_S). The loop never waits for it: each tier's DMs are put on a timer, the channel post goes on one chain, and the
@@ -651,15 +651,30 @@ async function holderDms(r, logo, skip = null, text = formatPost(r), kb = r.sour
    earlier one. The 1M holder DMs follow the channel post as before, minus the chats that already had it. A post still
    waiting when the server stops is kept in data/sentry-pending.json and sent when it starts again. With no staker lead (no
    stake contract, perks off, no tiered wallet linked) and nothing waiting, a post goes out exactly as it always did. */
-const LEAD_MAX_S = 30, PENDING = "sentry-pending.json";
-const TIER_NAME = { gold: "Gold", silver: "Silver", bronze: "Bronze" };
+// King's Guard (owner, 24 Nov 2026): linked wallets holding 50,000,000 $TROYA across the wallet and its Agent Wallet
+// (server/treasury.mjs guardChats, only while the holder perks are on) get the post 60 s ahead. A chat that is both a staker
+// and King's Guard gets the higher of its two leads, once. Staking leads stay at most 30 s (stake.mjs LEAD_MAX_SEC).
+const LEAD_MAX_S = 60, PENDING = "sentry-pending.json";
+const TIER_NAME = { guard: "King's Guard", gold: "Gold", silver: "Silver", bronze: "Bronze" };
 let chain = Promise.resolve(), waiting = 0, lastDue = 0, recentDirty = false;
 
+// one entry per chat, the longest lead wins (King's Guard on a tie), clamped to 0..LEAD_MAX_S, longest first
+function mergeLeads(...lists) {
+  const by = new Map();
+  for (const x of lists.flat()) {
+    if (!x || x.chat == null) continue;
+    const leadSec = Math.min(LEAD_MAX_S, Math.max(0, Math.round(Number(x.leadSec) || 0)));
+    if (!(leadSec > 0)) continue;
+    const k = String(x.chat), had = by.get(k);
+    if (!had || leadSec > had.leadSec || (leadSec === had.leadSec && x.tier === "guard")) by.set(k, { ...x, leadSec });
+  }
+  return [...by.values()].sort((a, b) => b.leadSec - a.leadSec);
+}
 async function stakerLeads() {
   if (MODE === "dry" || !TG) return [];
-  const st = await import("./stake.mjs").catch(() => null);
-  const list = st ? await st.stakerChats().catch(() => []) : [];
-  return list.map((x) => ({ ...x, leadSec: Math.min(LEAD_MAX_S, Math.max(0, Math.round(Number(x.leadSec) || 0))) })).filter((x) => x.leadSec > 0 && x.chat != null);
+  const [st, tr] = await Promise.all([import("./stake.mjs").catch(() => null), import("./treasury.mjs").catch(() => null)]);
+  const [stake, guard] = await Promise.all([st ? st.stakerChats().catch(() => []) : [], tr?.guardChats ? tr.guardChats().catch(() => []) : []]);
+  return mergeLeads(stake, guard);
 }
 async function dmOne(chat, text, kb, logo) {
   const lg = logo ? (fileIds.has(logo.cid) ? { cid: logo.cid, fileId: fileIds.get(logo.cid) } : logo) : null;
@@ -684,7 +699,7 @@ function postWithLead(p) {
       for (const x of list) {
         await dmOne(x.chat, `${p.text}
 
-<i>${TIER_NAME[x.tier] || "Staker"} tier: you get this ${sec} s before the public channel.</i>`, p.markup, p.logo).catch(() => {});
+<i>${x.tier === "guard" ? "King's Guard" : `${TIER_NAME[x.tier] || "Staker"} tier`}: you get this ${sec} s before the public channel.</i>`, p.markup, p.logo).catch(() => {});
         await new Promise((res) => setTimeout(res, 60));
       }
     }, Math.max(0, at - sec * 1000 - Date.now()));
@@ -775,4 +790,4 @@ export async function register(r, ctx) {
 }
 
 // tests only (tools/sentry-lead-test.mjs): the staker-lead queue without the chain loop
-export const _test = { postWithLead, setStore: (s) => { store = s; }, waiting: () => waiting, recent };
+export const _test = { postWithLead, mergeLeads, setStore: (s) => { store = s; }, waiting: () => waiting, recent };

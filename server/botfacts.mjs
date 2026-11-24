@@ -66,7 +66,7 @@ function receipts(html) {
 // the terms people ask about most and that the team changes from the admin side: read live, never written in a prompt
 function tiers(t) {
   if (!Array.isArray(t?.tiers) || !t.tiers.length) return "";
-  const rows = t.tiers.map((x) => `${x.name} (${x.min ? `${big(x.min)} $TROYA` : "anyone"}): ${x.watchfirePins} Watchfire pin${x.watchfirePins === 1 ? "" : "s"}, ${x.gateChecksPerDay ?? "the holder quota of"} Gate checks a day${x.perks ? ", holder perks" : ""}`);
+  const rows = t.tiers.map((x) => `${x.name} (${x.min ? `${big(x.min)} $TROYA` : "anyone"}): ${x.watchfirePins} Watchfire pin${x.watchfirePins === 1 ? "" : "s"}, ${x.gateChecksPerDay ?? "the holder quota of"} Gate checks a day${x.perks ? ", holder perks" : ""}${Array.isArray(x.extras) && x.extras.length ? `, plus ${x.extras.join(" and ")}` : ""}`);
   return `Holder tiers (troya.codes/agent#/treasury, counted across ${t.counted || "the signed-in wallet and its Agent Wallet"}): ${rows.join("; ")}.${t.perks ? ` ${t.perks}` : ""}${t.pro?.note ? ` ${t.pro.note}` : ""}`;
 }
 function herald(lb, cup) {

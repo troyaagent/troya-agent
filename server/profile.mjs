@@ -250,6 +250,8 @@ export async function badgesOf(address) {
     team: isTeamAddr(k),
     x: /^[A-Za-z0-9_]{1,15}$/.test(x?.username || "") ? x.username : null,
     holder: hold ? !!hold.holder : null,
+    // King's Guard: 50,000,000 $TROYA across the wallet and its Agent Wallet (server/treasury.mjs), from the same balance read
+    guard: hold ? !!(await import("./treasury.mjs").then((m) => m.isGuardBalance(hold.balance)).catch(() => false)) : null,
     stake: /^(bronze|silver|gold)$/.test(stake || "") ? stake : null,
     pass: pass?.me?.active && Number(pass.me.passId) > 0 ? Number(pass.me.passId) : null,
   };

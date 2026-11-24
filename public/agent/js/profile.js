@@ -79,6 +79,8 @@ export function profileHeader({ onEdit } = {}) {
     const tags = h("span", { class: "pr-tags" },
       b.team ? tag("Team", "team", "Troya team (a person, not a bot)") : null,
       b.holder ? tag("Holder", "", "Holds at least 1,000,000 $TROYA") : null,
+      // King's Guard (holder tier, 50,000,000 $TROYA): separate from the staking tier, so a wallet can show both
+      b.guard ? h("span", { class: "pr-tag kg-badge", title: "King's Guard: holds at least 50,000,000 $TROYA across the wallet and its Agent Wallet" }, icon("shield"), "King's Guard") : null,
       b.stake ? tag(cap(b.stake), `stk-badge t-${b.stake}`, `${cap(b.stake)} tier $TROYA staker`) : null,
       b.pass ? tag(`Pass #${b.pass}`, "", "Troya Holder Pass (soulbound)") : null,
       b.x ? h("a", { class: "pr-tag pr-x", href: `https://x.com/${b.x}`, target: "_blank", rel: "noopener nofollow", title: "X account linked with Sign in with X" }, `@${b.x}`) : null);

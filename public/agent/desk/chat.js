@@ -9,7 +9,7 @@
 //   mountChat(el, { inline: true })   the same panel drawn inside el (e.g. a Desk section)
 // Returns a stop function. New messages are read every 4 s while the panel is open and every 30 s while it is closed
 // (for the unread count); nothing is read while the tab is hidden.
-import { h, clear, toast, ago, short, modal, useCss } from "/agent/js/ui.js";
+import { h, clear, toast, ago, short, modal, useCss, icon } from "/agent/js/ui.js";
 import { api } from "/agent/js/api.js";
 import { avatarFor, profileHref } from "/agent/js/profile.js";
 import { wallet, onWallet, signIn } from "/agent/js/wallet.js";
@@ -180,6 +180,8 @@ export function mountChat(host = document.body, { inline = false } = {}) {
         m.user && m.x ? h("span", { class: "cc-sub", title: "X account linked with Sign in with X" }, `@${m.x}`) : null,
         m.team ? h("span", { class: "cc-tag team", title: "Troya team (a person, not a bot)" }, "Team") : null,
         m.holder ? h("span", { class: "cc-tag", title: "Holds at least 1,000,000 $TROYA" }, "Holder") : null,
+        // King's Guard holder tier (50,000,000 $TROYA), read once at post time; separate from the staking tier below
+        m.guard ? h("span", { class: "cc-tag kg-badge", title: "King's Guard: holds at least 50,000,000 $TROYA across the wallet and its Agent Wallet" }, icon("shield"), "King's Guard") : null,
         // $TROYA staking tier, read once at post time (sent only once the stake perks are on)
         /^(bronze|silver|gold)$/.test(m.stake || "") ? h("span", { class: `cc-tag stk-badge t-${m.stake}`, title: `${m.stake[0].toUpperCase()}${m.stake.slice(1)} tier $TROYA staker` }, `${m.stake[0].toUpperCase()}${m.stake.slice(1)}`) : null,
         h("time", { class: "cc-time", datetime: new Date(m.at).toISOString(), title: new Date(m.at).toLocaleString() }, ago(m.at)),

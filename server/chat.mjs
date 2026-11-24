@@ -138,7 +138,7 @@ let prof = null;   // profile.mjs, loaded in register (not imported at the top: 
 const view = (m) => {
   const c = prof?.cardOf?.(m.from) || null;
   return { id: m.id, at: m.at, from: m.from, name: c?.username || (m.x ? `@${m.x}` : short(m.from)), user: c?.username || null, avatar: c?.avatar || null,
-    x: m.x || null, holder: !!m.holder, ...(m.stake ? { stake: m.stake } : {}), team: isAdminAddr(m.from), text: m.text };
+    x: m.x || null, holder: !!m.holder, ...(m.guard ? { guard: true } : {}), ...(m.stake ? { stake: m.stake } : {}), team: isAdminAddr(m.from), text: m.text };
 };
 function meOf(req) {
   const s = getSession(req);
@@ -190,7 +190,7 @@ export async function register(r, ctx) {
     if (S.messages.slice(-80).some((m) => lc(m.from) === a && now - m.at < 30 * 60e3 && fold(m.text).toLowerCase().replace(/\s+/g, " ") === key)) throw new HttpError(409, "You just said that.");
     times.push(now); recent.set(a, times);
     if (recent.size > 5000) recent.delete(recent.keys().next().value);
-    // shown next to the name: a linked X handle (Sign in with X), the 1M $TROYA holder mark and the $TROYA staking tier
+    // shown next to the name: a linked X handle (Sign in with X), the 1M $TROYA holder mark, the King's Guard mark and the $TROYA staking tier
     // badge (only once the stake perks are on: server/stake.mjs badgeOf answers null before that), read once at post time
     const [x, h, sb] = await Promise.all([
       withTimeout(import("./xsocial.mjs").then((m) => m.handleOf(a)).catch(() => null), 2500),
@@ -198,6 +198,8 @@ export async function register(r, ctx) {
       withTimeout(import("./stake.mjs").then((m) => m.badgeOf(a)).catch(() => null), 3000)]);
     const m = { id: ++S.seq, seq: S.seq, at: now, from: normAddress(a), text, x: /^[A-Za-z0-9_]{1,15}$/.test(x?.username || "") ? x.username : null, holder: !!h?.holder };
     if (/^(bronze|silver|gold)$/.test(sb || "")) m.stake = sb;
+    // King's Guard (50,000,000 $TROYA, server/treasury.mjs), from the same balance read as the holder mark
+    if (h && (await import("./treasury.mjs").then((t) => t.isGuardBalance(h.balance)).catch(() => false))) m.guard = true;
     S.messages.push(m);
     if (S.messages.length > KEEP) S.messages.splice(0, S.messages.length - KEEP);
     save();

@@ -45,7 +45,7 @@ function gateCount(g) { const t = tallyOf(g?.checks); return { ...t, tally: t.te
 const GATE_REUSE_MS = 45_000;
 // ?review=1 (the Gate page's and the launch page's buy chips): the review opens once the Gate passes, within this long
 const AUTO_REVIEW_MS = 60_000;
-const GATE_COPY = "Pick a coin and an amount. Troya runs its checks (seven on Robinhood Chain), a simulated swap and a test sell included, before your wallet can sign.";
+const GATE_COPY = "Pick a coin and an amount. Troya runs its checks (nine on Robinhood Chain for a Pons coin), a simulated swap and a test sell included, before your wallet can sign.";
 // A stand-in sender for cross-chain quotes before a wallet is connected (LI.FI quotes the burn address like any wallet).
 // A quote made for it is a preview only: it is never signed, Review always fetches the route again for the real wallet.
 const PREVIEW_FROM = "0x000000000000000000000000000000000000dEaD";
@@ -697,7 +697,7 @@ export async function mount(view, ctx) {
           h("div", {},
             busy ? h("p", { class: "sw2-wait", "data-busy": "" }, busyLine()) : null,
             h("p", { class: busy ? "fine muted" : "sw2-wait" }, st.gating ? "Simulating the exact swap from your address and a test sell…"
-              : st.loading ? "Then Troya runs its checks (seven on Robinhood Chain) before your wallet can sign." : GATE_COPY))));
+              : st.loading ? "Then Troya runs its checks (nine on Robinhood Chain for a Pons coin) before your wallet can sign." : GATE_COPY))));
       return;
     }
     const c = gateCount(g), v = verdictOf(g);

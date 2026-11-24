@@ -352,6 +352,8 @@ async function intentWatchlist(ctx, lang) {
 // the LLM's prompt use), so the parser, which runs when the LLM is off or over its cap, knows the product too. Only for
 // a question that names a feature by a name of its own: everyday words that are also page names (market, swap, gate…)
 // count only when the question compares two features, so "what is the market doing?" still reaches the movers.
+// words that ask for an order; a ticket is only made when the user's own message (or the one before it) asks for one
+const ORDER_WORDS = /\b(buy|sell|swap|convert|trade|ape|long|short|open|close|order|ticket|stop[\s-]?loss|take[\s-]?profit|tp|sl|dca|twap|alert|notify|bridge|fund|deposit|withdraw|send|beli|jual|tukar|cicil|nyicil|setor|tarik|kirim|pasang|order)\b/i;
 const GLOSS_ASK = /\b(what(?:'?s| is| are| does| do)?|which|difference|differ(?:ent|ence)?|compare|versus|vs|explain|meaning|means?|how (?:does|do|is)|tell me about|apa(?:kah)? itu|bedanya|beda(?:nya)?|jelaskan|maksud(?:nya)?|fungsi(?:nya)?)\b/i;
 const GLOSS_VS = /\b(difference|differ|compare|versus|vs|or|bedanya|beda|atau)\b/i;
 const GENERIC = new Set(["market", "swap", "perps", "bridge", "portfolio", "history", "inbox", "chat", "assistant", "social", "gate", "badge", "snap", "rail", "buyback", "tiers", "coin page", "token page"]);
@@ -365,7 +367,9 @@ const questionOnly = (t) => {
 };
 function intentGlossary(raw, lang) {
   const text = questionOnly(raw);
-  if (!GLOSS_ASK.test(text) || /0x[0-9a-fA-F]{40}/.test(text) || /\d/.test(text)) return null;
+  // a bare feature name ("Ring radar", "Scepter") asks what it is too (Xivor, 24 Nov 2026), as long as it is short and no order
+  const bare = text.trim().split(/\s+/).length <= 4 && !ORDER_WORDS.test(text);
+  if ((!GLOSS_ASK.test(text) && !bare) || /0x[0-9a-fA-F]{40}/.test(text) || /\d/.test(text)) return null;
   const found = featuresIn(text);
   // named by a name of its own ("Scepter", "Sentry Autopilot", "Troya Gate"), not only by an everyday word ("gate")
   const nt = normT(text);
@@ -379,8 +383,8 @@ function intentGlossary(raw, lang) {
 
 function helpText(lang) {
   return T(lang,
-    "I read Robinhood Chain and Hyperliquid and line up orders for you to approve. Try:\n- **What's moving?**\n- **Funding BTC** or **funding extremes**\n- **Swap 0.01 ETH to NVDA**\n- **Long ETH 5x $100 sl 3000**\n- **Is 0x… safe?**\n- **Stop loss ETH at 3000** · **DCA 0.01 ETH weekly into NVDA**\n- **My balance** · **Bridge 0.05 ETH from Arbitrum**\n\nBase, Arbitrum and Solana swaps and Hyperliquid spot are on the Swap and Spot pages.",
-    "Aku membaca Robinhood Chain dan Hyperliquid lalu menyiapkan order untuk kamu setujui. Coba:\n- **Apa yang lagi naik?**\n- **Funding BTC** atau **funding ekstrem**\n- **Tukar 0.01 ETH ke NVDA**\n- **Long ETH 5x $100 sl 3000**\n- **0x… aman?**\n- **Stop loss ETH di 3000** · **DCA 0.01 ETH tiap minggu ke NVDA**\n- **Saldo saya** · **Bridge 0.05 ETH dari Arbitrum**\n\nSwap di Base, Arbitrum dan Solana serta spot Hyperliquid ada di halaman Swap dan Spot.");
+    "I read Robinhood Chain and Hyperliquid, explain any Troya feature, and only prepare an order when you ask for one. Things you can type, for example:\n- **What is Ring Radar?** (or any feature name)\n- **Is 0x… safe?** (paste a coin)\n- **What's moving?** · **Funding extremes**\n- **My balance**\n- Orders, only when you want one: **swap 0.01 ETH to** a coin, **long ETH 5x $100 sl 3000**, **stop loss ETH at 3000**\n\nBase, Arbitrum and Solana swaps and Hyperliquid spot are on the Swap and Spot pages.",
+    "Aku membaca Robinhood Chain dan Hyperliquid, menjelaskan fitur Troya, dan hanya menyiapkan order kalau kamu memintanya. Contoh yang bisa diketik:\n- **Apa itu Ring Radar?** (atau nama fitur apa pun)\n- **0x… aman?** (tempel alamat koin)\n- **Apa yang lagi naik?** · **Funding ekstrem**\n- **Saldo saya**\n- Order, hanya kalau kamu mau: **tukar 0.01 ETH ke** sebuah koin, **long ETH 5x $100 sl 3000**, **stop loss ETH di 3000**\n\nSwap di Base, Arbitrum dan Solana serta spot Hyperliquid ada di halaman Swap dan Spot.");
 }
 
 /* ---------- LLM agent (OpenRouter) ---------- */
@@ -455,6 +459,7 @@ ${FACTS.map((f) => `- ${f}`).join("\n")}${glossaryBlock()}
 Rules:
 - What a feature is, where it lives and whether it can move money: answer from the FEATURE GLOSSARY and give its link. When asked how features differ, compare them from their glossary lines, one short bullet each. Never invent a feature, a playbook type, an agent template or a setting that is not there; if something is missing, say you do not have it and point to troya.codes/agent#/docs.
 - Every price, volume, funding rate, balance or token fact you state must come from a tool result in this conversation. Never guess numbers. If a tool fails, say so plainly.
+- Never offer, suggest or prepare a trade the user did not ask for, and never end an answer by proposing one. A feature name on its own (for example "Ring radar") is a question about that feature: answer from the glossary with its link.
 - Orders: call make_swap_ticket / make_perp_ticket / make_watch / make_bridge_ticket / make_hl_fund_ticket. They create a ticket the user signs or approves; you never move funds and never say an order was placed or filled.
 - Hyperliquid perps need USDC on the user's own Hyperliquid account. Never tell them to deposit on another site: call make_hl_fund_ticket (ETH on Robinhood Chain → USDC on Hyperliquid, one route). When the Hyperliquid account is empty and they want a perp, offer the funding ticket alongside the perp ticket. Before the Agent Wallet can trade perps they approve it once (Agent page → Hyperliquid trading → Approve on Hyperliquid).
 - Perps: a dollar amount from the user is the position size (notional) unless they say margin/modal; margin = size / leverage. Swaps: amounts are in the input token unless given in dollars (then use amount_usd).
@@ -482,7 +487,12 @@ async function agentAnswer(ctx, text, lang) {
   const proposals = [];
   const take = (r) => { if (r?.proposals?.length) proposals.push(...r.proposals); return { ticketCreated: !!r?.proposals?.length, result: r?.text || "" }; };
   const perps = async (c) => (await hlMarkets()).find((m) => m.coin.toUpperCase() === String(c || "").replace(/^\$/, "").toUpperCase())?.coin;
+  // a ticket only when the user asked for an order, in this message or the one before it (an answer to "how much?"):
+  // never a buy nobody asked for (Xivor, 24 Nov 2026)
+  const lastUser = [...hist].reverse().find((m) => m.role === "user" && !/^\(Context only/.test(m.content))?.content || "";
+  const asked = ORDER_WORDS.test(text) || (ORDER_WORDS.test(lastUser) && text.trim().split(/\s+/).length <= 8);
   const exec = async (name, a = {}) => {
+    if (/^make_/.test(name) && !asked) return { error: "No ticket: the user did not ask for an order. Answer the question only, and never suggest or offer a trade." };
     if (READ_TOOLS.includes(name)) return runTool(name, name === "get_balances" && !a.address ? { ...a, address: ctx.address } : a, ctx);
     if (name === "eth_price") return { ethUsd: await ethUsd() };
     if (name === "make_swap_ticket") {

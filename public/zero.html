@@ -96,7 +96,7 @@
       <div><i data-zw="m">–</i><span>Minutes</span></div>
       <div><i data-zw="s">–</i><span>Seconds</span></div>
     </div>
-    <p class="zw-done" data-zw-done hidden>Zero is live (scheduled 30 Nov). Troya is checking it now.</p>
+    <p class="zw-done" data-zw-done hidden>It is launch day: Zero is scheduled to start today, 30 Nov. LayerZero gave no time of day, so this page marks Zero live only once its first blocks are confirmed.</p>
     <p class="zw-when" data-zw-when><b>30 Nov (UTC)</b> scheduled start · no time of day announced</p>
   </section>
 
@@ -120,12 +120,12 @@
       <h2 id="what-h" class="h2">In plain words</h2>
       <div>
         <ul class="zw-facts">
-          <li>Zero is a new blockchain made by LayerZero. Its work is split into zones, for EVM apps, for trading and for private payments, and it uses zero-knowledge proofs so a computation can be checked without running it again.</li>
+          <li>Zero is a new blockchain made by LayerZero. Its work is split into zones, for EVM apps, for trading and for private payments, and it uses succinct proofs so a computation can be checked without running it again (LayerZero lists zero-knowledge proofs as a later step).</li>
           <li>ATLAS is an exchange engine on Zero that matches, clears and settles trades in one system. It has no app of its own: trading venues put their own screens on top of it.</li>
           <li>Open ATLAS is the standard setup for crypto trading apps: a venue connects, picks or creates markets and serves its users without building an exchange engine.</li>
           <li>Zero and ATLAS are scheduled to launch on 30 Nov 2026. That date is LayerZero's; no time of day has been announced, so this countdown runs to the start of 30 Nov in UTC.</li>
         </ul>
-        <p class="zw-src">Sources: <a href="https://layerzero.network/blog/introducing-atlas" target="_blank" rel="noopener">Introducing ATLAS</a> (LayerZero blog, 25 Aug 2026) and <a href="https://cryptobriefing.com/layerzero-zero-mainnet-lzatlas-launch/" target="_blank" rel="noopener">Crypto Briefing</a> (launch date).</p>
+        <p class="zw-src">Sources: <a href="https://layerzero.network/blog/introducing-atlas" target="_blank" rel="noopener">Introducing ATLAS</a> (LayerZero blog, 25 Aug 2026) and <a href="https://layerzero.network/blog/stake-zro-on-zero" target="_blank" rel="noopener">Stake ZRO on Zero</a> (LayerZero blog, 20 Nov 2026, launch date).</p>
       </div>
     </div>
   </section>
@@ -156,13 +156,13 @@
   const ZERO = {
     at: Date.UTC(2026, 10, 30, 0, 0, 0),
     items: [
-      { name: "Zero mainnet", state: "auto", note: { counting: "Scheduled for 30 Nov 2026.", live: "Scheduled for 30 Nov 2026; Troya is checking it now." } },
+      { name: "Zero mainnet", state: "auto", note: { counting: "Scheduled for 30 Nov 2026.", live: "Launch day. No time of day was announced; marked live once the first blocks are confirmed." } },
       { name: "Troya Gate on Zero", state: "planned", note: "Check a Zero token before you buy, the way the Gate checks every coin on Robinhood Chain." },
       { name: "Sentry on Zero", state: "planned", note: "Read new tokens and launchpads on Zero and flag the risky ones, the way Sentry reads every launch today." },
       { name: "Open ATLAS in Troya", state: "researching", note: "Studying whether Troya can bring Open ATLAS trading into its own desk, behind the Gate and your Agent Wallet caps." },
     ],
   };
-  const LABEL = { counting: "Counting down", live: "Live (scheduled)", planned: "Planned", researching: "Researching" };
+  const LABEL = { counting: "Counting down", live: "Launch day", planned: "Planned", researching: "Researching" };
   const cd = document.querySelector("[data-zw-cd]"), done = document.querySelector("[data-zw-done]"), list = document.querySelector("[data-zw-list]");
   let shown = "";
   const render = (isLive) => {

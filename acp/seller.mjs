@@ -63,6 +63,37 @@ function deliverable(out) {
   });
 }
 
+async function evaluate(session, ev) {
+  const job = await session.fetchJob().catch(() => session.job);
+  const provider = job?.providerAddress || ev.provider, buyer = job?.clientAddress;
+  const deliverable = String(ev.deliverable ?? job?.deliverable ?? "").trim();
+  const jobRef = `acp:${session.chainId}:${session.jobId}`;
+  const post = async (path, body) => {
+    const r = await fetch(`${TROYA}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(60_000) });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(j?.error || `Troya answered ${r.status}`);
+    return j;
+  };
+  if (!provider || !buyer) { console.error(`[acp] evaluate ${session.jobId}: no provider or buyer on the job; left for the SLA to expire`); return; }
+  const pre = await post("/api/phaeacians/precheck", { provider, buyer, job: jobRef }).catch((e) => ({ verdict: "error", why: e.message }));
+  const rec = await post("/api/phaeacians/complete", { jobRef, provider, buyer, ...(ev.deliverableHash ? { deliverableHash: ev.deliverableHash } : {}) }).catch(() => null);
+  const link = rec?.url ? ` Record: ${rec.url}` : "";
+  if (!deliverable) {
+    await session.reject(`Troya Phaeacians (evaluator): nothing was delivered for this job, so the escrow goes back to the buyer.${link}`);
+    console.log(`[acp] evaluated ${session.jobId}: rejected, no deliverable`);
+    return;
+  }
+  if (pre?.verdict === "refuse") {
+    const why = (pre.reasons || []).filter((x) => x.level === "refuse").map((x) => x.text).join(" ").slice(0, 400) || pre.summary || "the pair failed the check";
+    await session.reject(`Troya Phaeacians (evaluator): ${why} The escrow goes back to the buyer.${link}`);
+    console.log(`[acp] evaluated ${session.jobId}: rejected, pair refused`);
+    return;
+  }
+  const note = pre?.verdict === "caution" ? " Phaeacians noted cautions on the pair (see the record)." : pre?.verdict === "error" ? " The pair check could not run fully." : "";
+  await session.complete(`Troya Phaeacians (evaluator): a deliverable was submitted and the pair passed the collusion check.${note} Troya checks the pair and that something was delivered, never whether the work is good.${link}`);
+  console.log(`[acp] evaluated ${session.jobId}: completed (${pre?.verdict || "?"})`);
+}
+
 const busy = new Set();   // one handler per job at a time (events can arrive twice on reconnect)
 async function once(session, what, fn) {
   const k = `${session.chainId}:${session.jobId}:${what}`;
@@ -108,6 +139,14 @@ agent.on("entry", async (session, entry) => {
         console.error(`[acp] job ${session.jobId}: check failed after funding, asked the buyer to reject: ${err?.message}`);
       }
     });
+  }
+  // 3) Troya named as the job's evaluator (V10 F66 Phaeacians, owner OK 26 Nov 2026): when another agent's job is
+  //    submitted, Troya checks the pair (self-deal, the buyer funding the provider, direct transfers between them) and
+  //    whether anything was delivered, signs a Phaeacians record, then completes the job (escrow to the provider) or
+  //    rejects it (escrow back to the buyer). Troya never holds the money; ACP's escrow does. It cannot judge whether the
+  //    work is good: it rejects only on a missing deliverable or a pair Phaeacians refuses, and says so in the reason.
+  if (entry.kind === "system" && entry.event?.type === "job.submitted" && session.roles?.includes("evaluator") && !session.roles?.includes("provider")) {
+    return once(session, "evaluate", () => evaluate(session, entry.event));
   }
   if (entry.kind === "system" && /job\.(completed|rejected|expired)/.test(entry.event?.type || "")) console.log(`[acp] job ${session.jobId} ${entry.event.type}`);
 });

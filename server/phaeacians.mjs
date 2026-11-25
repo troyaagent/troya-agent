@@ -331,8 +331,9 @@ async function recordView(rec) {
 }
 
 const ACP = {
-  status: "not wired",
-  how: "Virtuals ACP v2 lets the buyer name any wallet as a job's evaluator (createJobFromOffering with evaluatorAddress). That evaluator gets job.submitted and calls complete (escrow pays the provider) or reject (escrow refunds the buyer). Troya's ACP agent (Troya Gate, 0x1731a0D264A4fd6aB6702bD849Aa6A13533c7E6C) can take that role once the owner turns it on; until then this desk signs records only and decides no escrow.",
+  status: "live",
+  evaluator: "0x1731a0D264A4fd6aB6702bD849Aa6A13533c7E6C",
+  how: "On Virtuals ACP v2 a buyer can name Troya Gate's agent wallet (0x1731a0D264A4fd6aB6702bD849Aa6A13533c7E6C, on Base and Robinhood Chain) as a job's evaluator with createJobFromOffering(..., { evaluatorAddress }). When the provider submits, Troya runs this precheck and signs a completion record, then completes the job (escrow pays the provider) or rejects it (escrow refunds the buyer). It rejects only when nothing was delivered or the pair is refused (self-deal, the buyer funded the provider, or both); otherwise it completes. Troya never holds the money and never judges whether the work is good. Troya does not evaluate jobs where it is the provider.",
 };
 
 export async function register(r, ctx) {

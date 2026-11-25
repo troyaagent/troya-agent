@@ -531,7 +531,7 @@ export function copyOf(s, r) {
 }
 const postUrl = (j) => (j?.result?.message_id ? `https://t.me/${CHANNEL.replace(/^@/, "")}/${j.result.message_id}` : null);
 function record(s, r, posted, reason, j) {
-  recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, posted, ...(r.source ? { source: r.source } : {}), reason, raised: r.pons?.raised ?? null, progressPct: r.pons?.progressPct ?? null, buyers: r.buyers ? r.buyers.organic : null, eligible: !!posted || (meetsBar(r) && !COPY_HOLD.test(reason || "")), at: r.at, post: postUrl(j) });
+  recent.unshift({ token: r.token, symbol: r.symbol, name: r.name, verdict: r.v, posted, ...(r.source ? { source: r.source } : {}), reason, raised: r.pons?.raised ?? null, progressPct: r.pons?.progressPct ?? null, buyers: r.buyers ? r.buyers.organic : null, eligible: !!posted || (meetsBar(r) && !COPY_HOLD.test(reason || "")), fails: (r.checks || []).filter((c) => c.status === "fail").map((c) => c.key), at: r.at, post: postUrl(j) });   // fails: V9 F52 Two Fates tells a safety block from a route-only one
   recent.length = Math.min(recent.length, 200);
   s.recent = recent.slice(0, 200);                                   // survives restarts
   return recent[0];

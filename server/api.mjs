@@ -55,6 +55,7 @@ const MODULES = [
   "./stats.mjs",       // public usage numbers (community request 21 Nov): GET /api/stats, page /stats
   "./xtracker.mjs",    // V8 F41 X Tracker: tracked X accounts ride on the filtered stream; a posted contract gets the Gate and a ping
   "./antround.mjs",    // Arena: Anthropic Round, the five AI traders on xyz:ANT (paper; live with ANT_ROUND_LIVE=1)
+  "./warroom.mjs",     // V9 F52 War Room + F53 Myrmidons: calls, challenges and rug reports graded in public (no stakes)
   "./heelhunt.mjs",    // V9 F50 Heel Hunt: talk the Vault Keeper AI into sending the prize (opens only when the team sets it open)
   "./fates.mjs",       // V9 F52 Two Fates (part 1): passed vs blocked launches graded on the same clock, GET /api/fates
   "./patroclus.mjs",   // V9 F54 Patroclus: the Heel card as an embeddable SVG image (GET /api/heelcard/:address.svg) and its embed kit

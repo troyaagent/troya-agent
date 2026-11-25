@@ -75,7 +75,7 @@ export function si(name, cls = "") {
 // No route was removed in the regroup: every old address still resolves through ROUTES below.
 export const GROUPS = [
   [null, [["Home", "#/", "desk"]]],
-  ["Discover", [["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["All Robinhood coins", "#/launch", "launch"], ["Gate a coin", "#/gate", "gate"], ["Find the weak spot", "#/heel", "heel"], ["Heel Hunt", "#/heelhunt", "heel"], ["Trader habits", "#/chiron", "chiron"], ["Leaderboard", "#/leaderboard", "leaderboard"]]],
+  ["Discover", [["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["All Robinhood coins", "#/launch", "launch"], ["Gate a coin", "#/gate", "gate"], ["Find the weak spot", "#/heel", "heel"], ["Heel Hunt", "#/heelhunt", "heel"], ["War Room", "#/warroom", "leaderboard"], ["Trader habits", "#/chiron", "chiron"], ["Leaderboard", "#/leaderboard", "leaderboard"]]],
   ["Trade", [["Swift", "#/swift", "swift"], ["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Stock desk", "#/stocks", "stocks"], ["Liquidity desk", "#/liquidity", "liquidity"], ["Lighter perps", "#/lighter", "lighter"], ["Bridge", "#/bridge", "bridge"]]],
   ["Launch", [["Create coin", "#/create", "create"], ["My coins & fees", "#/creator", "creator"]]],
   // Autopilot keeps its place until the owner decides where it belongs
@@ -105,9 +105,10 @@ const ROUTES = {
   about: "about",                                            // About Troya (23 Nov): ./about.js, the intro that used to open the Desk
   phoenix: "phoenix",                                        // V9 F57 Phoenix: ./phoenix.js (loads its own phoenix.css)
   heelhunt: "heelhunt",                                      // V9 F50 Heel Hunt: ./heelhunt.js (loads its own heelhunt.css)
+  warroom: "warroom",                                        // V9 F52 War Room + F53 Myrmidons: ./warroom.js
   u: "portfolio",                                            // profiles (21 Nov): #/u/<username> → a wallet's public page
 };
-const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", chiron: "./chiron.js", clusters: "./clusters.js", swift: "./swift.js", about: "./about.js", phoenix: "./phoenix.js", heelhunt: "./heelhunt.js" };
+const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", chiron: "./chiron.js", clusters: "./clusters.js", swift: "./swift.js", about: "./about.js", phoenix: "./phoenix.js", heelhunt: "./heelhunt.js", warroom: "./warroom.js" };
 // The sheets each page asks for with useCss at mount. route() requests them together with the module, so the stylesheet
 // is not one more round trip after the code. The boot script in /agent/index.html keeps a copy of this table and of the
 // routes above to start the same downloads before this file has even arrived: change both together.

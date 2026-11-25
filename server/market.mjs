@@ -524,11 +524,13 @@ async function fillSocials() {
       .sort((a, b) => (b.volume24hUsd || 0) - (a.volume24hUsd || 0)).slice(0, 60);
     if (!due.length) return;
     const pons = due.filter((t) => t.launchpad === "pons");
+    const bare = [];   // Pons coins whose Pons profile lists no link: their DexScreener page often does (SIGIL, 25 Nov 2026)
     for (const t of pons) {
       const p = await ponsProfile(t.address).catch(() => null);
       SOCIALS.set(t.address, { twitter: p?.twitter || null, telegram: p?.telegram || null, website: p?.website || null, at: now });
+      if (!p?.twitter && !p?.telegram && !p?.website) bare.push(t.address);
     }
-    const rest = due.filter((t) => t.launchpad !== "pons").map((t) => t.address);
+    const rest = [...due.filter((t) => t.launchpad !== "pons").map((t) => t.address), ...bare];
     if (rest.length) {
       const rows = dsRows(await dsPairs(rest).catch(() => []), null);
       for (const a of rest) { const r = rows.get(a); SOCIALS.set(a, { twitter: r?.twitter || null, telegram: r?.telegram || null, website: r?.website || null, at: now }); }

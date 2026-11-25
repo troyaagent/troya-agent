@@ -70,7 +70,7 @@ export async function mount(view) {
         ch.addEventListener("click", () => { if (!li.querySelector(".wr-ch")) li.append(challengeForm(c, li)); });
         li.append(
           h("div", {}, h("a", { class: "link", href: `#/gate/${c.token}` }, c.symbol ? `$${c.symbol}` : short(c.token)), h("span", { class: `wr-v ${c.verdict}` }, c.verdict === "passed" ? "Troya: passed" : "Troya: blocked"),
-            h("span", { class: "fine" }, `checked ${ago(c.at)} ago${c.reason ? ` · ${c.reason.split(":")[0]}` : ""} · open ${Math.max(0, Math.round((c.closesAt - Date.now()) / 60e3))} more min`)),
+            h("span", { class: "fine" }, `checked ${ago(c.at)} ago${c.reason ? ` · ${c.reason.split(":")[0]}` : ""} · open ${(() => { const m = Math.max(0, Math.round((c.closesAt - Date.now()) / 60e3)); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`; })()} more`)),
           h("div", { class: "wr-act" }, sv, zr, ch));
         return li;
       })) : h("p", { class: "fine" }, "No launch is open right now. New ones appear here as Sentry checks them."));

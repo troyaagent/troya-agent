@@ -98,10 +98,16 @@ export async function mount(view) {
   const shareBox = h("p", { class: "fine stk-share" });
   const headBadge = h("span", { class: "stk-state" });
   const chainSlot = h("div", { class: "stk-ch-slot" });
+  // Phantom (Xivor70, 26 Nov 2026): it signs in fine, but as far as we know it cannot add Robinhood Chain as a network, so the
+  // approve and stake transactions need a wallet that can. Said up front, before anyone gets stuck at the gas step.
+  const phantomNote = h("div", { class: "alert", hidden: true, style: { marginBottom: "12px" } },
+    "Phantom can sign in and claim free gas here, but as far as we know it cannot add Robinhood Chain as a network, so it cannot send the approve and stake transactions. Import the same wallet into MetaMask or Rabby to stake.");
+  const isPhantom = () => !!(wallet.address && (wallet.eip?.isPhantom || /phantom/i.test(`${wallet.info?.name || ""} ${wallet.info?.rdns || ""}`)));
+  const notePhantom = () => { phantomNote.hidden = !isPhantom(); };
   let chain = null;
   clear(view, h("div", { class: "dk stk" },
     pageHead("Stake $TROYA", "Stake $TROYA to earn a tier: Bronze, Silver or Gold, from how much you stake and for how long. Each tier unlocks perks inside Troya. Unstaking takes 3 days. Stakers also share part of the $TROYA creator fees in ETH, paid into the staking contract every day (claim any time): a share that grows with market cap, varies with volume, not a promised yield.", { act: headBadge }),
-    tiles, shareBox, h("div", { class: "stk-grid" }, act, prog), chainSlot, tiersBox, risks, foot));
+    phantomNote, tiles, shareBox, h("div", { class: "stk-grid" }, act, prog), chainSlot, tiersBox, risks, foot));
   // the on-chain section loads on its own, so it never holds up the stake form
   import("./stake-chain.js").then((m) => {
     if (!alive) return;
@@ -470,7 +476,8 @@ export async function mount(view) {
     if (key(st.me) !== before && !act.contains(document.activeElement)) paint(); else { paintTiles(); paintProg(); paintTwoX(); chain?.paint(); }
   }
   // onWallet calls back at once: that first call is the load; after that only an address change reloads
-  const off = onWallet(() => { const k = String(wallet.address || "").toLowerCase(); if (k !== seen) { seen = k; st.me = null; load(); } });
+  notePhantom();
+  const off = onWallet(() => { notePhantom(); const k = String(wallet.address || "").toLowerCase(); if (k !== seen) { seen = k; st.me = null; load(); } });
   const refresher = setInterval(soft, 60_000);
   return () => { alive = false; off(); clearInterval(refresher); if (tick) clearInterval(tick); };
 }

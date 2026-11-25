@@ -218,7 +218,13 @@ async function postAlert(c) {
   if (TG_CHAT && process.env.TELEGRAM_BOT_TOKEN)
     await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ chat_id: TG_CHAT, text, link_preview_options: { is_disabled: true } }), signal: AbortSignal.timeout(15_000) }).catch(() => {});
-  if (ALERTS_X) await import("./xsocial.mjs").then((m) => m.postTweet(text.slice(0, 280))).catch(() => {});
+  if (ALERTS_X) {
+    // X keeps the link: a short form under 280 characters instead of the Telegram text cut mid-sentence
+    const where = c.chain === "ethereum" ? "on Ethereum" : "on Robinhood Chain";
+    let x = `Pharos storm watch: ${c.label} ${where}, ${c.field} changed: ${c.fromText} → ${c.toText}. Not proof of harm; read it before you cross: troya.codes/agent#/scylla`;
+    if (x.length > 280) x = `Pharos storm watch: ${String(c.label).slice(0, 60)} ${where}, ${String(c.field).slice(0, 40)} changed. Not proof of harm; read it before you cross: troya.codes/agent#/scylla`;
+    await import("./xsocial.mjs").then((m) => m.postTweet(x)).catch(() => {});
+  }
 }
 
 /** For Scylla: warnings for routes touching these chain ids (recent setting changes, chain health). */

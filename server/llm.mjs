@@ -41,7 +41,7 @@ async function call(messages, tools, opts = {}) {
       "X-Title": "Troya Agent",
     },
     body: JSON.stringify({
-      model: opts.model || MODEL, models: [opts.model || MODEL, FALLBACK],
+      model: opts.model || MODEL, ...(opts.noFallback ? {} : { models: [opts.model || MODEL, FALLBACK] }),   // noFallback: never answer with a weaker model
       messages, tools: tools.length ? tools : undefined, tool_choice: tools.length ? "auto" : undefined,
       max_tokens: opts.maxTokens || 900, temperature: opts.temperature ?? 0.3, usage: { include: true },
       ...(opts.reasoning ? { reasoning: opts.reasoning } : {}),
@@ -62,11 +62,11 @@ export async function ask({ system, user, model, maxTokens = 700, temperature = 
 }
 
 // Runs the model, executes the tool calls it asks for (exec(name, args) → result object), and repeats until it answers.
-export async function chatWithTools({ system, history = [], user, tools = [], exec, maxSteps = 5, onTool }) {
+export async function chatWithTools({ system, history = [], user, tools = [], exec, maxSteps = 5, onTool, model, maxTokens, temperature, noFallback }) {
   const messages = [{ role: "system", content: system }, ...history, { role: "user", content: user }];
   for (let step = 0; step < maxSteps; step++) {
     const lastStep = step === maxSteps - 1;
-    const msg = await call(messages, lastStep ? [] : tools);
+    const msg = await call(messages, lastStep ? [] : tools, { model, maxTokens, temperature, noFallback });   // model: a caller may pick its own (Heel Hunt runs a stronger one)
     const calls = msg.tool_calls || [];
     if (!calls.length) return String(msg.content || "").trim();
     messages.push({ role: "assistant", content: msg.content || "", tool_calls: calls });

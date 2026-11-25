@@ -23,6 +23,7 @@ async function ownerChats() {
   const d = await store.readJson("reports-tg.json", {});
   return (d.chats || []).filter((c) => !c.off && !String(c.id).startsWith("-")).map((c) => c.id);
 }
+export const tellOwner = (text) => tell(text);   // other modules (Heel Hunt) tell the owner the same way
 async function tell(text) {
   const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
   if (!TOKEN) return;

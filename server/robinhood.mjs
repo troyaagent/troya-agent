@@ -1407,6 +1407,31 @@ async function lifi(p) {
   if (!res.ok) throw new HttpError(res.status === 404 ? 404 : 502, json?.message ? `No route: ${json.message}` : `LI.FI ${res.status}`);
   return json;
 }
+
+/* Safe crossings (owner, 26 Nov 2026, after V10 F59 Scylla scored the default routes red): every LI.FI route Troya hands out
+   may only use bridges whose Scylla fact sheet scores 40 or more with no red line (single-key control, an unresolved
+   exploit). Bridges with no checked facts are left out too. BRIDGE_SAFE=0 goes back to LI.FI's own pick. */
+let safeCache = { at: 0, list: "" };
+export async function safeBridges() {
+  if (process.env.BRIDGE_SAFE === "0") return "";
+  if (Date.now() - safeCache.at < 10 * 60_000 && safeCache.list) return safeCache.list;
+  try {
+    const { FACTS, scoreFacts } = await import("./scylla.mjs");
+    const ok = Object.entries(FACTS).filter(([k, f]) => f.kind !== "router").map(([k, f]) => scoreFacts(k, f)).filter((x) => x.score >= 40 && !(x.redLines || []).length).map((x) => x.key);
+    safeCache = { at: Date.now(), list: ok.join(",") };
+  } catch (e) { console.warn("[bridge] safe list:", e.message); }
+  return safeCache.list;
+}
+const safeParam = async () => { const l = await safeBridges(); return l ? `&allowBridges=${l}` : ""; };
+// a route the safe list rules out answers 404: say why in plain words, never a bare "No route"
+async function lifiSafe(path) {
+  const extra = await safeParam();
+  try { return await lifi(path + extra); }
+  catch (e) {
+    if (extra && (e.status === 404 || /No route/i.test(e.message))) throw new HttpError(404, "No route right now passes Troya's bridge safety bar (Scylla score 40+ with no red line). Try a different amount or try again in a few minutes; the scores are at troya.codes/agent#/scylla.");
+    throw e;
+  }
+}
 export async function bridgeQuote({ fromChain, toChain = CHAIN_ID, address, amountWei }) {
   fromChain = Number(fromChain); toChain = Number(toChain || CHAIN_ID);
   if (!LIFI_CHAINS[fromChain] || !LIFI_CHAINS[toChain] || fromChain === toChain) throw new HttpError(400, "Unsupported chain pair.");
@@ -1414,7 +1439,7 @@ export async function bridgeQuote({ fromChain, toChain = CHAIN_ID, address, amou
   const who = addr(address, "wallet address");
   const amount = BigInt(amountWei || 0);
   if (amount <= 0n) throw new HttpError(400, "Enter a positive amount.");
-  const q = await lifi(`/quote?fromChain=${fromChain}&toChain=${toChain}&fromToken=${ZERO}&toToken=${ZERO}&fromAddress=${who}&toAddress=${who}&fromAmount=${amount}&integrator=troya-agent&slippage=0.01`);
+  const q = await lifiSafe(`/quote?fromChain=${fromChain}&toChain=${toChain}&fromToken=${ZERO}&toToken=${ZERO}&fromAddress=${who}&toAddress=${who}&fromAmount=${amount}&integrator=troya-agent&slippage=0.01`);
   const e = q.estimate || {}, tx = q.transactionRequest;
   if (!tx?.to || !tx?.data) throw new HttpError(502, "The route came back without a transaction to sign.");
   const usd = (l) => (l || []).reduce((s, x) => s + (Number(x?.amountUSD) || 0), 0);
@@ -1479,7 +1504,7 @@ export async function crossBuyQuote({ fromChain, toChain, toToken, address, amou
   const gate = { verdict: fail ? "failed" : warn ? "caution" : "passed", passed: checks.filter((c) => c.status === "pass").length, total: checks.filter((c) => c.status !== "skip").length,
     why: fail ? `${fail.label}: ${fail.detail}` : warn ? `${warn.label}: ${warn.detail}` : null, checks };
   if (fail || !g.pass) throw new HttpError(409, `Troya Gate stopped this buy on ${LIFI_CHAINS[toChain]}: ${gate.why || "a check failed"}`, { gate });
-  const q = await lifi(`/quote?fromChain=${fromChain}&toChain=${toChain}&fromToken=${ZERO}&toToken=${coin}&fromAddress=${who}&toAddress=${who}&fromAmount=${amount}&integrator=troya-agent&slippage=${slip}`);
+  const q = await lifiSafe(`/quote?fromChain=${fromChain}&toChain=${toChain}&fromToken=${ZERO}&toToken=${coin}&fromAddress=${who}&toAddress=${who}&fromAmount=${amount}&integrator=troya-agent&slippage=${slip}`);
   const e = q.estimate || {}, tx = q.transactionRequest, a = q.action || {};
   if (!tx?.to || !tx?.data) throw new HttpError(502, "The route came back without a transaction to sign.");
   if (Number(tx.chainId || fromChain) !== fromChain) throw new HttpError(502, "The route asked for a transaction on another chain.");

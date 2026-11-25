@@ -53,6 +53,7 @@ const ROUTES = {
   "/swap": "/swap.html",
   "/stake": "/stake.html",
   "/zero": "/zero.html",
+  "/heel": "/heel.html",   // V9 F54: the short link printed on the Patroclus card
   "/safety": "/safety.html",
   "/proof": "/proof.html",
   "/changelog/agent-wallet": "/changelog/agent-wallet.html",

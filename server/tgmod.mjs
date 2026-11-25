@@ -96,7 +96,8 @@ const RULES = [
   // call channels, "insider" and signal sellers
   [3, /insider\s+(?:calls?|printing|plays?)|next\s+(?:call|play|gem)|(?:my|our)\s+(?:next\s+)?calls?\b|call(?:ed)?\s+(?:this|it)\s+(?:one\s+)?(?:privately|early|at)|called\s+privately|\bvip\s+(?:calls?|group|channel)|verified\s+scanners?|(?:good|quality|best|free)\s+signals|signals?\s+(?:group|channel)|catch(?:ing)?\s+(?:all\s+)?(?:the\s+)?runners|call\s+the\s+big\s+investors/i],
   // scams (also a ban at once, see SCAM)
-  [3, /rug\s?pull.{0,80}(?:teach|learn|dm)|(?:teach|show)\s+you\s+how|recover\s+(?:your\s+)?(?:funds|wallet|crypto)|guaranteed\s+(?:profit|returns?)|investment\s+(?:manager|plan|account)/i],
+  // "today is my birthday, giving out free SOL to the first 3 people to private me" (25 Nov 2026): free coins for a DM
+  [3, /rug\s?pull.{0,80}(?:teach|learn|dm)|(?:teach|show)\s+you\s+how|recover\s+(?:your\s+)?(?:funds|wallet|crypto)|guaranteed\s+(?:profit|returns?)|investment\s+(?:manager|plan|account)|(?:giv(?:e|ing)\s+(?:out|away)|free)\s+[^\n]{0,30}?\b(?:sol|eth|btc|usdt|usdc|crypto|coins?|tokens?|airdrop|\$\d+)\b[^\n]{0,160}?\b(?:private|dm|pm|inbox|message|text|contact)\s+me\b|\b(?:first|1st)\s+\d{1,3}\s+(?:people|persons?|users?|members?)\s+(?:to|that|who)\s+(?:private|dm|pm|inbox|message|text)\s+me\b/i],
   // gains brags: "106X", "(30K >1.1M)", "50k → 1.7m", "NOW AT $10M MC"
   [2, /\b\d{2,4}\s?x\b(?!\s*(?:lev|leverage|long|short))|\(\s*\d+(?:\.\d+)?\s*k\s*>\s*\d|\d+(?:\.\d+)?\s*k\s*(?:>|->|→|to)\s*\d+(?:\.\d+)?\s*m\b|\bnow\s+at\s+\$?\d/i],
   // private call groups bragging: "shared in my private at $12K, now at $541K", "called in private at 12k MC"

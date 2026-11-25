@@ -58,13 +58,19 @@
     <h2 id="use-h" class="h2 words" data-words style="margin-bottom:32px">People using the product</h2>
     <div class="stats-grid" data-stats="usage"></div>
   </section>
+  <section class="ip" aria-labelledby="ag-h">
+    <div class="eyebrow-line"><span>02 / AI agents</span></div>
+    <h2 id="ag-h" class="h2 words" data-words style="margin-bottom:12px">AI agents on Troya</h2>
+    <p class="lead" style="margin:0 0 22px;color:var(--muted);font-size:14px">Counted apart, never added into one number: Troya's own AI traders, people's Agent Wallets (an AI trades for its owner inside caps), agents that file calls in Troya's registry, and outside agents that paid Troya for a Gate check.</p>
+    <div class="stats-grid" data-stats="agents"></div>
+  </section>
   <section class="ip" aria-labelledby="com-h">
-    <div class="eyebrow-line"><span>02 / Community</span></div>
+    <div class="eyebrow-line"><span>03 / Community</span></div>
     <h2 id="com-h" class="h2 words" data-words style="margin-bottom:32px">Around the coin</h2>
     <div class="stats-grid" data-stats="community"></div>
   </section>
   <section class="ip" aria-labelledby="pr-h">
-    <div class="eyebrow-line"><span>03 / Proof</span></div>
+    <div class="eyebrow-line"><span>04 / Proof</span></div>
     <h2 id="pr-h" class="h2 words" data-words style="margin-bottom:32px">Work the product did</h2>
     <p class="lead" style="margin:0 0 22px;color:var(--muted);font-size:14px"><b data-live="burn.total">–</b> $TROYA burned (1,000,000,000 minus totalSupply(), read on chain) · <b data-live="trades.arena">–</b> Arena trades with real money · <b data-live="trades.steps">–</b> real-money tests on /verify. Every one with its transaction: <a class="ulink" href="/proof">Proof</a>.</p>
     <div class="stats-grid" data-stats="proof"></div>
@@ -84,6 +90,7 @@
 <script type="module">
 const LABELS = {
   usage: [["walletsUsedTroya", "wallets that used Troya"], ["walletsLast7Days", "of them in the last 7 days"], ["tradesExecuted", "trades executed through Troya"], ["tradesLast7Days", "trades in the last 7 days"], ["tradesFromXOrTelegram", "trades placed from X or Telegram"], ["coinsLaunched", "coins launched through Troya"], ["agentWallets", "Agent Wallets opened"], ["playbooksCreated", "playbooks set up"], ["paidGateCalls", "paid Gate checks by other apps and agents"]],
+  agents: [["arenaAiTraders", "AI traders in Troya's Arena"], ["arenaRealMoneyTrades", "Arena trades with real money"], ["agentWallets", "Agent Wallets (an AI trades for its owner)"], ["registryAgents", "agents filing calls in Troya's registry"], ["registryCallsGraded", "of their calls graded in public"], ["outsideAgentsPaidForGate", "outside agents that paid for a Gate check"], ["gateChecksViaAcp", "Gate checks sold on Virtuals ACP"], ["gateChecksViaX402", "Gate checks paid over x402"], ["passportsRead", "agent passports read (Bow)"]],
   community: [["holders", "$TROYA holders"], ["telegramMembers", "Telegram members"], ["xFollowers", "followers on X"]],
   proof: [["launchesCheckedBySentry", "launches checked and graded by Sentry"], ["sentryPasses", "clean launches Sentry posted"], ["arenaTrades", "Arena trades by the AI traders"], ["arenaLiveTrades", "of them with real money"], ["troyaBurned", "$TROYA burned: 1B minus totalSupply() on chain"], ["realMoneyTests", "real-money tests on /verify"]],
 };

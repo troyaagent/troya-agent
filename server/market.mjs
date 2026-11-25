@@ -698,6 +698,27 @@ async function ensureBoard() {
 /** index row for a token (swap quotes read its pool depth; callouts, Portfolio and Watchfire its price): a copy with the
  *  same honest price, market cap and real liquidity the Market and the coin page show */
 export const indexRow = (address) => { const t = board.rows.get(lc(address)); return t ? honest(t) : null; };
+/** coins the board's GeckoTerminal pages did not reach (graduated Pons coins with a real pool showed no price, MC or Buy:
+ *  GENESIS had a $19K pool, lynx_evo 25 Nov 2026): read their pools from DexScreener and put them on the board, so the
+ *  Graduated tab, the coin page and the Buy see the same row. Called again every few minutes to keep them fresh. */
+export async function adoptRows(addresses, { launchpad = null, max = 40 } = {}) {
+  const want = [...new Set((addresses || []).map(lc))].filter((a) => ADDR_RE.test(a) && (!board.rows.has(a) || board.rows.get(a)._adopted)).slice(0, max);   // new ones, and the ones adopted earlier (fresh price, seen again)
+  if (!want.length) return 0;
+  const ethUsd = await getEthUsd().catch(() => ETH_LAST);
+  let n = 0;
+  for (const a of want) {
+    const pairs = await dsTokenPairs(a).catch(() => []);
+    const r = dsRows(pairs, ethUsd).get(a);
+    if (!r || !(r.priceUsd > 0) || !((r.liquidityUsd || 0) >= 500)) continue;   // the board's own bar: pools under $500 stay off
+    if (pairs.length) REAL.set(a, { usd: realFromPairs(pairs, a, ethUsd), at: Date.now() });
+    const now = Date.now();
+    board.rows.set(a, { ...r, ...(launchpad ? { launchpad, tradable: true } : {}), priceAt: now, priceSource: "DexScreener", seenAt: now, _adopted: true });
+    if (r.image) IMAGES.set(a, r.image);
+    n++;
+  }
+  if (n) saveBoard();
+  return n;
+}
 
 function cleanOpts(opts = {}) {
   let sort = String(opts.sort || "volume").toLowerCase();

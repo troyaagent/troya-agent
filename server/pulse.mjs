@@ -12,7 +12,7 @@
 import { ADDR, CHAINS, rpc, ponsState, ponsPublic, tokenMeta } from "./robinhood.mjs";
 import { AbiCoder, getAddress } from "ethers";
 import { recentResults, itemMeetsBar, isStock, paperLiquidity, cleanName, cleanSymbol, lookAlike } from "./sentry.mjs";
-import { indexRow } from "./market.mjs";
+import { indexRow, adoptRows } from "./market.mjs";
 import { bornAt } from "./tokenage.mjs";
 
 const lc = (s) => String(s || "").toLowerCase();
@@ -204,6 +204,11 @@ export async function register(r, ctx) {
   if (!ON) return;
   setTimeout(() => tick().catch(() => {}), 35_000).unref?.();
   setInterval(() => tick().catch(() => {}), TICK_MS).unref?.();
+  // graduated coins the board's pages did not reach get their pool read from DexScreener (lynx_evo, 25 Nov 2026: GENESIS
+  // showed no price, MC or Buy with a $19K pool)
+  const adopt = () => adoptRows(inLane().filter((x) => { const r = indexRow(x.token); return !r || r._adopted; }).map((x) => x.token), { launchpad: "pons" }).catch((e) => console.warn("[pulse] adopt:", e.message));
+  setTimeout(adopt, 60_000).unref?.();
+  setInterval(adopt, 4 * 60_000).unref?.();
 }
 
 // tests only

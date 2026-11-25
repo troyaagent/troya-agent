@@ -75,7 +75,7 @@ export function si(name, cls = "") {
 // No route was removed in the regroup: every old address still resolves through ROUTES below.
 export const GROUPS = [
   [null, [["Home", "#/", "desk"]]],
-  ["Discover", [["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["All Robinhood coins", "#/launch", "launch"], ["Gate a coin", "#/gate", "gate"], ["Find the weak spot", "#/heel", "heel"], ["Trader habits", "#/chiron", "chiron"], ["Leaderboard", "#/leaderboard", "leaderboard"]]],
+  ["Discover", [["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["All Robinhood coins", "#/launch", "launch"], ["Gate a coin", "#/gate", "gate"], ["Find the weak spot", "#/heel", "heel"], ["Heel Hunt", "#/heelhunt", "heel"], ["Trader habits", "#/chiron", "chiron"], ["Leaderboard", "#/leaderboard", "leaderboard"]]],
   ["Trade", [["Swift", "#/swift", "swift"], ["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Stock desk", "#/stocks", "stocks"], ["Liquidity desk", "#/liquidity", "liquidity"], ["Lighter perps", "#/lighter", "lighter"], ["Bridge", "#/bridge", "bridge"]]],
   ["Launch", [["Create coin", "#/create", "create"], ["My coins & fees", "#/creator", "creator"]]],
   // Autopilot keeps its place until the owner decides where it belongs
@@ -86,7 +86,7 @@ export const GROUPS = [
 ];
 // not in the sidebar, still found by Search (⌘K): the Inbox has the bell and the Portfolio badge; Verify and The Record sit under Safety
 // About Troya has its own link at the foot of the sidebar, just above the $TROYA chip (community request, 23 Nov 2026)
-const SEARCH_ONLY = [["Discover", [["Cluster map", "#/clusters", "clusters"], ["Heel Hunt", "#/heelhunt", "heel"]]], ["Portfolio", [["Inbox", "#/portfolio/inbox", "inbox"]]], ["More", [["About Troya", "#/about", "about"], ["Verify", "/verify", "proof"], ["The Record", "/record", "record"]]]];
+const SEARCH_ONLY = [["Discover", [["Cluster map", "#/clusters", "clusters"]]], ["Portfolio", [["Inbox", "#/portfolio/inbox", "inbox"]]], ["More", [["About Troya", "#/about", "about"], ["Verify", "/verify", "proof"], ["The Record", "/record", "record"]]]];
 const COLLAPSED_DEFAULT = { Agent: true, More: true };   // with these two shut the sidebar fits a 900 px screen
 const NAV_KEY = "troya.navGroups";
 const navState = (() => { try { return { ...COLLAPSED_DEFAULT, ...JSON.parse(localStorage.getItem(NAV_KEY) || "{}") }; } catch { return { ...COLLAPSED_DEFAULT }; } })();

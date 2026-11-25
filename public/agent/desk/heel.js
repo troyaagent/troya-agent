@@ -139,17 +139,26 @@ export async function mount(view, ctx) {
   }
   // V9 F54 Patroclus: the same answer as an image card for any site, bot or doc (GET /api/heelcard/:address)
   function embedEl(a) {
-    const img = `${location.origin}/api/heelcard/${a}.svg`, page = `${location.origin}/agent#/heel/${a}`;
-    const html = `<a href="${page}" target="_blank" rel="noopener"><img src="${img}" width="600" height="220" alt="Troya Heel for ${a}"></a>`;
-    const md = `[![Troya Heel](${img})](${page})`;
+    const img = `${location.origin}/api/heelcard/${a}.svg`;
+    // the card's link carries the signed-in wallet's Herald code, so wallets that join through a card count as its referrals
+    let ref = "";
+    const page = () => `${location.origin}/agent#/heel/${a}${ref ? `?ref=${ref}` : ""}`;
+    const html = () => `<a href="${page()}" target="_blank" rel="noopener"><img src="${img}" width="600" height="220" alt="Troya Heel for ${a}"></a>`;
+    const md = () => `[![Troya Heel](${img})](${page()})`;
     const copy = (t, what) => navigator.clipboard?.writeText(t).then(() => toast(`${what} copied.`, "ok", 2500), () => toast("Copy failed: select the text and copy it.", "error"));
+    const refLine = h("p", { class: "fine" }, wallet.session ? "Reading your referral code…" : "Sign in first and the card's link carries your Herald referral code: wallets that join Troya through your card count as yours.");
+    if (wallet.session) api.get("/api/herald/me").then((m) => {
+      if (m?.code) { ref = m.code; refLine.textContent = `Your Herald code (${m.code}) is in the card's link: wallets that join Troya through it count as your referrals.`; }
+      else refLine.textContent = "";
+    }).catch(() => { refLine.textContent = ""; });
     return h("details", { class: "hl-cov hl-embed" },
       h("summary", {}, "Embed this card on your site, bot or launchpad"),
       h("img", { src: img, width: "600", height: "220", alt: "Troya Heel card", loading: "lazy", style: { maxWidth: "100%", height: "auto", display: "block", margin: "10px 0" } }),
       h("p", { class: "fine" }, "An image, so it works anywhere an image does and runs no code on your page. It re-reads at most every 5 minutes and prints when it was read: a dated snapshot, never a safe stamp."),
+      refLine,
       h("div", { class: "dk-gate-a" },
-        h("button", { class: "btn sm", type: "button", onclick: () => copy(html, "HTML") }, "Copy HTML"),
-        h("button", { class: "btn sm", type: "button", onclick: () => copy(md, "Markdown") }, "Copy Markdown"),
+        h("button", { class: "btn sm", type: "button", onclick: () => copy(html(), "HTML") }, "Copy HTML"),
+        h("button", { class: "btn sm", type: "button", onclick: () => copy(md(), "Markdown") }, "Copy Markdown"),
         h("a", { class: "btn sm", href: img, target: "_blank", rel: "noopener" }, "Open the image")));
   }
 

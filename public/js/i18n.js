@@ -227,6 +227,9 @@
     "@media (max-width:760px){.d-right .d-lang{width:36px;height:36px;padding:0;justify-content:center}.d-right .d-lang span{display:none}.d-right .d-lang svg{width:16px;height:16px}}" +
     // a phone in a language with a long "Connect" has no room for the globe: the sidebar foot and Settings still have it
     "@media (max-width:560px){html.i18n:not([lang=zh-Hans]):not([lang=ja]):not([lang=ko]) .d-right .d-lang{display:none}}" +
+    // a small phone (lynx_evo, 25 Nov 2026: the wallet button was cut off once connected): no globe in the top bar in any
+    // language; the sidebar foot and Settings still have the picker
+    "@media (max-width:460px){.d-right .d-lang{display:none}}" +
     "html.i18n-wait body{visibility:hidden}" +
     // longer words than English in the site header's text links: tighter pills (English keeps its own look)
     "html.i18n .bb-soc a.bb-com{padding:0 10px;letter-spacing:.04em;margin-right:2px}" +

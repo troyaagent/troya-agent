@@ -42,7 +42,10 @@ function cookies(req) {
 const SITE = (() => { try { const u = new URL(process.env.SITE_URL || ""); return /^https?:$/.test(u.protocol) ? { host: u.host, proto: u.protocol.slice(0, -1) } : null; } catch { return null; } })();
 
 // Builds a sign-in style message. `purpose` lets other modules ask for a fresh signature (e.g. key export).
-export function makeChallenge(req, address, purpose = "sign-in", statement) {
+// chainId: the chain the wallet says it is on. Phantom (iOS in-app browser, Xivor70 26 Nov 2026) refuses to show a sign-in
+// message whose Chain ID differs from the chain the wallet is connected to, and Phantom cannot be on Robinhood Chain, so the
+// message names the wallet's own chain. The signature proves the address either way; nothing on chain uses it.
+export function makeChallenge(req, address, purpose = "sign-in", statement, chainId = 4663) {
   const addr = normAddress(address);
   const host = SITE?.host || hostOf(req);
   const proto = SITE?.proto || (isHttps(req) ? "https" : "http");
@@ -52,7 +55,7 @@ export function makeChallenge(req, address, purpose = "sign-in", statement) {
   const text = statement || (purpose === "sign-in"
     ? "Sign in to Troya Agent. This signature only proves you own this wallet. It sends nothing and costs no gas."
     : `Confirm: ${purpose}. This signature sends nothing and costs no gas.`);
-  const message = `${host} wants you to sign in with your Ethereum account:\n${addr}\n\n${text}\n\nURI: ${proto}://${host}\nVersion: 1\nChain ID: 4663\nNonce: ${nonce}\nIssued At: ${now.toISOString()}\nExpiration Time: ${exp.toISOString()}\nRequest ID: ${purpose}`;
+  const message = `${host} wants you to sign in with your Ethereum account:\n${addr}\n\n${text}\n\nURI: ${proto}://${host}\nVersion: 1\nChain ID: ${Number.isSafeInteger(Number(chainId)) && Number(chainId) > 0 ? Number(chainId) : 4663}\nNonce: ${nonce}\nIssued At: ${now.toISOString()}\nExpiration Time: ${exp.toISOString()}\nRequest ID: ${purpose}`;
   challenges.set(`${purpose}:${addr.toLowerCase()}`, { message, exp: exp.getTime() });
   if (challenges.size > 20000) for (const [k, v] of challenges) if (v.exp < Date.now()) challenges.delete(k);
   return message;
@@ -101,7 +104,7 @@ export async function register(r, ctx) {
   store = ctx.store;
   sessions = await store.readJson("sessions.json", {});
 
-  r.post("/api/auth/nonce", ({ req, body }) => ({ message: makeChallenge(req, body.address, "sign-in") }));
+  r.post("/api/auth/nonce", ({ req, body }) => ({ message: makeChallenge(req, body.address, "sign-in", undefined, body.chainId) }));
 
   r.post("/api/auth/verify", async ({ req, res, body }) => {
     const address = consumeChallenge(body.address, "sign-in", body.message, body.signature);

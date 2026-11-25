@@ -276,7 +276,9 @@ let signing = null;
 function signMessage() {
   return (signing ||= (async () => {
     const address = wallet.address;
-    const { message } = await api.post("auth/nonce", { address });
+    // the wallet's own chain goes into the message: Phantom refuses a sign-in whose Chain ID is not the chain it is on
+    const chainId = await wallet.eip.request({ method: "eth_chainId" }).then(Number).catch(() => wallet.chainId || 4663);
+    const { message } = await api.post("auth/nonce", { address, chainId });
     const signature = await wallet.eip.request({ method: "personal_sign", params: [toHex(message), address] });
     const me = await api.post("auth/verify", { address, message, signature });
     if (wallet.address !== address) throw new Error("The wallet switched accounts. Sign in again.");

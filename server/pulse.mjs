@@ -12,7 +12,7 @@
 import { ADDR, CHAINS, rpc, ponsState, ponsPublic, tokenMeta } from "./robinhood.mjs";
 import { AbiCoder, getAddress } from "ethers";
 import { recentResults, itemMeetsBar, isStock, paperLiquidity, cleanName, cleanSymbol, lookAlike } from "./sentry.mjs";
-import { indexRow, adoptRows } from "./market.mjs";
+import { indexRow, adoptRows, socialsOf } from "./market.mjs";
 import { bornAt } from "./tokenage.mjs";
 
 const lc = (s) => String(s || "").toLowerCase();
@@ -184,7 +184,7 @@ function gradList(limit) {
     const row = indexRow(x.token);   // the Market's own board row (no network call here); null when it is not listed yet
     return { ...x, priceUsd: num(row?.priceUsd), priceEth: num(row?.priceEth), mcapUsd: num(row?.mcapUsd), liquidityUsd: num(row?.liquidityUsd), realLiquidityUsd: num(row?.realLiquidityUsd),
       change24h: num(row?.change24h), volume24hUsd: num(row?.volume24hUsd), volume24hEth: num(row?.volume24hEth), txns24h: num(row?.txns24h), holders: num(row?.holders), top10Pct: num(row?.top10Pct),
-      priceAt: num(row?.priceAt), spark: Array.isArray(row?.spark) ? row.spark : null, tradable: !!row?.tradable, onBoard: !!row, image: row?.image || null };
+      priceAt: num(row?.priceAt), spark: Array.isArray(row?.spark) ? row.spark : null, tradable: !!row?.tradable, onBoard: !!row, image: row?.image || null, socials: socialsOf(x.token) };
   });
 }
 

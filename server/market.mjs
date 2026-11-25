@@ -698,6 +698,18 @@ async function ensureBoard() {
 /** index row for a token (swap quotes read its pool depth; callouts, Portfolio and Watchfire its price): a copy with the
  *  same honest price, market cap and real liquidity the Market and the coin page show */
 export const indexRow = (address) => { const t = board.rows.get(lc(address)); return t ? honest(t) : null; };
+/** a coin's X, Telegram and website: its Pons profile (or DexScreener's list) first, then the links on its pool row, so a
+ *  Pons coin whose profile is empty still shows the links its DexScreener page lists (lynx_evo, 25 Nov 2026) */
+export const socialsOf = (address) => {
+  const a = lc(address), s = socialOf(a);
+  if (s) return s;
+  const t = board.rows.get(a);
+  if (!t) return null;
+  const tw = t.twitter ? (String(t.twitter).startsWith("http") ? t.twitter : `https://x.com/${String(t.twitter).replace(/^@/, "")}`) : null;
+  const tg = t.telegram ? (String(t.telegram).startsWith("http") ? t.telegram : `https://t.me/${String(t.telegram).replace(/^@/, "")}`) : null;
+  const o = { x: tw ? cleanLink(tw) : null, telegram: tg ? cleanLink(tg) : null, website: t.website ? cleanLink(t.website) : null };
+  return o.x || o.telegram || o.website ? o : null;
+};
 /** coins the board's GeckoTerminal pages did not reach (graduated Pons coins with a real pool showed no price, MC or Buy:
  *  GENESIS had a $19K pool, lynx_evo 25 Nov 2026): read their pools from DexScreener and put them on the board, so the
  *  Graduated tab, the coin page and the Buy see the same row. Called again every few minutes to keep them fresh. */
@@ -1072,7 +1084,7 @@ export async function getRobinhoodTokens(opts = {}) {
   const births = await bornOf(page.map((t) => t.address));
   return {
     catCounts, cat: o.cat,
-    tokens: page.map((t, i) => ({ ...clean(t), bornAt: births[i] ?? null, pick: t._pick || undefined, spark: sparkOf(t), socials: socialOf(t.address), holders: holdersOf(t.address)?.count ?? null, top10Pct: holdersOf(t.address)?.top10 ?? null })), total: rows.length, counts, hiddenTotal: hidden,
+    tokens: page.map((t, i) => ({ ...clean(t), bornAt: births[i] ?? null, pick: t._pick || undefined, spark: sparkOf(t), socials: socialsOf(t.address), holders: holdersOf(t.address)?.count ?? null, top10Pct: holdersOf(t.address)?.top10 ?? null })), total: rows.length, counts, hiddenTotal: hidden,
     volume24hUsd: board.volumeUsd, volume24hEth: ethUsd ? board.volumeUsd / ethUsd : null,
     offset: o.offset, limit: o.limit, sort: o.sort, dir: o.dir, launchpad: o.launchpad,
     updatedAt: board.updatedAt, fresh10, freshOf: base.length, now, stale: !!board.error, notice: board.error ? `Last refresh failed (${board.error}); showing the previous board.` : null,

@@ -69,7 +69,11 @@ export async function tridentCheck(body = {}) {
     // approve / increaseAllowance to a plain wallet: the classic drainer
     if ((sel === "095ea7b3" || sel === "39509351") && words.length >= 2) {
       const spender = addrAt(0);
-      if (!K.has(spender) && (await isContract(spender)) === false) add("block", "approval-eoa", `This approves ${short(spender)}, a plain wallet, to move your coins. Drainers ask for exactly this.`);
+      if (!K.has(spender) && (await isContract(spender)) === false) {
+        // the Snap reader's generic "a contract Troya does not know" line would contradict this one: a plain wallet says more
+        for (let i = reasons.length - 1; i >= 0; i--) if (reasons[i].code === "approval" && /contract Troya does not know/i.test(reasons[i].text)) reasons.splice(i, 1);
+        add("block", "approval-eoa", `This approves ${short(spender)}, a plain wallet, to move your coins. Drainers ask for exactly this.`);
+      }
     }
     // transfer / transferFrom into the token contract or the zero address: gone for good
     if (sel === "a9059cbb" || sel === "23b872dd") {

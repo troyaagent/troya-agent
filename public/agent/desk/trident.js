@@ -95,9 +95,11 @@ export async function mount(view) {
 
   function paint(r) {
     const v = r.verdict;
+    // the headline already says the first reason; the list shows the rest
+    const rest = (r.reasons || []).filter((x) => !(r.summary || "").endsWith(x.text));
     clear(res,
       h("div", { class: `tr-v ${v}` }, h("b", {}, LV[v] || v), h("p", {}, r.summary || "")),
-      r.reasons?.length ? h("ul", { class: "tr-rs" }, r.reasons.map((x) => h("li", {}, h("span", { class: `tr-l ${x.level}` }, LV[x.level] || x.level), h("span", {}, x.text)))) : null,
+      rest.length ? h("ul", { class: "tr-rs" }, rest.map((x) => h("li", {}, h("span", { class: `tr-l ${x.level}` }, LV[x.level] || x.level), h("span", {}, x.text)))) : null,
       r.coins?.length ? h("p", { class: "fine", style: { marginTop: "10px" } }, "Coins it touches: ", ...r.coins.flatMap((c, i) => [i ? ", " : "", h("a", { class: "link", href: `#/gate/${c.token}` }, c.symbol ? `$${c.symbol}` : c.token), ` (${c.verdict})`])) : null,
       r.signed ? h("div", { class: "tr-sigd" }, "Signed by the Troya attestor ", h("span", { class: "mono" }, r.signed.attestor), h("br"), "hash ", h("span", { class: "mono" }, r.signed.hash), h("br"), "Verify: EIP-191 over \"Troya Trident\" + newline + hash.") : null,
       h("p", { class: "fine", style: { marginTop: "10px" } }, "A snapshot of what Troya reads right now, never a safe stamp. Troya does not see your wallet; nothing was signed or sent."));

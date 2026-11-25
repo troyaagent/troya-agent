@@ -86,7 +86,7 @@ export const GROUPS = [
 ];
 // not in the sidebar, still found by Search (⌘K): the Inbox has the bell and the Portfolio badge; Verify and The Record sit under Safety
 // About Troya has its own link at the foot of the sidebar, just above the $TROYA chip (community request, 23 Nov 2026)
-const SEARCH_ONLY = [["Discover", [["Cluster map", "#/clusters", "clusters"]]], ["Portfolio", [["Inbox", "#/portfolio/inbox", "inbox"]]], ["More", [["About Troya", "#/about", "about"], ["Verify", "/verify", "proof"], ["The Record", "/record", "record"]]]];
+const SEARCH_ONLY = [["Discover", [["Cluster map", "#/clusters", "clusters"], ["Heel Hunt", "#/heelhunt", "heel"]]], ["Portfolio", [["Inbox", "#/portfolio/inbox", "inbox"]]], ["More", [["About Troya", "#/about", "about"], ["Verify", "/verify", "proof"], ["The Record", "/record", "record"]]]];
 const COLLAPSED_DEFAULT = { Agent: true, More: true };   // with these two shut the sidebar fits a 900 px screen
 const NAV_KEY = "troya.navGroups";
 const navState = (() => { try { return { ...COLLAPSED_DEFAULT, ...JSON.parse(localStorage.getItem(NAV_KEY) || "{}") }; } catch { return { ...COLLAPSED_DEFAULT }; } })();
@@ -104,9 +104,10 @@ const ROUTES = {
   swift: "swift",                                            // V9 F49 Swift: ./swift.js (loads its own swift.css)
   about: "about",                                            // About Troya (23 Nov): ./about.js, the intro that used to open the Desk
   phoenix: "phoenix",                                        // V9 F57 Phoenix: ./phoenix.js (loads its own phoenix.css)
+  heelhunt: "heelhunt",                                      // V9 F50 Heel Hunt: ./heelhunt.js (loads its own heelhunt.css)
   u: "portfolio",                                            // profiles (21 Nov): #/u/<username> → a wallet's public page
 };
-const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", chiron: "./chiron.js", clusters: "./clusters.js", swift: "./swift.js", about: "./about.js", phoenix: "./phoenix.js" };
+const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", chiron: "./chiron.js", clusters: "./clusters.js", swift: "./swift.js", about: "./about.js", phoenix: "./phoenix.js", heelhunt: "./heelhunt.js" };
 // The sheets each page asks for with useCss at mount. route() requests them together with the module, so the stylesheet
 // is not one more round trip after the code. The boot script in /agent/index.html keeps a copy of this table and of the
 // routes above to start the same downloads before this file has even arrived: change both together.

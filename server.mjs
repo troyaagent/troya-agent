@@ -54,6 +54,7 @@ const ROUTES = {
   "/stake": "/stake.html",
   "/zero": "/zero.html",
   "/heel": "/heel.html",   // V9 F54: the short link printed on the Patroclus card
+  "/heel-hunt": "/heel-hunt.html",   // V9 F50 Heel Hunt
   "/safety": "/safety.html",
   "/proof": "/proof.html",
   "/changelog/agent-wallet": "/changelog/agent-wallet.html",

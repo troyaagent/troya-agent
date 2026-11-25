@@ -1,0 +1,33 @@
+/* V9 F50 Heel Hunt (#/heelhunt). Loaded by heelhunt.js itself; Desk tokens only, so the light theme follows. */
+.hh-page { display: grid; gap: 16px; }
+.hh-top { padding: 16px 18px; }
+.hh-head { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 16px; align-items: start; }
+.hh-head small { display: block; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); margin-bottom: 4px; }
+.hh-prize b { display: block; font-size: clamp(26px, 3.2vw, 38px); font-weight: 600; letter-spacing: -0.02em; color: var(--fg); }
+.hh-stat b { display: block; font-size: 20px; font-weight: 600; }
+.hh-stat .fine { display: block; margin-top: 2px; }
+.hh-st.s-open { color: var(--up); }
+.hh-st.s-won { color: var(--warn); }
+.hh-play, .hh-feed, .hh-rules { padding: 18px; }
+.hh-play h2, .hh-closed h2, .hh-won h2 { margin: 0 0 8px; font-size: 20px; letter-spacing: -0.01em; }
+.hh-in { width: 100%; min-height: 96px; resize: vertical; font-size: 14px; line-height: 1.45; margin-top: 10px; }
+.hh-send { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; }
+.hh-answer:empty { display: none; }
+.hh-answer { margin-top: 14px; }
+.hh-reply { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--bg-2); border-left: 3px solid var(--blue-2); }
+.hh-reply.won { border-left-color: var(--up); }
+.hh-reply small, .hh-r small { color: var(--faint); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.hh-reply p { margin: 6px 0 0; overflow-wrap: anywhere; }
+.hh-win { color: var(--up); font-weight: 600; }
+.hh-feed h3, .hh-rules h3 { margin: 0 0 10px; font-size: 15px; }
+.hh-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 720px; overflow: auto; }
+.hh-a { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--bg-2); }
+.hh-a.won { border-color: var(--up); }
+.hh-a-h { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; font-size: 12.5px; }
+.hh-tag { font-size: 11px; color: var(--up); border: 1px solid var(--up); border-radius: 999px; padding: 1px 8px; }
+.hh-q { margin: 6px 0 4px; font-size: 13.5px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.hh-r { margin: 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.hh-rl { margin: 0 0 10px; padding-left: 18px; display: grid; gap: 6px; font-size: 13.5px; }
+.hh-hash { word-break: break-all; font-size: 11.5px; }
+.hh-pre { white-space: pre-wrap; font-size: 12.5px; background: var(--bg-2); padding: 12px; border-radius: 8px; border: 1px solid var(--line-2); }
+@media (max-width: 720px) { .hh-head { grid-template-columns: 1fr 1fr; } .hh-prize { grid-column: 1 / -1; } }

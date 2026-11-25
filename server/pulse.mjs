@@ -206,7 +206,7 @@ export async function register(r, ctx) {
   setInterval(() => tick().catch(() => {}), TICK_MS).unref?.();
   // graduated coins the board's pages did not reach get their pool read from DexScreener (lynx_evo, 25 Nov 2026: GENESIS
   // showed no price, MC or Buy with a $19K pool)
-  const adopt = () => adoptRows(inLane().filter((x) => { const r = indexRow(x.token); return !r || r._adopted; }).map((x) => x.token), { launchpad: "pons" }).catch((e) => console.warn("[pulse] adopt:", e.message));
+  const adopt = () => adoptRows(inLane().filter((x) => { const r = indexRow(x.token); return !r || r._adopted || Date.now() - (r.priceAt || 0) > 20 * 60_000; }).map((x) => x.token), { launchpad: "pons" }).catch((e) => console.warn("[pulse] adopt:", e.message));
   setTimeout(adopt, 60_000).unref?.();
   setInterval(adopt, 4 * 60_000).unref?.();
 }

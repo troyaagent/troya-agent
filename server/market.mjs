@@ -701,8 +701,11 @@ export const indexRow = (address) => { const t = board.rows.get(lc(address)); re
 /** coins the board's GeckoTerminal pages did not reach (graduated Pons coins with a real pool showed no price, MC or Buy:
  *  GENESIS had a $19K pool, lynx_evo 25 Nov 2026): read their pools from DexScreener and put them on the board, so the
  *  Graduated tab, the coin page and the Buy see the same row. Called again every few minutes to keep them fresh. */
-export async function adoptRows(addresses, { launchpad = null, max = 40 } = {}) {
-  const want = [...new Set((addresses || []).map(lc))].filter((a) => ADDR_RE.test(a) && (!board.rows.has(a) || board.rows.get(a)._adopted)).slice(0, max);   // new ones, and the ones adopted earlier (fresh price, seen again)
+export async function adoptRows(addresses, { launchpad = null, max = 40, staleMs = 20 * 60_000 } = {}) {
+  // new ones, the ones adopted earlier (fresh price, seen again), and board rows whose price went stale: MCAT showed
+  // $32K from a 4-hour-old read after it fell to $2.8K (25 Nov 2026)
+  const stale = (a) => { const t = board.rows.get(a); return !!t && Date.now() - (honest(t).priceAt || 0) > staleMs; };
+  const want = [...new Set((addresses || []).map(lc))].filter((a) => ADDR_RE.test(a) && (!board.rows.has(a) || board.rows.get(a)._adopted || stale(a))).slice(0, max);
   if (!want.length) return 0;
   const ethUsd = await getEthUsd().catch(() => ETH_LAST);
   let n = 0;
@@ -712,7 +715,8 @@ export async function adoptRows(addresses, { launchpad = null, max = 40 } = {}) 
     if (!r || !(r.priceUsd > 0) || !((r.liquidityUsd || 0) >= 500)) continue;   // the board's own bar: pools under $500 stay off
     if (pairs.length) REAL.set(a, { usd: realFromPairs(pairs, a, ethUsd), at: Date.now() });
     const now = Date.now();
-    board.rows.set(a, { ...r, ...(launchpad ? { launchpad, tradable: true } : {}), priceAt: now, priceSource: "DexScreener", seenAt: now, _adopted: true });
+    const old = board.rows.get(a);
+    board.rows.set(a, { ...(old || {}), ...r, ...(launchpad ? { launchpad, tradable: true } : {}), createdAt: old?.createdAt || r.createdAt, priceAt: now, priceSource: "DexScreener", seenAt: now, _adopted: true });
     if (r.image) IMAGES.set(a, r.image);
     n++;
   }

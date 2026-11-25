@@ -40,21 +40,56 @@ async function shareRef(sym) {
   return v;
 }
 
+/* ---------- V9 F51 Zeno's Gap: a fair value while the US market is closed ----------
+   The last real share price is stale once the market closes, while the token keeps trading. Nasdaq-100 futures (NQ=F) trade
+   nearly around the clock on weekdays, so the overnight fair value of a share is its last real price moved by the futures
+   since that price was set (beta 1, the same for every share: an estimate, said so on the page). Futures are closed on
+   weekends, so over a weekend the fair value is simply Friday's last price. In Zeno's paradox Achilles never quite catches
+   the tortoise; here the token and the share are kept side by side until the open closes the gap. */
+const FUT = "NQ=F";
+let fut = null;
+async function futuresSeries() {
+  if (fut && Date.now() - fut.at < REF_MS) return fut.v;
+  const u = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(FUT)}?interval=5m&range=5d&includePrePost=true`;
+  const j = await fetch(u, { headers: UA, signal: AbortSignal.timeout(8000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const d = j?.chart?.result?.[0];
+  const ts = d?.timestamp || [], cl = d?.indicators?.quote?.[0]?.close || [];
+  const pts = ts.map((t, i) => [t * 1000, cl[i]]).filter(([, c]) => Number.isFinite(c) && c > 0);
+  const v = pts.length ? pts : null;
+  if (v) fut = { at: Date.now(), v };
+  return v;
+}
+// the futures' move from the moment a share price was set to now, or null when it cannot be read
+function futuresMove(pts, sinceMs) {
+  if (!pts || !sinceMs) return null;
+  let from = null;
+  for (const [t, c] of pts) { if (t <= sinceMs) from = c; else break; }
+  const to = pts[pts.length - 1][1];
+  return from ? to / from - 1 : null;
+}
+
 export async function stockGaps() {
   if (last && Date.now() - last.at < REF_MS) return last.v;
   const { stockDesk } = await import("./stocks.mjs");
   const desk = await stockDesk();
   const assets = (desk?.assets || []).filter((a) => a.priceUsd > 0);
   const rows = [];
+  const futPts = await futuresSeries().catch(() => null);
   for (let i = 0; i < assets.length; i += 6) {
     const part = await Promise.all(assets.slice(i, i + 6).map(async (a) => {
       const ref = await shareRef(a.symbol).catch(() => null);
       const perShare = a.priceUsd / (a.multiplier || 1);
       const gap = ref?.price ? (perShare / ref.price - 1) * 100 : null;
+      // Zeno's Gap: with the market closed, the share's fair value moves with the futures since its last real price
+      const closed = ref?.session && ref.session !== "open";
+      const fm = closed ? futuresMove(futPts, ref?.at) : 0;
+      const fair = ref?.price ? ref.price * (1 + (fm || 0)) : null;
+      const fairGap = fair ? (perShare / fair - 1) * 100 : null;
       return { symbol: a.symbol, name: a.name, address: a.address, logo: a.logo, tokenPriceUsd: a.priceUsd, multiplier: a.multiplier || 1, perShareUsd: +perShare.toFixed(4),
         sharePriceUsd: ref?.price ?? null, shareBasis: ref?.basis || null, shareAt: ref?.at || null, session: ref?.session || null,
         gapPct: gap == null ? null : +gap.toFixed(2), liquidityUsd: a.liquidityUsd ?? null, volume24hUsd: a.volume24hUsd ?? null,
-        thin: !(a.liquidityUsd >= 50_000) };
+        thin: !(a.liquidityUsd >= 50_000),
+        fairUsd: fair ? +fair.toFixed(4) : null, futuresMovePct: closed && fm != null ? +(fm * 100).toFixed(2) : null, fairGapPct: fairGap == null ? null : +fairGap.toFixed(2) };
     }));
     rows.push(...part);
   }
@@ -62,9 +97,14 @@ export async function stockGaps() {
   const session = rows.find((r) => r.session)?.session || null;
   const v = { at: Date.now(), session, rows,
     notable: rows.filter((r) => r.gapPct != null && !r.thin && Math.abs(r.gapPct) >= 1).slice(0, 8).map((r) => ({ symbol: r.symbol, gapPct: r.gapPct, address: r.address })),
+    // F51 snap-back watch: deep pools whose token sits 3% or more away from the fair value while the market is closed
+    snapBack: session && session !== "open" ? rows.filter((r) => r.fairGapPct != null && !r.thin && Math.abs(r.fairGapPct) >= 3)
+      .sort((a, b) => Math.abs(b.fairGapPct) - Math.abs(a.fairGapPct)).slice(0, 8).map((r) => ({ symbol: r.symbol, address: r.address, fairGapPct: r.fairGapPct, side: r.fairGapPct > 0 ? "above" : "below" })) : [],
+    futures: futPts ? { symbol: FUT, last: futPts[futPts.length - 1][1], at: futPts[futPts.length - 1][0] } : null,
+    zeno: "While the US market is closed, fair value = the share's last real price × (1 + the move in Nasdaq-100 futures since that price was set). The same move is used for every share (beta 1), so it is an estimate, not a quote. Futures are closed on weekends, so over a weekend fair value is Friday's last price. Whether a gap closes at the open is never known in advance: this is a reading, not a forecast or advice.",
     how: "gap = (token price ÷ multiplier) ÷ latest real share price − 1. The real price is the regular session, or pre-market/after-hours when that is the latest trade. Thin pools (under $50k liquidity) are marked: their price moves on small trades.",
     source: "Pool prices from the Robinhood Chain pools; share prices from Yahoo Finance's public chart data (delayed up to a few minutes)." };
-  last = { at: Date.now(), v };
+  if (rows.length) last = { at: Date.now(), v };   // an empty board (the stock desk still loading after a restart) is not cached
   return v;
 }
 

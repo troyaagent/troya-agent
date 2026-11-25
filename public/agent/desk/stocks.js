@@ -108,25 +108,32 @@ export async function mount(view, ctx) {
     const g = st.gaps;
     const thinBox = h("input", { type: "checkbox", checked: !st.showThin });
     const tbl = h("div", { class: "sd-tbl" });
+    // V9 F51 Zeno's Gap: with the market closed, the gap is read against a fair value that moves with Nasdaq-100 futures
+    const closed = !!g.session && g.session !== "open";
     const draw = () => {
       const rows = g.rows.filter((r) => r.gapPct != null && (st.showThin || !r.thin));
-      clear(tbl, h("div", { class: "sd-row sd-hd" }, h("span", {}, "Stock"), h("span", {}, "Token, per share"), h("span", {}, "Real share"), h("span", {}, "Gap"), h("span", {}, "")),
+      clear(tbl, h("div", { class: "sd-row sd-hd" }, h("span", {}, "Stock"), h("span", {}, "Token, per share"), h("span", {}, closed ? "Fair value" : "Real share"), h("span", {}, closed ? "Gap to fair" : "Gap"), h("span", {}, "")),
         rows.length ? null : h("p", { class: "muted sd-none" }, "No pool deep enough right now."),
         rows.map((r) => h("div", { class: "sd-row" },
           h("span", { class: "sd-name" }, stockIcon(r), h("b", {}, r.symbol), h("small", {}, `${r.thin ? "thin pool · " : ""}${r.liquidityUsd != null ? `$${compact(r.liquidityUsd)} liquidity` : ""}`)),
           h("span", {}, `$${price(r.perShareUsd)}`),
-          h("span", { title: r.shareBasis || "" }, r.sharePriceUsd != null ? `$${price(r.sharePriceUsd)}` : "–", r.shareBasis === "extended hours" ? h("small", { class: "muted" }, " ext.") : null),
-          h("span", {}, pctEl(r.gapPct)),
+          closed && r.fairUsd != null
+            ? h("span", { title: `Last real price $${price(r.sharePriceUsd)} (${r.shareBasis || ""})${r.futuresMovePct != null ? `, Nasdaq-100 futures ${r.futuresMovePct > 0 ? "+" : ""}${r.futuresMovePct}% since` : ""}` }, `$${price(r.fairUsd)}`, h("small", { class: "muted" }, ` last $${price(r.sharePriceUsd)}`))
+            : h("span", { title: r.shareBasis || "" }, r.sharePriceUsd != null ? `$${price(r.sharePriceUsd)}` : "–", r.shareBasis === "extended hours" ? h("small", { class: "muted" }, " ext.") : null),
+          h("span", {}, pctEl(closed && r.fairGapPct != null ? r.fairGapPct : r.gapPct)),
           h("a", { class: "btn sm", href: `#/swap?in=eth&out=${r.address}` }, r.gapPct < 0 ? "Buy" : "Trade"))));
     };
     thinBox.addEventListener("change", () => { st.showThin = !thinBox.checked; draw(); });
     draw();
-    const top = g.notable.length ? h("p", {}, h("b", {}, "Notable now: "), g.notable.map((n) => `${n.symbol} ${n.gapPct > 0 ? "+" : ""}${n.gapPct}%`).join(" · ")) : null;
+    const top = closed && g.snapBack?.length
+      ? h("p", {}, h("b", {}, "Snap-back watch: "), g.snapBack.map((n) => `${n.symbol} ${n.fairGapPct > 0 ? "+" : ""}${n.fairGapPct}% ${n.side} fair value`).join(" · "))
+      : g.notable.length ? h("p", {}, h("b", {}, "Notable now: "), g.notable.map((n) => `${n.symbol} ${n.gapPct > 0 ? "+" : ""}${n.gapPct}%`).join(" · ")) : null;
     clear(body, h("div", { class: "panel sd-panel" },
       h("div", { class: "sd-ph" }, h("h3", {}, "Token vs real share"), h("span", { class: "sd-count" }, SESSION[g.session] || "")),
       h("p", { class: "fine" }, "Stock tokens trade around the clock, the shares only in US market hours. A token below the real share is cheaper than the stock, above it costs more; overnight and on weekends the pool is pricing where it thinks the next open will be."),
+      closed && g.futures ? h("p", { class: "fine" }, h("b", {}, "Zeno's Gap: "), `the market is closed, so each share's fair value moves with Nasdaq-100 futures (${g.futures.symbol} ${Number(g.futures.last).toLocaleString("en-US")}) since its last real price.`) : null,
       top, h("label", { class: "row fine" }, thinBox, "Hide thin pools (under $50k liquidity)"), tbl,
-      h("p", { class: "fine" }, g.how), h("p", { class: "fine" }, g.source)));
+      h("p", { class: "fine" }, g.how), g.zeno ? h("p", { class: "fine" }, g.zeno) : null, h("p", { class: "fine" }, g.source)));
   }
 
   /* ---------- dividends & splits ---------- */

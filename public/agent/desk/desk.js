@@ -64,6 +64,9 @@ const SI = {
   voyage: "M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14",   // V10
   argus: "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM12 14.6a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2z",   // V10
   scylla: "M3 12c3-4 6-4 9 0s6 4 9 0M3 17c3-4 6-4 9 0s6 4 9 0",   // V10
+  mentor: "M4 19.5V5a2 2 0 0 1 2-2h12v15H6a2 2 0 0 0-2 2 2 2 0 0 0 2 2h12M9 8h6M9 12h4",   // V10
+  nekyia: "M12 3a7 7 0 0 0-7 7v11l2.5-2 2.5 2 2-2 2 2 2.5-2 2.5 2V10a7 7 0 0 0-7-7zM9.5 10h.01M14.5 10h.01",   // V10
+  tiresias: "M12 7v5l3 2M3.05 11a9 9 0 1 1 .5 4M3 4v7h7",   // V10
   phoenix: "M12 21c-3.9 0-6.5-2.7-6.5-6.2 0-3.4 2.6-5.2 3.4-8.8 1.9 1.5 2.9 3.4 3 5.4 1-.9 1.7-2.2 1.9-3.8 2.5 2 4.7 4.8 4.7 7.6 0 3.3-2.8 5.8-6.5 5.8zM12 21c-1.6 0-2.7-1.1-2.7-2.6 0-1.6 1.4-2.6 2.7-4.4 1.3 1.8 2.7 2.8 2.7 4.4 0 1.5-1.1 2.6-2.7 2.6z",   // V9 F57 Phoenix
 };
 export function si(name, cls = "") {
@@ -82,7 +85,7 @@ export function si(name, cls = "") {
 // No route was removed in the regroup: every old address still resolves through ROUTES below.
 export const GROUPS = [
   [null, [["Home", "#/", "desk"]]],
-  ["Discover", [["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["All Robinhood coins", "#/launch", "launch"], ["Gate a coin", "#/gate", "gate"], ["Find the weak spot", "#/heel", "heel"], ["Heel Hunt", "#/heelhunt", "heel"], ["War Room", "#/warroom", "leaderboard"], ["Check before signing", "#/trident", "trident"], ["Agent passport", "#/bow", "bow"], ["Real depth", "#/sirens", "sirens"], ["One stock, many seas", "#/proteus", "proteus"], ["Plan a trade", "#/voyage", "voyage"], ["Sentinel network", "#/argus", "argus"], ["Safe crossing", "#/scylla", "scylla"], ["Trader habits", "#/chiron", "chiron"], ["Leaderboard", "#/leaderboard", "leaderboard"]]],
+  ["Discover", [["Market", "#/market", "market"], ["Troya Launches", "#/troya-launches", "hippodrome"], ["All Robinhood coins", "#/launch", "launch"], ["Gate a coin", "#/gate", "gate"], ["Find the weak spot", "#/heel", "heel"], ["Heel Hunt", "#/heelhunt", "heel"], ["War Room", "#/warroom", "leaderboard"], ["Check before signing", "#/trident", "trident"], ["Agent passport", "#/bow", "bow"], ["Real depth", "#/sirens", "sirens"], ["One stock, many seas", "#/proteus", "proteus"], ["Plan a trade", "#/voyage", "voyage"], ["Sentinel network", "#/argus", "argus"], ["Safe crossing", "#/scylla", "scylla"], ["Blocked, and why", "#/mentor", "mentor"], ["Ghost trades", "#/nekyia", "nekyia"], ["Time machine", "#/tiresias", "tiresias"], ["Trader habits", "#/chiron", "chiron"], ["Leaderboard", "#/leaderboard", "leaderboard"]]],
   ["Trade", [["Swift", "#/swift", "swift"], ["Swap", "#/swap", "swap"], ["Perps", "#/perps", "perps"], ["Spot (Hyperliquid)", "#/spot", "spot"], ["Stock desk", "#/stocks", "stocks"], ["Liquidity desk", "#/liquidity", "liquidity"], ["Lighter perps", "#/lighter", "lighter"], ["Bridge", "#/bridge", "bridge"]]],
   ["Launch", [["Create coin", "#/create", "create"], ["My coins & fees", "#/creator", "creator"]]],
   // Autopilot keeps its place until the owner decides where it belongs
@@ -114,6 +117,9 @@ const ROUTES = {
   heelhunt: "heelhunt",                                      // V9 F50 Heel Hunt: ./heelhunt.js (loads its own heelhunt.css)
   warroom: "warroom",                                        // V9 F52 War Room + F53 Myrmidons: ./warroom.js
   trident: "trident",                                        // V10 F58 Trident, the Troya Firewall: ./trident.js
+  tiresias: "tiresias",                        // V10
+  nekyia: "nekyia",                            // V10
+  mentor: "mentor",                            // V10
   scylla: "scylla",                            // V10
   argus: "argus",                              // V10
   voyage: "voyage",                            // V10
@@ -123,7 +129,7 @@ const ROUTES = {
   bow: "bow",                                  // V10
   u: "portfolio",                                            // profiles (21 Nov): #/u/<username> → a wallet's public page
 };
-const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", chiron: "./chiron.js", clusters: "./clusters.js", swift: "./swift.js", about: "./about.js", phoenix: "./phoenix.js", heelhunt: "./heelhunt.js", warroom: "./warroom.js", trident: "./trident.js", bow: "./bow.js", sirens: "./sirens.js", proteus: "./proteus.js", voyage: "./voyage.js", argus: "./argus.js", scylla: "./scylla.js" };
+const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", chiron: "./chiron.js", clusters: "./clusters.js", swift: "./swift.js", about: "./about.js", phoenix: "./phoenix.js", heelhunt: "./heelhunt.js", warroom: "./warroom.js", trident: "./trident.js", bow: "./bow.js", sirens: "./sirens.js", proteus: "./proteus.js", voyage: "./voyage.js", argus: "./argus.js", scylla: "./scylla.js", mentor: "./mentor.js", nekyia: "./nekyia.js", tiresias: "./tiresias.js" };
 // The sheets each page asks for with useCss at mount. route() requests them together with the module, so the stylesheet
 // is not one more round trip after the code. The boot script in /agent/index.html keeps a copy of this table and of the
 // routes above to start the same downloads before this file has even arrived: change both together.

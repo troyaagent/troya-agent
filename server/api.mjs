@@ -66,6 +66,9 @@ const MODULES = [
   "./warroom.mjs",     // V9 F52 War Room + F53 Myrmidons: calls, challenges and rug reports graded in public (no stakes)
   "./heelhunt.mjs",    // V9 F50 Heel Hunt: talk the Vault Keeper AI into sending the prize (opens only when the team sets it open)
   "./fates.mjs",       // V9 F52 Two Fates (part 1): passed vs blocked launches graded on the same clock, GET /api/fates
+  "./mentor.mjs",      // V10 F70 Mentor: weekly Blocked-and-why report from Two Fates, GET /api/mentor (drafts only, never posts; MENTOR_DRAFTS=1 DMs the owner Mondays)
+  "./nekyia.mjs",      // V10 F67 Nekyia: a wallet's trades replayed as the paths not taken (held, sold at the top, followed the Gate)
+  "./tiresias.mjs",    // V10 F68 Tiresias: what the chain showed before past pumps and dumps, nearest analogs + base rates
   "./patroclus.mjs",   // V9 F54 Patroclus: the Heel card as an embeddable SVG image (GET /api/heelcard/:address.svg) and its embed kit
   "./phoenix.mjs",     // V9 F57 Phoenix: lessons from every closed Arena trade and graded call, pattern stats, bot corrections (shadow unless PHOENIX_INJECT=1)
   "./seal.mjs",

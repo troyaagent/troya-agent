@@ -134,7 +134,23 @@ export async function mount(view, ctx) {
       passportEl(r.passport, r.kind),
       h("details", { class: "hl-cov" }, h("summary", {}, `What was read (${r.coverage.filter((c) => c.status === "done").length} of ${r.coverage.length} sources) · ${ago(r.checkedAt)} ago`),
         h("ul", {}, r.coverage.map((c) => h("li", { class: `c-${c.status.replace("/", "")}` }, h("b", {}, c.source), h("span", {}, STATUS[c.status] || c.status), c.note ? h("small", {}, c.note) : null)))),
+      embedEl(a),
       h("p", { class: "note hl-note" }, r.note));
+  }
+  // V9 F54 Patroclus: the same answer as an image card for any site, bot or doc (GET /api/heelcard/:address)
+  function embedEl(a) {
+    const img = `${location.origin}/api/heelcard/${a}.svg`, page = `${location.origin}/agent#/heel/${a}`;
+    const html = `<a href="${page}" target="_blank" rel="noopener"><img src="${img}" width="600" height="220" alt="Troya Heel for ${a}"></a>`;
+    const md = `[![Troya Heel](${img})](${page})`;
+    const copy = (t, what) => navigator.clipboard?.writeText(t).then(() => toast(`${what} copied.`, "ok", 2500), () => toast("Copy failed: select the text and copy it.", "error"));
+    return h("details", { class: "hl-cov hl-embed" },
+      h("summary", {}, "Embed this card on your site, bot or launchpad"),
+      h("img", { src: img, width: "600", height: "220", alt: "Troya Heel card", loading: "lazy", style: { maxWidth: "100%", height: "auto", display: "block", margin: "10px 0" } }),
+      h("p", { class: "fine" }, "An image, so it works anywhere an image does and runs no code on your page. It re-reads at most every 5 minutes and prints when it was read: a dated snapshot, never a safe stamp."),
+      h("div", { class: "dk-gate-a" },
+        h("button", { class: "btn sm", type: "button", onclick: () => copy(html, "HTML") }, "Copy HTML"),
+        h("button", { class: "btn sm", type: "button", onclick: () => copy(md, "Markdown") }, "Copy Markdown"),
+        h("a", { class: "btn sm", href: img, target: "_blank", rel: "noopener" }, "Open the image")));
   }
 
   go.addEventListener("click", () => run(input.value));

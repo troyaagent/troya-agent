@@ -35,6 +35,8 @@ const RANGE = 2000;
 const lc = (s) => String(s || "").toLowerCase();
 const today = () => new Date().toISOString().slice(0, 10);
 const micro = (usdg) => Math.round(Number(usdg) * 1e6);
+// V9 F55 Styx Promise: a paid check that let the coin be bought is covered for 7 days (server/styx.mjs)
+const styx = (paid, payer, token, out) => { if (paid?.by === "credit" && payer) import("./styx.mjs").then((m) => m.notePaid({ method: "credit", payer, token, verdict: out?.attested?.verdict, micro: micro(paid.costUsdg) })).catch(() => {}); };
 const admins = () => String(process.env.X_ADMINS || process.env.TROYA_ADMINS || "").split(",").map((a) => a.trim().toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a));
 let store = null, dir = null, attestor = null, scanning = false;
 const seenSigs = new Map();                  // signature → expiry, so a signed request is used once
@@ -217,7 +219,7 @@ export async function paidCheck({ address, ip, token, amountEth, assay = true })
   if (!isAddress(String(token || ""))) throw new HttpError(400, "That is not a token address on Robinhood Chain.");
   const id = { address: address ? lc(address) : null, via: address ? "api-key" : "anonymous" };
   const { paid, refund } = await charge(id, ip || "tools");
-  try { return { ...(await runCheck(token, { amountEth, withAssay: assay !== false })), paid: { ...paid, wallet: id.address ? getAddress(id.address) : null, via: id.via } }; }
+  try { const out = await runCheck(token, { amountEth, withAssay: assay !== false }); styx(paid, id.address, token, out); return { ...out, paid: { ...paid, wallet: id.address ? getAddress(id.address) : null, via: id.via } }; }
   catch (e) { await refund().catch(() => {}); throw e.status ? e : new HttpError(502, `The check could not run: ${e.message}`); }
 }
 
@@ -282,6 +284,7 @@ export async function register(r, ctx) {
     const { paid, refund } = await charge(id, ip, { preferCredit: query.pay === "credit" });
     try {
       const out = await runCheck(params.token, { amountEth: query.amountEth, from: query.from, withAssay: query.assay !== "0" });
+      styx(paid, id.address, params.token, out);
       return { ...out, paid: { ...paid, wallet: id.address ? getAddress(id.address) : null, via: id.via } };
     } catch (e) { await refund().catch(() => {}); throw e.status ? e : new HttpError(502, `The check could not run: ${e.message}`); }
   }, { weight: 4, perMin: 60 });

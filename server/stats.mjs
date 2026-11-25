@@ -76,7 +76,27 @@ async function compute() {
   let verifySteps = 0;
   try { verifySteps = ((await readFile(join(root, "public", "verify.html"), "utf8")).match(/<article class="step[^"]*" data-v="/g) || []).length; } catch { /* none */ }
   const s = await slowNumbers();
+  // AI agents on Troya (community request in Ideas & Bugs, 25 Nov 2026: "how many agents trade on Troya?"). Three kinds,
+  // counted apart, never added into one flattering number: Troya's own AI traders, people's Agent Wallets (an AI trades
+  // for its owner inside caps), and outside agents that paid Troya for a Gate check (x402, Gate API credit, Virtuals ACP).
+  const registry = await store.readJson("registry.json", {});
+  const regAgents = Object.values(registry.agents || {});
+  const calls = registry.calls || [];
+  const outside = new Set();
+  for (const x of x402.last || []) if (x?.payer && !ex.has(lc(x.payer))) outside.add(lc(x.payer));
+  for (const d of Object.values(gateapi.deposits || {})) { const a = lc(d?.from || d?.payer || d?.wallet); if (/^0x[0-9a-f]{40}$/.test(a) && !ex.has(a)) outside.add(a); }
+  const bow = await store.readJson("bow.json", {});
+  const ph = await store.readJson("phaeacians.json", {});
+  const agents = {
+    arenaAiTraders: size(arena.agents), arenaTrades: pos.length, arenaRealMoneyTrades: pos.filter((p) => p.mode === "live").length,
+    agentWallets: wallets, agentWalletTrades: trades, agentWalletTradesLast7Days: trades7,
+    registryAgents: regAgents.length, registryCalls: calls.length, registryCallsGraded: calls.filter((c) => c.gradedAt).length,
+    outsideAgentsPaidForGate: outside.size, gateChecksPaid: paidGate, gateChecksViaAcp: Number(gateapi.stats?.acp || 0), gateChecksViaX402: Number(gateapi.stats?.x402 ?? x402.stats?.paid ?? 0),
+    passportsRead: Number(bow.stats?.passports ?? size(bow.recent)) || 0, agentJobsJudged: size(ph.prechecks) + size(ph.records || ph.completions),
+    note: "Counted apart: Troya's own AI traders (the Arena), people's Agent Wallets, agents that file calls in Troya's registry, and outside agents that paid Troya for a Gate check (x402, Gate API credit, Virtuals ACP). Team and test wallets are left out.",
+  };
   return {
+    agents,
     at: Date.now(),
     community: { telegramMembers: s.telegramMembers ?? null, xFollowers: s.xFollowers ?? null, holders: s.holders ?? null },
     usage: { walletsUsedTroya: users.size, walletsLast7Days: users7.size, agentWallets: wallets, tradesExecuted: trades, tradesLast7Days: trades7, tradesFromXOrTelegram: xTg, coinsLaunched: launches.length, playbooksCreated: playbooks, paidGateCalls: paidGate },

@@ -56,6 +56,8 @@ const MODULES = [
   "./xtracker.mjs",    // V8 F41 X Tracker: tracked X accounts ride on the filtered stream; a posted contract gets the Gate and a ping
   "./antround.mjs",    // Arena: Anthropic Round, the five AI traders on xyz:ANT (paper; live with ANT_ROUND_LIVE=1)
   "./trident.mjs",     // V10 F58 Trident: Troya Firewall, allow / warn / block for any transaction or signature request, signed
+  "./bow.mjs",     // V10 F62 Bow: Agent Passport, stamps with proof (ERC-8004, graded calls, paid jobs, Seal, launches, farm-like reviewers, endpoint health), signed
+  "./phaeacians.mjs", // V10 F66 Phaeacians: Evaluator Desk, precheck + collusion check before a job is funded, signed completion records; never holds money
   "./styx.mjs",        // V9 F55 Styx Promise: a paid Gate check that passed a coin which then went to zero within 7 days is refunded as Gate credit
   "./warroom.mjs",     // V9 F52 War Room + F53 Myrmidons: calls, challenges and rug reports graded in public (no stakes)
   "./heelhunt.mjs",    // V9 F50 Heel Hunt: talk the Vault Keeper AI into sending the prize (opens only when the team sets it open)

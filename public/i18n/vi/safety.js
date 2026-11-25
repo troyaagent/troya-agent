@@ -72,5 +72,5 @@ TROYA_I18N_ADD({"<1/>Safety":"<1/>An toàn",
 "$TROYA burned":"$TROYA đã đốt",
 "{0}% of all minted, {1} burns on chain":"{0}% tổng lượng đã phát hành, {1} lần đốt trên chuỗi",
 "Last Sentry post":"Bài đăng gần nhất của Sentry",
-"$SSOUL, graded on The Record":"$SSOUL, được chấm điểm trên The Record",
+"$BEZOAR, graded on The Record":"$BEZOAR, được chấm điểm trên The Record",
 "<1>Every change, newest first</1>":"<1>Mọi thay đổi, mới nhất trước</1>"});

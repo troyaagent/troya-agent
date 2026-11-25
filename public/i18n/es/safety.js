@@ -72,5 +72,5 @@ TROYA_I18N_ADD({"<1/>Safety":"<1/>Seguridad",
 "$TROYA burned":"$TROYA quemado",
 "{0}% of all minted, {1} burns on chain":"{0}% de todo lo acuñado, {1} quemas en la cadena",
 "Last Sentry post":"Última publicación de Sentry",
-"$SSOUL, graded on The Record":"$SSOUL, calificado en The Record",
+"$BEZOAR, graded on The Record":"$BEZOAR, calificado en The Record",
 "<1>Every change, newest first</1>":"<1>Cada cambio, del más reciente al más antiguo</1>"});

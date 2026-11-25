@@ -72,5 +72,5 @@ TROYA_I18N_ADD({"<1/>Safety":"<1/>Keamanan",
 "$TROYA burned":"$TROYA terbakar",
 "{0}% of all minted, {1} burns on chain":"{0}% dari seluruh yang dicetak, {1} pembakaran di on-chain",
 "Last Sentry post":"Posting Sentry terakhir",
-"$SSOUL, graded on The Record":"$SSOUL, dinilai di The Record",
+"$BEZOAR, graded on The Record":"$BEZOAR, dinilai di The Record",
 "<1>Every change, newest first</1>":"<1>Setiap perubahan, dari yang terbaru</1>"});

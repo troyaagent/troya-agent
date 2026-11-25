@@ -96,6 +96,66 @@
   "tag": "a"
  },
  {
+  "key": "<1/><2>Check before signing</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Agent passport</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Real depth</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>One stock, many seas</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Plan a trade</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Sentinel network</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Safe crossing</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Blocked, and why</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Ghost trades</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Time machine</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
   "key": "<1/><2>Trader habits</2>",
   "kind": "unit",
   "ctx": "d-grp-discover",
@@ -492,6 +552,12 @@
   "tag": "span"
  },
  {
+  "key": "Phantom can sign in and claim free gas here, but as far as we know it cannot add Robinhood Chain as a network, so it cannot send the approve and stake transactions. Import the same wallet into MetaMask or Rabby to stake.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
   "key": "Total staked",
   "kind": "unit",
   "ctx": "view",
@@ -558,7 +624,7 @@
   "tag": "small"
  },
  {
-  "key": "Today: tier Under $35k at MC ${0}.2K, stakers get {1} ETH so far.",
+  "key": "Today: tier Under $35k at MC ${0}.1K, stakers get {1} ETH so far.",
   "kind": "unit",
   "ctx": "view",
   "tag": "b"
@@ -828,13 +894,61 @@
   "tag": "h3"
  },
  {
-  "key": "Couldn't read the contract right now: server response {0} Method Not Allowed",
+  "key": "{0}.28M $TROYA",
   "kind": "unit",
   "ctx": "view",
-  "tag": "div"
+  "tag": "b"
  },
  {
-  "key": "<1/>Try again",
+  "key": "1M waiting to leave · contract holds {0}.28M",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "wallets with coins staked, from the contract's events",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "ETH held for rewards",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0} ETH",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "sent as rewards, not claimed yet",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "Total rewarded",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0} ETH claimed so far",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "Read from Robinhood Chain at {0}:{1}:{2} AM, block {3}, through Troya's RPC relay (the staker count from Troya's index of the contract's events). Check the same numbers yourself: totalStaked, totalRewarded and totalClaimed on",
+  "kind": "text",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "<1/>Read again",
   "kind": "unit",
   "ctx": "view",
   "tag": "button"
@@ -1800,7 +1914,7 @@
   "tag": "time"
  },
  {
-  "key": "3d",
+  "key": "4d",
   "kind": "unit",
   "ctx": "Community chat",
   "tag": "time"
@@ -1814,6 +1928,12 @@
  {
   "key": "11/22/2026, {0}:{1}:{2} PM",
   "kind": "attr:title",
+  "ctx": "Community chat",
+  "tag": "time"
+ },
+ {
+  "key": "3d",
+  "kind": "unit",
   "ctx": "Community chat",
   "tag": "time"
  },
@@ -2166,73 +2286,97 @@
   "tag": "i"
  },
  {
-  "key": "$SSOUL · SECOND SOUL · passed Sentry 3h ago · {0} independent buyers",
+  "key": "$BEZOAR · born 1h ago · passed Sentry 1h ago · {0} independent buyers",
   "kind": "attr:title",
   "ctx": "Coins that passed Sentry",
   "tag": "a"
  },
  {
-  "key": "<1><2/></1><3>$SSOUL</3><4>passed 3h</4>",
+  "key": "<1><2/></1><3>$BEZOAR</3><4>1h</4>",
   "kind": "unit",
   "ctx": "Coins that passed Sentry",
   "tag": "a"
  },
  {
-  "key": "$ISO · Isometry · born 7h ago · passed Sentry 6h ago · {0} independent buyers",
+  "key": "$COGNIS · Cognisec · born 3h ago · passed Sentry 3h ago · {0} independent buyers",
   "kind": "attr:title",
   "ctx": "Coins that passed Sentry",
   "tag": "a"
  },
  {
-  "key": "<1><2/></1><3>$ISO</3><4>7h</4>",
+  "key": "<1><2/></1><3>$COGNIS</3><4>3h</4>",
   "kind": "unit",
   "ctx": "Coins that passed Sentry",
   "tag": "a"
  },
  {
-  "key": "$耄蝶 · born 8h ago · passed Sentry 8h ago · {0} independent buyers",
+  "key": "$WYLVEX · Wylvex Exchange · born 3h ago · passed Sentry 3h ago · {0} independent buyers",
   "kind": "attr:title",
   "ctx": "Coins that passed Sentry",
   "tag": "a"
  },
  {
-  "key": "<1><2/></1><3>$耄蝶</3><4>8h</4>",
+  "key": "<1><2/></1><3>$WYLVEX</3><4>3h</4>",
   "kind": "unit",
   "ctx": "Coins that passed Sentry",
   "tag": "a"
  },
  {
-  "key": "$g8r · born 9h ago · passed Sentry 9h ago · {0} independent buyers",
+  "key": "$PLUSHIFYROB · Plushification rob · born 5h ago · passed Sentry 4h ago · {0} independent buyers",
   "kind": "attr:title",
   "ctx": "Coins that passed Sentry",
   "tag": "a"
  },
  {
-  "key": "<1><2/></1><3>$g8r</3><4>9h</4>",
+  "key": "<1><2/></1><3>$PLUSHIFYROB</3><4>5h</4>",
   "kind": "unit",
   "ctx": "Coins that passed Sentry",
   "tag": "a"
  },
  {
-  "key": "$EQX · EQUINOX · born 17h ago · passed Sentry 17h ago · {0} independent buyers",
+  "key": "$SSOUL · SECOND SOUL · born 7h ago · passed Sentry 7h ago · {0} independent buyers",
   "kind": "attr:title",
   "ctx": "Coins that passed Sentry",
   "tag": "a"
  },
  {
-  "key": "<1><2/></1><3>$EQX</3><4>17h</4>",
+  "key": "<1><2/></1><3>$SSOUL</3><4>7h</4>",
   "kind": "unit",
   "ctx": "Coins that passed Sentry",
   "tag": "a"
  },
  {
-  "key": "$FEATHERS · Official Feathers Coin · born 18h ago · passed Sentry 18h ago · {0} independent buyers",
+  "key": "$ISO · Isometry · born 12h ago · passed Sentry 10h ago · {0} independent buyers",
   "kind": "attr:title",
   "ctx": "Coins that passed Sentry",
   "tag": "a"
  },
  {
-  "key": "<1><2/></1><3>$FEATHERS</3><4>18h</4>",
+  "key": "<1><2/></1><3>$ISO</3><4>12h</4>",
+  "kind": "unit",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "$耄蝶 · born 13h ago · passed Sentry 13h ago · {0} independent buyers",
+  "kind": "attr:title",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "<1>?<2/></1><3>$耄蝶</3><4>13h</4>",
+  "kind": "unit",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "$g8r · born 13h ago · passed Sentry 13h ago · {0} independent buyers",
+  "kind": "attr:title",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "<1>G8<2/></1><3>$g8r</3><4>13h</4>",
   "kind": "unit",
   "ctx": "Coins that passed Sentry",
   "tag": "a"
@@ -2286,13 +2430,13 @@
   "tag": "th"
  },
  {
-  "key": "BONER<1><2><3/></2>Long</1><4>96d</4>",
+  "key": "PONS<1><2><3/></2>Ramses</1><4>134d</4>",
   "kind": "unit",
   "ctx": "view",
   "tag": "b"
  },
  {
-  "key": "Boner Coin",
+  "key": "Pons",
   "kind": "unit",
   "ctx": "view",
   "tag": "span"
@@ -2316,55 +2460,7 @@
   "tag": "a"
  },
  {
-  "key": "$231K real liquidity, $181K traded",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "span"
- },
- {
-  "key": "{0}₅{1} ETH",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "span"
- },
- {
-  "key": "Pool total ${0}.1K incl. the coin side",
-  "kind": "attr:title",
-  "ctx": "view",
-  "tag": "div"
- },
- {
-  "key": "${0}.3K",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "span"
- },
- {
-  "key": "Buy BONER with ETH",
-  "kind": "attr:aria-label",
-  "ctx": "view",
-  "tag": "div"
- },
- {
-  "key": "Review a {0} ETH buy of BONER: the Gate checks it and your wallet signs",
-  "kind": "attr:title",
-  "ctx": "view",
-  "tag": "a"
- },
- {
-  "key": "PONS<1><2><3/></2>Ramses</1><4>134d</4>",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "b"
- },
- {
-  "key": "Pons",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "span"
- },
- {
-  "key": "${0}.0M real liquidity, $175K traded",
+  "key": "${0}.1M real liquidity, ${1}.4M traded",
   "kind": "unit",
   "ctx": "view",
   "tag": "span"
@@ -2376,13 +2472,13 @@
   "tag": "span"
  },
  {
-  "key": "Pool total ${0}.1M incl. the coin side",
+  "key": "Pool total ${0}.7K incl. the coin side",
   "kind": "attr:title",
   "ctx": "view",
   "tag": "div"
  },
  {
-  "key": "${0}.0M",
+  "key": "${0}.1M",
   "kind": "unit",
   "ctx": "view",
   "tag": "span"
@@ -2400,127 +2496,49 @@
   "tag": "a"
  },
  {
-  "key": "HOOKR<1><2><3/></2>Uniswap</1><4>111d</4>",
+  "key": "AI<1><2><3/></2>Long</1><4>134d</4>",
   "kind": "unit",
   "ctx": "view",
   "tag": "b"
  },
  {
-  "key": "Hookr.fun",
+  "key": "Artificial Inu",
   "kind": "unit",
   "ctx": "view",
   "tag": "span"
  },
  {
-  "key": "$354K real liquidity, $349K traded",
+  "key": "$630K real liquidity, $990K traded",
   "kind": "unit",
   "ctx": "view",
   "tag": "span"
  },
  {
-  "key": "Pool total ${0}.9K incl. the coin side",
+  "key": "{0}₅{1} ETH",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Pool total ${0}.0M incl. the coin side",
   "kind": "attr:title",
   "ctx": "view",
   "tag": "div"
  },
  {
-  "key": "${0}.4K",
+  "key": "${0}.3K",
   "kind": "unit",
   "ctx": "view",
   "tag": "span"
  },
  {
-  "key": "Buy HOOKR with ETH",
+  "key": "Buy AI with ETH",
   "kind": "attr:aria-label",
   "ctx": "view",
   "tag": "div"
  },
  {
-  "key": "Review a {0} ETH buy of HOOKR: the Gate checks it and your wallet signs",
-  "kind": "attr:title",
-  "ctx": "view",
-  "tag": "a"
- },
- {
-  "key": "TEXEL<1><2><3/></2>Pons</1><4>21d</4>",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "b"
- },
- {
-  "key": "Texel",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "span"
- },
- {
-  "key": "$70K real liquidity, $406K traded",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "span"
- },
- {
-  "key": "{0}₆{1} ETH",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "span"
- },
- {
-  "key": "Pool total ${0}.5K incl. the coin side",
-  "kind": "attr:title",
-  "ctx": "view",
-  "tag": "div"
- },
- {
-  "key": "Buy TEXEL with ETH",
-  "kind": "attr:aria-label",
-  "ctx": "view",
-  "tag": "div"
- },
- {
-  "key": "Review a {0} ETH buy of TEXEL: the Gate checks it and your wallet signs",
-  "kind": "attr:title",
-  "ctx": "view",
-  "tag": "a"
- },
- {
-  "key": "MFLO<1><2><3/></2>Uniswap</1><4>7h</4>",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "b"
- },
- {
-  "key": "MarketFloat",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "span"
- },
- {
-  "key": "$86K real liquidity, $796K traded",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "span"
- },
- {
-  "key": "{0}₈{1} ETH",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "span"
- },
- {
-  "key": "${0}.9K",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "span"
- },
- {
-  "key": "Buy MFLO with ETH",
-  "kind": "attr:aria-label",
-  "ctx": "view",
-  "tag": "div"
- },
- {
-  "key": "Review a {0} ETH buy of MFLO: the Gate checks it and your wallet signs",
+  "key": "Review a {0} ETH buy of AI: the Gate checks it and your wallet signs",
   "kind": "attr:title",
   "ctx": "view",
   "tag": "a"
@@ -2544,7 +2562,19 @@
   "tag": "a"
  },
  {
-  "key": "$692K real liquidity, $60K traded",
+  "key": "$720K real liquidity, ${0}.1M traded",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Pool total ${0}.0K incl. the coin side",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "${0}.2K",
   "kind": "unit",
   "ctx": "view",
   "tag": "span"
@@ -2562,7 +2592,133 @@
   "tag": "a"
  },
  {
-  "key": "HEPH<1><2><3/></2>Uniswap</1><4>8h</4>",
+  "key": "HOOKR<1><2><3/></2>Uniswap</1><4>111d</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Hookr.fun",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "$394K real liquidity, $422K traded",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "${0}.8K",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Buy HOOKR with ETH",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Review a {0} ETH buy of HOOKR: the Gate checks it and your wallet signs",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "MEME<1><2><3/></2>Long</1><4>82d</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "A Meme Coin",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "$364K real liquidity, $72K traded",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Pool total ${0}.6K incl. the coin side",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "${0}.7K",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Buy MEME with ETH",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Review a {0} ETH buy of MEME: the Gate checks it and your wallet signs",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "TEXEL<1><2><3/></2>Pons</1><4>22d</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Texel",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "$56K real liquidity, $382K traded",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0}₆{1} ETH",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Pool total ${0}.4K incl. the coin side",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "${0}.9K",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Buy TEXEL with ETH",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Review a {0} ETH buy of TEXEL: the Gate checks it and your wallet signs",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "HEPH<1><2><3/></2>Uniswap</1><4>12h</4>",
   "kind": "unit",
   "ctx": "view",
   "tag": "b"
@@ -2580,10 +2736,10 @@
   "tag": "span"
  },
  {
-  "key": "${0}.7K",
-  "kind": "unit",
+  "key": "Pool total ${0}.9K incl. the coin side",
+  "kind": "attr:title",
   "ctx": "view",
-  "tag": "span"
+  "tag": "div"
  },
  {
   "key": "Buy HEPH with ETH",
@@ -2622,37 +2778,37 @@
   "tag": "a"
  },
  {
-  "key": "<1><2/></1><3><4>$CITY</4><5>Pons · {0} buyer</5></3><6>Caution</6><7>6m</7><8><9>Gate</9><10>Open</10></8>",
+  "key": "<1><2/></1><3><4>$TOEG</4><5>Toe g · Pons</5></3><6>Failed</6><7>1m</7><8><9>Gate</9><10>Open</10></8>",
   "kind": "unit",
   "ctx": "view",
   "tag": "li"
  },
  {
-  "key": "<1><2/></1><3><4>$KYM</4><5>Know Your Memepad · Pons · {0} buyers</5></3><6>Caution</6><7>7m</7><8><9>Gate</9><10>Open</10></8>",
+  "key": "<1><2/></1><3><4>$TOGI</4><5>TOGI COIN · Pons</5></3><6>Failed</6><7>1m</7><8><9>Gate</9><10>Open</10></8>",
   "kind": "unit",
   "ctx": "view",
   "tag": "li"
  },
  {
-  "key": "<1><2/></1><3><4>$PEPTIDES</4><5>Pons</5></3><6>Failed</6><7>7m</7><8><9>Gate</9><10>Open</10></8>",
+  "key": "<1>GL<2/></1><3><4>$GLYD</4><5>Pons · {0} buyers</5></3><6>Caution</6><7>7m</7><8><9>Gate</9><10>Open</10></8>",
   "kind": "unit",
   "ctx": "view",
   "tag": "li"
  },
  {
-  "key": "<1><2/></1><3><4>$ZGUARD</4><5>Pons · {0} buyers</5></3><6>Caution</6><7>7m</7><8><9>Gate</9><10>Open</10></8>",
+  "key": "<1><2/></1><3><4>$ROUTIQ</4><5>Pons · {0} buyers</5></3><6>Caution</6><7>10m</7><8><9>Gate</9><10>Open</10></8>",
   "kind": "unit",
   "ctx": "view",
   "tag": "li"
  },
  {
-  "key": "<1><2/></1><3><4>$DOCKVAULT</4><5>Pons · no real buying yet</5></3><6>Checks passed</6><7>14m</7><8><9>Gate</9><10>Open</10></8>",
+  "key": "<1><2/></1><3><4>$GLYD</4><5>Pons · {0} buyers</5></3><6>Caution</6><7>19m</7><8><9>Gate</9><10>Open</10></8>",
   "kind": "unit",
   "ctx": "view",
   "tag": "li"
  },
  {
-  "key": "<1><2/></1><3><4>$ODDRO</4><5>Pons · {0} buyers</5></3><6>Caution</6><7>14m</7><8><9>Gate</9><10>Open</10></8>",
+  "key": "<1><2/></1><3><4>$ROUTIQ</4><5>Pons · {0} buyers</5></3><6>Caution</6><7>23m</7><8><9>Gate</9><10>Open</10></8>",
   "kind": "unit",
   "ctx": "view",
   "tag": "li"
@@ -2682,25 +2838,25 @@
   "tag": "a"
  },
  {
-  "key": "$SPCXC",
+  "key": "$GREM",
   "kind": "unit",
   "ctx": "Coins that just graduated",
   "tag": "b"
  },
  {
-  "key": "SPCX Chain",
+  "key": "Gremlin",
   "kind": "unit",
   "ctx": "Coins that just graduated",
   "tag": "small"
  },
  {
-  "key": "11/25/2026, {0}:{1}:{2} PM",
+  "key": "11/26/2026, {0}:{1}:{2} AM",
   "kind": "attr:title",
   "ctx": "Coins that just graduated",
   "tag": "span"
  },
  {
-  "key": "Graduated 4h ago",
+  "key": "Graduated 1h ago",
   "kind": "unit",
   "ctx": "Coins that just graduated",
   "tag": "span"
@@ -2712,22 +2868,10 @@
   "tag": "dt"
  },
  {
-  "key": "${0}.6K",
-  "kind": "unit",
-  "ctx": "Coins that just graduated",
-  "tag": "dd"
- },
- {
   "key": "Curve filled",
   "kind": "unit",
   "ctx": "Coins that just graduated",
   "tag": "dt"
- },
- {
-  "key": "{0} SPCX",
-  "kind": "unit",
-  "ctx": "Coins that just graduated",
-  "tag": "dd"
  },
  {
   "key": "Open",
@@ -2748,6 +2892,48 @@
   "tag": "a"
  },
  {
+  "key": "$SPCXC",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "b"
+ },
+ {
+  "key": "SPCX Chain",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "small"
+ },
+ {
+  "key": "11/25/2026, {0}:{1}:{2} PM",
+  "kind": "attr:title",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "Graduated 9h ago",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "${0}.4K",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
+ },
+ {
+  "key": "${0}.1K",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
+ },
+ {
+  "key": "{0} SPCX",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
+ },
+ {
   "key": "$IGNOT",
   "kind": "unit",
   "ctx": "Coins that just graduated",
@@ -2760,22 +2946,10 @@
   "tag": "small"
  },
  {
-  "key": "Graduated 6h ago",
+  "key": "Graduated 11h ago",
   "kind": "unit",
   "ctx": "Coins that just graduated",
   "tag": "span"
- },
- {
-  "key": "${0}.2K",
-  "kind": "unit",
-  "ctx": "Coins that just graduated",
-  "tag": "dd"
- },
- {
-  "key": "{0} ETH",
-  "kind": "unit",
-  "ctx": "Coins that just graduated",
-  "tag": "dd"
  },
  {
   "key": "$JAZZ",
@@ -2790,16 +2964,28 @@
   "tag": "small"
  },
  {
-  "key": "Graduated 8h ago",
+  "key": "Graduated 13h ago",
   "kind": "unit",
   "ctx": "Coins that just graduated",
   "tag": "span"
+ },
+ {
+  "key": "${0}.5K",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
  },
  {
   "key": "{0} USDG",
   "kind": "unit",
   "ctx": "Coins that just graduated",
   "tag": "dd"
+ },
+ {
+  "key": "MC<1/>",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
  },
  {
   "key": "$MCAT",
@@ -2820,7 +3006,7 @@
   "tag": "span"
  },
  {
-  "key": "Graduated 16h ago",
+  "key": "Graduated 21h ago",
   "kind": "unit",
   "ctx": "Coins that just graduated",
   "tag": "span"
@@ -2844,7 +3030,7 @@
   "tag": "small"
  },
  {
-  "key": "Graduated 17h ago",
+  "key": "Graduated 22h ago",
   "kind": "unit",
   "ctx": "Coins that just graduated",
   "tag": "span"
@@ -2904,12 +3090,6 @@
   "tag": "span"
  },
  {
-  "key": "${0}.1K",
-  "kind": "unit",
-  "ctx": "Coins that just graduated",
-  "tag": "dd"
- },
- {
   "key": "SI<1/>",
   "kind": "unit",
   "ctx": "Coins that just graduated",
@@ -2934,7 +3114,19 @@
   "tag": "span"
  },
  {
+  "key": "Graduated 2d ago",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
   "key": "${0}.0K",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
+ },
+ {
+  "key": "${0}.6K",
   "kind": "unit",
   "ctx": "Coins that just graduated",
   "tag": "dd"
@@ -2956,12 +3148,6 @@
   "kind": "unit",
   "ctx": "Coins that just graduated",
   "tag": "small"
- },
- {
-  "key": "${0}.5K",
-  "kind": "unit",
-  "ctx": "Coins that just graduated",
-  "tag": "dd"
  },
  {
   "key": "AN<1/>",
@@ -3001,30 +3187,6 @@
  },
  {
   "key": "Interpres",
-  "kind": "unit",
-  "ctx": "Coins that just graduated",
-  "tag": "small"
- },
- {
-  "key": "Graduated 2d ago",
-  "kind": "unit",
-  "ctx": "Coins that just graduated",
-  "tag": "span"
- },
- {
-  "key": "TE<1/>",
-  "kind": "unit",
-  "ctx": "Coins that just graduated",
-  "tag": "span"
- },
- {
-  "key": "$TENDER",
-  "kind": "unit",
-  "ctx": "Coins that just graduated",
-  "tag": "b"
- },
- {
-  "key": "Tender",
   "kind": "unit",
   "ctx": "Coins that just graduated",
   "tag": "small"
@@ -3348,7 +3510,7 @@
   "tag": "li"
  },
  {
-  "key": "<1>Wallet cluster</1><2>0x49a6…61cf handed coins to {0} wallets that together hold {1}%.</2>",
+  "key": "<1>Busy first seconds</1><2>{0} wallets bought in the first {1} seconds and still hold {2}%; {3} wallets bought in one block.</2>",
   "kind": "unit",
   "ctx": "view",
   "tag": "li"
@@ -3360,7 +3522,7 @@
   "tag": "li"
  },
  {
-  "key": "{0} transfers read (most recent only) · 5m",
+  "key": "{0} transfers read (most recent only) · 20m",
   "kind": "unit",
   "ctx": "view",
   "tag": "p"
@@ -3402,19 +3564,19 @@
   "tag": "li"
  },
  {
-  "key": "Largest 24h moves: BIGTIME +{0}%, SNXX -{1}%, SOXL -{2}%, MUU -{3}%.",
+  "key": "Largest 24h moves: BIGTIME +{0}%, BLUR +{1}%, MOODENG +{2}%, SNXX -{3}%.",
   "kind": "unit",
   "ctx": "view",
   "tag": "li"
  },
  {
-  "key": "Funding at the edges: GIGADEV +{0}%/yr is the richest for shorts to collect, BIGTIME -{1}%/yr the richest for longs.",
+  "key": "Funding at the edges: KIOXIA +{0}%/yr is the richest for shorts to collect, BIGTIME -{1}%/yr the richest for longs.",
   "kind": "unit",
   "ctx": "view",
   "tag": "li"
  },
  {
-  "key": "Robinhood Chain: Claude leads 24h volume with ${0}.4M traded (+{1}%), out of ${2}.8M across coins on the board; FIONA is the strongest gainer among liquid coins at +{3}%.",
+  "key": "Robinhood Chain: Claude leads 24h volume with ${0}.3M traded (+{1}%), out of ${2}.2M across coins on the board; FIONA is the strongest gainer among liquid coins at +{3}%.",
   "kind": "unit",
   "ctx": "view",
   "tag": "li"
@@ -3462,22 +3624,10 @@
   "tag": "b"
  },
  {
-  "key": "OI ${0}.4M",
+  "key": "OI ${0}.8M",
   "kind": "unit",
   "ctx": "view",
   "tag": "small"
- },
- {
-  "key": "${0}.4M",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "td"
- },
- {
-  "key": "SNXX",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "b"
  },
  {
   "key": "${0}.5M",
@@ -3486,25 +3636,55 @@
   "tag": "td"
  },
  {
-  "key": "Semiconductor 3x ETF",
+  "key": "BLUR",
   "kind": "unit",
   "ctx": "view",
   "tag": "b"
  },
  {
-  "key": "OI ${0}.8M",
+  "key": "OI ${0}.3M",
   "kind": "unit",
   "ctx": "view",
   "tag": "small"
  },
  {
-  "key": "MUU",
+  "key": "MOODENG",
   "kind": "unit",
   "ctx": "view",
   "tag": "b"
  },
  {
-  "key": "OI ${0}.8K",
+  "key": "OI ${0}.1K",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "SNXX",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "OI ${0}.1M",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "${0}.3M",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "td"
+ },
+ {
+  "key": "MON",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "OI ${0}.2M",
   "kind": "unit",
   "ctx": "view",
   "tag": "small"
@@ -3516,34 +3696,28 @@
   "tag": "td"
  },
  {
-  "key": "KORU",
+  "key": "MUU",
   "kind": "unit",
   "ctx": "view",
   "tag": "b"
  },
  {
-  "key": "OI ${0}.5M",
+  "key": "Semiconductor 3x ETF",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "OI ${0}.9M",
   "kind": "unit",
   "ctx": "view",
   "tag": "small"
  },
  {
-  "key": "CoreWeave",
+  "key": "${0}.0M",
   "kind": "unit",
   "ctx": "view",
-  "tag": "b"
- },
- {
-  "key": "OI ${0}.6M",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "small"
- },
- {
-  "key": "Zhipu AI",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "b"
+  "tag": "td"
  },
  {
   "key": "Your agent<1/>",
@@ -3636,7 +3810,7 @@
   "tag": "span"
  },
  {
-  "key": "24h volume ${0}.4M, open interest ${1}.4M.",
+  "key": "24h volume ${0}.5M, open interest ${1}.8M.",
   "kind": "unit",
   "ctx": "view",
   "tag": "span"
@@ -3648,7 +3822,7 @@
   "tag": "span"
  },
  {
-  "key": "${0}.4M traded in 24h on Uniswap.",
+  "key": "${0}.0M traded in 24h on Uniswap.",
   "kind": "unit",
   "ctx": "view",
   "tag": "span"
@@ -3660,25 +3834,31 @@
   "tag": "span"
  },
  {
-  "key": "New on Uniswap: Pompom",
+  "key": "New on Uniswap: GREM",
   "kind": "attr:title",
   "ctx": "view",
   "tag": "span"
  },
  {
-  "key": "Launched {0} min ago, ${1}.8K traded so far.",
+  "key": "Launched {0} min ago, ${1}.7K traded so far.",
   "kind": "unit",
   "ctx": "view",
   "tag": "span"
  },
  {
-  "key": "xyz:ZHIPU funding -{0}%/yr",
+  "key": "xyz:KIOXIA funding +{0}%/yr",
   "kind": "attr:title",
   "ctx": "view",
   "tag": "span"
  },
  {
-  "key": "ZHIPU funding -{0}%/yr",
+  "key": "KIOXIA funding +{0}%/yr",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Longs pay shorts about {0}% per hour at the current rate.",
   "kind": "unit",
   "ctx": "view",
   "tag": "span"
@@ -3792,7 +3972,7 @@
   "tag": "span"
  },
  {
-  "key": "Good evening.",
+  "key": "Late night.",
   "kind": "unit",
   "ctx": "view",
   "tag": "h1"
@@ -4008,18 +4188,6 @@
   "tag": "button"
  },
  {
-  "key": "$BONER",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "b"
- },
- {
-  "key": "Select $BONER",
-  "kind": "attr:aria-label",
-  "ctx": "view",
-  "tag": "button"
- },
- {
   "key": "$PONS",
   "kind": "unit",
   "ctx": "view",
@@ -4027,6 +4195,30 @@
  },
  {
   "key": "Select $PONS",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "$AI",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Select $AI",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "$CASHCAT",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Select $CASHCAT",
   "kind": "attr:aria-label",
   "ctx": "view",
   "tag": "button"
@@ -4044,25 +4236,13 @@
   "tag": "button"
  },
  {
-  "key": "$TEXEL",
+  "key": "$MEME",
   "kind": "unit",
   "ctx": "view",
   "tag": "b"
  },
  {
-  "key": "Select $TEXEL",
-  "kind": "attr:aria-label",
-  "ctx": "view",
-  "tag": "button"
- },
- {
-  "key": "$MFLO",
-  "kind": "unit",
-  "ctx": "view",
-  "tag": "b"
- },
- {
-  "key": "Select $MFLO",
+  "key": "Select $MEME",
   "kind": "attr:aria-label",
   "ctx": "view",
   "tag": "button"
@@ -4104,19 +4284,19 @@
   "tag": "button"
  },
  {
-  "key": "$SPY",
+  "key": "$SPCX",
   "kind": "unit",
   "ctx": "view",
   "tag": "b"
  },
  {
-  "key": "SPDR S&amp;P {0} ETF",
+  "key": "SpaceX Class A",
   "kind": "unit",
   "ctx": "view",
   "tag": "small"
  },
  {
-  "key": "Select $SPY",
+  "key": "Select $SPCX",
   "kind": "attr:aria-label",
   "ctx": "view",
   "tag": "button"
@@ -4201,6 +4381,66 @@
  },
  {
   "key": "War Room",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Check before signing",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Agent passport",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Real depth",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "One stock, many seas",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Plan a trade",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Sentinel network",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Safe crossing",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Blocked, and why",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Ghost trades",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Time machine",
   "kind": "unit",
   "ctx": "crumb",
   "tag": "p"
@@ -4384,23 +4624,5 @@
   "kind": "unit",
   "ctx": "crumb",
   "tag": "p"
- },
- {
-  "key": "Late night.",
-  "kind": "unit",
-  "ctx": "chat greeting (time of day)",
-  "tag": "h1"
- },
- {
-  "key": "Good morning.",
-  "kind": "unit",
-  "ctx": "chat greeting (time of day)",
-  "tag": "h1"
- },
- {
-  "key": "Good afternoon.",
-  "kind": "unit",
-  "ctx": "chat greeting (time of day)",
-  "tag": "h1"
  }
 ]

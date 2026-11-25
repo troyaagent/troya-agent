@@ -72,5 +72,5 @@ TROYA_I18N_ADD({"<1/>Safety":"<1/>安全",
 "$TROYA burned":"已销毁的 $TROYA",
 "{0}% of all minted, {1} burns on chain":"占全部已铸造量的 {0}%,链上共 {1} 次销毁",
 "Last Sentry post":"Sentry 最近一次发布",
-"$SSOUL, graded on The Record":"$SSOUL,已在 The Record 上评级",
+"$BEZOAR, graded on The Record":"$BEZOAR,在 The Record 上获得评级",
 "<1>Every change, newest first</1>":"<1>所有更新,最新在前</1>"});

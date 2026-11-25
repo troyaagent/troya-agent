@@ -480,13 +480,13 @@
   "tag": "span"
  },
  {
-  "key": "3h ago",
+  "key": "1h ago",
   "kind": "unit",
   "ctx": "building",
   "tag": "b"
  },
  {
-  "key": "$SSOUL, graded on The Record",
+  "key": "$BEZOAR, graded on The Record",
   "kind": "unit",
   "ctx": "building",
   "tag": "small"
@@ -498,43 +498,43 @@
   "tag": "li"
  },
  {
-  "key": "<1>Staking: 2x share for stakers who traded through Troya in the last {0} hours (verified swaps, Agent Wallet, TG/X, launches)</1><2>3d ago</2>",
+  "key": "<1>Staking: 2x share for stakers who traded through Troya in the last {0} hours (verified swaps, Agent Wallet, TG/X, launches)</1><2>4d ago</2>",
   "kind": "unit",
   "ctx": "building",
   "tag": "li"
  },
  {
-  "key": "<1>Tribute: a creator holding {0}%+ of a revenue token is an amber flag</1><2>3d ago</2>",
+  "key": "<1>Tribute: a creator holding {0}%+ of a revenue token is an amber flag</1><2>4d ago</2>",
   "kind": "unit",
   "ctx": "building",
   "tag": "li"
  },
  {
-  "key": "<1>Activity feed: launches, stakers, agents, outside-agent Gate use, graduations, payouts, MC tiers to the Telegram group and an X digest (dry…</1><2>3d ago</2>",
+  "key": "<1>Activity feed: launches, stakers, agents, outside-agent Gate use, graduations, payouts, MC tiers to the Telegram group and an X digest (dry…</1><2>4d ago</2>",
   "kind": "unit",
   "ctx": "building",
   "tag": "li"
  },
  {
-  "key": "<1>Staking: daily creator-fee share ({0}:{1} UTC), first payout on day {2}, tiny amounts stay with the owner</1><2>3d ago</2>",
+  "key": "<1>Staking: daily creator-fee share ({0}:{1} UTC), first payout on day {2}, tiny amounts stay with the owner</1><2>4d ago</2>",
   "kind": "unit",
   "ctx": "building",
   "tag": "li"
  },
  {
-  "key": "<1>Profiles: username, bio, avatar and banner per wallet on Portfolio, #/u/&lt;name&gt; and in the chat</1><2>3d ago</2>",
+  "key": "<1>Profiles: username, bio, avatar and banner per wallet on Portfolio, #/u/&lt;name&gt; and in the chat</1><2>4d ago</2>",
   "kind": "unit",
   "ctx": "building",
   "tag": "li"
  },
  {
-  "key": "<1>Stake in the site navbar next to Community, /stake short link, Stake under Portfolio in the app</1><2>3d ago</2>",
+  "key": "<1>Stake in the site navbar next to Community, /stake short link, Stake under Portfolio in the app</1><2>4d ago</2>",
   "kind": "unit",
   "ctx": "building",
   "tag": "li"
  },
  {
-  "key": "<1>TROYA staking: TroyaStake contract + tests, tiers and perks hooks, hourly-MC creator fee split (off until the contract is live)</1><2>3d ago</2>",
+  "key": "<1>TROYA staking: TroyaStake contract + tests, tiers and perks hooks, hourly-MC creator fee split (off until the contract is live)</1><2>4d ago</2>",
   "kind": "unit",
   "ctx": "building",
   "tag": "li"

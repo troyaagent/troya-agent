@@ -72,5 +72,5 @@ TROYA_I18N_ADD({"<1/>Safety":"<1/>Безопасность",
 "$TROYA burned":"Сожжено $TROYA",
 "{0}% of all minted, {1} burns on chain":"{0}% от всего выпущенного, сжиганий в блокчейне: {1}",
 "Last Sentry post":"Последний пост Sentry",
-"$SSOUL, graded on The Record":"$SSOUL, оценён в The Record",
+"$BEZOAR, graded on The Record":"$BEZOAR, оценён в The Record",
 "<1>Every change, newest first</1>":"<1>Все изменения, сначала новые</1>"});

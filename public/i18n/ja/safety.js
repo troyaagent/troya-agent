@@ -72,5 +72,5 @@ TROYA_I18N_ADD({"<1/>Safety":"<1/>セーフティ",
 "$TROYA burned":"$TROYA バーン済み",
 "{0}% of all minted, {1} burns on chain":"総ミント量の{0}%、オンチェーンでのバーン {1}件",
 "Last Sentry post":"Sentry の直近の投稿",
-"$SSOUL, graded on The Record":"$SSOUL、The Record で評価",
+"$BEZOAR, graded on The Record":"$BEZOAR、The Recordで評価",
 "<1>Every change, newest first</1>":"<1>すべての変更(新しい順)</1>"});

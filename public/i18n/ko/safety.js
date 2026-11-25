@@ -72,5 +72,5 @@ TROYA_I18N_ADD({"<1/>Safety":"<1/>안전",
 "$TROYA burned":"소각된 $TROYA",
 "{0}% of all minted, {1} burns on chain":"전체 발행량의 {0}%, 온체인 소각 {1}건",
 "Last Sentry post":"마지막 Sentry 게시물",
-"$SSOUL, graded on The Record":"$SSOUL, The Record에서 평가됨",
+"$BEZOAR, graded on The Record":"$BEZOAR, The Record에서 등급 평가됨",
 "<1>Every change, newest first</1>":"<1>모든 변경 사항, 최신순</1>"});

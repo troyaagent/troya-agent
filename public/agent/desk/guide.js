@@ -309,7 +309,9 @@ function chatSend(q) {
   const guest = !wallet.session;
   const prior = guest ? guestLog.get().slice(-8) : undefined;
   const context = g ? `(I am on the ${g.t} page of troya.codes/agent.${screenText()}) ` : screenText() ? `(${screenText().trim()}) ` : "";
-  stream("assistant/stream", { message: context + q, ...(guest ? { history: prior } : {}) }, (type, data) => {
+  // the reply language from Settings (the language picker sets it too); "auto" answers in the language of the message
+  const lang = (() => { try { return JSON.parse(localStorage.getItem("troya.prefs") || "{}")?.lang || "auto"; } catch { return "auto"; } })();
+  stream("assistant/stream", { message: context + q, lang, ...(guest ? { history: prior } : {}) }, (type, data) => {
     if (type === "status") status.lastChild.textContent = data.text;
     else if (type === "text") { acc += data.delta; body.innerHTML = md(acc); scroll(); }
     else if (type === "proposal") acts.append(h("a", { class: "g-act", href: "#/agent" }, chromeIcon("chat"), "A ticket is ready: confirm it in Chat"));

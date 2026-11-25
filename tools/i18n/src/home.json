@@ -1,0 +1,806 @@
+[
+ {
+  "key": "I",
+  "kind": "unit",
+  "ctx": "aside",
+  "tag": "span"
+ },
+ {
+  "key": "V",
+  "kind": "unit",
+  "ctx": "aside",
+  "tag": "span"
+ },
+ {
+  "key": "the gift is not<1/>the danger",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "p"
+ },
+ {
+  "key": "beware of Greeks<1/>bearing gifts",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "p"
+ },
+ {
+  "key": "every coin,<1/>opened at the gate",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "p"
+ },
+ {
+  "key": "nothing moves<1/>until you sign",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "p"
+ },
+ {
+  "key": "the night watch<1/>never sleeps",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "p"
+ },
+ {
+  "key": "you keep<1/>the keys",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "p"
+ },
+ {
+  "key": "<1>Your agent,</1> <2><3>Inside the</3><4/><5>walls</5></2> <6>Troya</6>",
+  "kind": "unit",
+  "ctx": "h1",
+  "tag": "h1"
+ },
+ {
+  "key": "<1/><2>Trade Anthropic<3>ANT perp · bridge in from Robinhood Chain</3></2><4>Trade</4>",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>V8 Agamemnon live · V9 Achilles next</2><3>Roadmap</3>",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Free gas for holders</2><3>See the rules</3>",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "button"
+ },
+ {
+  "key": "Scroll",
+  "kind": "attr:aria-label",
+  "ctx": "main",
+  "tag": "a"
+ },
+ {
+  "key": "Works with",
+  "kind": "attr:aria-label",
+  "ctx": "Works with",
+  "tag": "section"
+ },
+ {
+  "key": "Chains, routes, wallets and AI tools Troya connects to. Logos belong to their owners; listed as integrations, not partnerships.",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "p"
+ },
+ {
+  "key": "<1><2/></1><3>Robinhood Chain</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Hyperliquid</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>trade.xyz</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Lighter</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Morpho</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Base</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Arbitrum</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Ethereum</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Solana</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Pons</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Uniswap</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>KyberSwap</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Jupiter</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>PancakeSwap</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>LI.FI</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Relay</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>DEX Screener</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>GeckoTerminal</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Blockscout</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Fomo</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>MetaMask</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Coinbase Wallet</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Rabby</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>OKX Wallet</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>X</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Telegram</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>GitHub</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Claude</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Cursor</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>OpenRouter</3>",
+  "kind": "unit",
+  "ctx": "Works with",
+  "tag": "li"
+ },
+ {
+  "key": "Inside the walls",
+  "kind": "unit",
+  "ctx": "inside",
+  "tag": "p"
+ },
+ {
+  "key": "The story is old. <1>A gift at the gate,</1> and something inside it.",
+  "kind": "unit",
+  "ctx": "iw-h",
+  "tag": "h2"
+ },
+ {
+  "key": "On Robinhood Chain, every new coin is a gift at the gate. Troya opens it before you do, and an agent you control works from the inside. Talk to it like a trader sitting next to you: it pulls the Robinhood Chain tape, Pons curves and every launchpad, Uniswap pools, Base, Arbitrum and Solana routes, and Hyperliquid perps and spot into one desk, then hands you a ticket that is ready to sign.",
+  "kind": "unit",
+  "ctx": "inside",
+  "tag": "p"
+ },
+ {
+  "key": "<1><2>Robinhood Chain</2><3>Base</3><4>Arbitrum</4><5>Solana</5><6>Hyperliquid</6></1><7><8>Swap</8><9>Perps</9><10>Spot</10><11>Bridge</11><12>Launch</12><13>MCP</13></7>",
+  "kind": "unit",
+  "ctx": "inside",
+  "tag": "p"
+ },
+ {
+  "key": "<1/>Watch the film · {0} min",
+  "kind": "unit",
+  "ctx": "inside",
+  "tag": "button"
+ },
+ {
+  "key": "Open the app",
+  "kind": "unit",
+  "ctx": "inside",
+  "tag": "a"
+ },
+ {
+  "key": "Play the film",
+  "kind": "attr:aria-label",
+  "ctx": "inside",
+  "tag": "button"
+ },
+ {
+  "key": "Gate checks before every Pons buy",
+  "kind": "unit",
+  "ctx": "inside",
+  "tag": "span"
+ },
+ {
+  "key": "Tools in the Troya MCP server",
+  "kind": "unit",
+  "ctx": "inside",
+  "tag": "span"
+ },
+ {
+  "key": "$TROYA burned: 1B minus totalSupply(), <1>check it</1>",
+  "kind": "unit",
+  "ctx": "inside",
+  "tag": "span"
+ },
+ {
+  "key": "Main LP position, held by the Pons locker for good, <1>check it</1>",
+  "kind": "unit",
+  "ctx": "inside",
+  "tag": "span"
+ },
+ {
+  "key": "I <1/> Troya Gate",
+  "kind": "unit",
+  "ctx": "gate",
+  "tag": "p"
+ },
+ {
+  "key": "Every coin, <1>opened</1> at the gate",
+  "kind": "unit",
+  "ctx": "gate",
+  "tag": "h3"
+ },
+ {
+  "key": "Before a swap is shown, and again before the Agent Wallet signs, Troya Gate reads seven things: route, price impact, depth, fees, a simulation, a test sell and transfer tax. Fail one, no order. It runs again when you press Confirm, and whatever happens next is written to your journal.",
+  "kind": "unit",
+  "ctx": "gate",
+  "tag": "p"
+ },
+ {
+  "key": "Gate a coin",
+  "kind": "unit",
+  "ctx": "gate",
+  "tag": "a"
+ },
+ {
+  "key": "II <1/> Telegram",
+  "kind": "unit",
+  "ctx": "telegram",
+  "tag": "p"
+ },
+ {
+  "key": "A trading desk <1>in every chat</1>",
+  "kind": "unit",
+  "ctx": "telegram",
+  "tag": "h3"
+ },
+ {
+  "key": "Paste a coin in a private chat with @TrojanTroya_bot, or tap Trade in Telegram on a Sentry post. /long, /short, /close or plain words like \"long ETH ${0} at 3x\". The Gate runs first, Buy only appears when it passes, and nothing goes through until you tap Confirm. It trades from your Agent Wallet, inside your caps.",
+  "kind": "unit",
+  "ctx": "telegram",
+  "tag": "p"
+ },
+ {
+  "key": "Open @TrojanTroya_bot",
+  "kind": "unit",
+  "ctx": "telegram",
+  "tag": "a"
+ },
+ {
+  "key": "III <1/> Troya Sentry",
+  "kind": "unit",
+  "ctx": "sentry",
+  "tag": "p"
+ },
+ {
+  "key": "The night watch <1>never sleeps</1>",
+  "kind": "unit",
+  "ctx": "sentry",
+  "tag": "h3"
+ },
+ {
+  "key": "Every new Pons launch goes through the Gate about {0} seconds in, and again at {1}, {2} and {3} minutes, and so do new pools on Uniswap and the other Robinhood Chain launchpads. Only clean passes with real buying reach the channel: at least {4} ETH on the curve (or in the pool) and {5} or more independent buyers. Farm wallets and copies are left out. Checks, never an endorsement.",
+  "kind": "unit",
+  "ctx": "sentry",
+  "tag": "p"
+ },
+ {
+  "key": "Follow t.me/troyasentry",
+  "kind": "unit",
+  "ctx": "sentry",
+  "tag": "a"
+ },
+ {
+  "key": "IV <1/> Sentry Autopilot",
+  "kind": "unit",
+  "ctx": "autopilot",
+  "tag": "p"
+ },
+ {
+  "key": "Your rules, <1>around the clock</1>",
+  "kind": "unit",
+  "ctx": "autopilot",
+  "tag": "h3"
+ },
+ {
+  "key": "Give the agent your rules, like \"launches that pass the Gate above {0} ETH raised, {1} ETH each, take profit at 2x, stop at -{2}%\". Start in practice with play money at real prices, go live from your Agent Wallet when you are ready. The best results show on a leaderboard you can copy from.",
+  "kind": "unit",
+  "ctx": "autopilot",
+  "tag": "p"
+ },
+ {
+  "key": "Try it in practice",
+  "kind": "unit",
+  "ctx": "autopilot",
+  "tag": "a"
+ },
+ {
+  "key": "<1>I</1>Gate",
+  "kind": "unit",
+  "ctx": "inside",
+  "tag": "button"
+ },
+ {
+  "key": "<1>II</1>Telegram",
+  "kind": "unit",
+  "ctx": "inside",
+  "tag": "button"
+ },
+ {
+  "key": "<1>III</1>Sentry",
+  "kind": "unit",
+  "ctx": "inside",
+  "tag": "button"
+ },
+ {
+  "key": "<1>IV</1>Autopilot",
+  "kind": "unit",
+  "ctx": "inside",
+  "tag": "button"
+ },
+ {
+  "key": "Also in the desk",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Everything else, <1>one click in</1>",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h3"
+ },
+ {
+  "key": "Ask and quote",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Point at a token, a pool or a perp and ask. Live numbers (price, depth, funding, your balances) plus a contract risk read, in whatever language you typed. The chat remembers the conversation, and New chat keeps old ones in an archive you can reopen.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Ask Troya",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "a"
+ },
+ {
+  "key": "Swaps",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Coins and tokenized stocks route through Pons curves and Uniswap v3 and v4 pools, and coins from the other Robinhood Chain launchpads (Long.xyz, Bankr, Frontier.fun, Abyss, Virtuals and more) through KyberSwap. Thin, new or misbehaving pools are skipped, and the quote is refreshed once more before your wallet opens.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Swap",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "a"
+ },
+ {
+  "key": "More chains",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "The same Swap page also trades on Base and Arbitrum (routes from KyberSwap) and on Solana (routes from Jupiter, with Phantom, Solflare or Backpack). Pick the network, and the Gate runs on that chain before anything is signed: route, depth, fees, a simulation and a test sell.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Pick a network",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "a"
+ },
+ {
+  "key": "Perps ticket",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Any Hyperliquid perp, either side, with leverage, take-profit and stop-loss in the same ticket. Funding takes one transaction: ETH on Robinhood Chain becomes USDC on your own Hyperliquid account.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Perps",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "a"
+ },
+ {
+  "key": "Spot on Hyperliquid",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Buy and sell HYPE, UBTC, UETH and the other Hyperliquid spot coins from your own Hyperliquid account, with the same trade-only key as Perps. A Spot Gate reads the live book first, and orders never fill more than {0}% from the price.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Spot",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "a"
+ },
+ {
+  "key": "Launch a coin",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Post <1/> on X, or use Create coin on troya.codes. Open to everyone: one launch from X a day (three a day in all across X, Telegram and troya.codes). Holders of {0} $TROYA have no daily limit and keep {1}% of the creator fee. Creator tax from {2} to {3}%.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Create coin",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "a"
+ },
+ {
+  "key": "Read the guide",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "a"
+ },
+ {
+  "key": "Troya Launches",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "a"
+ },
+ {
+  "key": "A small wallet Troya can act from without a popup every time, never past the daily caps you set. Withdrawals only go back to your own wallet. It is custodial, so fund it like pocket money.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Autopilot and playbooks",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Write a playbook once (a stop-loss guard, a take-profit ladder, a weekly DCA) and the server checks it every {0} seconds, tab open or not. Without the Agent Wallet it leaves you a ticket to approve.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Playbooks",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "a"
+ },
+ {
+  "key": "Daily AI brief",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Every morning: your positions, PnL, liquidation distance, funding, the nearest stop, the market and the day's Sentry, with a two-line summary. Smart alerts when a stop is close.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "See today's brief",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "a"
+ },
+ {
+  "key": "Gate badge",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Pons devs can show a live Gate result on their own site: paste the contract, copy one line. Checked again at most every {0} minutes, a snapshot and never a \"safe\" stamp.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Get a badge",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "a"
+ },
+ {
+  "key": "$TROYA holder perks",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "A wallet holding at least {0} $TROYA (with its Agent Wallet) gets {1} assistant messages a day, {2} active playbooks, every coin Sentry posts by private message, no daily launch limit and {3}% of the creator fee on coins you launch.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Connect a wallet",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "a"
+ },
+ {
+  "key": "API, MCP and CLI",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Wire Troya into Claude Desktop, Cursor or Claude Code with one command, run it in your terminal with <1/>, or call the REST API. The same tools, caps and journal sit behind every door.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "<1>$</1>npx -y @troyaagent/mcp<2>Copy</2>",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "button"
+ },
+ {
+  "key": "Check it yourself",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Each feature opened only after a test with real money. The Verify page lists those transactions, the contracts and who signed, with links to the explorers, so anyone can check them. Proof puts the burn, the Gate and every agent trade on one page.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Verify",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "a"
+ },
+ {
+  "key": "<1>High walls.</1> <2>Your rules at the gate.</2>",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Real markets",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Mainnet only: Robinhood Chain, Base, Arbitrum, Solana and Hyperliquid. Each action passes a check before it runs, an operator kill switch can freeze everything, and MCP execution ships in dry-run.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Risk first",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Order size, leverage, a market allowlist and a daily USD ceiling are tested before every action. Pause freezes the Agent Wallet on the spot.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "Full audit trail",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Every move is logged with the reasoning behind it, and the whole journal is readable inside the app.",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "p"
+ },
+ {
+  "key": "<1/>V · What burns<2/>",
+  "kind": "unit",
+  "ctx": "proof",
+  "tag": "p"
+ },
+ {
+  "key": "What burns, <1>stays burned</1>",
+  "kind": "unit",
+  "ctx": "c5",
+  "tag": "h2"
+ },
+ {
+  "key": "<1><2/> $TROYA burned ·</1> <3><4/>% of the 1B minted</3><5/><6>Uniswap v4 LP ·</6> <7>NFT #{0} ·</7> <8>dead address</8><9/><10>block {1} ·</10> <11>{2} Nov {3}</11><12/><13>no presale ·</13> <14>no pre-minted team allocation ·</14> <15>no owner</15>",
+  "kind": "unit",
+  "ctx": "proof",
+  "tag": "p"
+ },
+ {
+  "key": "Burned with the token's own burn(), so the supply itself goes down and nothing sits at a dead address: check totalSupply on the explorer. <1/>",
+  "kind": "unit",
+  "ctx": "proof",
+  "tag": "p"
+ },
+ {
+  "key": "The LP burn",
+  "kind": "unit",
+  "ctx": "proof",
+  "tag": "a"
+ },
+ {
+  "key": "totalSupply on Blockscout",
+  "kind": "unit",
+  "ctx": "proof",
+  "tag": "a"
+ },
+ {
+  "key": "Every burn",
+  "kind": "unit",
+  "ctx": "proof",
+  "tag": "a"
+ },
+ {
+  "key": "Join Telegram",
+  "kind": "unit",
+  "ctx": "proof",
+  "tag": "a"
+ },
+ {
+  "key": "Troya Agent | AI trading desk for Robinhood Chain",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "title"
+ },
+ {
+  "key": "<1><2>Y</2><3>o</3><4>u</4><5>r</5> <6>a</6><7>g</7><8>e</8><9>n</9><10>t</10><11>,</11></1> <12><13><14>I</14><15>n</15><16>s</16><17>i</17><18>d</18><19>e</19> <20>t</20><21>h</21><22>e</22></13><23/><24><25>w</25><26>a</26><27>l</27><28>l</28><29>s</29></24></12> <30>Troya</30>",
+  "kind": "unit",
+  "ctx": "h1",
+  "tag": "h1"
+ }
+]

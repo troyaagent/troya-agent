@@ -1,0 +1,590 @@
+[
+ {
+  "key": "Troya Agent home",
+  "kind": "attr:aria-label",
+  "ctx": "header",
+  "tag": "a"
+ },
+ {
+  "key": "<1>Troya</1><2>Agent</2><3>MMXXVI</3>",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "a"
+ },
+ {
+  "key": "Troya elsewhere",
+  "kind": "attr:aria-label",
+  "ctx": "Troya elsewhere",
+  "tag": "nav"
+ },
+ {
+  "key": "Proof",
+  "kind": "unit",
+  "ctx": "Troya elsewhere",
+  "tag": "a"
+ },
+ {
+  "key": "Roadmap",
+  "kind": "unit",
+  "ctx": "Troya elsewhere",
+  "tag": "a"
+ },
+ {
+  "key": "Community",
+  "kind": "unit",
+  "ctx": "Troya elsewhere",
+  "tag": "a"
+ },
+ {
+  "key": "Stake",
+  "kind": "unit",
+  "ctx": "Troya elsewhere",
+  "tag": "a"
+ },
+ {
+  "key": "X",
+  "kind": "attr:title",
+  "ctx": "Troya elsewhere",
+  "tag": "a"
+ },
+ {
+  "key": "Troya on X",
+  "kind": "attr:aria-label",
+  "ctx": "Troya elsewhere",
+  "tag": "a"
+ },
+ {
+  "key": "Telegram",
+  "kind": "attr:title",
+  "ctx": "Troya elsewhere",
+  "tag": "a"
+ },
+ {
+  "key": "Troya on Telegram",
+  "kind": "attr:aria-label",
+  "ctx": "Troya elsewhere",
+  "tag": "a"
+ },
+ {
+  "key": "GitHub",
+  "kind": "attr:title",
+  "ctx": "Troya elsewhere",
+  "tag": "a"
+ },
+ {
+  "key": "Troya on GitHub",
+  "kind": "attr:aria-label",
+  "ctx": "Troya elsewhere",
+  "tag": "a"
+ },
+ {
+  "key": "<1/>Buy<2>$TROYA</2><3/>",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "<1/><2><3>Troya Swap</3><4>Our own desk. The Gate checks $TROYA first, then Troya routes the best price on Robinhood Chain.</4></2><5>Best</5>",
+  "kind": "unit",
+  "ctx": "bb-menu",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2><3>Pons</3><4>The launchpad where $TROYA started</4></2><5/>",
+  "kind": "unit",
+  "ctx": "bb-menu",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2><3>Fomo</3><4>The social trading app, on web and phone</4></2><5/>",
+  "kind": "unit",
+  "ctx": "bb-menu",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2><3>DexScreener</3><4>Live chart, pools and trades</4></2><5/>",
+  "kind": "unit",
+  "ctx": "bb-menu",
+  "tag": "a"
+ },
+ {
+  "key": "<1>CA</1><2/><3>Copy</3>",
+  "kind": "unit",
+  "ctx": "bb-menu",
+  "tag": "button"
+ },
+ {
+  "key": "Open app",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "a"
+ },
+ {
+  "key": "Menu",
+  "kind": "attr:aria-label",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "<1><2>{0}</2>Open the desk</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Markets</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>The Gate</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Telegram</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Sentry</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Autopilot</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Everything else</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Proof</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Docs</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Community</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Stake $TROYA</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Roadmap</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Launch on X</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "Sentry",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "a"
+ },
+ {
+  "key": "Close",
+  "kind": "attr:aria-label",
+  "ctx": "",
+  "tag": "button"
+ },
+ {
+  "key": "<1/>Troya pays your gas",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "p"
+ },
+ {
+  "key": "Free gas for holders",
+  "kind": "unit",
+  "ctx": "gas-h",
+  "tag": "h2"
+ },
+ {
+  "key": "<1>Hold {0} $TROYA</1> or more, in your wallet plus its Agent Wallet.",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Claim once a week</1> in the app: Portfolio, Claim free gas. A little ETH on Robinhood Chain, enough for dozens of trades.",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "li"
+ },
+ {
+  "key": "<1>For wallets running low:</1> a wallet already holding {0} ETH or more does not need it yet.",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Agent Wallet trades</1> get their gas refunded automatically, up to a daily amount.",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Any wallet works</1>: MetaMask, Rabby, Coinbase Wallet, OKX Wallet and others. It is plain ETH sent to your address.",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "li"
+ },
+ {
+  "key": "Paid from a sponsor wallet with a daily budget. When the day's budget is used, claims open again at {0}:{1} UTC.",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "li"
+ },
+ {
+  "key": "Claim in the app",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "a"
+ },
+ {
+  "key": "Get $TROYA",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "a"
+ },
+ {
+  "key": "Agent Wallet",
+  "kind": "unit",
+  "ctx": "desk",
+  "tag": "h4"
+ },
+ {
+  "key": "Pages",
+  "kind": "attr:aria-label",
+  "ctx": "Pages",
+  "tag": "nav"
+ },
+ {
+  "key": "<1>CA</1><2/>",
+  "kind": "unit",
+  "ctx": "footer",
+  "tag": "button"
+ },
+ {
+  "key": "Privacy Policy",
+  "kind": "unit",
+  "ctx": "footer",
+  "tag": "a"
+ },
+ {
+  "key": "Terms of Use",
+  "kind": "unit",
+  "ctx": "footer",
+  "tag": "a"
+ },
+ {
+  "key": "Every number on this site is read from the chain or from Troya's own records: <1>see the proof</1>.",
+  "kind": "unit",
+  "ctx": "footer",
+  "tag": "p"
+ },
+ {
+  "key": "© {0} Troya Agent",
+  "kind": "unit",
+  "ctx": "footer",
+  "tag": "span"
+ },
+ {
+  "key": "Mainnet beta",
+  "kind": "unit",
+  "ctx": "footer",
+  "tag": "span"
+ },
+ {
+  "key": "All rights reserved",
+  "kind": "unit",
+  "ctx": "footer",
+  "tag": "span"
+ },
+ {
+  "key": "Product",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "p"
+ },
+ {
+  "key": "<1>Desk</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Swap</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Perps</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Stocks</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Launch</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Bridge</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Launch on X</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Proof</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Verify</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>The Record</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Seal</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Arena</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Oath</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Flywheel</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Agent Wallet changelog</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "Build",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "p"
+ },
+ {
+  "key": "<1>API and MCP</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Gate badge</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Gate in your group</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Gate in MetaMask</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>llms.txt</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Docs</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "Company",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "p"
+ },
+ {
+  "key": "<1>Roadmap</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Community</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Stake $TROYA</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Plans</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Capabilities</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Philosophy</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Market analysis</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Insights</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Risk controls</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Safety</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Privacy Policy</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Terms of Use</1>",
+  "kind": "unit",
+  "ctx": "Menu",
+  "tag": "li"
+ },
+ {
+  "key": "Troya Agent is software for reading markets and preparing orders on Robinhood Chain, Base, Arbitrum, Solana and Hyperliquid mainnet. It is in beta and handles real funds. You can sign every action in your own wallet, which Troya never holds, or switch on an optional Agent Wallet: a small custodial wallet whose key the operator stores encrypted, so the agent can act within the caps you and the operator set. Nothing on this site or in the app is investment, legal or tax advice, an offer or a solicitation. Digital assets are volatile and you can lose everything you put in. You are responsible for the limits you choose and for every action taken under them.",
+  "kind": "unit",
+  "ctx": "footer",
+  "tag": "p"
+ },
+ {
+  "key": "Skip to content",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "a"
+ },
+ {
+  "key": "Site",
+  "kind": "attr:aria-label",
+  "ctx": "pn-menu",
+  "tag": "nav"
+ },
+ {
+  "key": "<1><2>{0}</2>Troya</1>",
+  "kind": "unit",
+  "ctx": "pn-menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Capabilities</1>",
+  "kind": "unit",
+  "ctx": "pn-menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Philosophy</1>",
+  "kind": "unit",
+  "ctx": "pn-menu",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2>{0}</2>Plans</1>",
+  "kind": "unit",
+  "ctx": "pn-menu",
+  "tag": "li"
+ }
+]

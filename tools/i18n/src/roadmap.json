@@ -1,0 +1,1850 @@
+[
+ {
+  "key": "<1/>Roadmap",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "span"
+ },
+ {
+  "key": "Achilles is here. Find the heel.",
+  "kind": "unit",
+  "ctx": "ph",
+  "tag": "h1"
+ },
+ {
+  "key": "Every shipped phase ran on the live site before it was announced; the receipts are on <1>/verify</1>. V9 Achilles is the roadmap now and its first phase, Heel, is live; V8 Agamemnon is live and finishing its real-money tests, and the roadmaps after V9 already have their names, up to Olympus.",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "p"
+ },
+ {
+  "key": "Roadmaps",
+  "kind": "attr:aria-label",
+  "ctx": "Roadmaps",
+  "tag": "nav"
+ },
+ {
+  "key": "V9 · Achilles",
+  "kind": "unit",
+  "ctx": "Roadmaps",
+  "tag": "a"
+ },
+ {
+  "key": "V8 · Agamemnon",
+  "kind": "unit",
+  "ctx": "Roadmaps",
+  "tag": "a"
+ },
+ {
+  "key": "V7 · Athena",
+  "kind": "unit",
+  "ctx": "Roadmaps",
+  "tag": "a"
+ },
+ {
+  "key": "V6 · Hermes",
+  "kind": "unit",
+  "ctx": "Roadmaps",
+  "tag": "a"
+ },
+ {
+  "key": "V5 · Odysseus",
+  "kind": "unit",
+  "ctx": "Roadmaps",
+  "tag": "a"
+ },
+ {
+  "key": "V4 · Cassandra",
+  "kind": "unit",
+  "ctx": "Roadmaps",
+  "tag": "a"
+ },
+ {
+  "key": "V3 · More chains",
+  "kind": "unit",
+  "ctx": "Roadmaps",
+  "tag": "a"
+ },
+ {
+  "key": "V2 · Terminal",
+  "kind": "unit",
+  "ctx": "Roadmaps",
+  "tag": "a"
+ },
+ {
+  "key": "V1 · Sentry",
+  "kind": "unit",
+  "ctx": "Roadmaps",
+  "tag": "a"
+ },
+ {
+  "key": "V10–V14 · Later",
+  "kind": "unit",
+  "ctx": "Roadmaps",
+  "tag": "a"
+ },
+ {
+  "key": "Now / V9 Achilles",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "V9",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "<1><2/>Complete · {0} Nov {1}</1><3>Announced {2} Nov {3}</3><4>{4} of {5} phases live; Zero Watch follows {6} Nov</4><5/>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "p"
+ },
+ {
+  "key": "Achilles, the Swift",
+  "kind": "unit",
+  "ctx": "v9-h",
+  "tag": "h2"
+ },
+ {
+  "key": "The fastest warrior of the Trojan War, almost impossible to beat, with one weak spot: his heel. He fought against Troy, so V9 takes the best of an old enemy: speed, and finding the one weak spot in anything before it hurts you. Paste a coin, a dev, an agent or a trader and Troya names its heel with the evidence and one tap to guard against it; one box buys at the best price Troya can reach. V9 comes from a research pass on {0} Nov {1}. Each phase below says where it stands: live, building next, coming, or still being researched, and like V8 each one names its own limit.",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "p"
+ },
+ {
+  "key": "F47",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "small"
+ },
+ {
+  "key": "Heel <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · read-only</1>Paste a coin, a dev wallet or an AI agent and Troya names its one weak spot in a sentence, with the on-chain evidence for every fact. A dev gets a passport: its past launches, what it did with each in the first day, and where its first ETH came from. One Guard button pins the coin to Watchfire or watches the dev, so you hear when it moves. Thetis dipped Achilles in the Styx holding him by the heel; Heel looks for that one spot in everything. Honest limit: wallet clusters are always a probability, so Heel describes what wallets did, never who people are. <2>Live {0} Nov at troya.codes/agent#/heel and in the API at /api/heel.</2>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "F48",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "small"
+ },
+ {
+  "key": "Chiron <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · rules on your Agent Wallet</1>Paste any trader wallet, no connecting needed, and Chiron reads its own swaps on the Pons curve and Uniswap to find the one habit that costs it most: buying in a launch's first {0} seconds or {1} minutes, holding losers far longer than winners, trading too often, or selling winners early. Each habit comes with its cost in ETH, the sample size and the transactions behind it, and nothing is named under {2} closed round trips. One tap turns it into a personal rule the Gate and Scepter enforce for you, such as no buys in a launch's first {3} seconds or at most a few buys a day, on every buy from your Agent Wallet. The centaur Chiron trained Achilles. Honest limit: swaps you sign in your own wallet are not stopped, and the holding and selling habits are saved as reminders because Troya does not hold or close positions for you. <2>It describes habits, it never tells anyone what to buy. Live {4} Nov at troya.codes/agent#/chiron and in the API at /api/chiron.</2>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "F49",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "small"
+ },
+ {
+  "key": "Swift and Troya Atlas <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live</1>One buy box. Troya Atlas compares every venue Troya already reaches (the Pons curve, Uniswap, KyberSwap, Base, Arbitrum, Hyperliquid and Lighter) and routes your trade to the best price, with the Gate checking the coin first, and you can fund it from any chain. Achilles was the fastest runner of the Greeks. <2>The full desk stays one tap away for anyone who wants every control.</2>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "F50",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "small"
+ },
+ {
+  "key": "Heel Hunt <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · round {0} open</1>A public challenge: talk the Vault Keeper, an AI with a real tool that sends the prize, into using it, and the prize is yours. Free to enter with a signed-in wallet, one message every {1} minutes, every attempt and answer public. The prize sits in a wallet made for this game only and can only ever go to the wallet that made the winning attempt. The keeper's instructions are fixed for the round, their sha256 published at the start and the full text after it ends. Troya hunts for its own heel before anyone else finds it. A private red-team pass ran first: the keeper held against {2} of {3} common tricks. <2>Round {4}: {5} ETH (about ${6}), open {7} Nov to {8} Dec {9}. If nobody wins, the prize goes back to the Troya team.</2>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "F51",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "small"
+ },
+ {
+  "key": "Zeno's Gap <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · read-only</1>Stock tokens on Robinhood Chain trade around the clock; the stock markets do not. While the US market is closed, Zeno's Gap gives each share a fair value: its last real price moved by Nasdaq-{0} futures since that price was set, the same move for every share. The board shows how far each token sits from that fair value, and a snap-back watch lists the deep pools {1}% or more away from it. Futures are closed on weekends, so over a weekend fair value is Friday's last price. In Zeno's paradox, Achilles can never quite catch the tortoise. <2>An estimate, not a quote, and never a forecast.</2> Live {2} Nov in Stocks, Vs real share.",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "F52",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "small"
+ },
+ {
+  "key": "Two Fates and War Room <1>Community idea</1>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · no stakes</1>Every new launch gets a signed {0}-hour survival call, graded in public afterwards, misses included. Part {1}, from Xivor's spec, is collecting since {2} Nov: every launch Sentry checks goes on a passed or a blocked list, both priced at the check, at {3} hour and at {4} hours, with the same definition of \"went to zero\". A coin blocked only because its curve trades against USDG or a stock token is left out, and a blocked coin that could not be sold is counted as a full loss on its own line. Both columns are on The Record, whatever they say. Part {5}, the War Room, is live at troya.codes/agent#/warroom: call a fresh launch's fate, or challenge Troya's verdict with your reasons, graded by the same {6}-hour clock, with a public leaderboard. In the War Room the community can challenge any Troya verdict with evidence and make its own predictions, graded the same way. Achilles was told he had two fates to choose from. <2>A scorecard, not a betting market: no stakes and no money on predictions.</2>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "F53",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "small"
+ },
+ {
+  "key": "Myrmidons <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · reputation</1>Community rug hunters report a ring or a rug on any Robinhood Chain coin with on-chain evidence. Troya checks it with its own reads, Two Fates and Heel, for up to {0} hours, and every confirmed report counts on the War Room leaderboard. The Myrmidons were Achilles' loyal army. No prize pool: rewards for holders already come from staking and free gas. <2>Proof is about what wallets did, never about people.</2> Live {1} Nov in the War Room.",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "F54",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "small"
+ },
+ {
+  "key": "Patroclus <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · read-only</1>The Heel card, embeddable anywhere an image works: launchpads, bots, wallets, docs and forum posts. Open any coin, dev or agent in Heel and copy one line of HTML or Markdown; the card shows its one weak spot, the severity, the Gate verdict and the time it was read, and links back to the full Heel with every fact's proof. Patroclus went into battle wearing Achilles' armour. Signed in, the card's link carries your Herald referral code, so wallets that join Troya through a card you show count as your referrals (live {0} Nov). <2>Every card is a dated snapshot, never a safe stamp.</2> Live {1} Nov at troya.codes/heel and in the API at /api/heelcard/&lt;address&gt;.svg.",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "F55",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "small"
+ },
+ {
+  "key": "Styx Promise <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · paid checks</1>When you pay Troya for a Gate check (Gate API credit or x402) and the result says the coin can be bought, the check is covered for {0} days. If the coin goes to zero in that time, the fee for that check comes back by itself as Gate API credit on the wallet that paid, with a sealed receipt. The Styx made Achilles nearly unbeatable, all but the heel. Troya takes no swap fee, so a paid check is the only fee there is to give back. <2>Not insurance: only Troya's own check fee is returned, never trading losses.</2> Live {1} Nov; the ledger is at /api/styx.",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "F56",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "small"
+ },
+ {
+  "key": "Troya Zero Watch <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "b"
+ },
+ {
+  "key": "<1/>LayerZero's new chain, Zero, is scheduled to go live on {0} Nov {1} with ATLAS, an exchange engine other apps can plug into (Open ATLAS). Troya is getting ready: checking Zero's tokens and launchpads for the Gate and Sentry, and studying bringing Open ATLAS trading into Troya. <2>No time of day has been announced, so the countdown runs to the start of {2} Nov (UTC). Troya Atlas in F49 is Troya's own router and not part of ATLAS.</2>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "{0} Nov (UTC)",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "<1/>days",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "<1/>hrs",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "<1/>min",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "<1/>sec",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "Launch day ({0} Nov). No time of day was announced; Troya marks Zero live once its first blocks are confirmed.",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "F57",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "small"
+ },
+ {
+  "key": "Phoenix <1>Community idea</1> <2>Open</2>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · in use</1>The agents learn from Troya's own graded results. Every closed Arena trade, Anthropic Round call and graded Sentry call becomes a lesson, and the lessons add up to win rates by pattern, such as coin age at entry or ETH raised on the curve, each with its sample size; nothing is called a pattern under {0} trades. The community bot learns the same way, from every correction the team writes once. Phoenix was the tutor who raised Achilles. <2>Live {1} Nov at troya.codes/agent#/phoenix, in shadow mode first; since {2} Nov the Arena and Anthropic Round traders read their own lessons before they write their rules. It is advice in a prompt only: no cap, budget or Gate check changes.</2>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "span"
+ },
+ {
+  "key": "V9 progress, updated as it ships",
+  "kind": "unit",
+  "ctx": "v9-progress",
+  "tag": "small"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> V9 Achilles is on the roadmap. Heel is live at troya.codes/agent#/heel: paste a coin, a dev wallet or an agent and get its one weak spot with the evidence, a dev passport and a Guard button.",
+  "kind": "unit",
+  "ctx": "v9-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Troya Zero Watch is up at <2>troya.codes/zero</2>, counting down to Zero's scheduled start on {2} Nov (UTC).",
+  "kind": "unit",
+  "ctx": "v9-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Swift and Troya Atlas is live at troya.codes/agent#/swift: one buy box that quotes every venue Troya reaches and routes to the best price, with the Gate in the Buy button. Next: Chiron.",
+  "kind": "unit",
+  "ctx": "v9-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Phoenix is live in shadow mode at troya.codes/agent#/phoenix, a community idea from lynx_evo: every closed Arena trade and graded Sentry call is a lesson, with win rates by pattern and their sample sizes, rebuilt from history on day one. The agents do not read the lessons yet; the community bot already follows the team's corrections.",
+  "kind": "unit",
+  "ctx": "v9-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Phoenix is switched on: the Arena and Anthropic Round traders now read what their own graded trades taught them, as advice only; caps, budgets and the Gate stay as they were. Every lesson they read is shown at troya.codes/agent#/phoenix.",
+  "kind": "unit",
+  "ctx": "v9-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Chiron is live at troya.codes/agent#/chiron: paste any trader wallet and it names the one habit that cost it most, from that wallet's own swaps, with its cost in ETH, the sample size and the transactions behind it. One tap makes it a rule on your Agent Wallet (no buys in a launch's first {2} seconds, or at most a few buys a day), shown and removable in Agent control.",
+  "kind": "unit",
+  "ctx": "v9-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Patroclus is live: every Heel answer is now a card any launchpad, bot, wallet or doc can show with one line of HTML or Markdown, copied from the Heel page (troya.codes/heel). The card prints when it was read and links back to the proof. Myrmidons drops its prize pool: confirmed rug proofs go on the hunter's public profile as reputation.",
+  "kind": "unit",
+  "ctx": "v9-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Zeno's Gap is live in Stocks, Vs real share: while the US market is closed, each share gets a fair value moved by Nasdaq-{2} futures, with a snap-back watch for deep pools far from it. Two Fates part {3} started collecting: passed and blocked launches priced on the same clock, a community idea from Xivor. Zero Watch now says \"launch day\" on {4} Nov instead of \"live\", because LayerZero gave no time of day.",
+  "kind": "unit",
+  "ctx": "v9-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Heel Hunt round {2} is open at troya.codes/heel-hunt: talk the Vault Keeper into sending its {3} ETH prize. Free to enter, every attempt public, until {4} Dec {5}.",
+  "kind": "unit",
+  "ctx": "v9-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> The War Room and Myrmidons are live at troya.codes/agent#/warroom: call a fresh launch's fate, challenge any Troya verdict, or report a rug with on-chain proof, all graded in public by the same {2}-hour clock. No stakes and no money, only a leaderboard.",
+  "kind": "unit",
+  "ctx": "v9-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Styx Promise is live: a paid Gate check that let a coin be bought is covered for {2} days, and if the coin goes to zero the check fee comes back by itself as Gate credit. Only Troya's own fee, never trading losses.",
+  "kind": "unit",
+  "ctx": "v9-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> V9 Achilles is complete: {2} of its {3} phases are live. Zero Watch follows when LayerZero's Zero chain goes live on {4} Nov.",
+  "kind": "unit",
+  "ctx": "v9-progress",
+  "tag": "li"
+ },
+ {
+  "key": "Live, finishing / V8 Agamemnon",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "span"
+ },
+ {
+  "key": "V8",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "span"
+ },
+ {
+  "key": "<1><2/>Live, finishing</1><3>Announced {0} Nov {1}</3><4>Every phase running since {2} Nov; real-money tests and switches next</4><5/>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "p"
+ },
+ {
+  "key": "Agamemnon, the King",
+  "kind": "unit",
+  "ctx": "v8-h",
+  "tag": "h2"
+ },
+ {
+  "key": "King of Mycenae, the commander every Greek army followed to Troy. An army follows a king who guards it, tells it the truth and listens to it, so V8 is built that way: one commander, one budget, one kill switch, many jobs, and a receipt for every move. It comes from a full research pass across Robinhood Chain on {0} Nov {1}, from what the live Arena taught us, and from what this community asked for. Every phase is live and works inside your Agent Wallet's caps, and each one below says where it stands: tested with real money (its receipt on <1>/verify</1>), alerts or paper only, read-only, or with its real-money test still pending.",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "p"
+ },
+ {
+  "key": "F39",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "small"
+ },
+ {
+  "key": "Watchfire <1>From the live Arena</1> <2>Open</2>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · alert or paper</1>In the opening of the play Agamemnon, a watchman waits on a roof for the beacon fire from Troy. Ring Radar now reads a launch; Watchfire keeps watching every coin after it. It watches two kinds of danger. Rings: holders funded by the same wallets, approvals to the same unknown contract, gas sent to many wallets at once and coins gathered into one wallet. Herds: one holder with a big share of the supply, or a crowd that bought through the same trading app, which leaves all at once when selling starts, so Watchfire tracks how fast holders are selling. It starts as alerts on the coin page and in Telegram, then an opt-in exit from your Agent Wallet when a ring starts to move. Honest limit: on this chain nobody can sell ahead of a dump inside the same block, so Watchfire keeps you out of red rings and acts on the early signs. <2>Live {0} Nov in alert mode: on every coin page, for coins the Arena holds, coins Aegis guards and coins you pin. The paper Arena sells on a fire; real-money exits wait for their test.</2>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "span"
+ },
+ {
+  "key": "F40",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "small"
+ },
+ {
+  "key": "Tribute <1>Asked by the community</1> <2>Open</2>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · read-only</1>Is a coin's \"revenue\" real? Tribute traces where a token's income or rewards really come from, and flags income sent in by the creator's own wallets, rewards paid in the token itself, market caps that no real ETH or USDG backs, and scripted round-number volume. <2>Live {0} Nov on every coin page and in the API and MCP.</2>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "span"
+ },
+ {
+  "key": "F41",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "small"
+ },
+ {
+  "key": "War Table <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · real-money tested</1>Every coin page becomes a full trading terminal: candles down to the second, price or market cap, dev buys and sells marked on the chart, trades filtered by dev, snipers, bundlers, insiders, whales, fresh wallets and rings, top traders, early buyers and the dev's other coins, and instant buy presets that always pass the Gate first. Sign in with X brings X inside: posts that mention the coin with Troya's verdict beside them, callouts that put the caller's avatar on the chart with their real profit or loss read from their wallet and graded in The Record, and an X Tracker that pings you when an account you follow posts a contract, Gate first. <2>Live {0} Nov: stage {1} (trade panel, labelled trades, early buyers, chart marks), stage {2} (callouts graded at {3} h, callers on the chart, posts on X) and the X Tracker (track accounts from any coin page or the Treasury).</2>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "span"
+ },
+ {
+  "key": "F42",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "small"
+ },
+ {
+  "key": "Herald <1>Asked by the community</1> <2>Open</2>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · read-only</1>Agamemnon's heralds carried his word to every camp. Share cards for Gate verdicts, Watchfire alerts and your PnL, each with your referral link; referral rewards paid in ETH from fees; a weekly Arena Cup ranked by PnL %, not volume; and a contributor board that pays for real work, such as code, guides and videos, never for posts. <2>Live {0} Nov at Discover → Herald. Rewards set the same day: referrers earn {1}% of what Troya makes from the wallets they bring, for {2} days, and the weekly Arena Cup pays ${3} in ETH (1st ${4}, 2nd ${5}, 3rd ${6}), all capped at {7}% of weekly creator-fee income. Payouts go out weekly after the Cup week closes, and each one is listed with its transaction on /proof once sent.</2>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "span"
+ },
+ {
+  "key": "F43",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "small"
+ },
+ {
+  "key": "Champions <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Real-money test pending</1>Public profiles with real, on-chain PnL, a feed of what proven traders buy, and following a proven trader or Arena strategy into your own capped Agent Wallet. Leaderboards, team scoreboards and a public scorecard of every Sentry call and every Arena trader. <2>Live {0} Nov in Agent → Arena.</2>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "span"
+ },
+ {
+  "key": "F44",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "small"
+ },
+ {
+  "key": "Scepter <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · real-money tested</1>One command screen for all your agents: one budget, a cap for each job, approvals waiting for you, a receipt for every action and one kill switch. A trust ladder you climb at your pace: watch, then approve each trade, then run inside your caps. Every money move from Telegram, X or chat passes the Gate and your caps first. <2>Live {0} Nov at Agent → Scepter.</2>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "span"
+ },
+ {
+  "key": "F45",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "small"
+ },
+ {
+  "key": "Allies and Skills <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · read-only</1>Other AI agents can call Troya Gate, Watchfire and Tribute with one command, and Troya reads the track record of other agents on Robinhood Chain before it trusts them. <2>Live {0} Nov: troya.codes/mcp, /skill.md, /llms.txt, /api/allies.</2>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "span"
+ },
+ {
+  "key": "F46",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "small"
+ },
+ {
+  "key": "Treasury <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "b"
+ },
+ {
+  "key": "<1>Live · read-only</1>Clear holder tiers for $TROYA, usage credits for holders, and Pro plans paid in $TROYA or a stablecoin. <2>Live {0} Nov at Discover → Treasury. Pro plans open once the team sets their prices.</2>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "span"
+ },
+ {
+  "key": "V8 progress, updated every day",
+  "kind": "unit",
+  "ctx": "v8-progress",
+  "tag": "small"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> V8 Agamemnon announced, starting with the forensics of the {2} Nov $SUPLEX dump. One second before the dump, {3} wallets sent their coins to one wallet within {4} s, and that wallet sold {5}% of the supply.",
+  "kind": "unit",
+  "ctx": "v8-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Watchfire v1 is live in alert mode: it fires on coins gathered into one wallet, a single sale of {2}% of the supply or more, and fast selling. Replayed on the Arena's last {3} hours, it fired before the exit in {4} of {5} losing trades; live exits wait for their real-money test.",
+  "kind": "unit",
+  "ctx": "v8-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> War Table stage {2} is live on every coin page: one-tap buys and sells from your Agent Wallet through the Gate, the Watchfire panel and every trade labelled. It has a real-money receipt: <2>Verify {3}</2>.",
+  "kind": "unit",
+  "ctx": "v8-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Scepter is live at Agent → Scepter: one switch that stops every agent, the trust ladder (Watch, Approve, Auto) enforced on the server, and a daily cap for each job. A trade you tap yourself is never held back by the ladder.",
+  "kind": "unit",
+  "ctx": "v8-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Champions is live in Agent → Arena: follow an Arena trader with a real-money record into your own Agent Wallet, through the Gate, your caps and your trust ladder. There is no performance fee.",
+  "kind": "unit",
+  "ctx": "v8-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Allies and Skills is live: any AI agent can plug in with one line over MCP and check another agent's on-chain record. The Treasury tiers are live too, from Visitor to King's Guard, with Watchfire pins sent to your inbox and Telegram.",
+  "kind": "unit",
+  "ctx": "v8-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Herald is live at Discover → Herald: referral links, share cards, the referrers' board and the weekly Arena Cup. Rewards were set on {2} Nov: a {3}% referral share for {4} days and a ${5} weekly Cup, capped at {6}% of weekly creator-fee income.",
+  "kind": "unit",
+  "ctx": "v8-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> War Table stage {2} adds callouts stamped at the price of the moment and graded in public at {3} hours. Tribute traces who paid the holders in the last {4} days, and with whose money.",
+  "kind": "unit",
+  "ctx": "v8-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> The X Tracker is live: track callers, devs and KOLs on X, and when one posts a Robinhood Chain contract, Troya runs the Gate and sends you the post and the verdict. Every V8 phase now runs on the live site.",
+  "kind": "unit",
+  "ctx": "v8-progress",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} Nov {1}</1> Next: the real-money test of Watchfire's exits, then referral rewards, Cup prizes and Pro plans once the team sets them.",
+  "kind": "unit",
+  "ctx": "v8-progress",
+  "tag": "li"
+ },
+ {
+  "key": "Shipped roadmaps",
+  "kind": "attr:aria-label",
+  "ctx": "Shipped roadmaps",
+  "tag": "section"
+ },
+ {
+  "key": "Shipped / V7 to V1, tap one to open",
+  "kind": "unit",
+  "ctx": "Shipped roadmaps",
+  "tag": "span"
+ },
+ {
+  "key": "<1>V7</1><2>Athena · {0} phases · shipped {1} Nov</2><3/>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "summary"
+ },
+ {
+  "key": "V7",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "span"
+ },
+ {
+  "key": "<1><2/>Shipped</1><3>{0} Nov {1}</3><4/>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "p"
+ },
+ {
+  "key": "Athena",
+  "kind": "unit",
+  "ctx": "v7-h",
+  "tag": "h2"
+ },
+ {
+  "key": "Goddess of wisdom and strategy, and Odysseus's guide. Sharpened on {0} Nov {1} after a full research pass across Robinhood Chain: the biggest loss here is rigged launches, so V7 now catches them before the buy, guards what you hold after it, holds devs to their word in code, and seals Troya's checks, verdicts and trades with signed receipts. Every phase that can move your money is opt-in, stays inside your Agent Wallet's caps and passed a real-money test first (<1>troya.codes/verify, steps {2} to {3}</1>).",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "p"
+ },
+ {
+  "key": "F31",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "small"
+ },
+ {
+  "key": "Aegis and Ring Radar <1>Open</1><2/>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "Before you buy, a radar built for Pons reads the launch itself: wallets the creator freed from the snipe tax, a shared bundler, decoy coins with the same name, and where the dev's money came from. After you buy, an opt-in guard gets your Agent Wallet out inside its caps when the dev dumps or liquidity is pulled. It starts as alerts. <1>Live {0} Nov: Ring Radar on every Pons launch, in Sentry posts and Gate flags; Aegis alerts and exit tickets on every coin you hold. Selling on its own from the Agent Wallet passed its real-money test the same day (<2>troya.codes/verify, step {1}</2>).</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "span"
+ },
+ {
+  "key": "F32",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "small"
+ },
+ {
+  "key": "Oath <1>Open</1><2/>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "Dev pledges in three tiers: watched in public, held by Troya's rules, and an Oath Vault that enforces the limit in code and is checked by a prover. Every coin shows it live: Oath kept or broken. <1>Tiers {0} and {1} live {2} Nov: watched at troya.codes/oath, and a broken Oath turns the Gate verdict and Sentry post to caution and closes Troya launches for those wallets for {3} days. Tier {4}, the Oath Vault, is deployed, verified, proven with Halmos and tested with real coins (<2>troya.codes/verify, step {5}</2>).</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "span"
+ },
+ {
+  "key": "F33",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "small"
+ },
+ {
+  "key": "Council <1>Open</1><2/>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "Three reasons not to buy, with base rates from The Record. Then bull, bear and risk agents argue it out, and every argument cites signed Gate, Assay and Record data. <1>Live {0} Nov: under every coin on the Gate page and /council in Telegram, every verdict sealed.</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "span"
+ },
+ {
+  "key": "F34",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "small"
+ },
+ {
+  "key": "Arena <1>Open</1><2/>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "Strategist and Proving Ground in one: a strategy in plain words becomes rules, replays on The Record, runs seven days on paper, then earns small live caps. A public arena where AI models trade small real money on Robinhood Chain, every move with a receipt. <1>Paper part live {0} Nov: strategies in plain words replayed on The Record and proven on paper, five AI traders side by side. Since {1} Nov the five AI traders also trade a real budget, {2} ETH each through the Gate, live at troya.codes/arena. User strategies earn live caps after proving.</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "span"
+ },
+ {
+  "key": "F35",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "small"
+ },
+ {
+  "key": "Seal <1>Open</1><2/>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "A signed, hash-chained receipt for every Gate API check, Council verdict, red Aegis alert, Arena trade and Record call, signed twice (ECDSA and post-quantum ML-DSA) and anchored on Robinhood Chain every day. Troya's own contracts get properties proven by a prover. Owl, your weekly journal, is built from your receipts. <1>Live {0} Nov: Seal and {1} proven properties of three contracts (the fee splitter, the Holder Pass and the Oath Vault) at troya.codes/seal, Owl in Portfolio → Owl.</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "span"
+ },
+ {
+  "key": "F36",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "small"
+ },
+ {
+  "key": "Quantum-Ready <1>Open</1><2/>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "A key-exposure check for a coin's owner, admin and big holders, post-quantum signatures on every receipt, and public quantum randomness for draws and the arena. Ready for the quantum era, without pretending to be immune. <1>Live {0} Nov: key exposure on the Gate page, ML-DSA-{1} on every receipt, NIST and drand randomness sealed.</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "span"
+ },
+ {
+  "key": "F37",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "small"
+ },
+ {
+  "key": "Robinhood Radar <1>Open</1><2/>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "Signals made for this chain: coins listed in the Robinhood app, smart money and callers on chain {0}, and stock tokens trading above or below the real share, including weekend gaps. <1>Live {1} Nov: stock tokens against the real share, smart wallets scored on The Record (/smart in Telegram), and Robinhood Chain coins in the Robinhood app (tradable or price only) watched every {2} minutes, on every coin's Gate page.</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "span"
+ },
+ {
+  "key": "F38",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "small"
+ },
+ {
+  "key": "Gate in your wallet <1>Open</1><2/>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "Troya Gate's verdict on the MetaMask confirm screen for Robinhood Chain transactions, and a verdict feed other bots and launchpads can call. <1>Live {0} Nov: the signed verdict feed at /api/gate/feed. The Troya Gate Snap is released on npm (@troyaagent/snap) and runs in MetaMask Flask today; MetaMask's allowlist review opens it to every MetaMask.</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "span"
+ },
+ {
+  "key": "<1>V6</1><2>Hermes · {0} phases · shipped {1}–{2} Nov</2><3/>",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "summary"
+ },
+ {
+  "key": "V6",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "span"
+ },
+ {
+  "key": "<1><2/>Shipped</1><3>{0}–{1} Nov {2}</3>",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "p"
+ },
+ {
+  "key": "Hermes",
+  "kind": "unit",
+  "ctx": "v6-h",
+  "tag": "h2"
+ },
+ {
+  "key": "The messenger of the gods, and of trade. Troya moves into your X and Telegram. Each phase ships after a real-money test.",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "p"
+ },
+ {
+  "key": "F26",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "small"
+ },
+ {
+  "key": "Launch on X <1>Guide</1>",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "b"
+ },
+ {
+  "key": "Tag @Troyaagent with a name, a $TICKER and an image, and the coin goes live on Pons from your Agent Wallet. Open to everyone: one from X a day, no limit with 1M $TROYA.",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "span"
+ },
+ {
+  "key": "F27",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "small"
+ },
+ {
+  "key": "Launch in Telegram <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "b"
+ },
+ {
+  "key": "Send /launch to @TrojanTroya_bot in a private chat: step by step or one photo with a caption, a preview, then Confirm. Same rules and fees as X and troya.codes, for everyone.",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "span"
+ },
+ {
+  "key": "F28",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "small"
+ },
+ {
+  "key": "Creator desk <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "b"
+ },
+ {
+  "key": "Every coin you launched through Troya, its creator fees read live from Pons, and a one-click claim signed by your own wallet.",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "span"
+ },
+ {
+  "key": "F29",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "small"
+ },
+ {
+  "key": "Trade on X <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "b"
+ },
+ {
+  "key": "“@Troyaagent buy {0} $TROYA” or “sell {1}% $TROYA”, from your Agent Wallet, through the Gate and your own limits. Everyone can trade $TROYA; holders of 1M $TROYA can trade any coin.",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "span"
+ },
+ {
+  "key": "F30",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "small"
+ },
+ {
+  "key": "Born at the gate <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "b"
+ },
+ {
+  "key": "Every coin launched through Troya shows its live Troya Gate verdict on Troya Launches and takes its place on The Record from its first block.",
+  "kind": "unit",
+  "ctx": "v6",
+  "tag": "span"
+ },
+ {
+  "key": "<1>V5</1><2>Odysseus · {0} phases · shipped {1} Nov</2><3/>",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "summary"
+ },
+ {
+  "key": "V5",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "span"
+ },
+ {
+  "key": "<1><2/>Shipped</1><3>{0} Nov {1}</3>",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "p"
+ },
+ {
+  "key": "Odysseus",
+  "kind": "unit",
+  "ctx": "v5-h",
+  "tag": "h2"
+ },
+ {
+  "key": "The long way home: tools for AI agents, and a signature on everything they touch.",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "p"
+ },
+ {
+  "key": "F21",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "small"
+ },
+ {
+  "key": "The chart oracle <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "b"
+ },
+ {
+  "key": "Every {0} hours a chart note for ETH, BTC, $TROYA and the top picks from fixed rules, graded in public {1} hours later.",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "span"
+ },
+ {
+  "key": "F22",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "small"
+ },
+ {
+  "key": "Troya CLI <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "b"
+ },
+ {
+  "key": "The desk in your terminal: npx @troyaagent/cli gate TROYA.",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "span"
+ },
+ {
+  "key": "F23",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "small"
+ },
+ {
+  "key": "Gate for every agent <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "b"
+ },
+ {
+  "key": "Fresh Gate checks at an agent's own trade size, signed by Troya, paid per check in USDG after the free ones. Since {0} Nov also over x402 (${1} USDC on Base, Arbitrum or Polygon, no account) and as the agent \"Troya Gate\" on Virtuals ACP (USDC on Base, USDG on Robinhood Chain).",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "span"
+ },
+ {
+  "key": "F24",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "small"
+ },
+ {
+  "key": "Agent registry <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "b"
+ },
+ {
+  "key": "Agents file calls that are signed when filed and graded when due, and earn a public reputation.",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "span"
+ },
+ {
+  "key": "F25",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "small"
+ },
+ {
+  "key": "The audited rail <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "b"
+ },
+ {
+  "key": "Limits, an allowlist and a kill switch for agents trading through Robinhood's agentic MCP, with a signed audit log. Not affiliated with Robinhood.",
+  "kind": "unit",
+  "ctx": "v5",
+  "tag": "span"
+ },
+ {
+  "key": "<1>V4</1><2>Cassandra · {0} phases · shipped {1}–{2} Nov</2><3/>",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "summary"
+ },
+ {
+  "key": "V4",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "span"
+ },
+ {
+  "key": "Cassandra",
+  "kind": "unit",
+  "ctx": "v4-h",
+  "tag": "h2"
+ },
+ {
+  "key": "Named for the prophet nobody believed. Eight phases that show their work: every call graded, every coin x-rayed.",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "p"
+ },
+ {
+  "key": "F13",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "small"
+ },
+ {
+  "key": "The Record <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "b"
+ },
+ {
+  "key": "Every Sentry call graded in public: the price at the call, an hour and a day later, and the peak.",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "span"
+ },
+ {
+  "key": "F14",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "small"
+ },
+ {
+  "key": "The Assay <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "b"
+ },
+ {
+  "key": "Dev wallets, holder clusters, bundled buys, wash trades and who funded the dev, under the Gate.",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "span"
+ },
+ {
+  "key": "F15",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "small"
+ },
+ {
+  "key": "TWAP and Smart DCA <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "b"
+ },
+ {
+  "key": "Big orders cut into slices under a price-impact cap, and buys sized by the {0}-day average.",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "span"
+ },
+ {
+  "key": "F16",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "small"
+ },
+ {
+  "key": "More perps <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "b"
+ },
+ {
+  "key": "trade.xyz stock, index and metal perps, and Lighter on Robinhood Chain.",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "span"
+ },
+ {
+  "key": "F17",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "small"
+ },
+ {
+  "key": "Stock desk <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "b"
+ },
+ {
+  "key": "Every Robinhood stock token with dividends and splits, baskets in one go, loans on Morpho.",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "span"
+ },
+ {
+  "key": "F18",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "small"
+ },
+ {
+  "key": "Liquidity desk <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "b"
+ },
+ {
+  "key": "Uniswap v3 ranges set from the pool's own volatility, watched around the clock.",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "span"
+ },
+ {
+  "key": "F19",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "small"
+ },
+ {
+  "key": "$TROYA flywheel <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "b"
+ },
+ {
+  "key": "Creator fees, buybacks, burns and locked liquidity, read back from the chain.",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "span"
+ },
+ {
+  "key": "F20",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "small"
+ },
+ {
+  "key": "Social layer <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "b"
+ },
+ {
+  "key": "Troya on X, the Holder Pass, holder votes and an agent factory.",
+  "kind": "unit",
+  "ctx": "v4",
+  "tag": "span"
+ },
+ {
+  "key": "<1>V3</1><2>More chains · {0} phases · shipped {1} Nov</2><3/>",
+  "kind": "unit",
+  "ctx": "v3",
+  "tag": "summary"
+ },
+ {
+  "key": "V3",
+  "kind": "unit",
+  "ctx": "v3",
+  "tag": "span"
+ },
+ {
+  "key": "More chains, more features",
+  "kind": "unit",
+  "ctx": "v3-h",
+  "tag": "h2"
+ },
+ {
+  "key": "Asked for by the group: every launchpad on Robinhood Chain, then Base, Arbitrum, Solana and Hyperliquid spot, all behind the same Gate.",
+  "kind": "unit",
+  "ctx": "v3",
+  "tag": "p"
+ },
+ {
+  "key": "F10",
+  "kind": "unit",
+  "ctx": "v3",
+  "tag": "small"
+ },
+ {
+  "key": "Every Robinhood Chain launchpad <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v3",
+  "tag": "b"
+ },
+ {
+  "key": "Long.xyz, Bankr, Frontier.fun, Abyss, Virtuals and more in the Market, Gate and Sentry; KyberSwap routes when Troya's own can't.",
+  "kind": "unit",
+  "ctx": "v3",
+  "tag": "span"
+ },
+ {
+  "key": "F11",
+  "kind": "unit",
+  "ctx": "v3",
+  "tag": "small"
+ },
+ {
+  "key": "Base and Arbitrum <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v3",
+  "tag": "b"
+ },
+ {
+  "key": "Swaps on both with the same simulation, test sell and transfer-tax checks, and a Bridge to move ETH between chains.",
+  "kind": "unit",
+  "ctx": "v3",
+  "tag": "span"
+ },
+ {
+  "key": "F12",
+  "kind": "unit",
+  "ctx": "v3",
+  "tag": "small"
+ },
+ {
+  "key": "Solana and Hyperliquid spot <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v3",
+  "tag": "b"
+ },
+ {
+  "key": "Solana swaps with a Solana Gate (mint and freeze authority, Token-{0} traps), and HYPE and other Hyperliquid spot coins.",
+  "kind": "unit",
+  "ctx": "v3",
+  "tag": "span"
+ },
+ {
+  "key": "<1>V2</1><2>Terminal · {0} phases · shipped {1} Nov</2><3/>",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "summary"
+ },
+ {
+  "key": "V2",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "span"
+ },
+ {
+  "key": "The terminal",
+  "kind": "unit",
+  "ctx": "v2-h",
+  "tag": "h2"
+ },
+ {
+  "key": "Telegram became a full trading terminal, and the agent started working while you sleep.",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "p"
+ },
+ {
+  "key": "F5",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "small"
+ },
+ {
+  "key": "Telegram as a terminal",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "b"
+ },
+ {
+  "key": "Perps on Hyperliquid, funding, stops, take-profits and playbooks from a private chat, in plain words or commands.",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "span"
+ },
+ {
+  "key": "F6",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "small"
+ },
+ {
+  "key": "Daily AI brief",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "b"
+ },
+ {
+  "key": "A brief once a day and smart alerts, by private message or in Portfolio on the web.",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "span"
+ },
+ {
+  "key": "F7",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "small"
+ },
+ {
+  "key": "Sentry Autopilot <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "b"
+ },
+ {
+  "key": "Rules that buy Sentry's passes: practice with play money first, live from the Agent Wallet after a real-money test.",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "span"
+ },
+ {
+  "key": "F8",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "small"
+ },
+ {
+  "key": "Start in {0} seconds <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "b"
+ },
+ {
+  "key": "The shortest path from nothing to a first checked trade.",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "span"
+ },
+ {
+  "key": "F9",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "small"
+ },
+ {
+  "key": "Leaderboard and copy rules <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "b"
+ },
+ {
+  "key": "Traders who opt in are ranked, and their playbooks can be copied.",
+  "kind": "unit",
+  "ctx": "v2",
+  "tag": "span"
+ },
+ {
+  "key": "<1>V1</1><2>Sentry · {0} phases · shipped {1} Nov</2><3/>",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "summary"
+ },
+ {
+  "key": "V1",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "span"
+ },
+ {
+  "key": "Sentry and the Gate badge",
+  "kind": "unit",
+  "ctx": "v1-h",
+  "tag": "h2"
+ },
+ {
+  "key": "The first roadmap, built the day $TROYA launched: a watchman for every new coin, trading from Telegram, and perks for holders.",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "p"
+ },
+ {
+  "key": "F1",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "small"
+ },
+ {
+  "key": "Troya Sentry <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "b"
+ },
+ {
+  "key": "Every new Pons launch goes through the Gate; only clean passes with real buying are posted to t.me/troyasentry.",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "span"
+ },
+ {
+  "key": "F2",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "small"
+ },
+ {
+  "key": "Trade in Telegram",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "b"
+ },
+ {
+  "key": "Buy and sell from a private chat with the bot through your Agent Wallet: the Gate runs first and every trade needs Confirm.",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "span"
+ },
+ {
+  "key": "F3",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "small"
+ },
+ {
+  "key": "Holder perks",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "b"
+ },
+ {
+  "key": "Hold {0} $TROYA for {1} assistant messages a day, {2} playbooks and Sentry results by private message.",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "span"
+ },
+ {
+  "key": "F4",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "small"
+ },
+ {
+  "key": "Troya Gate badge <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "b"
+ },
+ {
+  "key": "A live badge any project can put on its site, re-checked at most every {0} minutes. A snapshot, never a safe stamp.",
+  "kind": "unit",
+  "ctx": "v1",
+  "tag": "span"
+ },
+ {
+  "key": "Later / The rest of the voyage",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "span"
+ },
+ {
+  "key": "Named, not yet planned",
+  "kind": "unit",
+  "ctx": "later-h",
+  "tag": "h2"
+ },
+ {
+  "key": "The story goes on after Achilles. These roadmaps have names and a direction, nothing more: no phases, no dates and no promises until each one is announced.",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "p"
+ },
+ {
+  "key": "V10",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "span"
+ },
+ {
+  "key": "Poseidon",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "b"
+ },
+ {
+  "key": "God of the sea, the voyage's hardest crossing",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "small"
+ },
+ {
+  "key": "The seas: liquidity and more chains.",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "span"
+ },
+ {
+  "key": "V11",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "span"
+ },
+ {
+  "key": "Penelope",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "b"
+ },
+ {
+  "key": "Odysseus's wife, weaving and waiting for years",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "small"
+ },
+ {
+  "key": "Patience: tools for the long run.",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "span"
+ },
+ {
+  "key": "V12",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "span"
+ },
+ {
+  "key": "Prometheus",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "b"
+ },
+ {
+  "key": "The titan who brought fire to people",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "small"
+ },
+ {
+  "key": "Fire for everyone: open tools for builders.",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "span"
+ },
+ {
+  "key": "V13",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "span"
+ },
+ {
+  "key": "Ithaca",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "b"
+ },
+ {
+  "key": "Odysseus's island, the end of the voyage",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "small"
+ },
+ {
+  "key": "Home: holders help steer what comes next.",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "span"
+ },
+ {
+  "key": "V14",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "span"
+ },
+ {
+  "key": "Olympus",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "b"
+ },
+ {
+  "key": "The mountain of the gods",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "small"
+ },
+ {
+  "key": "The summit: everything Troya, together.",
+  "kind": "unit",
+  "ctx": "later",
+  "tag": "span"
+ },
+ {
+  "key": "Built in the open.",
+  "kind": "unit",
+  "ctx": "no-h",
+  "tag": "h2"
+ },
+ {
+  "key": "Receipts",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "a"
+ },
+ {
+  "key": "Releases",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "a"
+ },
+ {
+  "key": "Ideas and bugs",
+  "kind": "unit",
+  "ctx": "main",
+  "tag": "a"
+ },
+ {
+  "key": "Troya Agent | Roadmap",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "title"
+ },
+ {
+  "key": "<1><2>Achilles</2></1> <3><4>is</4></3> <5><6>here.</6></5> <7><8>Find</8></7> <9><10>the</10></9> <11><12>heel.</12></11>",
+  "kind": "unit",
+  "ctx": "ph",
+  "tag": "h1"
+ },
+ {
+  "key": "<1><2/>Complete · {0} Nov {1}</1><3>Announced {2} Nov {3}</3><4>{4} of {5} phases live; Zero Watch follows {6} Nov</4>",
+  "kind": "unit",
+  "ctx": "v9",
+  "tag": "p"
+ },
+ {
+  "key": "<1><2>Achilles,</2></1> <3><4>the</4></3> <5><6>Swift</6></5>",
+  "kind": "unit",
+  "ctx": "v9-h",
+  "tag": "h2"
+ },
+ {
+  "key": "<1><2/>Live, finishing</1><3>Announced {0} Nov {1}</3><4>Every phase running since {2} Nov; real-money tests and switches next</4>",
+  "kind": "unit",
+  "ctx": "v8",
+  "tag": "p"
+ },
+ {
+  "key": "<1><2>Agamemnon,</2></1> <3><4>the</4></3> <5><6>King</6></5>",
+  "kind": "unit",
+  "ctx": "v8-h",
+  "tag": "h2"
+ },
+ {
+  "key": "<1><2>Athena</2></1>",
+  "kind": "unit",
+  "ctx": "v7-h",
+  "tag": "h2"
+ },
+ {
+  "key": "Aegis and Ring Radar <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "Oath <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "Council <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "Arena <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "Seal <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "Quantum-Ready <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "Robinhood Radar <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "Gate in your wallet <1>Open</1>",
+  "kind": "unit",
+  "ctx": "v7",
+  "tag": "b"
+ },
+ {
+  "key": "<1><2>Hermes</2></1>",
+  "kind": "unit",
+  "ctx": "v6-h",
+  "tag": "h2"
+ },
+ {
+  "key": "<1><2>Odysseus</2></1>",
+  "kind": "unit",
+  "ctx": "v5-h",
+  "tag": "h2"
+ },
+ {
+  "key": "<1><2>Cassandra</2></1>",
+  "kind": "unit",
+  "ctx": "v4-h",
+  "tag": "h2"
+ },
+ {
+  "key": "<1><2>More</2></1> <3><4>chains,</4></3> <5><6>more</6></5> <7><8>features</8></7>",
+  "kind": "unit",
+  "ctx": "v3-h",
+  "tag": "h2"
+ },
+ {
+  "key": "<1><2>The</2></1> <3><4>terminal</4></3>",
+  "kind": "unit",
+  "ctx": "v2-h",
+  "tag": "h2"
+ },
+ {
+  "key": "<1><2>Sentry</2></1> <3><4>and</4></3> <5><6>the</6></5> <7><8>Gate</8></7> <9><10>badge</10></9>",
+  "kind": "unit",
+  "ctx": "v1-h",
+  "tag": "h2"
+ },
+ {
+  "key": "<1><2>Named,</2></1> <3><4>not</4></3> <5><6>yet</6></5> <7><8>planned</8></7>",
+  "kind": "unit",
+  "ctx": "later-h",
+  "tag": "h2"
+ },
+ {
+  "key": "<1><2>Built</2></1> <3><4>in</4></3> <5><6>the</6></5> <7><8>open.</8></7>",
+  "kind": "unit",
+  "ctx": "no-h",
+  "tag": "h2"
+ }
+]

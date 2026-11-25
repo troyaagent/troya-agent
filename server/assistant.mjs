@@ -21,8 +21,15 @@ let store;
 
 /* ---------- language ---------- */
 const ID_RE = /\b(apa|yang|berapa|tolong|beli|jual|saya|aku|aman|gimana|bagaimana|harga|naik|turun|sekarang|dong|aja|ini|itu|untuk|dengan|dari|tukar|saldo|tiap|setiap|hari|minggu|buka|tutup|cek|lagi|bisa|gak|nggak|ngga|tidak|mau|pasang|kabari|ingatkan|pantau|posisi|lindungi|amankan|cicil|baru|ke|jam|kalau|kalo|banget|rame|ramai|halo|hallo|hai|selamat|terima kasih|makasih)\b/gi;
+// a reply language picked on troya.codes (the site's language picker or Settings). "en" and "id" also switch the
+// parser's own short answers; the others only steer the model's reply (its fixed lines stay English).
+export const REPLY_LANGS = {
+  en: "English", id: "Bahasa Indonesia (casual and friendly, like a trading-desk buddy)", zh: "Simplified Chinese (简体中文)",
+  ja: "Japanese (日本語)", ko: "Korean (한국어)", es: "Spanish (Español)", pt: "Brazilian Portuguese (Português do Brasil)",
+  ru: "Russian (Русский)", tr: "Turkish (Türkçe)", vi: "Vietnamese (Tiếng Việt)",
+};
 export function detectLang(text, pref) {
-  if (pref === "en" || pref === "id") return pref;
+  if (pref && Object.hasOwn(REPLY_LANGS, pref)) return pref;
   const hits = (String(text).match(ID_RE) || []).length;
   const words = String(text).split(/\s+/).filter(Boolean).length;
   return hits >= 2 || (hits >= 1 && words <= 5) ? "id" : "en";
@@ -468,7 +475,7 @@ Rules:
 - No financial advice or price predictions. You may describe data, trends and risks.
 - ${guest ? "The user is a guest (not signed in): they can ask about any coin, price or Gate check; for balances, positions or the Agent Wallet, ask them to connect a wallet and sign in." : "The user is signed in; get_balances without an address reads their wallet."}
 - Earlier turns in this chat were answered from tool results that are not repeated here, and tickets they created are noted as [Tickets created: ...]. Trust those earlier answers: never retract or "correct" them because their tool data is missing. Call the tools again if you need fresh numbers.
-- Reply in ${lang === "id" ? "Bahasa Indonesia (casual and friendly, like a trading-desk buddy)" : "English"}, matching the user's language if they switch. Be brief: under 150 words unless listing data. Use **bold** and "- " bullets. No tables, no headings, no emoji.${live}${workBlock()}${persona}
+- Reply in ${REPLY_LANGS[lang] || "English"}, matching the user's language if they switch.${lang !== "en" && lang !== "id" && REPLY_LANGS[lang] ? ` The user picked this language on troya.codes: write the whole reply in it, keep product names (Troya, Troya Gate, Sentry, Heel, Agent Wallet), coin tickers, addresses and numbers exactly as they are, and never change a number or a claim.` : ""} Be brief: under 150 words unless listing data. Use **bold** and "- " bullets. No tables, no headings, no emoji.${live}${workBlock()}${persona}
 Current time: ${new Date().toISOString().slice(0, 16)} UTC.`;
 }
 // the live block, without holding up an answer: a cold or slow read of the site answers without it this once (the read

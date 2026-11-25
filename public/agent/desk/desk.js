@@ -286,6 +286,8 @@ const caShort = SITE.ca ? short(SITE.ca, 4) : "Not live yet";
 clear($("[data-side-foot]"),
   // what Troya is, one tap away: the Desk opens straight on markets and the ask bar (community request, 23 Nov 2026)
   h("a", { class: "d-about", href: "#/about" }, si("about"), h("span", {}, "About Troya"), h("i", { "aria-hidden": "true" }, "→")),
+  // the language picker again at the foot of the sidebar (the top bar shows only a globe on phones)
+  window.TroyaI18n?.picker({ cls: "d-lang-side" }) || null,
   h("button", { class: "d-ca", type: "button", title: "Copy contract address", onclick: async () => {
     if (!SITE.ca) return toast("The contract address is not live yet.");
     try { await navigator.clipboard.writeText(SITE.ca); toast("Contract address copied", "ok"); } catch { toast(SITE.ca); }
@@ -414,7 +416,9 @@ function renderRight() {
   const gear = h("button", { class: "icon-btn", type: "button", "aria-label": "Settings", onclick: openSettings }, si("gear"));
   const light = document.documentElement.dataset.theme === "light";
   const mode = h("button", { class: "icon-btn d-mode", type: "button", "aria-label": light ? "Dark mode" : "Light mode", title: light ? "Dark mode" : "Light mode", onclick: () => setTheme(light ? "dark" : "light") }, si(light ? "moon" : "sun"));
-  clear(right, chip, chatTop, bell, mode, gear, wbtn);
+  // the site language (public/js/i18n.js): English, 中文, 日本語 … ; it also sets the assistant's reply language
+  const langPick = window.TroyaI18n?.picker({ compact: true, cls: "d-lang" }) || null;
+  clear(right, chip, langPick, chatTop, bell, mode, gear, wbtn);
   for (const el of document.querySelectorAll("[data-inbox]")) { el.textContent = inboxCount ? (inboxCount > 9 ? "9+" : inboxCount) : ""; el.hidden = !inboxCount; }
 }
 function walletMenu() {
@@ -433,12 +437,15 @@ function walletMenu() {
 function openSettings() {
   const p = prefs.get();
   const slip = h("input", { class: "input", type: "number", min: "0.1", max: "20", step: "0.1", value: p.slippage, style: { width: "90px" } });
-  const lang = h("select", { class: "select" }, [["auto", "Same as my message"], ["en", "English"]].map(([v, t]) => h("option", { value: v, selected: p.lang === v }, t)));
+  // every language the site has, by its own name (public/js/i18n.js); the picker sets this too, Settings can override it
+  const replyLangs = [["auto", "Same as my message"], ...(window.TroyaI18n?.langs || [["en", "EN", "English", "en"]]).map(([, , name, code]) => [code === "auto" ? "en" : code, name])];
+  const lang = h("select", { class: "select" }, replyLangs.map(([v, t]) => h("option", { value: v, selected: p.lang === v }, t)));
   // the top-bar sun/moon is hidden on small phones, so the theme lives here too; it applies at once, no Save needed
   const look = seg([{ value: "dark", label: "Dark" }, { value: "light", label: "Light" }], document.documentElement.dataset.theme === "light" ? "light" : "dark", (v) => setTheme(v), "d-look");
   look.setAttribute("aria-label", "Appearance");
   const m = modal({ title: "Settings", body: h("div", { style: { display: "grid", gap: "14px" } },
     h("div", { class: "field" }, h("span", {}, "Appearance"), look),
+    window.TroyaI18n ? h("div", { class: "field" }, h("span", {}, "Language"), window.TroyaI18n.picker({ cls: "d-lang-set" })) : null,
     h("label", { class: "field" }, h("span", {}, "Default swap slippage (%)"), slip),
     h("label", { class: "field" }, h("span", {}, "Assistant reply language"), lang),
     h("p", { class: "note" }, "Appearance, slippage and language are kept in this browser only."),

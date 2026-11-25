@@ -1,0 +1,4406 @@
+[
+ {
+  "key": "Sidebar",
+  "kind": "attr:aria-label",
+  "ctx": "Sidebar",
+  "tag": "aside"
+ },
+ {
+  "key": "Troya Agent home",
+  "kind": "attr:aria-label",
+  "ctx": "Sidebar",
+  "tag": "a"
+ },
+ {
+  "key": "<1/> <2><3>Troya</3><4>Agent</4></2>",
+  "kind": "unit",
+  "ctx": "Sidebar",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1>Search<3/>",
+  "kind": "unit",
+  "ctx": "Sidebar",
+  "tag": "button"
+ },
+ {
+  "key": "App",
+  "kind": "attr:aria-label",
+  "ctx": "App",
+  "tag": "nav"
+ },
+ {
+  "key": "<1/><2>Home</2>",
+  "kind": "unit",
+  "ctx": "App",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Agent</2><3>Trades for you</3>",
+  "kind": "unit",
+  "ctx": "App",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Launch</2><3>Create a coin</3>",
+  "kind": "unit",
+  "ctx": "App",
+  "tag": "a"
+ },
+ {
+  "key": "<1>Discover</1><2>−</2>",
+  "kind": "unit",
+  "ctx": "App",
+  "tag": "button"
+ },
+ {
+  "key": "<1/><2>Market</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Troya Launches</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>All Robinhood coins</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Gate a coin</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Find the weak spot</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Heel Hunt</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>War Room</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Trader habits</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Leaderboard</2>",
+  "kind": "unit",
+  "ctx": "d-grp-discover",
+  "tag": "a"
+ },
+ {
+  "key": "<1>Trade</1><2>−</2>",
+  "kind": "unit",
+  "ctx": "App",
+  "tag": "button"
+ },
+ {
+  "key": "<1/><2>Swift</2>",
+  "kind": "unit",
+  "ctx": "d-grp-trade",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Swap</2>",
+  "kind": "unit",
+  "ctx": "d-grp-trade",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Perps</2>",
+  "kind": "unit",
+  "ctx": "d-grp-trade",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Spot (Hyperliquid)</2>",
+  "kind": "unit",
+  "ctx": "d-grp-trade",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Stock desk</2>",
+  "kind": "unit",
+  "ctx": "d-grp-trade",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Liquidity desk</2>",
+  "kind": "unit",
+  "ctx": "d-grp-trade",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Lighter perps</2>",
+  "kind": "unit",
+  "ctx": "d-grp-trade",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Bridge</2>",
+  "kind": "unit",
+  "ctx": "d-grp-trade",
+  "tag": "a"
+ },
+ {
+  "key": "<1>Launch</1><2>−</2>",
+  "kind": "unit",
+  "ctx": "App",
+  "tag": "button"
+ },
+ {
+  "key": "<1/><2>Create coin</2>",
+  "kind": "unit",
+  "ctx": "d-grp-launch",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>My coins &amp; fees</2>",
+  "kind": "unit",
+  "ctx": "d-grp-launch",
+  "tag": "a"
+ },
+ {
+  "key": "<1>Agent</1><2>+</2>",
+  "kind": "unit",
+  "ctx": "App",
+  "tag": "button"
+ },
+ {
+  "key": "<1/><2>Chat</2>",
+  "kind": "unit",
+  "ctx": "d-grp-agent",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Agent control</2>",
+  "kind": "unit",
+  "ctx": "d-grp-agent",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Agent Wallet</2>",
+  "kind": "unit",
+  "ctx": "d-grp-agent",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Autopilot</2>",
+  "kind": "unit",
+  "ctx": "d-grp-agent",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Launch Autopilot</2>",
+  "kind": "unit",
+  "ctx": "d-grp-agent",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Playbooks</2>",
+  "kind": "unit",
+  "ctx": "d-grp-agent",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Exit guard</2>",
+  "kind": "unit",
+  "ctx": "d-grp-agent",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Strategy arena</2>",
+  "kind": "unit",
+  "ctx": "d-grp-agent",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>What the agents learned</2>",
+  "kind": "unit",
+  "ctx": "d-grp-agent",
+  "tag": "a"
+ },
+ {
+  "key": "<1>Portfolio</1><2>−</2>",
+  "kind": "unit",
+  "ctx": "App",
+  "tag": "button"
+ },
+ {
+  "key": "<1/><2>Overview</2>",
+  "kind": "unit",
+  "ctx": "d-grp-portfolio",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Stake $TROYA</2>",
+  "kind": "unit",
+  "ctx": "d-grp-portfolio",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>History</2>",
+  "kind": "unit",
+  "ctx": "d-grp-portfolio",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Weekly review</2>",
+  "kind": "unit",
+  "ctx": "d-grp-portfolio",
+  "tag": "a"
+ },
+ {
+  "key": "<1>More</1><2>+</2>",
+  "kind": "unit",
+  "ctx": "App",
+  "tag": "button"
+ },
+ {
+  "key": "<1/><2>Invite &amp; earn</2>",
+  "kind": "unit",
+  "ctx": "d-grp-more",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Holder tiers</2>",
+  "kind": "unit",
+  "ctx": "d-grp-more",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>$TROYA flywheel</2>",
+  "kind": "unit",
+  "ctx": "d-grp-more",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>AI calls</2>",
+  "kind": "unit",
+  "ctx": "d-grp-more",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Robinhood MCP rail</2>",
+  "kind": "unit",
+  "ctx": "d-grp-more",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Social</2>",
+  "kind": "unit",
+  "ctx": "d-grp-more",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Start in {0} seconds</2>",
+  "kind": "unit",
+  "ctx": "d-grp-more",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Docs</2>",
+  "kind": "unit",
+  "ctx": "d-grp-more",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Safety</2>",
+  "kind": "unit",
+  "ctx": "d-grp-more",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>What's new</2>",
+  "kind": "unit",
+  "ctx": "d-grp-more",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Plans and tiers</2>",
+  "kind": "unit",
+  "ctx": "d-grp-more",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Report a bug</2>",
+  "kind": "unit",
+  "ctx": "d-grp-more",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>About Troya</2><3>→</3>",
+  "kind": "unit",
+  "ctx": "Sidebar",
+  "tag": "a"
+ },
+ {
+  "key": "Copy contract address",
+  "kind": "attr:title",
+  "ctx": "Sidebar",
+  "tag": "button"
+ },
+ {
+  "key": "<1>$TROYA</1><2/><3/>",
+  "kind": "unit",
+  "ctx": "Sidebar",
+  "tag": "button"
+ },
+ {
+  "key": "Telegram",
+  "kind": "unit",
+  "ctx": "Sidebar",
+  "tag": "a"
+ },
+ {
+  "key": "X",
+  "kind": "unit",
+  "ctx": "Sidebar",
+  "tag": "a"
+ },
+ {
+  "key": "GitHub",
+  "kind": "unit",
+  "ctx": "Sidebar",
+  "tag": "a"
+ },
+ {
+  "key": "Sentry",
+  "kind": "unit",
+  "ctx": "Sidebar",
+  "tag": "a"
+ },
+ {
+  "key": "Menu",
+  "kind": "attr:aria-label",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "Desk home",
+  "kind": "attr:aria-label",
+  "ctx": "header",
+  "tag": "a"
+ },
+ {
+  "key": "Portfolio",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "span"
+ },
+ {
+  "key": "Stake $TROYA",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "b"
+ },
+ {
+  "key": "Search",
+  "kind": "attr:aria-label",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "<1><2/></1><3>Search</3><4/>",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "Troya trades on Robinhood Chain",
+  "kind": "attr:title",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "Network: Robinhood Chain",
+  "kind": "attr:aria-label",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "<1><2/></1>Robinhood Chain",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "Community chat",
+  "kind": "attr:title",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "Inbox",
+  "kind": "attr:aria-label",
+  "ctx": "header",
+  "tag": "a"
+ },
+ {
+  "key": "Light mode",
+  "kind": "attr:title",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "Settings",
+  "kind": "attr:aria-label",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "Connect wallet",
+  "kind": "attr:aria-label",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "<1/><2>Connect<3> wallet</3></2>",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "Stake $TROYA to earn a tier: Bronze, Silver or Gold, from how much you stake and for how long. Each tier unlocks perks inside Troya. Unstaking takes {0} days. Stakers also share part of the $TROYA creator fees in ETH, paid into the staking contract every day (claim any time): a share that grows with market cap, varies with volume, not a promised yield.",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "p"
+ },
+ {
+  "key": "Live on Robinhood Chain",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "span"
+ },
+ {
+  "key": "Total staked",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0}.28M",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "{0}% of the supply",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "Stakers",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0} waiting to leave",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "Cooldown",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0} days",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "between unstake and withdraw",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "Fee",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "None",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "no owner, no admin",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "Today: tier Under $35k at MC ${0}.2K, stakers get {1} ETH so far.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Staker pot so far: {0} ETH, paid on Nov {1}, {2}.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "<1>{0}.3M of {1}.1M staked ({2}%) → stakers receive {3}% of today's share.</1> Each staked $TROYA earns the same rate. The full daily share is paid once {4}% of supply is staked; until then the unpaid part stays with the team.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Yesterday ({0}-{1}-{2}): stakers {3} ETH kept in the pot; burn nothing.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "A share of $TROYA creator fees that grows with market cap ({0}% → {1}% at $35k → {2}% at $100k of trading volume), varies with volume, not a promised yield. <1>Paid into the staking contract every day; claim any time.</1> <2>If nobody is staked when the daily share is paid, it stays with the team.</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "<1>Trade through Troya at least once a day to earn 2x.</1> A staker who made a trade of ${0} or more through Troya (the Swap page on Robinhood Chain, the Agent Wallet, trades in Telegram or on X, or a coin launched through Troya) in the {1} hours before the daily share counts double in it: each staked $TROYA weighs {2} instead of {3}. The contract pays everyone the 1x part; the extra part is sent straight to the wallet in ETH from the creator wallet once it adds up to at least the smallest payment. Team and test wallets keep 1x. The qualifying trade is ${4} or more for daily shares up to {5} Nov {6} and ${7} or more from {8} Nov {9} (the share paid {10} Dec {11}:{12} UTC onward).",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "How the share works",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "summary"
+ },
+ {
+  "key": "The $TROYA creator wallet earns {0}% of every $TROYA trade. Each fee is split by the $TROYA market cap in the hour it came in (the median of several reads that hour): under $35k stakers get {1}% of trading volume, from $35k {2}%, from $100k {3}% and another {4}% buys $TROYA back and burns it. Paid into the staking contract every day ({5}:{6} UTC, for the day before) and shared by every coin staked at that moment; claim any time on the stake page. Each staked $TROYA earns the same rate: the full share is paid once {7}% of the supply is staked, and with less staked only that fraction is paid ({8}% staked: half the share) while the rest stays with the team. Fees from before the contract is live, and from its first {9} days, are paid together on day {10} after it goes live. Anything a run cannot send (nobody staked, under {11} ETH, the gas reserve) stays with the team; nothing is carried over.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "<1>Under $35k</1>: stakers {0}% of volume",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>$35k to $100k</1>: stakers {0}% of volume",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>$100k and up</1>: stakers {0}% of volume, plus {1}% bought back and burned",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "The market cap of each hour is the median of several reads that hour (Troya's market index, DexScreener and the pool price on chain), so a short pump does not move the tier.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "Stake",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h3"
+ },
+ {
+  "key": "Connect the wallet that holds your $TROYA. Staking is signed in your own wallet; Troya never holds your coins.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "<1/>Connect wallet",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Tier progress",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h3"
+ },
+ {
+  "key": "No tier yet",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Connect a wallet to see yours",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "Next: Bronze. It needs both.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "Size",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0} of {1}.2K $TROYA · {2}.2K more",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "Time",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0} days from your first stake",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "Coins waiting out the cooldown count for nothing. A top-up moves your start time forward in proportion to the coins added, so a big top-up looks younger than a small one.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "<1/>How it works on-chain",
+  "kind": "unit",
+  "ctx": "stk-ch-title",
+  "tag": "h2"
+ },
+ {
+  "key": "Source verified · exact match",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Your $TROYA is held by a smart contract on Robinhood Chain, not by Troya. It has no owner and no admin: nobody, the team included, can pause it, change it, take a fee or move your coins. If this website ever goes away, you can still unstake and claim on Blockscout in a few clicks, as shown below.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "Contract",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "dt"
+ },
+ {
+  "key": "Copy the contract address",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Blockscout",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Network",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "dt"
+ },
+ {
+  "key": "Robinhood Chain (chain ID {0})",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "dd"
+ },
+ {
+  "key": "Coin",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "dt"
+ },
+ {
+  "key": "$TROYA <1><2/></1>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "dd"
+ },
+ {
+  "key": "Deployed",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "dt"
+ },
+ {
+  "key": "Nov {0}, {1}, block {2} · <1>transaction</1>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "dd"
+ },
+ {
+  "key": "Source",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "dt"
+ },
+ {
+  "key": "Verified, exact match: <1>Blockscout</1> · <2>Sourcify</2> · <3>GitHub</3>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "dd"
+ },
+ {
+  "key": "Audit",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "dt"
+ },
+ {
+  "key": "Automated scan ({0} real issues); independent audit not done yet.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Public tests:",
+  "kind": "text",
+  "ctx": "view",
+  "tag": "dd"
+ },
+ {
+  "key": "{0} unit and fuzz, {1} invariants, {2} fork test",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Automated scan below",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Coins waiting out the {0} days earn nothing. The daily share is sent by the creator wallet; the 2x bonus for traders is sent straight from that wallet to yours, outside the contract.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "The contract right now",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h3"
+ },
+ {
+  "key": "Couldn't read the contract right now: server response {0} Method Not Allowed",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "<1/>Try again",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "<1><2>What the contract can't do</2><3>no owner, no pause, no upgrade, no fee</3></1><4/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "summary"
+ },
+ {
+  "key": "Only {0} functions can change anything",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "stake, requestUnstake, cancelUnstake, withdraw and claim act only on the calling wallet's own account; notifyReward only adds ETH. The other {0} functions only read. Blockscout lists all {1}.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "All {0} on Blockscout<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Source L82–{0}<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "No owner, no admin",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "It inherits only a re-entry guard: no Ownable, no admin role, no allow-list. The constructor stores the coin's address and nothing else, so the wallet that deployed it got no power over it.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "L21<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Constructor L72–{0}<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "No pause",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Nothing can stop staking, unstaking or withdrawing. withdraw() checks only that you have coins waiting and that their {0} days are over.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "withdraw() L126–{0}<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "No upgrade",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Not a proxy: the code at the address matches the published source exactly, and it has no delegatecall and no selfdestruct. The coin it holds is fixed for good (immutable).",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Verified code<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Sourcify<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "L40<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "No fee",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Every coin that arrives is booked as yours; withdraw() pays back every waiting coin and claim() all your ETH. There is no fee in the code to switch on.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "stake() L86–{0}<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "L134<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Nobody can move or freeze your coins",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Every function acts on the wallet that calls it (msg.sender). The one line that sends $TROYA out and the one line that sends ETH out both pay the caller. A test tries it from another wallet and fails.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Coins out L134<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "ETH out L167<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Test<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "The {0} days are fixed",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "COOLDOWN is a constant compiled into the code: {0} seconds. Nobody can make the wait longer.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "L26<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "No rescue, no sweep",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Only your own withdraw() and claim() take anything out. Plain ETH is refused (there is no receive()), so ETH only comes in as a reward. The flip side: $TROYA sent straight to the address, not through stake(), can never come back.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "notifyReward() L144–{0}<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2>Exit without this website</2><3>unstake and claim on Blockscout</3></1><4/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "summary"
+ },
+ {
+  "key": "Open the verified contract on Blockscout",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "and go to Read/Write contract. Check the address:",
+  "kind": "text",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "<1/>Open on Blockscout",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1>Connect your wallet</1> with Connect your wallet at the top of the list: the wallet that staked, on Robinhood Chain (chain ID {0}).",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "requestUnstake(amount)",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": ": open it, paste your amount in wei ({0} decimals) into amount, press Write and confirm in your wallet. Or type whole $TROYA and press ×{1}^{2}.",
+  "kind": "text",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Connect your wallet here to fill in your staked amount, or type any amount.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "$TROYA",
+  "kind": "text",
+  "ctx": "view",
+  "tag": "label"
+ },
+ {
+  "key": "$TROYA to unstake, to turn into wei",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "input"
+ },
+ {
+  "key": "In wei",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "<1/>Copy",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Wait {0} days.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "stakeOf(your address), on the same page, shows unlockAt in Unix seconds. Asking to unstake more restarts the {0} days for every waiting coin; cancelUnstake() puts them back into the stake.",
+  "kind": "text",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "<1>withdraw()</1>: press Write. There is nothing to type: every waiting coin goes back to your wallet.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "claim()",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "for your reward ETH: press Write, any time, even after you have left.",
+  "kind": "text",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "None of this goes through troya.codes: Blockscout talks to Robinhood Chain directly, so it works even if this website is offline. Any tool that can call a contract works the same way, for example Foundry's cast (add your own signer, such as --ledger):",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "What it does not promise",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "It has not been audited by an outside firm yet. Its tests are public: run them yourself from the repository.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "The daily ETH is sent by the team. The contract keeps whatever has reached it for you, but it cannot make new rewards arrive.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1/>Automated security scan",
+  "kind": "unit",
+  "ctx": "stk-scan-t",
+  "tag": "h3"
+ },
+ {
+  "key": "Automated scan; independent audit not done yet",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "Slither and Wake, free code scanners, read the exact source verified at this address on Nov {0}, {1} (UTC), file for file. Findings cover TroyaStake.sol only. The contract can't be changed, so nothing here can be patched: it is published so you can judge for yourself.",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "p"
+ },
+ {
+  "key": "Slither {0}.6",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "b"
+ },
+ {
+  "key": "Trail of Bits · {0} detectors",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "small"
+ },
+ {
+  "key": "{0} results: {1} Medium, {2} Low, {3} Informational.",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "pass {0} text<1/>",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "a"
+ },
+ {
+  "key": "pass {0} json<1/>",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "a"
+ },
+ {
+  "key": "pass {0} diff<1/>",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "a"
+ },
+ {
+  "key": "Wake {0}.2",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "b"
+ },
+ {
+  "key": "Ackee Blockchain · {0} detectors",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "small"
+ },
+ {
+  "key": "No detections at any level.",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "text<1/>",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "a"
+ },
+ {
+  "key": "json<1/>",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "a"
+ },
+ {
+  "key": "config<1/>",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "a"
+ },
+ {
+  "key": "Aderyn",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "b"
+ },
+ {
+  "key": "Cyfrin",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "small"
+ },
+ {
+  "key": "Not run. Cyfrin has retired Aderyn and withdrawn its downloads, so it can no longer be installed. Wake was run in its place.",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "Why",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "a"
+ },
+ {
+  "key": "Before triage · {0} results",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "<1>{0}</1>High",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "<1>{0}</1>Medium",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "<1>{0}</1>Low",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "<1>{0}</1>Informational",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "After triage · each checked against the code",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "<1>{0}</1>Real issues",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "<1>{0}</1>False positives",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "<1><2>Every result, triaged</2><3>{0} results, each with the line it points at and why</3></1><4/>",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "summary"
+ },
+ {
+  "key": "False positive",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "Slither said Medium · stake()",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "small"
+ },
+ {
+  "key": "L89<1/>",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "a"
+ },
+ {
+  "key": "got is the balance change across this one transfer, and the check only refuses a deposit that delivered {0} coins. Coins sent to the contract by anyone else arrive in other transactions, so they cannot fake or block a real stake.",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "Slither said Medium · stakedFor()",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "small"
+ },
+ {
+  "key": "L189<1/>",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "a"
+ },
+ {
+  "key": "A read-only view that returns {0} when nothing is staked: since is {1} exactly when the stake is empty, because it is set from block.timestamp (never {2}) whenever coins are staked. It moves nothing.",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "Informational",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "Slither said Low · withdraw()",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "small"
+ },
+ {
+  "key": "L130<1/>",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "a"
+ },
+ {
+  "key": "This is the {0}-day wait itself, so using the block time is intended. Whoever produces blocks can nudge their time slightly; against a {1}-second wait that is noise, and it only changes when callers get back their own coins, which already stopped earning.",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "Slither said Low · stakedFor()",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "small"
+ },
+ {
+  "key": "The same check as the incorrect-equality result on this line. Slither flags it because since comes from block.timestamp, but the check asks whether anything is staked, not whether time has passed. Read-only.",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "Slither said Informational · whole project",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "small"
+ },
+ {
+  "key": "L2<1/>",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "a"
+ },
+ {
+  "key": "The Foundry project mixes version ranges (forge-std and tests &gt;={0}.13, OpenZeppelin ^{1}.20, the Troya contracts {2}.24 and ^{3}.24). The deployed contract was compiled with exactly solc {4}.24 (Sourcify exact match), so the range written in the source changes nothing on chain.",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "Slither said Informational · claim()",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "small"
+ },
+ {
+  "key": "L167<1/>",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "a"
+ },
+ {
+  "key": "call is the recommended way to send ETH (transfer and send cap gas at {0} and break smart-contract wallets). It pays only msg.sender, after owed is set to {1} and totalClaimed is updated, under nonReentrant, and the whole claim reverts if the payment fails, so ETH cannot be lost or paid twice.",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "span"
+ },
+ {
+  "key": "About the two Slither passes: on the unchanged source, Slither {0}.6 hit an internal error on line {1} (_settle) and then skipped its data-flow analysis, so pass {2} found {3}. Pass {4} split that one line in two in a scan-only copy, same maths, and found {5}, the {6} from pass {7} among them. Nothing on chain was changed. <1>The one-line change</1> · <2>Summary as JSON</2>",
+  "kind": "unit",
+  "ctx": "stk-scan",
+  "tag": "p"
+ },
+ {
+  "key": "Tiers and perks",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h2"
+ },
+ {
+  "key": "Perks live",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Bronze",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "{0}.2K $TROYA",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "staked",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "<1/>Sentry alerts {0} s before the public channel",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1/>{0}.5x assistant messages and Council calls",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1/>{0} free Gate API checks a day",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1/>{0} Arena Cup points a week",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1/>Bronze badge on your wallet",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "Silver",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "{0}.0K $TROYA",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "<1/>2x assistant messages and Council calls",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1/>Silver badge on your wallet",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "Gold",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "{0}.8M $TROYA",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "<1/>3x assistant messages and Council calls",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1/>Gold badge on your wallet",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "No perk is money: they are features inside Troya. Sizes and perks are set by the team on the server and can change; the contract itself never changes.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "<1/>Risks, in plain words",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h2"
+ },
+ {
+  "key": "<1>Smart contract risk</1><2>Your coins sit in a smart contract. A bug in it could lose them. It is tested and has no owner, but it has not had an outside audit.</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>{0} days to get out</1><2>Unstaking takes {1} days, and you cannot sell coins that are staked or waiting. If the price falls in those days, there is no faster way out.</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>The wait restarts</1><2>Asking to unstake more while coins already wait adds them and restarts the {0}-day wait for all of them.</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Nobody can undo a mistake</1><2>There is no owner, admin, pause or upgrade. $TROYA sent straight to the contract address, instead of through Stake, is lost for good.</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Not a yield</1><2>The daily ETH is a share of $TROYA creator fees: it moves with trading volume and with the market cap tier, can be zero on a quiet day, and is not promised. It goes to the coins staked at the moment it arrives (every day at {0}:{1} UTC, for the day before); coins waiting out the cooldown get none. If nobody is staked then, or it is under {2} ETH, it stays with the team.</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>The 2x part is sent by the team</1><2>The contract pays every staked coin the same 1x part. The extra part for stakers who traded through Troya is sent from the $TROYA creator wallet once it adds up to the smallest payment; it waits (and keeps adding up) while that wallet is short of its gas reserve. Only trades the server can check count: the Swap page on Robinhood Chain, the Agent Wallet, Telegram and X trades, and launches through Troya.</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Tiers can move</1><2>Tier sizes are a share of the total supply, and the team can change sizes and perks. A tier you reach today can need more later.</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Holder tiers</1><2>Treasury holder tiers count your staked and waiting coins too.</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Network fees</1><2>Every step (approve, stake, unstake, withdraw, claim) is a transaction on Robinhood Chain paid in ETH.</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Contract </1><2/> on Robinhood Chain. No owner, no admin, no fee, not upgradeable: only you can move your coins. Tier sizes are a share of the $TROYA total supply, read on chain.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "Non-custodial by default · You sign every transaction · Not financial advice",
+  "kind": "unit",
+  "ctx": "footer",
+  "tag": "span"
+ },
+ {
+  "key": "Footer",
+  "kind": "attr:aria-label",
+  "ctx": "Footer",
+  "tag": "nav"
+ },
+ {
+  "key": "Troya Agent",
+  "kind": "unit",
+  "ctx": "Footer",
+  "tag": "a"
+ },
+ {
+  "key": "Bridge",
+  "kind": "unit",
+  "ctx": "Footer",
+  "tag": "a"
+ },
+ {
+  "key": "Docs",
+  "kind": "unit",
+  "ctx": "Footer",
+  "tag": "a"
+ },
+ {
+  "key": "Verify",
+  "kind": "unit",
+  "ctx": "Footer",
+  "tag": "a"
+ },
+ {
+  "key": "Charts by TradingView",
+  "kind": "unit",
+  "ctx": "Footer",
+  "tag": "a"
+ },
+ {
+  "key": "Operator",
+  "kind": "unit",
+  "ctx": "Footer",
+  "tag": "a"
+ },
+ {
+  "key": "Troya agent",
+  "kind": "attr:aria-label",
+  "ctx": "Troya agent",
+  "tag": "aside"
+ },
+ {
+  "key": "<1/>Troya agent<2>You ask · Troya checks · you sign</2>",
+  "kind": "unit",
+  "ctx": "Troya agent",
+  "tag": "span"
+ },
+ {
+  "key": "Open full chat",
+  "kind": "attr:title",
+  "ctx": "Troya agent",
+  "tag": "a"
+ },
+ {
+  "key": "Close",
+  "kind": "attr:aria-label",
+  "ctx": "Troya agent",
+  "tag": "button"
+ },
+ {
+  "key": "Quick tabs",
+  "kind": "attr:aria-label",
+  "ctx": "Quick tabs",
+  "tag": "nav"
+ },
+ {
+  "key": "<1/><2>Ask</2>",
+  "kind": "unit",
+  "ctx": "Quick tabs",
+  "tag": "button"
+ },
+ {
+  "key": "<1/><2>Agent</2>",
+  "kind": "unit",
+  "ctx": "Quick tabs",
+  "tag": "a"
+ },
+ {
+  "key": "<1/><2>Portfolio</2><3/>",
+  "kind": "unit",
+  "ctx": "Quick tabs",
+  "tag": "a"
+ },
+ {
+  "key": "<1/>Ask Troya",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "button"
+ },
+ {
+  "key": "Community",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "b"
+ },
+ {
+  "key": "Public chat · people with signed-in wallets",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "small"
+ },
+ {
+  "key": "Close chat",
+  "kind": "attr:aria-label",
+  "ctx": "header",
+  "tag": "button"
+ },
+ {
+  "key": "Community messages",
+  "kind": "attr:aria-label",
+  "ctx": "Community chat",
+  "tag": "div"
+ },
+ {
+  "key": "<1>No messages yet</1>Say hello. Everyone can read this chat; posting needs a wallet sign-in.",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "div"
+ },
+ {
+  "key": "0x4A8BF81968beEd20625B7bA7aD549d5b1efE9B30",
+  "kind": "attr:title",
+  "ctx": "Community chat",
+  "tag": "a"
+ },
+ {
+  "key": "lynx",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "a"
+ },
+ {
+  "key": "X account linked with Sign in with X",
+  "kind": "attr:title",
+  "ctx": "Community chat",
+  "tag": "span"
+ },
+ {
+  "key": "@XPinarachy",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "span"
+ },
+ {
+  "key": "Holds at least {0} $TROYA",
+  "kind": "attr:title",
+  "ctx": "Community chat",
+  "tag": "span"
+ },
+ {
+  "key": "Holder",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "span"
+ },
+ {
+  "key": "11/21/2026, {0}:{1}:{2} PM",
+  "kind": "attr:title",
+  "ctx": "Community chat",
+  "tag": "time"
+ },
+ {
+  "key": "3d",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "time"
+ },
+ {
+  "key": "Essentially, make the user interface simpler and easier to use, so that users can adapt more quickly.",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "div"
+ },
+ {
+  "key": "11/22/2026, {0}:{1}:{2} PM",
+  "kind": "attr:title",
+  "ctx": "Community chat",
+  "tag": "time"
+ },
+ {
+  "key": "Hi",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "div"
+ },
+ {
+  "key": "0x6b4A12a337371B7EE453e2dBA07F0aa7ba95EB39",
+  "kind": "attr:title",
+  "ctx": "Community chat",
+  "tag": "a"
+ },
+ {
+  "key": "0x6b4A…EB39",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "a"
+ },
+ {
+  "key": "Sup",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "div"
+ },
+ {
+  "key": "zolva agent add liquidity to own token 10M zolva",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "div"
+ },
+ {
+  "key": "bullish",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "div"
+ },
+ {
+  "key": "0x2844310391cd489C8E2DcD5Ba7E34aA47A37c6Ce",
+  "kind": "attr:title",
+  "ctx": "Community chat",
+  "tag": "a"
+ },
+ {
+  "key": "0x2844…c6Ce",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "a"
+ },
+ {
+  "key": "11/23/2026, {0}:{1}:{2} AM",
+  "kind": "attr:title",
+  "ctx": "Community chat",
+  "tag": "time"
+ },
+ {
+  "key": "2d",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "time"
+ },
+ {
+  "key": "yoooooooooooo",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "div"
+ },
+ {
+  "key": "best dev! best team! TROYA GONNA SURPRISE A LOT OF PEOPLE IN A GOOD WAY",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "div"
+ },
+ {
+  "key": "Hope so, Someone bought the interpreter, it looks good.",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "div"
+ },
+ {
+  "key": "New messages",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "button"
+ },
+ {
+  "key": "Connect to post",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "button"
+ },
+ {
+  "key": "Reading is open to everyone. Your profile name, or your wallet address, shows next to what you write.",
+  "kind": "unit",
+  "ctx": "Community chat",
+  "tag": "span"
+ },
+ {
+  "key": "Appearance",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "span"
+ },
+ {
+  "key": "Dark",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "button"
+ },
+ {
+  "key": "Light",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "button"
+ },
+ {
+  "key": "Language",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "span"
+ },
+ {
+  "key": "Default swap slippage (%)",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "span"
+ },
+ {
+  "key": "Assistant reply language",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "span"
+ },
+ {
+  "key": "Same as my message",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "option"
+ },
+ {
+  "key": "English",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "option"
+ },
+ {
+  "key": "Español",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "option"
+ },
+ {
+  "key": "Português",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "option"
+ },
+ {
+  "key": "Türkçe",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "option"
+ },
+ {
+  "key": "Tiếng Việt",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "option"
+ },
+ {
+  "key": "Bahasa Indonesia",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "option"
+ },
+ {
+  "key": "Appearance, slippage and language are kept in this browser only.",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "p"
+ },
+ {
+  "key": "Telegram alerts",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "span"
+ },
+ {
+  "key": "Sign in to link your Telegram.",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "span"
+ },
+ {
+  "key": "Sign in",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "button"
+ },
+ {
+  "key": "Playbook alerts, fills and tickets waiting for you, sent to your Telegram by the Troya bot.",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "p"
+ },
+ {
+  "key": "Save",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "button"
+ },
+ {
+  "key": "Connect a wallet",
+  "kind": "attr:aria-label",
+  "ctx": "",
+  "tag": "div"
+ },
+ {
+  "key": "<1><2/></1><3>Phone wallet (QR code)</3><4>Scan</4>",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "button"
+ },
+ {
+  "key": "<1><2/></1><3>MetaMask</3><4>Install</4>",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>Rabby</3><4>Install</4>",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>OKX Wallet</3><4>Install</4>",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>Coinbase Wallet</3><4>Install</4>",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "a"
+ },
+ {
+  "key": "No browser wallet was found. Scan a code with a wallet app on your phone, or install a browser wallet, reload this page, then connect.",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "p"
+ },
+ {
+  "key": "Troya never holds your wallet's key. You approve every transaction in the wallet itself.",
+  "kind": "unit",
+  "ctx": "",
+  "tag": "p"
+ },
+ {
+  "key": "Home",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "b"
+ },
+ {
+  "key": "Ask Troya",
+  "kind": "attr:aria-label",
+  "ctx": "Ask Troya",
+  "tag": "section"
+ },
+ {
+  "key": "$TROYA flywheel",
+  "kind": "attr:aria-label",
+  "ctx": "Ask Troya",
+  "tag": "a"
+ },
+ {
+  "key": "<1>Every coin opened at the gate.</1><2> Troya checks the coin and simulates your trade before your wallet signs.</2><3>About Troya<4/></3>",
+  "kind": "unit",
+  "ctx": "Ask Troya",
+  "tag": "p"
+ },
+ {
+  "key": "Paste a coin or ask Troya…",
+  "kind": "attr:placeholder",
+  "ctx": "Ask Troya",
+  "tag": "input"
+ },
+ {
+  "key": "Paste a coin address or ask your agent",
+  "kind": "attr:aria-label",
+  "ctx": "Ask Troya",
+  "tag": "input"
+ },
+ {
+  "key": "Ask<1/>",
+  "kind": "unit",
+  "ctx": "Ask Troya",
+  "tag": "button"
+ },
+ {
+  "key": "What's running hot?",
+  "kind": "unit",
+  "ctx": "Ask Troya",
+  "tag": "button"
+ },
+ {
+  "key": "Crowded funding",
+  "kind": "unit",
+  "ctx": "Ask Troya",
+  "tag": "button"
+ },
+ {
+  "key": "How Troya works",
+  "kind": "unit",
+  "ctx": "Ask Troya",
+  "tag": "button"
+ },
+ {
+  "key": "{0}% Troya fee · Gate on every order · your keys",
+  "kind": "unit",
+  "ctx": "Ask Troya",
+  "tag": "a"
+ },
+ {
+  "key": "Coins that passed Sentry",
+  "kind": "attr:aria-label",
+  "ctx": "Coins that passed Sentry",
+  "tag": "section"
+ },
+ {
+  "key": "Passed Sentry",
+  "kind": "unit",
+  "ctx": "Coins that passed Sentry",
+  "tag": "span"
+ },
+ {
+  "key": "Passed Sentry: The newest coins that passed every Sentry check and drew real buying: at least {0} ETH in from {1} independent buyers, the same bar as the Sentry channel. Not a recommendation: open the coin and its Gate before you trade.",
+  "kind": "attr:aria-label",
+  "ctx": "Coins that passed Sentry",
+  "tag": "i"
+ },
+ {
+  "key": "i",
+  "kind": "unit",
+  "ctx": "Coins that passed Sentry",
+  "tag": "i"
+ },
+ {
+  "key": "$SSOUL · SECOND SOUL · passed Sentry 3h ago · {0} independent buyers",
+  "kind": "attr:title",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>$SSOUL</3><4>passed 3h</4>",
+  "kind": "unit",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "$ISO · Isometry · born 7h ago · passed Sentry 6h ago · {0} independent buyers",
+  "kind": "attr:title",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>$ISO</3><4>7h</4>",
+  "kind": "unit",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "$耄蝶 · born 8h ago · passed Sentry 8h ago · {0} independent buyers",
+  "kind": "attr:title",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>$耄蝶</3><4>8h</4>",
+  "kind": "unit",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "$g8r · born 9h ago · passed Sentry 9h ago · {0} independent buyers",
+  "kind": "attr:title",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>$g8r</3><4>9h</4>",
+  "kind": "unit",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "$EQX · EQUINOX · born 17h ago · passed Sentry 17h ago · {0} independent buyers",
+  "kind": "attr:title",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>$EQX</3><4>17h</4>",
+  "kind": "unit",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "$FEATHERS · Official Feathers Coin · born 18h ago · passed Sentry 18h ago · {0} independent buyers",
+  "kind": "attr:title",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>$FEATHERS</3><4>18h</4>",
+  "kind": "unit",
+  "ctx": "Coins that passed Sentry",
+  "tag": "a"
+ },
+ {
+  "key": "Coins on Robinhood Chain<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h2"
+ },
+ {
+  "key": "Troya picks",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Trending",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Full market",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Price",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "th"
+ },
+ {
+  "key": "24h",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "th"
+ },
+ {
+  "key": "Liquidity",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "th"
+ },
+ {
+  "key": "Buy (ETH)",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "th"
+ },
+ {
+  "key": "BONER<1><2><3/></2>Long</1><4>96d</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Boner Coin",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "X (opens the coin's own page)",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Website",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Website (opens the coin's own page)",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "$231K real liquidity, $181K traded",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0}₅{1} ETH",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Pool total ${0}.1K incl. the coin side",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "${0}.3K",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Buy BONER with ETH",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Review a {0} ETH buy of BONER: the Gate checks it and your wallet signs",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "PONS<1><2><3/></2>Ramses</1><4>134d</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Pons",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "${0}.0M real liquidity, $175K traded",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0}₄{1} ETH",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Pool total ${0}.1M incl. the coin side",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "${0}.0M",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Buy PONS with ETH",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Review a {0} ETH buy of PONS: the Gate checks it and your wallet signs",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "HOOKR<1><2><3/></2>Uniswap</1><4>111d</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Hookr.fun",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "$354K real liquidity, $349K traded",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Pool total ${0}.9K incl. the coin side",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "${0}.4K",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Buy HOOKR with ETH",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Review a {0} ETH buy of HOOKR: the Gate checks it and your wallet signs",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "TEXEL<1><2><3/></2>Pons</1><4>21d</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Texel",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "$70K real liquidity, $406K traded",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0}₆{1} ETH",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Pool total ${0}.5K incl. the coin side",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Buy TEXEL with ETH",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Review a {0} ETH buy of TEXEL: the Gate checks it and your wallet signs",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "MFLO<1><2><3/></2>Uniswap</1><4>7h</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "MarketFloat",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "$86K real liquidity, $796K traded",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0}₈{1} ETH",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "${0}.9K",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Buy MFLO with ETH",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Review a {0} ETH buy of MFLO: the Gate checks it and your wallet signs",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "CASHCAT<1><2><3/></2>Uniswap</1><4>159d</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Cash Cat",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Telegram (opens the coin's own page)",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "$692K real liquidity, $60K traded",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Buy CASHCAT with ETH",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Review a {0} ETH buy of CASHCAT: the Gate checks it and your wallet signs",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "HEPH<1><2><3/></2>Uniswap</1><4>8h</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "HEPH AI",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "$50K real liquidity, $340K traded",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "${0}.7K",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Buy HEPH with ETH",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Review a {0} ETH buy of HEPH: the Gate checks it and your wallet signs",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "{0} coins pass the picks bar today. Scores, not advice.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "Sentry<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h2"
+ },
+ {
+  "key": "Sentry Autopilot",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Channel",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3><4>$CITY</4><5>Pons · {0} buyer</5></3><6>Caution</6><7>6m</7><8><9>Gate</9><10>Open</10></8>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3><4>$KYM</4><5>Know Your Memepad · Pons · {0} buyers</5></3><6>Caution</6><7>7m</7><8><9>Gate</9><10>Open</10></8>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3><4>$PEPTIDES</4><5>Pons</5></3><6>Failed</6><7>7m</7><8><9>Gate</9><10>Open</10></8>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3><4>$ZGUARD</4><5>Pons · {0} buyers</5></3><6>Caution</6><7>7m</7><8><9>Gate</9><10>Open</10></8>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3><4>$DOCKVAULT</4><5>Pons · no real buying yet</5></3><6>Checks passed</6><7>14m</7><8><9>Gate</9><10>Open</10></8>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3><4>$ODDRO</4><5>Pons · {0} buyers</5></3><6>Caution</6><7>14m</7><8><9>Gate</9><10>Open</10></8>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "Coins that just graduated",
+  "kind": "attr:aria-label",
+  "ctx": "Coins that just graduated",
+  "tag": "section"
+ },
+ {
+  "key": "Just graduated<1/>",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "h2"
+ },
+ {
+  "key": "Pons curve filled · own Uniswap v4 pool",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "See all {0} graduated",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "a"
+ },
+ {
+  "key": "$SPCXC",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "b"
+ },
+ {
+  "key": "SPCX Chain",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "small"
+ },
+ {
+  "key": "11/25/2026, {0}:{1}:{2} PM",
+  "kind": "attr:title",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "Graduated 4h ago",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "Market cap",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dt"
+ },
+ {
+  "key": "${0}.6K",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
+ },
+ {
+  "key": "Curve filled",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dt"
+ },
+ {
+  "key": "{0} SPCX",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
+ },
+ {
+  "key": "Open",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "a"
+ },
+ {
+  "key": "Gate",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "a"
+ },
+ {
+  "key": "Graduation tx",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "a"
+ },
+ {
+  "key": "$IGNOT",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "b"
+ },
+ {
+  "key": "ignot",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "small"
+ },
+ {
+  "key": "Graduated 6h ago",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "${0}.2K",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
+ },
+ {
+  "key": "{0} ETH",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
+ },
+ {
+  "key": "$JAZZ",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "b"
+ },
+ {
+  "key": "paired with USDG",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "small"
+ },
+ {
+  "key": "Graduated 8h ago",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "{0} USDG",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
+ },
+ {
+  "key": "$MCAT",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "b"
+ },
+ {
+  "key": "Moon Cat",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "small"
+ },
+ {
+  "key": "11/25/2026, {0}:{1}:{2} AM",
+  "kind": "attr:title",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "Graduated 16h ago",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "CO<1/>",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "$COMMUNITY",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "b"
+ },
+ {
+  "key": "Community is Capital",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "small"
+ },
+ {
+  "key": "Graduated 17h ago",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "ME<1/>",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "$MEMORIA",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "b"
+ },
+ {
+  "key": "Memoria",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "small"
+ },
+ {
+  "key": "11/24/2026, {0}:{1}:{2} PM",
+  "kind": "attr:title",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "Graduated 1d ago",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "MO<1/>",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "$MOTH",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "b"
+ },
+ {
+  "key": "Moth",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "small"
+ },
+ {
+  "key": "11/24/2026, {0}:{1}:{2} AM",
+  "kind": "attr:title",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "${0}.1K",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
+ },
+ {
+  "key": "SI<1/>",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "$SIGIL",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "b"
+ },
+ {
+  "key": "Sigil",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "small"
+ },
+ {
+  "key": "11/23/2026, {0}:{1}:{2} PM",
+  "kind": "attr:title",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "${0}.0K",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
+ },
+ {
+  "key": "GE<1/>",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "$GENESIS",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "b"
+ },
+ {
+  "key": "GENESIS CHAD",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "small"
+ },
+ {
+  "key": "${0}.5K",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
+ },
+ {
+  "key": "AN<1/>",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "$ANTC",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "b"
+ },
+ {
+  "key": "ANT Chain",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "small"
+ },
+ {
+  "key": "{0} ANT",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "dd"
+ },
+ {
+  "key": "IN<1/>",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "$INTP",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "b"
+ },
+ {
+  "key": "Interpres",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "small"
+ },
+ {
+  "key": "Graduated 2d ago",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "TE<1/>",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "span"
+ },
+ {
+  "key": "$TENDER",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "b"
+ },
+ {
+  "key": "Tender",
+  "kind": "unit",
+  "ctx": "Coins that just graduated",
+  "tag": "small"
+ },
+ {
+  "key": "<1><2/></1><3><4>Buy a coin</4><5>Every coin on Robinhood Chain</5></3>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3><4>Gate a coin</4><5>Nine checks before you buy</5></3>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3><4>Launch</4><5>Create a coin with the Gate on it</5></3>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3><4>Perps</4><5>Crypto, stocks and metals</5></3>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Get started",
+  "kind": "attr:aria-label",
+  "ctx": "Get started",
+  "tag": "section"
+ },
+ {
+  "key": "{0} of {1} done",
+  "kind": "unit",
+  "ctx": "Get started",
+  "tag": "span"
+ },
+ {
+  "key": "All steps",
+  "kind": "unit",
+  "ctx": "Get started",
+  "tag": "a"
+ },
+ {
+  "key": "Hide",
+  "kind": "unit",
+  "ctx": "Get started",
+  "tag": "button"
+ },
+ {
+  "key": "Connect and sign in",
+  "kind": "unit",
+  "ctx": "Get started",
+  "tag": "b"
+ },
+ {
+  "key": "Your wallet proves it is you. Signing is free and sends nothing.",
+  "kind": "unit",
+  "ctx": "Get started",
+  "tag": "p"
+ },
+ {
+  "key": "Get ETH on Robinhood Chain",
+  "kind": "unit",
+  "ctx": "Get started",
+  "tag": "b"
+ },
+ {
+  "key": "Bridge it in, or buy a coin with ETH on Base or Arbitrum.",
+  "kind": "unit",
+  "ctx": "Get started",
+  "tag": "p"
+ },
+ {
+  "key": "Bridge ETH in",
+  "kind": "unit",
+  "ctx": "Get started",
+  "tag": "a"
+ },
+ {
+  "key": "Make a first Gate-checked swap",
+  "kind": "unit",
+  "ctx": "Get started",
+  "tag": "b"
+ },
+ {
+  "key": "From your own wallet. The Gate checks it before you sign.",
+  "kind": "unit",
+  "ctx": "Get started",
+  "tag": "p"
+ },
+ {
+  "key": "Try a small swap",
+  "kind": "unit",
+  "ctx": "Get started",
+  "tag": "a"
+ },
+ {
+  "key": "ETH",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "1D",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "1W",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "1M",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "<1>-{0}%</1> · {1} days",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Hyperliquid",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Charting by TradingView",
+  "kind": "attr:title",
+  "ctx": "tv-attr-logo",
+  "tag": "a"
+ },
+ {
+  "key": "Troya Gate",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h2"
+ },
+ {
+  "key": "Open the Gate",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Nine checks before you can buy: route, price impact, depth, fees and taxes, a simulation, a test sell, transfer tax, the dev's side wallets and, for Pons coins, the launch ring. Fail one, no order.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "Search a coin (TROYA, NVDA…) or paste its address",
+  "kind": "attr:placeholder",
+  "ctx": "view",
+  "tag": "input"
+ },
+ {
+  "key": "Coin name, ticker or address",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "input"
+ },
+ {
+  "key": "<1/>Run the Gate",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "{0} of {1} checks passed",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "robinhood",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "$NVDA",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Created Tue, {0} Jun {1} {2}:{3}:{4} UTC",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "NVIDIA · 0xd060…9EEC · age 168d",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Passed",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0} passed",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Opens the swap review for {0} ETH. Swap runs the Gate again first; you confirm there and sign in your wallet.",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1/>Buy $NVDA",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Buy $NVDA with",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Review a buy of $NVDA with {0} ETH",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Checked for a {0} ETH buy · just now",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "Live example: NVDA, a Robinhood stock token. Paste any coin above to check it.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "<1><2/></1><3>Route</3><4>Uniswap v3 · WETH → NVDA</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Price impact</3><4>{0}%</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Pool depth</3><4>{0} ETH</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Fees and taxes</3><4>{0}%</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Transaction simulation</3><4>The exact swap succeeds against the current pool</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Test sell</3><4>Selling back returns {0} ETH</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1><2/></1><3>Transfer tax</3><4>None detected</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Can I buy? Yes.</1> Every check passed at this moment. A snapshot, never a safe stamp: a coin can change after a check.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "The Assay",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "who is behind this coin",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "<1>Partial history</1><2>Only the most recent {0} transfers were read (the coin has more, or no readable birth): dev and launch numbers may be incomplete.</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Wallet cluster</1><2>0x49a6…61cf handed coins to {0} wallets that together hold {1}%.</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "<1>Mostly round-trip trading</1><2>{0} wallets that buy and sell the same amounts (bots or wash trading) made {1}% of all trades: the volume looks bigger than real demand.</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "{0} transfers read (most recent only) · 5m",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "<1/>Buy on Fomo",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Token page",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1/>Get the badge",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Brief<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h2"
+ },
+ {
+  "key": "live",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0} of {1} liquid Hyperliquid perps (24h volume above $1M) are up over the last {2} hours.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "Largest 24h moves: BIGTIME +{0}%, SNXX -{1}%, SOXL -{2}%, MUU -{3}%.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "Funding at the edges: GIGADEV +{0}%/yr is the richest for shorts to collect, BIGTIME -{1}%/yr the richest for longs.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "Robinhood Chain: Claude leads 24h volume with ${0}.4M traded (+{1}%), out of ${2}.8M across coins on the board; FIONA is the strongest gainer among liquid coins at +{3}%.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "li"
+ },
+ {
+  "key": "Ask about the brief →",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Hyperliquid movers<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h2"
+ },
+ {
+  "key": "All perps",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Market",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "th"
+ },
+ {
+  "key": "Funding/yr",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "th"
+ },
+ {
+  "key": "Volume",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "th"
+ },
+ {
+  "key": "BIGTIME",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "OI ${0}.4M",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "${0}.4M",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "td"
+ },
+ {
+  "key": "SNXX",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "${0}.5M",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "td"
+ },
+ {
+  "key": "Semiconductor 3x ETF",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "OI ${0}.8M",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "MUU",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "OI ${0}.8K",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "${0}.8M",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "td"
+ },
+ {
+  "key": "KORU",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "OI ${0}.5M",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "CoreWeave",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "OI ${0}.6M",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "Zhipu AI",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Your agent<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h2"
+ },
+ {
+  "key": "Agent settings",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Connect a wallet and sign in to give Troya an Agent Wallet with caps, rules for Autopilot and playbooks that watch for you.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "<1><2/></1><3>Agent Wallet</3><4>Small wallet with daily caps</4><5/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>Autopilot</3><4>Runs approved tickets in this tab</4><5/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>Sentry Autopilot</3><4>Your rules on every new launch</4><5/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>Playbooks</3><4>Alerts and orders on triggers</4><5/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Signals<1/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h2"
+ },
+ {
+  "key": "Funding",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "BIGTIME funding -{0}%/yr",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Shorts pay longs about {0}% per hour at the current rate.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Watch",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Ask",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Move",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "BIGTIME up {0}% in 24h",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "24h volume ${0}.4M, open interest ${1}.4M.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "FIONA +{0}% on Robinhood Chain",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "${0}.4M traded in 24h on Uniswap.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "New",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "New on Uniswap: Pompom",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Launched {0} min ago, ${1}.8K traded so far.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "xyz:ZHIPU funding -{0}%/yr",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "ZHIPU funding -{0}%/yr",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0} more",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Tools",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h2"
+ },
+ {
+  "key": "<1><2/></1><3>Swap</3><4>Coins and tokenized stocks on Robinhood Chain</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>Earn on liquidity</3><4>Ranges set from volatility</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>Bridge</3><4>Bring ETH in from Ethereum, Arbitrum or Base</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>Build an agent</3><4>From your own playbooks</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>Stocks</3><4>Tokenized stocks with live prices and dividends</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "<1><2/></1><3>API and MCP</3><4>Give your own agent a scoped token</4>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "a"
+ },
+ {
+  "key": "Agent",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "span"
+ },
+ {
+  "key": "Chat",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "b"
+ },
+ {
+  "key": "Agent sections",
+  "kind": "attr:aria-label",
+  "ctx": "Agent sections",
+  "tag": "nav"
+ },
+ {
+  "key": "Scepter",
+  "kind": "unit",
+  "ctx": "Agent sections",
+  "tag": "a"
+ },
+ {
+  "key": "Wallet",
+  "kind": "unit",
+  "ctx": "Agent sections",
+  "tag": "a"
+ },
+ {
+  "key": "Autopilot",
+  "kind": "unit",
+  "ctx": "Agent sections",
+  "tag": "a"
+ },
+ {
+  "key": "Aegis",
+  "kind": "unit",
+  "ctx": "Agent sections",
+  "tag": "a"
+ },
+ {
+  "key": "Arena",
+  "kind": "unit",
+  "ctx": "Agent sections",
+  "tag": "a"
+ },
+ {
+  "key": "Playbooks",
+  "kind": "unit",
+  "ctx": "Agent sections",
+  "tag": "a"
+ },
+ {
+  "key": "Guest chat<1>Kept in this browser only</1>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Good evening.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "h1"
+ },
+ {
+  "key": "You ask. Troya checks. You sign.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "<1><2/></1><3>Is $TROYA safe to buy?</3>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "<1><2/></1><3>What is moving on Robinhood Chain?</3>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "<1><2/></1><3>What does Sentry Autopilot do?</3>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "<1><2/></1><3>Show the ANT perp</3>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Asking as a guest: answers and Gate checks, no wallet needed. Connect and sign in for tickets and your balances.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Guest mode: answers and Gate checks. Sign in for tickets.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Signing a message proves the wallet is yours. It costs nothing and sends nothing.",
+  "kind": "attr:title",
+  "ctx": "view",
+  "tag": "i"
+ },
+ {
+  "key": "<1/>Sign in",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Ask Troya anything…",
+  "kind": "attr:placeholder",
+  "ctx": "view",
+  "tag": "textarea"
+ },
+ {
+  "key": "Message",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "textarea"
+ },
+ {
+  "key": "Send",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "<1/>No wallet",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "{0} of {1} guest questions left",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Trade",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "span"
+ },
+ {
+  "key": "Swap",
+  "kind": "unit",
+  "ctx": "header",
+  "tag": "b"
+ },
+ {
+  "key": "<1><2/></1>Robinhood",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "<1><2/></1>Base",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "<1><2/></1>Arbitrum",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "<1><2/></1>Solana",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "You pay",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Amount to sell",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "input"
+ },
+ {
+  "key": "<1><2><3/></2><4><5/></4></1><6>ETH</6><7/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Switch tokens",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "You get",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "<1>Select token</1><2/>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Slippage",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Slippage: The most the price may move against you between quote and inclusion. If it moves further, the swap reverts and only the network fee is spent.",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "i"
+ },
+ {
+  "key": "Your wallet signs. Troya never holds your funds. <1>Troya fee {0}%</1>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "Robinhood Chain is chain {0}, gas is paid in ETH. Troya routes Pons Family curves (until a coin graduates) and Uniswap v3/v4 pools, and the other Robinhood Chain launchpads and pools through KyberSwap. Troya adds no fee of its own. <1>Bridge ETH in</1> · <2>Browse the market</2>",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "Popular now",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "Troya",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "Born through Troya, graduated: launch your own coin",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Select $TROYA",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Select",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "$BONER",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Select $BONER",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "$PONS",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Select $PONS",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "$HOOKR",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Select $HOOKR",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "$TEXEL",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Select $TEXEL",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "$MFLO",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Select $MFLO",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "Stock tokens",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "div"
+ },
+ {
+  "key": "$ANT",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "Anthropic, PBC Class A Common Stock",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "Select $ANT",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "NVIDIA",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "Select $NVDA",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "$SPY",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "b"
+ },
+ {
+  "key": "SPDR S&amp;P {0} ETF",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "small"
+ },
+ {
+  "key": "Select $SPY",
+  "kind": "attr:aria-label",
+  "ctx": "view",
+  "tag": "button"
+ },
+ {
+  "key": "{0} h change. Selecting a coin runs Troya Gate on it before you can sign.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "The Gate",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "Waiting",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "span"
+ },
+ {
+  "key": "Pick a coin and an amount. Troya runs its checks (nine on Robinhood Chain for a Pons coin), a simulated swap and a test sell included, before your wallet can sign.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "Route",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "The path your swap takes appears here with the quote.",
+  "kind": "unit",
+  "ctx": "view",
+  "tag": "p"
+ },
+ {
+  "key": "Launch",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Discover",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Troya Launches",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "All Robinhood coins",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Gate a coin",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Find the weak spot",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Heel Hunt",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "War Room",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Trader habits",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Leaderboard",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Swift",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Perps",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Spot (Hyperliquid)",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Stock desk",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Liquidity desk",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Lighter perps",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Create coin",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "My coins &amp; fees",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Agent control",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Agent Wallet",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Launch Autopilot",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Exit guard",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Strategy arena",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "What the agents learned",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Overview",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "History",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Weekly review",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "More",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Invite &amp; earn",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Holder tiers",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "AI calls",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Robinhood MCP rail",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Social",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Start in {0} seconds",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Safety",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "What's new",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Plans and tiers",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Report a bug",
+  "kind": "unit",
+  "ctx": "crumb",
+  "tag": "p"
+ },
+ {
+  "key": "Late night.",
+  "kind": "unit",
+  "ctx": "chat greeting (time of day)",
+  "tag": "h1"
+ },
+ {
+  "key": "Good morning.",
+  "kind": "unit",
+  "ctx": "chat greeting (time of day)",
+  "tag": "h1"
+ },
+ {
+  "key": "Good afternoon.",
+  "kind": "unit",
+  "ctx": "chat greeting (time of day)",
+  "tag": "h1"
+ }
+]

@@ -56,6 +56,10 @@ const MODULES = [
   "./xtracker.mjs",    // V8 F41 X Tracker: tracked X accounts ride on the filtered stream; a posted contract gets the Gate and a ping
   "./antround.mjs",    // Arena: Anthropic Round, the five AI traders on xyz:ANT (paper; live with ANT_ROUND_LIVE=1)
   "./trident.mjs",     // V10 F58 Trident: Troya Firewall, allow / warn / block for any transaction or signature request, signed
+  "./pharos.mjs",  // V10 F61 Pharos: Storm Watch, Robinhood Chain's core contracts on Ethereum, multisigs, timelocks, LI.FI contracts and chain health every 12 min, change log (alerts off unless PHAROS_ALERTS=1)
+  "./scylla.mjs",  // V10 F59 Scylla: Safe Crossing, every bridge route in/out of Robinhood Chain scored 0-100 from sourced facts, red lines, Gate on arrival, signed crossing receipt
+  "./voyage.mjs",  // V10 F65 Voyage: one sentence → a signed plan (Atlas venues, Gate, LI.FI crossings, costs, risks) and a promised-vs-got log; never signs or sends
+  "./argus.mjs",   // V10 F69 Argus: Sentinel Network, watches and flags with on-chain evidence, checked by Troya's own reads (reputation only, no prize pool)
   "./bow.mjs",     // V10 F62 Bow: Agent Passport, stamps with proof (ERC-8004, graded calls, paid jobs, Seal, launches, farm-like reviewers, endpoint health), signed
   "./phaeacians.mjs", // V10 F66 Phaeacians: Evaluator Desk, precheck + collusion check before a job is funded, signed completion records; never holds money
   "./styx.mjs",        // V9 F55 Styx Promise: a paid Gate check that passed a coin which then went to zero within 7 days is refunded as Gate credit
@@ -69,6 +73,8 @@ const MODULES = [
   "./oath.mjs",        // V7 F32 Oath (tier 1, watched): signed dev pledges shown live as kept or broken, with the breaking txs
   "./aegis.mjs",       // V7 F31 Aegis: a guard on every coin a user holds (dev and whale sells, sell test, tax, Oath), alerts and exit tickets
   "./radar.mjs",       // V7 F37 Robinhood Radar: stock tokens against the real share (gap, session, weekend pricing)
+  "./sirens.mjs",      // V10 F63 Sirens: real depth per venue at $100/$1K/$10K, honest 24h volume (wash filters, published method), family tree across chains
+  "./proteus.mjs",     // V10 F64 Proteus: one share on every venue Troya can read (RH stock tokens, Hyperliquid HIP-3 perps, xStocks, Ondo) vs the real share and a 24/7 fair-value band
   "./smartmoney.mjs",  // V7 F37 Robinhood Radar: smart wallets scored on The Record's graded calls
   "./owl.mjs",         // V7 F35 Owl: your trading week from the chain, with plain coaching, sealed
   "./verdictfeed.mjs", // V7 F38 Gate in your wallet: signed verdict feed and the transaction check behind the Troya Snap

@@ -668,9 +668,12 @@ async function aiAnswer(m, tg, me) {
   aiLast.set(who, Date.now()); win.push(Date.now()); aiWindow.set(chatId, win);
   tg("sendChatAction", { chat_id: chatId, action: "typing" }).catch(() => {});
   const name = String(m.from?.first_name || m.from?.username || "someone").slice(0, 32);
-  const text = String(m.text || m.caption || "").replace(new RegExp("@" + (me?.username || "\\u0000"), "ig"), "").trim().slice(0, 800);
+  // the whole message (Telegram allows 4,096 characters): it was cut at 800, and the assistant then told Xivor70 (26 Nov 2026)
+  // that his long, complete idea "got cut off". Anything past 3,500 is marked as trimmed by Troya, never blamed on the sender.
+  const full = String(m.text || m.caption || "").replace(new RegExp("@" + (me?.username || "\\u0000"), "ig"), "").trim();
+  const text = full.length > 3500 ? `${full.slice(0, 3500)} [the rest of this long message was trimmed by Troya, not by the sender]` : full;
   const repliedText = m.reply_to_message?.text || m.reply_to_message?.caption || "";   // announcements are photos with a caption
-  const quoted = repliedText ? `(replying to: "${String(repliedText).slice(0, 300)}")\n` : "";
+  const quoted = repliedText ? `(replying to: "${String(repliedText).slice(0, 900)}")\n` : "";
   const mem = chatMemory.get(chatId) || [];
   const links = await linkNotes(`${text} ${repliedText}`).catch(() => "");
   // the member's voice (/persona): their own pick, else the group's default; the default voice adds nothing

@@ -231,7 +231,15 @@
     // longer words than English in the site header's text links: tighter pills (English keeps its own look)
     "html.i18n .bb-soc a.bb-com{padding:0 10px;letter-spacing:.04em;margin-right:2px}" +
     // and where they still do not fit, they wait in the menu (where they already are)
-    "@media (max-width:1180px){html.i18n .bb-soc a.bb-com{display:none}}@media (max-width:1279px){html.i18n[lang=ru] .bb-soc a.bb-com{display:none}}";
+    "@media (max-width:1180px){html.i18n .bb-soc a.bb-com{display:none}}@media (max-width:1279px){html.i18n[lang=ru] .bb-soc a.bb-com{display:none}}" +
+    // the home hero in Chinese, Japanese and Korean: each half of the title stays on one line (as in English) and the type
+    // shrinks until the longer half fits the screen; --n is that half's length in em. Pill buttons never wrap.
+    "html.i18n .hero-pills b{white-space:nowrap}" +
+    ":is(html[lang=ja],html[lang=zh-Hans],html[lang=ko]) .mega{letter-spacing:-.01em;line-height:1}" +
+    ":is(html[lang=ja],html[lang=zh-Hans],html[lang=ko]) .mega :is(.l1,.l2>span){white-space:nowrap}" +
+    "html[lang=ja] .mega{--n:11}html[lang=ko] .mega{--n:8.6}html[lang=zh-Hans] .mega{--n:6.5}" +
+    ":is(html[lang=ja],html[lang=zh-Hans],html[lang=ko]) .mega{font-size:min(clamp(42px,6.4vw,112px),calc((100vw - 40px)/var(--n)))}" +
+    "@media (max-width:640px){:is(html[lang=ja],html[lang=zh-Hans],html[lang=ko]) .mega{font-size:min(40px,9.4vw,calc((100vw - 40px)/var(--n)))}}";
   var GLOBE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>';
   function setLang(l) {
     l = norm(l) || "en";

@@ -5,7 +5,7 @@ TROYA_I18N_ADD({"the gift is not<1/>the danger":"선물이<1/>위험은 아니�
 "nothing moves<1/>until you sign":"서명하기 전에는<1/>아무것도 움직이지 않는다",
 "the night watch<1/>never sleeps":"야간 경계는<1/>잠들지 않는다",
 "you keep<1/>the keys":"키는<1/>당신이 보관한다",
-"<1>Your agent,</1> <2><3>Inside the</3><4/><5>walls</5></2> <6>Troya</6>":"<1>당신의 에이전트,</1> <6>Troya</6>의 <2><3>성벽</3><4/><5>안에서</5></2>",
+"<1>Your agent,</1> <2><3>Inside the</3><4/><5>walls</5></2> <6>Troya</6>":"<1>당신의 에이전트,</1> <2><3>성벽</3><4/><5>안에서</5></2> <6>Troya</6>",
 "<1/><2>Trade Anthropic<3>ANT perp · bridge in from Robinhood Chain</3></2><4>Trade</4>":"<1/><2>Anthropic 거래<3>ANT 무기한 선물 · Robinhood Chain에서 브리지로 이동</3></2><4>거래</4>",
 "<1/><2>V8 Agamemnon live · V9 Achilles next</2><3>Roadmap</3>":"<1/><2>V8 Agamemnon 운영 중 · 다음은 V9 Achilles</2><3>로드맵</3>",
 "<1/><2>Free gas for holders</2><3>See the rules</3>":"<1/><2>홀더를 위한 가스비 무료</2><3>규칙 보기</3>",

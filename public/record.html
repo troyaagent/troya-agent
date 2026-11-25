@@ -62,6 +62,23 @@
     <div class="rec-stats" data-rec-stats></div>
   </section>
 
+  <section class="ip" id="two-fates" aria-labelledby="tf-h">
+    <div class="eyebrow-line"><span>00b / Passed vs blocked</span></div>
+    <div class="split" style="margin-bottom:28px">
+      <h2 id="tf-h" class="h2 words" data-words>Two fates</h2>
+      <p class="lead rv">The score above grades the coins Sentry posts. This compares every launch the Gate let through with every launch it blocked for a safety reason, priced on the same clock, with the same definition of "went to zero". Both columns stay up whatever they say. A community idea from Xivor.</p>
+    </div>
+    <div data-fates><p class="rec-empty">Loading…</p></div>
+    <style>
+      .fx-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .fx-col .fx-r { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid rgba(216,247,255,.08); font-size: 14px; }
+      .fx-col .fx-r b { font-weight: 600; text-align: right; }
+      .fx-col .fx-r small { opacity: .7; font-weight: 400; }
+      .fx-wait { margin: 0 0 18px; }
+      @media (max-width: 720px) { .fx-cols { grid-template-columns: 1fr; } }
+    </style>
+  </section>
+
   <section class="ip" aria-labelledby="ls-h">
     <div class="eyebrow-line"><span>01 / Every call</span></div>
     <div class="split" style="margin-bottom:28px">
@@ -110,5 +127,6 @@
 <script src="/js/buybar.js" defer></script>
 <script src="/home/rain.js" defer></script>
 <script src="/home/record.js" defer></script>
+<script src="/home/fates.js" defer></script>
 </body>
 </html>

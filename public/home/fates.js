@@ -1,0 +1,48 @@
+// The Record page, V9 F52 Two Fates part 1: passed vs blocked launches, graded on the same clock (/api/fates).
+// Plain DOM. Both columns are shown whatever they say, as promised in the group (Xivor's spec, 25 Nov 2026).
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const box = $("[data-fates]");
+  if (!box) return;
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const pct = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${Math.abs(x) >= 1000 ? Math.round(x).toLocaleString("en-US") : x.toFixed(1)}%`);
+  const share = (x) => (x == null ? "–" : `${Math.round(x * 100)}%`);
+  const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? `${m}m ago` : m < 1440 ? `${Math.floor(m / 60)}h ago` : `${Math.floor(m / 1440)}d ago`; };
+  const short = (a) => a.slice(0, 6) + "…" + a.slice(-4);
+  const RES = { up: '<b class="rec-win">Up</b>', down: '<b class="rec-miss">Down</b>', zero: '<b class="rec-miss">Went to zero</b>', "not-sellable": '<b class="rec-miss">Not sellable</b>' };
+
+  function col(name, s, note) {
+    const row = (k, v) => `<div class="fx-r"><span>${k}</span><b>${v}</b></div>`;
+    return `<div class="rec-tile fx-col"><span>${name}</span>
+      ${row("Checked", s.checked.toLocaleString("en-US"))}
+      ${row("Graded at 24 h", `${s.graded.toLocaleString("en-US")}${s.watching ? ` <small>(${s.watching} watching)</small>` : ""}`)}
+      ${row("Median at 24 h", s.graded ? pct(s.median24h) : "–")}
+      ${row("Went to zero", s.graded ? `${s.wentToZero}${s.notSellable ? ` + ${s.notSellable} not sellable` : ""} <small>(${share(s.zeroShare)})</small>` : "–")}
+      ${row("Higher after a day", s.graded ? `${s.up24h} of ${s.graded}` : "–")}
+      <small>${note}</small></div>`;
+  }
+
+  async function load() {
+    let d;
+    try { d = await fetch("/api/fates?limit=60").then((r) => r.json()); } catch { box.innerHTML = '<p class="rec-empty">Could not load the two lists right now.</p>'; return; }
+    const first = d.since ? new Date(d.since + 86400e3).toISOString().slice(0, 16).replace("T", " ") + " UTC" : "";
+    const graded = d.passed.graded + d.blocked.graded;
+    box.innerHTML = `
+      ${graded ? "" : `<p class="lead fx-wait">Collecting since ${esc(new Date(d.since).toISOString().slice(0, 10))}. The first coins are graded 24 hours after their check${first ? `, from about ${esc(first)}` : ""}.</p>`}
+      <div class="rec-stats fx-cols">
+        ${col("Passed the Gate", d.passed, "passed, or passed with notes")}
+        ${col("Blocked by the Gate", d.blocked, "blocked for a safety reason; route-only blocks left out")}
+      </div>
+      <div class="rec-wrap"><table class="rec-tbl rec-calls"><thead><tr><th>Coin</th><th>List</th><th>Checked</th><th>1 h</th><th>24 h</th><th>Result</th></tr></thead><tbody>
+      ${(d.recent || []).filter((c) => c.status !== "no-price").slice(0, 40).map((c) => `<tr>
+        <td><a class="rec-coin" href="/agent#/gate/${esc(c.token)}">${c.symbol ? "$" + esc(c.symbol) : short(c.token)}</a>${c.reason ? `<small title="${esc(c.reason)}">${esc(c.reason.split(":")[0])}</small>` : ""}</td>
+        <td>${c.cohort === "passed" ? "Passed" : "Blocked"}</td><td>${ago(c.at)}</td>
+        <td>${c.change1h == null ? '<span class="rec-na">–</span>' : pct(c.change1h)}</td>
+        <td>${c.change24h == null ? '<span class="rec-na">–</span>' : pct(c.change24h)}</td>
+        <td>${c.result ? RES[c.result] || esc(c.result) : c.notSellable ? '<span class="rec-watch">Watching · could not be sold</span>' : '<span class="rec-watch">Watching</span>'}</td></tr>`).join("") || '<tr><td colspan="6" class="rec-empty">No launches checked yet.</td></tr>'}
+      </tbody></table></div>
+      <p class="rec-note">${esc(d.rules)} Raw data: <a class="ulink" href="/api/fates?limit=500" target="_blank" rel="noopener">JSON</a>.</p>`;
+  }
+  load();
+  setInterval(() => { if (document.visibilityState === "visible") load(); }, 120_000);
+})();

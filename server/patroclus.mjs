@@ -92,7 +92,7 @@ export async function register(r) {
       const data = await read(m[1]);
       res.writeHead(200, {
         "content-type": "image/svg+xml; charset=utf-8",
-        "cache-control": data ? "public, max-age=300" : "public, max-age=20",
+        "cache-control": data && !data.partial ? "public, max-age=300" : "public, max-age=30",   // a partial read (a source still reading) is re-asked soon
         "x-content-type-options": "nosniff",
         "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
         "access-control-allow-origin": "*",

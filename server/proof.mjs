@@ -19,6 +19,8 @@ import { getAddress } from "ethers";
 import { hlInfo } from "./hl.mjs";
 import { setFragment, setValue, fragments } from "./livehtml.mjs";
 import { gateHtml, evidenceOf, replayCall, esc } from "../public/home/gate-evidence.js";
+// the bots' own reminder ("use the FEATURE GLOSSARY … never details from memory") is for them, not for the /proof reader
+const publicSays = (t) => String(t || "").replace(/;\s*for where it is and how it works use the FEATURE GLOSSARY[^;]*?never details from memory/g, "").trim();
 
 export const TEST_WALLET = "0x12a05719851c8375342DE65c9105329c81f57054";
 const SITE = (process.env.SITE_URL || "https://troya.codes").replace(/\/$/, "");
@@ -469,7 +471,7 @@ export async function claimsView() {
   add("x402", process.env.X402_ENABLED === "1" ? "Troya Gate over x402: $0.05 USDC per signed check on Base (also Arbitrum, Polygon, and USDG on Robinhood Chain)." : "Troya Gate over x402 is not switched on on this server.", st(process.env.X402_ENABLED === "1"), [ev.api("/api/gate/x402"), ev.api("/.well-known/x402")]);
   add("snap", "The Troya Gate Snap is on npm and runs in MetaMask Flask; regular MetaMask needs MetaMask's allowlist review, which is pending.", "planned", [ev.api("https://registry.npmjs.org/@troyaagent/snap", "npm: @troyaagent/snap"), ev.page(`${SITE}/snap`)], { note: "planned: in every MetaMask after the allowlist review" });
   // staking and the activity feed have their own claims above, read from the chain and from the server's switches
-  for (const w of work) if (!["stake", "activity"].includes(w.key) && !claims.some((x) => x.id === w.key)) add(`work-${w.key}`, `${w.name}: ${w.says}`, w.status === "building" ? "planned" : "live", [], { from: "the WORK IN PROGRESS list the bots and the assistant answer from (server/botfacts.mjs)" });
+  for (const w of work) if (!["stake", "activity"].includes(w.key) && !claims.some((x) => x.id === w.key)) add(`work-${w.key}`, `${w.name}: ${publicSays(w.says)}`, w.status === "building" ? "planned" : "live", [], { from: "the WORK IN PROGRESS list the bots and the assistant answer from (server/botfacts.mjs)" });
   add("no-audit", "There is no third-party security audit of Troya. The Agent Wallet is custodial by design: the operator stores its key encrypted, so keep it small.", "live", [ev.page(`${SITE}/verify#no-h`)]);
   const v = {
     name: "Troya Agent proof", site: `${SITE}/proof`, version: 2, generated: new Date(now).toISOString(),

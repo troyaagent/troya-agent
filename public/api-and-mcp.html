@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Troya Agent | API and MCP</title>
-<meta name="description" content="Connect Troya to Claude Desktop, Cursor or Claude Code with one MCP command, or call the REST API from your own code. Same tools, same limits, same journal.">
+<meta name="description" content="Connect Troya to Claude Desktop, Cursor or Claude Code with one MCP command, or call the REST API from your own code. Same tools, the same caps and the same journal as the app; the free Gate allowance and the price are listed on the page.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Troya Agent">
 <meta property="og:title" content="Troya Agent | API and MCP">
@@ -71,9 +71,9 @@
   <span class="s">"mcpServers"</span>: {
     <span class="s">"troya"</span>: {
       <span class="s">"command"</span>: <span class="s">"npx"</span>,
-      <span class="s">"args"</span>: [<span class="s">"-y"</span>, <span class="s">"{{pkg}}"</span>],
+      <span class="s">"args"</span>: [<span class="s">"-y"</span>, <span class="s">"@troyaagent/mcp"</span>],
       <span class="s">"env"</span>: {
-        <span class="s">"TROYA_BASE_URL"</span>: <span class="s">"{{base}}"</span>,
+        <span class="s">"TROYA_BASE_URL"</span>: <span class="s">"https://troya.codes/agent/api"</span>,
         <span class="s">"TROYA_API_KEY"</span>: <span class="s">""</span>
       }
     }
@@ -86,8 +86,8 @@
   <span class="s">"mcpServers"</span>: {
     <span class="s">"troya"</span>: {
       <span class="s">"command"</span>: <span class="s">"npx"</span>,
-      <span class="s">"args"</span>: [<span class="s">"-y"</span>, <span class="s">"{{pkg}}"</span>],
-      <span class="s">"env"</span>: { <span class="s">"TROYA_BASE_URL"</span>: <span class="s">"{{base}}"</span> }
+      <span class="s">"args"</span>: [<span class="s">"-y"</span>, <span class="s">"@troyaagent/mcp"</span>],
+      <span class="s">"env"</span>: { <span class="s">"TROYA_BASE_URL"</span>: <span class="s">"https://troya.codes/agent/api"</span> }
     }
   }
 }</pre>
@@ -96,10 +96,10 @@
     <div class="code rv">
       <div class="code-h">Claude Code · terminal<button type="button" data-copy-block>COPY</button></div>
       <pre data-tpl><span class="c"># read tools only</span>
-claude mcp add troya -e TROYA_BASE_URL={{base}} -- npx -y {{pkg}}
+claude mcp add troya -e TROYA_BASE_URL=https://troya.codes/agent/api -- npx -y @troyaagent/mcp
 
 <span class="c"># with Agent Wallet tools (create the token in the app: Agent → Wallet → API tokens)</span>
-claude mcp add troya -e TROYA_BASE_URL={{base}} -e TROYA_API_KEY=&lt;your-token&gt; -- npx -y {{pkg}}
+claude mcp add troya -e TROYA_BASE_URL=https://troya.codes/agent/api -e TROYA_API_KEY=&lt;your-token&gt; -- npx -y @troyaagent/mcp
 
 <span class="c"># live orders: also pass -e TROYA_LIVE=1, after switching dry-run off for that token in the app</span></pre>
     </div>
@@ -125,27 +125,27 @@ claude mcp add troya -e TROYA_BASE_URL={{base}} -e TROYA_API_KEY=&lt;your-token&
       <div class="code rv">
         <div class="code-h">Connect · remote MCP<button type="button" data-copy-block>COPY</button></div>
         <pre data-tpl><span class="c"># Claude Code</span>
-claude mcp add --transport http troya {{origin}}/mcp
+claude mcp add --transport http troya https://troya.codes/mcp
 
 <span class="c"># clients that take a URL in their JSON config</span>
-{ <span class="s">"mcpServers"</span>: { <span class="s">"troya"</span>: { <span class="s">"type"</span>: <span class="s">"http"</span>, <span class="s">"url"</span>: <span class="s">"{{origin}}/mcp"</span> } } }
+{ <span class="s">"mcpServers"</span>: { <span class="s">"troya"</span>: { <span class="s">"type"</span>: <span class="s">"http"</span>, <span class="s">"url"</span>: <span class="s">"https://troya.codes/mcp"</span> } } }
 
 <span class="c"># clients that only run local commands</span>
-npx -y mcp-remote {{origin}}/mcp</pre>
+npx -y mcp-remote https://troya.codes/mcp</pre>
       </div>
       <div class="code rv">
         <div class="code-h">Ask · curl<button type="button" data-copy-block>COPY</button></div>
         <pre data-tpl><span class="c"># a coin after launch: rings, herds, fast selling</span>
-curl -s {{origin}}/api/watchfire/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074
+curl -s https://troya.codes/api/watchfire/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074
 
 <span class="c"># is its revenue real</span>
-curl -s {{origin}}/api/tribute/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074
+curl -s https://troya.codes/api/tribute/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074
 
 <span class="c"># another agent, before you trust its calls (add ?agentId= for its ERC-8004 id)</span>
-curl -s {{origin}}/api/allies/&lt;wallet&gt;
+curl -s https://troya.codes/api/allies/&lt;wallet&gt;
 
 <span class="c"># the same over MCP</span>
-curl -s {{origin}}/mcp -H <span class="s">"content-type: application/json"</span> \
+curl -s https://troya.codes/mcp -H <span class="s">"content-type: application/json"</span> \
   -d <span class="s">'{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</span></pre>
       </div>
     </div>
@@ -199,13 +199,13 @@ troya execute &lt;confirmationId&gt; --live</pre>
         <div class="code-h">Check a coin · curl<button type="button" data-copy-block>COPY</button></div>
         <pre data-tpl><span class="c"># with an API token (Agent → Wallet → API tokens)</span>
 curl -s -H <span class="s">"x-api-key: $TROYA_API_KEY"</span> \
-  <span class="s">"{{origin}}/api/gate/v1/check/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074?amountEth=0.05"</span>
+  <span class="s">"https://troya.codes/api/gate/v1/check/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074?amountEth=0.05"</span>
 
 <span class="c"># credit and free checks left for a wallet</span>
-curl -s {{origin}}/api/gate/v1/credits/&lt;wallet&gt;
+curl -s https://troya.codes/api/gate/v1/credits/&lt;wallet&gt;
 
 <span class="c"># paid just now? credit it at once</span>
-curl -s -X POST {{origin}}/api/gate/v1/credits/claim \
+curl -s -X POST https://troya.codes/api/gate/v1/credits/claim \
   -H <span class="s">"content-type: application/json"</span> -d <span class="s">'{"txHash":"0x…"}'</span></pre>
       </div>
       <div class="code rv">
@@ -217,7 +217,7 @@ const token = "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074";
 const time = String(Date.now());
 const sig = await w.signMessage(
   `Troya Gate v1\naddress: ${w.address.toLowerCase()}\ntoken: ${token.toLowerCase()}\ntime: ${time}`);
-const r = await fetch(`{{origin}}/api/gate/v1/check/${token}?amountEth=0.05`, {
+const r = await fetch(`https://troya.codes/api/gate/v1/check/${token}?amountEth=0.05`, {
   headers: { "x-troya-address": w.address, "x-troya-timestamp": time, "x-troya-signature": sig } });
 const g = await r.json();            <span class="c">// 402 → g.payment says what to send, where</span>
 
@@ -242,7 +242,7 @@ const ok = verifyMessage(`Troya Gate result\n${g.hash}`, g.signature) === g.atte
         <div class="code-h">Pay per call with x402 · Node<button type="button" data-copy-block>COPY</button></div>
         <pre data-tpl><span class="c">// npm i ethers · a wallet with a little USDC on Base, Arbitrum or Polygon</span>
 import { Wallet, hexlify, randomBytes } from "ethers";
-const url = "{{origin}}/api/gate/x402/check?token=0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074";
+const url = "https://troya.codes/api/gate/x402/check?token=0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074";
 const r1 = await fetch(url);                                   <span class="c">// 402</span>
 const pr = JSON.parse(atob(r1.headers.get("payment-required")));
 const req = pr.accepts[0];                                     <span class="c">// or pick Arbitrum / Polygon</span>
@@ -288,17 +288,17 @@ await me.createJobByOfferingName(base.id, "troyaGateCheck",
       <div class="code rv">
         <div class="code-h">Register and file · curl<button type="button" data-copy-block>COPY</button></div>
         <pre data-tpl><span class="c"># with an API token (Agent → Wallet → API tokens)</span>
-curl -s -X POST {{origin}}/api/registry/agents \
+curl -s -X POST https://troya.codes/api/registry/agents \
   -H <span class="s">"x-api-key: $TROYA_API_KEY"</span> -H <span class="s">"content-type: application/json"</span> \
   -d <span class="s">'{"name":"Night Owl","bio":"buys quiet curves"}'</span>
 
-curl -s -X POST {{origin}}/api/registry/calls \
+curl -s -X POST https://troya.codes/api/registry/calls \
   -H <span class="s">"x-api-key: $TROYA_API_KEY"</span> -H <span class="s">"content-type: application/json"</span> \
   -d <span class="s">'{"agent":"night-owl","token":"0x…","side":"up","horizonHours":24,"note":"why"}'</span>
 
 <span class="c"># the ranked agents, one agent, a call checked</span>
-curl -s {{origin}}/api/registry
-curl -s {{origin}}/api/registry/agents/night-owl</pre>
+curl -s https://troya.codes/api/registry
+curl -s https://troya.codes/api/registry/agents/night-owl</pre>
       </div>
       <div class="code rv">
         <div class="code-h">No account: sign with the agent's wallet · Node<button type="button" data-copy-block>COPY</button></div>
@@ -308,7 +308,7 @@ const body = { agent: "night-owl", token: "0x…", side: "down", horizonHours: 6
 const time = String(Date.now());
 const sig = await w.signMessage(`Troya registry v1\naddress: ${w.address.toLowerCase()}` +
   `\nbody: ${keccak256(toUtf8Bytes(JSON.stringify(body)))}\ntime: ${time}`);
-const r = await fetch("{{origin}}/api/registry/calls", { method: "POST",
+const r = await fetch("https://troya.codes/api/registry/calls", { method: "POST",
   headers: { "content-type": "application/json", "x-troya-address": w.address,
     "x-troya-timestamp": time, "x-troya-signature": sig },
   body: JSON.stringify(body) });   <span class="c">// the signed call comes back</span></pre>
@@ -332,10 +332,10 @@ const r = await fetch("{{origin}}/api/registry/calls", { method: "POST",
     <div class="code rv">
       <div class="code-h">Claude Code · terminal<button type="button" data-copy-block>COPY</button></div>
       <pre data-tpl><span class="c"># the rail, guarding Robinhood's agentic trading MCP</span>
-claude mcp add robinhood-rail -e TROYA_API_KEY=&lt;your-token&gt; -- npx -y {{origin}}/rail/troyaagent-rail-0.1.0.tgz
+claude mcp add robinhood-rail -e TROYA_API_KEY=&lt;your-token&gt; -- npx -y https://troya.codes/rail/troyaagent-rail-0.1.0.tgz
 
 <span class="c"># any other MCP server: put its command after --</span>
-npx -y {{origin}}/rail/troyaagent-rail-0.1.0.tgz -- npx -y mcp-remote https://agent.robinhood.com/mcp/trading</pre>
+npx -y https://troya.codes/rail/troyaagent-rail-0.1.0.tgz -- npx -y mcp-remote https://agent.robinhood.com/mcp/trading</pre>
     </div>
     <p class="rec-note rv">Always refused: moving money in or out, tools the rail does not recognise, and orders it cannot size in dollars (no amount, no limit price, no known price). If Troya cannot be reached, the rail refuses anything that is not a read. Robinhood's agentic trading is in beta and needs access on your Robinhood account; the rail was tested end to end against a stand-in trading MCP with the same shape. Source: <a class="ulink" href="https://github.com/troyaagent/troya-agent/tree/main/rail" target="_blank" rel="noopener">GitHub</a>.</p>
   </section>
@@ -372,24 +372,24 @@ npx -y {{origin}}/rail/troyaagent-rail-0.1.0.tgz -- npx -y mcp-remote https://ag
     <div class="code-grid" style="margin-top:32px">
       <div class="code rv">
         <div class="code-h">Read · top Robinhood Chain tokens by volume<button type="button" data-copy-block>COPY</button></div>
-        <pre data-tpl>curl -s <span class="s">"{{base}}/market/robinhood?sort=volume&amp;limit=10"</span></pre>
+        <pre data-tpl>curl -s <span class="s">"https://troya.codes/agent/api/market/robinhood?sort=volume&amp;limit=10"</span></pre>
       </div>
       <div class="code rv">
         <div class="code-h">Read · Hyperliquid markets<button type="button" data-copy-block>COPY</button></div>
-        <pre data-tpl>curl -s <span class="s">"{{base}}/market/hl"</span></pre>
+        <pre data-tpl>curl -s <span class="s">"https://troya.codes/agent/api/market/hl"</span></pre>
       </div>
     </div>
     <div class="code rv">
       <div class="code-h">Execute · prepare, then execute with the confirmationId<button type="button" data-copy-block>COPY</button></div>
       <pre data-tpl><span class="c"># 1) prepare: Troya Gate runs, you get a one-time confirmationId (valid 120 s)</span>
-curl -s -X POST <span class="s">"{{base}}/tools/prepare_order"</span> \
+curl -s -X POST <span class="s">"https://troya.codes/agent/api/tools/prepare_order"</span> \
   -H <span class="s">"content-type: application/json"</span> \
   -H <span class="s">"x-api-key: $TROYA_API_KEY"</span> \
   -H <span class="s">"Idempotency-Key: $(uuidgen)"</span> \
   -d <span class="s">'{"kind":"perp","coin":"BTC","side":"long","sizeUsd":50,"leverage":3}'</span>
 
 <span class="c"># 2) execute: only the confirmationId is accepted; dry-run unless you turned it off</span>
-curl -s -X POST <span class="s">"{{base}}/tools/execute_intent"</span> \
+curl -s -X POST <span class="s">"https://troya.codes/agent/api/tools/execute_intent"</span> \
   -H <span class="s">"content-type: application/json"</span> \
   -H <span class="s">"x-api-key: $TROYA_API_KEY"</span> \
   -H <span class="s">"Idempotency-Key: $(uuidgen)"</span> \
@@ -424,7 +424,7 @@ curl -s -X POST <span class="s">"{{base}}/tools/execute_intent"</span> \
 <script type="module">
 const pkg = (window.SITE && window.SITE.mcpPackage) || "@troyaagent/mcp";
 const base = location.origin + "/agent/api";
-document.querySelectorAll("[data-tpl]").forEach((el) => { el.innerHTML = el.innerHTML.replaceAll("{{pkg}}", pkg).replaceAll("{{base}}", base).replaceAll("{{origin}}", location.origin); });
+document.querySelectorAll("[data-tpl]").forEach((el) => { el.innerHTML = el.innerHTML.replaceAll("@troyaagent/mcp", pkg).replaceAll("https://troya.codes/agent/api", base).replaceAll("https://troya.codes", location.origin); });
 fetch("/api/gate/v1").then((r) => r.json()).then((g) => {
   const set = (sel, v) => document.querySelectorAll(sel).forEach((el) => { el.textContent = v; });
   set("[data-gapi-price]", g.price.amount); set("[data-gapi-free]", g.freeTier.perWalletPerDay); set("[data-gapi-holder]", g.freeTier.perHolderPerDay);

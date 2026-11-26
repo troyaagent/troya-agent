@@ -20,10 +20,15 @@ const ADDR = m ? m[1] : null;
 const coinBox = $("[data-ck-coin]");
 
 /* ---------- the dashboard ---------- */
+const icon = (r, cls = "ck-ico") => {
+  const letters = esc(String(r.symbol || r.address || "?").replace(/^\$/, "").slice(0, 2).toUpperCase());
+  const q = r.kind === "stock" ? "" : "";
+  return `<span class="${cls}" aria-hidden="true"><i>${letters}</i><img src="/api/icon/token/${esc(r.address)}${q}" alt="" loading="lazy" onload="this.parentNode.classList.add('ok')" onerror="this.remove()"></span>`;
+};
 const row = (r, extra = "") => {
   const name = r.symbol ? `$${esc(r.symbol)}` : short(r.address);
   const badge = r.score != null ? r.score : r.kind === "stock" ? "Stock" : r.kind === "major" ? "Major" : "–";
-  return `<li class="ck-row"><a href="/check/${esc(r.address)}"><b>${name}</b><small>${esc(r.label || "")}${r.reason ? ` · ${esc(r.reason)}` : ""}</small><small>${short(r.address)} · ${ago(r.at)}${extra}</small></a><span class="ck-badge" style="--c:${tone(r.tone)}">${esc(badge)}</span></li>`;
+  return `<li class="ck-row">${icon(r)}<a href="/check/${esc(r.address)}"><b>${name}</b><small>${esc(r.label || "")}${r.reason ? ` · ${esc(r.reason)}` : ""}</small><small>${short(r.address)} · ${ago(r.at)}${extra}</small></a><span class="ck-badge" style="--c:${tone(r.tone)}">${esc(badge)}</span></li>`;
 };
 async function loadDash() {
   let d; try { d = await (await fetch("/api/check")).json(); } catch { return; }
@@ -84,7 +89,7 @@ function showCoin(r) {
   coinBox.innerHTML = `
   <div class="ck-card" style="--tone:${tone(r.tone)}">
     <div>
-      <p class="ck-sym">${esc(name)}</p>
+      <p class="ck-sym">${icon(r, "ck-ico lg")}${esc(name)}</p>
       ${r.name && r.name !== r.symbol ? `<p class="ck-name">${esc(r.name)}</p>` : ""}
       <p class="ck-addr"><code>${esc(r.address)}</code><button class="ck-mini" type="button" data-copy="${esc(r.address)}">Copy</button></p>
       <ul class="ck-reasons">${reasons}</ul>

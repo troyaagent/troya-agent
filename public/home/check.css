@@ -65,7 +65,7 @@
 .ck-board h3, .ck-sub { margin: 0 0 14px; font: 500 11px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
 .ck-sub { margin: 44px 0 14px; }
 .ck-board ol, .ck-recent { list-style: none; margin: 0; padding: 0; }
-.ck-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.ck-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 10px 0; border-top: 1px solid var(--line); }
 .ck-row:first-child { border-top: 0; }
 .ck-row a { min-width: 0; color: var(--fg); }
 .ck-row a b { font-weight: 600; overflow-wrap: anywhere; }
@@ -121,3 +121,13 @@
   .ck-ring { width: 200px; }
   .ck-rec-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* token logo in a rounded square (dashboard rows and the coin header) */
+.ck-ico { position: relative; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; overflow: hidden; background: color-mix(in srgb, var(--fg) 8%, transparent); border: 1px solid var(--line); flex: none; }
+.ck-ico i { font: 600 13px/1 var(--mono); font-style: normal; color: var(--muted); letter-spacing: .02em; }
+.ck-ico img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .2s; }
+.ck-ico.ok img { opacity: 1; }
+.ck-ico.ok i { visibility: hidden; }
+.ck-ico.lg { width: 48px; height: 48px; border-radius: 14px; margin-right: 14px; vertical-align: middle; }
+.ck-sym { display: flex; align-items: center; }
+@media (max-width: 460px) { .ck-row { grid-template-columns: 34px minmax(0, 1fr) auto; } .ck-row .ck-ico { width: 34px; height: 34px; border-radius: 10px; } .ck-ico.lg { width: 40px; height: 40px; margin-right: 10px; } }

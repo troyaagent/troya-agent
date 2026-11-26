@@ -9,7 +9,7 @@
 // Env (acp.env on the server, never committed; values from the agent's page on app.virtuals.io):
 //   ACP_WALLET_ADDRESS   the agent wallet address            ACP_WALLET_ID      the wallet id (Signers tab)
 //   ACP_SIGNER_KEY       the signer private key (Signers tab → Add Signer → Copy Key)
-//   ACP_BUILDER_CODE     optional, bc-… from the Settings tab  ACP_PRICE_USDC     default 0.01
+//   ACP_BUILDER_CODE     optional, bc-… from the Settings tab  ACP_PRICE_USDC     default 0.05
 //   GATE_INTERNAL_KEY    the same value as in the server's .env  TROYA_URL        default http://127.0.0.1:9270
 import { AcpAgent, PrivyAlchemyEvmProviderAdapter, AssetToken, robinhood } from "@virtuals-protocol/acp-node-v2";
 import { base } from "@account-kit/infra";
@@ -18,7 +18,7 @@ const env = process.env;
 for (const k of ["ACP_WALLET_ADDRESS", "ACP_WALLET_ID", "ACP_SIGNER_KEY", "GATE_INTERNAL_KEY"])
   if (!env[k]) { console.error(`[acp] ${k} is not set; see acp/README.md`); process.exit(1); }
 const TROYA = String(env.TROYA_URL || "http://127.0.0.1:9270").replace(/\/+$/, "");
-const PRICE = Math.max(0.01, Number(env.ACP_PRICE_USDC || 0.01));
+const PRICE = Math.max(0.01, Number(env.ACP_PRICE_USDC || 0.05));
 const ADDR = /0x[0-9a-fA-F]{40}/;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

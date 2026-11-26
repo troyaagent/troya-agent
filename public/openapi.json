@@ -3,7 +3,7 @@
   "info": {
     "title": "Troya Gate",
     "version": "1.0.0",
-    "description": "A fresh, signed pre-trade safety check for any token on Robinhood Chain (chain 4663), run at your trade size: can it be bought and sold, the real taxes, price impact, honeypot and liquidity tests, plus dev and holder flags. Every result is signed by the Troya attestor so any agent can verify it. Pay per call over x402: $0.01 in USDC on Base, Arbitrum or Polygon, or USDG on Robinhood Chain. No account, no API key. Charged only after the check runs.",
+    "description": "A fresh, signed pre-trade safety check for any token on Robinhood Chain (chain 4663), run at your trade size: can it be bought and sold, the real taxes, price impact, honeypot and liquidity tests, plus dev and holder flags. Every result is signed by the Troya attestor so any agent can verify it. Pay per call over x402: $0.05 in USDC on Base, Arbitrum or Polygon, or USDG on Robinhood Chain. No account, no API key. Charged only after the check runs.",
     "contact": { "url": "https://troya.codes/api-and-mcp#x402" }
   },
   "servers": [{ "url": "https://troya.codes" }],

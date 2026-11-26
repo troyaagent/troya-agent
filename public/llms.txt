@@ -22,7 +22,7 @@ Every answer is a reading of the chain at that moment, not advice. Token names, 
 
 - [Troya Gate check](https://troya.codes/api/gate/v1/check/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074?amountEth=0.01): GET /api/gate/v1/check/<token>?amountEth=; verdict passed, caution, failed or untested, signed by the attestor; free checks each day, then 0.01 USDG credit
 - [Gate API terms](https://troya.codes/api/gate/v1): price, free tiers, pay-to address and attestor
-- [Troya Gate over x402](https://troya.codes/api/gate/x402): GET /api/gate/x402/check?token= answers 402; $0.01 in USDC on Base, Arbitrum or Polygon, or USDG on Robinhood Chain; no account
+- [Troya Gate over x402](https://troya.codes/api/gate/x402): GET /api/gate/x402/check?token= answers 402; $0.05 in USDC on Base, Arbitrum or Polygon, or USDG on Robinhood Chain; no account
 - [Watchfire](https://troya.codes/api/watchfire): GET /api/watchfire/<token>; level clear, amber, red or fire, with reasons and top holders
 - [Tribute](https://troya.codes/api-and-mcp#agents): GET /api/tribute/<token>; verdict, reasons and checks on where a coin's income comes from
 - [Ring Radar](https://troya.codes/api/ring): GET /api/ring/<token>; verdict clear, amber or red on a Pons launch

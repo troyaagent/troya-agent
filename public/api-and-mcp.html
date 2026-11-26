@@ -229,7 +229,7 @@ const ok = verifyMessage(`Troya Gate result\n${g.hash}`, g.signature) === g.atte
 
     <div id="x402" class="split" style="margin:64px 0 32px">
       <h3 class="h2 words" data-words style="font-size:clamp(26px,3.2vw,40px)">No account at all: x402 and Virtuals</h3>
-      <p class="lead rv">The same signed check, sold to any agent without an API key or a deposit. Over x402 the agent pays $0.01 in USDC per call on Base, Arbitrum or Polygon. On Virtuals ACP it hires the agent "Troya Gate" and pays through ACP's escrow, in USDC on Base or USDG on Robinhood Chain. Both were tested with real money on 19 Nov 2026 (receipts on <a class="link" href="/verify#x402">/verify</a>).</p>
+      <p class="lead rv">The same signed check, sold to any agent without an API key or a deposit. Over x402 the agent pays $0.05 in USDC per call on Base, Arbitrum or Polygon. On Virtuals ACP it hires the agent "Troya Gate" and pays through ACP's escrow, in USDC on Base or USDG on Robinhood Chain. Both were tested with real money on 19 Nov 2026 (receipts on <a class="link" href="/verify#x402">/verify</a>).</p>
     </div>
     <div class="steps four" style="margin-bottom:40px">
       <article class="step rv"><span class="n">01 · x402</span><h3>402, sign, done</h3><p><code class="mono">GET /api/gate/x402/<wbr>check?token=0x…</code> answers 402 with a <code class="mono">PAYMENT-REQUIRED</code> header. Sign the USDC transfer it names (EIP-3009), send it back as <code class="mono">PAYMENT-SIGNATURE</code>, get the result.</p></article>

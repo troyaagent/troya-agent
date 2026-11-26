@@ -58,8 +58,8 @@ curl -s "https://troya.codes/api/gate/v1/check/0x1FA81ddaAAc83240803B3F2d20595E4
 Paying for checks:
 
 - Without anything, an IP gets a few free checks a day to try it.
-- With a Troya API token (`x-api-key: troya_…`, made in the app at Agent, Wallet, API tokens) or a wallet signature, the wallet gets free checks each day, more for holders of 1,000,000 $TROYA, then spends USDG credit (0.01 USDG per check). `GET /api/gate/v1` returns today's price, free tiers and the attestor address. When credit runs out the answer is HTTP 402 with what to send and where.
-- No account at all: x402. `GET /api/gate/x402/check?token=0x…&amountEth=0.01` answers 402 with a `PAYMENT-REQUIRED` header; pay $0.01 in USDC on Base, Arbitrum or Polygon, or USDG on Robinhood Chain, and send it back as `PAYMENT-SIGNATURE`. A check that cannot run is never charged. Discovery: `/.well-known/x402`, `/openapi.json`.
+- With a Troya API token (`x-api-key: troya_…`, made in the app at Agent, Wallet, API tokens) or a wallet signature, the wallet gets free checks each day, more for holders of 1,000,000 $TROYA, then spends USDG credit (0.05 USDG per check). `GET /api/gate/v1` returns today's price, free tiers and the attestor address. When credit runs out the answer is HTTP 402 with what to send and where.
+- No account at all: x402. `GET /api/gate/x402/check?token=0x…&amountEth=0.01` answers 402 with a `PAYMENT-REQUIRED` header; pay $0.05 in USDC on Base, Arbitrum or Polygon, or USDG on Robinhood Chain, and send it back as `PAYMENT-SIGNATURE`. A check that cannot run is never charged. Discovery: `/.well-known/x402`, `/openapi.json`.
 - On Virtuals ACP, the same check is the job `troyaGateCheck` of the agent "Troya Gate".
 
 Verify any result: `hash` is keccak256 of `JSON.stringify(attested)`, and `signature` is EIP-191 over `"Troya Gate result\n" + hash` by the attestor `0xbEa3056612704eEE964B892862d969D2d4bB5fDE`. Or `POST /api/gate/v1/verify` with `{ "attested": …, "signature": … }`.

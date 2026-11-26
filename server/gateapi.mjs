@@ -30,7 +30,7 @@ const USDG = String(ADDR.usdg || "0x5fc5360d0400a0fd4f2af552add042d716f1d168").t
 const PAY_TO = getAddress(process.env.GATE_PAY_TO || "0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4");   // the $TROYA creator wallet
 const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const pad = (a) => "0x" + a.toLowerCase().replace(/^0x/, "").padStart(64, "0");
-const DEFAULTS = { enabled: true, priceUsdg: 0.01, freePerDay: 10, holderFreePerDay: 200, anonPerDay: 3 };
+const DEFAULTS = { enabled: true, priceUsdg: 0.05, freePerDay: 10, holderFreePerDay: 200, anonPerDay: 3 };
 const RANGE = 2000;
 const lc = (s) => String(s || "").toLowerCase();
 const today = () => new Date().toISOString().slice(0, 10);

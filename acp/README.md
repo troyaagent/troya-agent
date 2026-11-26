@@ -8,7 +8,7 @@ Troya's attestor. This folder is the seller program. It runs on the Troya server
 
 - **Agent:** Troya Gate (agent wallet `0x1731a0D264A4fd6aB6702bD849Aa6A13533c7E6C` on Base)
 - **Job name:** `troyaGateCheck`
-- **Price:** 0.01 USDC per job
+- **Price:** 0.05 USDC per job (0.01 until 26 Nov 2026)
 - **SLA:** 5 minutes
 - **Description:** A fresh pre-trade safety check for any token on Robinhood Chain (chain 4663), run at your trade
   size. It tests whether the token can be bought and sold, shows the real taxes and price impact, and runs honeypot and

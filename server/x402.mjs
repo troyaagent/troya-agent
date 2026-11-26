@@ -1,4 +1,4 @@
-// F23+ · Troya Gate over x402 (v2): any agent pays $0.01 in USDC on Base per check, with no account, no API key and no
+// F23+ · Troya Gate over x402 (v2): any agent pays $0.05 in USDC on Base per check, with no account, no API key and no
 // deposit. The 402 reply carries the price and the Bazaar description, so x402 directories (Coinbase's Bazaar,
 // Agentic.Market, x402scan) can list it and agents can find it on their own.
 //
@@ -38,7 +38,7 @@ function cfg() {
   const list = String(process.env.X402_NETWORKS || process.env.X402_NETWORK || "eip155:84532").split(",").map((x) => x.trim()).filter((x) => NETS[x]);
   const networks = list.length ? [...new Set(list)] : ["eip155:84532"];
   const network = networks[0], net = NETS[network];
-  const price = Math.max(0.001, Number(process.env.X402_PRICE_USD || 0.01));
+  const price = Math.max(0.001, Number(process.env.X402_PRICE_USD || 0.05));
   return {
     enabled: process.env.X402_ENABLED === "1",
     network, net, networks, price,
@@ -136,7 +136,7 @@ function required(c, error) {
     error,
     resource: {
       url: `${SITE()}/api/gate/x402/check`,
-      description: "Troya Gate: a fresh pre-trade safety check for any token on Robinhood Chain, run at your trade size. Can it be bought and sold, the real taxes, price impact, honeypot and liquidity tests, plus dev and holder flags. Signed by Troya's attestor so any agent can verify it. Pay $0.01 in USDC (Base, Arbitrum, Polygon) or USDG (Robinhood Chain).",
+      description: "Troya Gate: a fresh pre-trade safety check for any token on Robinhood Chain, run at your trade size. Can it be bought and sold, the real taxes, price impact, honeypot and liquidity tests, plus dev and holder flags. Signed by Troya's attestor so any agent can verify it. Pay $0.05 in USDC (Base, Arbitrum, Polygon) or USDG (Robinhood Chain).",
       mimeType: "application/json",
       serviceName: "Troya Gate",
       tags: ["crypto", "token-safety", "trading", "robinhood-chain", "honeypot-check"],
@@ -221,7 +221,7 @@ export async function register(r, ctx) {
   r.get("/api/gate/x402/well-known", async () => ({
     version: 1,
     resources: [`${SITE()}/api/gate/x402/check`],
-    instructions: "GET /api/gate/x402/check?token=<Robinhood Chain token>&amountEth=0.01 answers 402 with the price; pay $0.01 in USDC on Base, Arbitrum or Polygon, or USDG on Robinhood Chain, and get a signed Troya Gate check. Docs: https://troya.codes/api-and-mcp#x402",
+    instructions: "GET /api/gate/x402/check?token=<Robinhood Chain token>&amountEth=0.01 answers 402 with the price; pay $0.05 in USDC on Base, Arbitrum or Polygon, or USDG on Robinhood Chain, and get a signed Troya Gate check. Docs: https://troya.codes/api-and-mcp#x402",
   }), { weight: 1 });
 
   r.get("/api/gate/x402/check", async ({ req, res, query }) => {

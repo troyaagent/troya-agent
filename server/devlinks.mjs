@@ -40,6 +40,7 @@ const HUB_TXS = 3000;          // a wallet with more transactions than this (exc
 const SMALL_TXS = 300;         // a funder this small links every wallet it paid; up to HUB_TXS, only those paid within a day of the dev
 const PUBLIC_TXS = 50_000;     // a contract this busy is a public app: wallets trading through it in one block are a herd
 const OWN_TXS = 2_000;         // a router this small is someone's own contract: every wallet trading through it is a cluster
+const FLOW_TOP = 150, FLOW_PEERS = 8;   // the Cluster map's wallet cards: the largest balances followed, counterparties kept per side
                                // (bot apps and bundler services seen on Robinhood Chain have 8,000 to 50,000,000 transactions)
 const DAY_S = 86_400, BLOCKS_A_DAY = 864_000;   // Robinhood Chain: about 0.1 s blocks
 const MAX_TRANSFERS = 20_000;  // a busy coin is read on its newest transfers; the dev's own transfers are read in full
@@ -622,6 +623,26 @@ export function analyze(F, cut = F.end, { now = null, balNow = null } = {}) {
   if (together >= 3) why.push(`${together} linked wallets sold within one minute of each other`);
   if (loose.length && P.looseHold >= 1) why.push(`${loose.length} other cluster${loose.length === 1 ? "" : "s"} (not tied to the dev) hold${loose.length === 1 ? "s" : ""} ${r2(P.looseHold)}%`);
   const label = status === "fail" ? (P.recent >= RULES.failSellingNow ? "Dev side is selling now" : "Dev side holds most of the supply") : null;
+  // the Cluster map's wallet cards (clusters.mjs, 27 Nov): for the largest balances and the dev, this coin's transfers in the
+  // ledger, coins in from and out to other wallets (wallet to wallet: pools and routers are trades, counted as bought and sold)
+  // with the largest counterparties, each with the transaction of its largest transfer
+  const flows = new Map();
+  if (cut >= F.end) {
+    const cand = new Set([...bal.keys(), ...(balNow ? balNow.keys() : [])]);
+    const cmp = (a, b) => { const x = balOf(a), y = balOf(b); return y > x ? 1 : y < x ? -1 : 0; };
+    const top = [...cand].filter((w) => w && w !== ZERO && !burn(w) && balOf(w) > 0n).sort(cmp).slice(0, FLOW_TOP);
+    const acc = new Map();
+    for (const w of [...top, ...devs]) acc.set(w, { n: 0, inV: 0n, outV: 0n, inN: 0, outN: 0, from: new Map(), to: new Map() });
+    for (const x of tr) { const a = acc.get(x.from), b = x.to !== x.from ? acc.get(x.to) : null; if (a) a.n++; if (b) b.n++; }
+    const peer = (m, k, x) => { const c = m.get(k) || { v: 0n, n: 0, big: -1n, tx: null }; c.v += x.v; c.n++; if (x.v > c.big) { c.big = x.v; c.tx = x.tx; } m.set(k, c); };
+    for (const x of edges) {
+      const b = acc.get(x.to), a = acc.get(x.from);
+      if (b) { b.inV += x.v; b.inN++; peer(b.from, x.from, x); }
+      if (a) { a.outV += x.v; a.outN++; peer(a.to, x.to, x); }
+    }
+    const slim = (m) => ({ count: m.size, top: [...m].sort((p, q) => (q[1].v > p[1].v ? 1 : q[1].v < p[1].v ? -1 : 0)).slice(0, FLOW_PEERS).map(([a, c]) => ({ address: a, v: c.v, n: c.n, tx: c.tx, contract: codes.get(a) ?? null })) });
+    for (const [w, f] of acc) flows.set(w, { bal: balOf(w), n: f.n, inV: f.inV, outV: f.outV, inN: f.inN, outN: f.outN, from: slim(f.from), to: slim(f.to), bought: S.get(w)?.bought || 0n, sold: S.get(w)?.sold || 0n });
+  }
   const sale = (s) => (s ? { at: s.at, block: s.block, tx: s.tx, wallet: getAddress(s.wallet), dev: s.dev } : null);
   const view = (w) => { const s = S.get(w); return { wallet: getAddress(w), why: L.get(w).why, evidence: L.get(w).ev, hop: L.get(w).hop, holdsPct: r2(pct(balOf(w), supply)), boughtPct: r2(pct(s?.bought || 0n, supply)),
     gotPct: r2(pct(s?.gotIn || 0n, supply)), soldPct: r2(pct(s?.sold || 0n, supply)), firstSale: s?.sells?.[0] ? { at: s.sells[0].at, tx: s.sells[0].tx } : null, lastSale: s?.sells?.length ? { at: s.sells.at(-1).at, tx: s.sells.at(-1).tx } : null }; };
@@ -646,7 +667,7 @@ export function analyze(F, cut = F.end, { now = null, balNow = null } = {}) {
     // "dev didn't sell early" rule sums the sales in a coin's first minutes against it, autopilot-rules.mjs)
     _set: { linked: new Set(linked), devs, loose: new Set(looseWallets), relays: [...venue].filter((v) => !PUBLIC.has(v) && v !== F.curve),
       sells: sells.map((x) => ({ at: x.at, v: x.v, dev: x.dev })), got,
-      edges: edges.filter((x) => x.v * 10_000n >= supply).slice(-4000).map((x) => ({ from: x.from, to: x.to, v: x.v, tx: x.tx, block: x.block })), supply },
+      edges: edges.filter((x) => x.v * 10_000n >= supply).slice(-4000).map((x) => ({ from: x.from, to: x.to, v: x.v, tx: x.tx, block: x.block })), supply, flows, flowsPartial: !!F.partial, transfers: tr.length },
   };
 }
 

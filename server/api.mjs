@@ -148,6 +148,9 @@ function hit(key, weight, perMin) {
 }
 
 export function ipOf(req) {
+  // behind Cloudflare (27 Nov 2026) the visitor's IP is CF-Connecting-IP; Caddy strips that header from anything that
+  // did not come through Cloudflare, so it cannot be faked by calling the origin directly
+  if (process.env.TRUST_PROXY === "1") { const cf = String(req.headers["cf-connecting-ip"] || "").trim(); if (cf) return cf; }
   return (process.env.TRUST_PROXY === "1" && String(req.headers["x-forwarded-for"] || "").split(",")[0].trim()) || req.socket.remoteAddress || "?";
 }
 

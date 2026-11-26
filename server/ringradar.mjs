@@ -101,11 +101,19 @@ async function balances(token, wallets) {
 }
 
 /** The radar for one Pons coin. launch = { tx, block } when the caller already has the launch log (Sentry does). */
+// one read per coin at a time: the Gate's line, Heel and Troya Check all ask for the same launch, often within a second
+const inflight = new Map();
 export async function ringCheck(token, launch = null) {
   if (!isAddress(String(token || ""))) throw new HttpError(400, "That is not a token address.");
   const t = lc(token);
   const hit = memo.get(t);
   if (hit && Date.now() - hit.at < 10 * 60_000) return hit.res;
+  if (inflight.has(t)) return inflight.get(t);
+  const p = ringRead(token, t, launch).finally(() => inflight.delete(t));
+  inflight.set(t, p);
+  return p;
+}
+async function ringRead(token, t, launch) {
   const l = launch?.tx ? launch : await findLaunchTx(t);
   if (!l) { const res = { token: getAddress(t), verdict: "unknown", reasons: ["No Pons V2 launch found for this coin, so Ring Radar has nothing to read."], at: Date.now() }; memo.set(t, { at: Date.now(), res }); return res; }
   const tx = await rpc("robinhood", "eth_getTransactionByHash", [l.tx], { timeoutMs: 15_000 });

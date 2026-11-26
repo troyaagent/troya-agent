@@ -57,6 +57,8 @@ function lookup(a, fresh = false) {
 const result = (a) => lookup(a).p;
 
 export const badgeResult = result;           // for the bot's /badge
+// Troya Check (check.mjs): a new check now, past the memo (joins one already under way), for a route that failed once
+export const badgeFresh = (a) => lookup(a, true).p;
 
 // the shared labels in capitals (verdict.js LABEL), so the badge on a dev's site reads as Swap and the Gate page do
 const LOOK = {

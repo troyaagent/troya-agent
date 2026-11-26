@@ -69,7 +69,10 @@ export const CAPS = {
   gateNotRead: 60,    // the Gate could not run: nothing shows it can be sold back
   unread: 74,         // the Gate, Ring Radar, the dev side or The Assay is still unread: never "No major flags" without them
 };
-const MIN_READ_WEIGHT = 45;                         // under this, too little was read to give a number
+// enough read to give a number: 35 of the weight with the Gate among it (the Gate plus liquidity is 36), or 45 without it.
+// A non-Pons coin has no Ring Radar or dev-side reading, so a flat 45 left it unscored whenever The Assay was still reading
+// (HOOKR, Ibex in the 27 Nov calibration). The unread cap (74) still keeps such a score out of "No major flags".
+const MIN_READ_WITH_GATE = 35, MIN_READ_WEIGHT = 45;
 const CORE_PARTS = ["gate", "ring", "devside", "holders"];
 export const BANDS = [
   { min: 75, label: "No major flags", tone: "good" },
@@ -98,8 +101,42 @@ const notApplicable = (p, why) => Object.assign(p, { status: "n/a", value: null,
 const toneOf = (v) => (v >= 0.8 ? "good" : v >= 0.35 ? "warn" : "bad");
 const score = (p, v, summary, extra = {}) => Object.assign(p, { value: Math.round(Math.max(0, Math.min(1, v)) * 1000) / 1000, tone: toneOf(v), summary, ...extra });
 
+/* ---------- plain words ---------- */
+// The modules write for analysts ("0x1890…ebff handed coins to 199 wallets that together hold 100.0%"). The reasons people read
+// on the page, the card, X and Telegram say the same facts in one clear clause each. Numbers are kept exactly.
+const pctW = (v) => `${String(Number(v).toFixed(1)).replace(/\.0$/, "")}%`;
+const PLAIN = [
+  [/the dev and the wallets tied to it sold (\d+(?:\.\d+)?)% of the coins they received \(the dev wallet itself (\d+(?:\.\d+)?)%\)/gi,
+    (m, a, b) => `${Number(a) >= 99.5 ? "wallets linked to the dev have sold everything they got" : `wallets linked to the dev have sold ${pctW(a)} of what they got`}; ${Number(b) === 0 ? "the dev wallet itself hasn't sold any" : `the dev wallet itself sold ${pctW(b)} of its coins`}`],
+  [/(0x[0-9a-fA-F]{4}…[0-9a-fA-F]{4}) \(the dev\) handed coins to (\d+) wallets that together hold (\d+(?:\.\d+)?)%/g, (m, w, n, x) => `the dev spread coins to ${n} wallets, and together they hold ${pctW(x)} of the supply`],
+  [/(0x[0-9a-fA-F]{4}…[0-9a-fA-F]{4}) handed coins to (\d+) wallets that together hold (\d+(?:\.\d+)?)%/g, (m, w, n, x) => `one wallet (${w}) spread coins to ${n} others, and together they hold ${pctW(x)} of the supply`],
+  [/the dev wallet sold (\d+(?:\.\d+)?)% of the coins it received/gi, (m, a) => (Number(a) >= 99.5 ? "the dev has sold all of its coins" : `the dev has sold ${pctW(a)} of its coins`)],
+  [/the dev wallet holds (\d+(?:\.\d+)?)% of the supply/gi, (m, a) => `the dev still holds ${pctW(a)} of the supply`],
+  [/wallets that bought in the first 30 seconds \((\d+)\) still hold (\d+(?:\.\d+)?)% of the supply/gi, (m, n, x) => `${n} wallets that bought in the first 30 seconds still hold ${pctW(x)} of the supply`],
+  [/the dev wallet removed liquidity worth (\d+(?:\.\d+)?)% of the supply from a pool/gi, (m, a) => `the dev pulled liquidity worth ${pctW(a)} of the supply`],
+  [/the dev wallet sent coins to (\d+) other wallets \((\d+(?:\.\d+)?)% of the supply\)/gi, (m, n, a) => `the dev sent ${pctW(a)} of the supply to ${n} other wallets`],
+  [/(\d+) wallets that buy and sell the same amounts \(bots or wash trading\) made (\d+(?:\.\d+)?)% of all trades(?:: the volume looks bigger than real demand)?/gi, (m, n, x) => `${pctW(x)} of all trades come from ${n} wallets trading the same amounts back and forth (bots or wash trading)`],
+  [/the 10 biggest wallets hold (\d+(?:\.\d+)?)% of the supply/gi, (m, a) => `the 10 biggest wallets hold ${pctW(a)} of the supply`],
+];
+export function plainText(s) {
+  let t = String(s || "");
+  for (const [re, fn] of PLAIN) t = t.replace(re, fn);
+  // a rewritten clause that opens a sentence starts with a capital
+  return t.replace(/(^|[.:!?]\s+)([a-z])/g, (m, a, b) => a + b.toUpperCase());
+}
+/** The dev side in one sentence, from devlinks' own numbers (linked wallets, what they hold, what they sold). */
+export function devsideSentence(dl) {
+  const n = dl?.linked?.count, ds = dl?.devSide;
+  if (n == null || !ds) return null;
+  const hold = n ? `${n} wallet${n === 1 ? " is" : "s are"} linked to the dev and hold${n === 1 ? "s" : ""} ${pctW(dl.linked.holdsPct || 0)} of the supply` : "No wallets linked to the dev were found";
+  const dev = ds.devHoldsPct >= 0.01 ? `the dev itself holds ${pctW(ds.devHoldsPct)}` : null;
+  const sold = ds.soldPct > 0 ? (ds.soldOfGotPct >= 99.5 ? "the dev side has sold everything it got" : `the dev side has sold ${pctW(ds.soldOfGotPct)} of what it got`) : null;
+  return `${[hold, dev, sold].filter(Boolean).join("; ")}.`;
+}
+
 /* ---------- the parts ---------- */
 const CORE = ["route", "impact", "depth", "fee", "sim", "sell", "tax"];
+const TRANSIENT = /\b(busy|timed? ?out|timeout|rate.?limit|429|50[234]|ECONN\w*|ENOTFOUND|EAI_AGAIN|socket|could not reach|upstream|try again|temporarily|unavailable)\b/i;
 const NO_SELL_ROUTE = /no route to sell it back/i;
 const EMPTY_CURVE = /holds no buyers|too little/i;
 
@@ -112,14 +149,22 @@ export function gatePart(g, A) {
   p.evidence = core.map((c) => ({ label: c.label, status: c.status, text: noDot(c.detail) }));
   p.checkedAt = g.checkedAt || null;
   const curve = !!g.curve;
-  const fail = core.find((c) => c.status === "fail" && !(curve && c.key === "depth"));
+  // the failing check that matters most (fees and the sell side before the route, the route before depth), not the first
+  // listed: GREM read "impact 89%" first while its fee was 85% (impact includes the fee), so it was called a thin pool
+  const RANK_FAIL = { sell: 0, sim: 1, tax: 2, fee: 3, route: 4, depth: 5, impact: 6 };
+  const fails = core.filter((c) => c.status === "fail" && !(curve && c.key === "depth")).sort((a, b) => (RANK_FAIL[a.key] ?? 9) - (RANK_FAIL[b.key] ?? 9));
+  let fail = fails[0] || null;
+  // a route that failed because a node or an API was busy is no reading at all: not read, never a cap (HOOKR flipped 60 → 25)
+  if (fail?.key === "route" && TRANSIENT.test(fail.detail || "")) return notRead(p, `Not read: the route could not be read just now (${noDot(String(fail.detail).slice(0, 120))}).`);
   const sell = core.find((c) => c.key === "sell");
   const noSell = sell?.status === "warn" && NO_SELL_ROUTE.test(sell.detail || "");
   p.noSellRoute = noSell;
   if (fail) {
-    const d = noDot(fail.detail);
+    const d = noDot(fail.detail).replace(/^(\S+%)\s*\(([^()]+)\)$/, "$1, $2");
     if (fail.key === "route") return score(p, 0, `Blocked: Troya finds no route to buy it (${d}).`, { cap: { at: CAPS.noRoute, why: "the Gate finds no route to buy it" }, short: "Troya finds no route to buy it." });
-    if (fail.key === "impact" || fail.key === "depth") return score(p, 0.2, `Blocked: the pool is too thin for a 0.01 ETH buy (${fail.label}: ${d}).`, { cap: { at: CAPS.thinFail, why: "the pool is too thin for a small buy" }, short: "The pool is too thin for even a small buy." });
+    // "too thin" only on a real depth reading under the floor; a high price impact over a deep pool is said as it is, no cap
+    if (fail.key === "depth") return score(p, 0.2, `Blocked: the pool is too thin for a 0.01 ETH buy (only ${d} on the ETH side).`, { cap: { at: CAPS.thinFail, why: "the pool is too thin for a small buy" }, short: `The pool is too thin for even a small buy (${d}).` });
+    if (fail.key === "impact") { const depth = core.find((c) => c.key === "depth"); return score(p, 0.3, `A 0.01 ETH buy would move the price ${d}${depth?.status === "pass" ? `, although the pool reads ${noDot(depth.detail)} deep` : ""}. Troya will not offer that buy.`, { short: `A small buy would move the price ${d}.` }); }
     p.notSellable = fail.key === "sell" || fail.key === "sim";
     const what = { sell: "the test sell failed, so it could not be sold back", sim: "the exact swap fails when simulated", tax: `too much is lost on every transfer (${d})`, fee: `fees and taxes are too high (${d})` }[fail.key] || `${lc(fail.label)} failed`;
     return score(p, 0, `Blocked: ${what}.${fail.key === "sell" || fail.key === "sim" ? ` ${d}.` : ""}`, { cap: { at: CAPS.gateFail, why: `the Gate failed: ${what}` }, short: `${cap1(what)}.` });
@@ -140,7 +185,8 @@ export function ringPart(g, r, A) {
   const p = part("ring", { links: [links.gate(A)] });
   const line = (g?.checks || []).find((c) => c.key === "ring");
   if (!g?.checks?.length && !(r?.verdict && r.verdict !== "unknown")) return notRead(p, "Not read: it is read with the Gate, which did not finish.");
-  if ((!r || r.verdict === "unknown") && line?.status === "warn" && /still reading/i.test(line.detail || "")) return notRead(p, "Not read yet: Ring Radar is still reading this launch. Check again in a minute.");
+  if (r?.verdict === "unknown") return notApplicable(p, `Not a Pons launch Ring Radar can read${r.reasons?.[0] ? ` (${noDot(r.reasons[0]).replace(/^./, (c) => c.toLowerCase())})` : ""}.`);
+  if (!r && line?.status === "warn" && /still reading/i.test(line.detail || "")) return notRead(p, "Not read yet: Ring Radar is still reading this launch. Check again in a minute.");
   const verdict = r?.verdict && r.verdict !== "unknown" ? r.verdict : line ? (line.status === "fail" ? "red" : line.status === "warn" ? "amber" : "clear") : null;
   if (!verdict) return notApplicable(p, "Not a Pons launch Ring Radar can read (it reads Pons launches up to about 2 days back).");
   if (r?.launch?.tx) p.links.push(links.tx(r.launch.tx, "Launch transaction"));
@@ -165,9 +211,10 @@ export function devsidePart(g, dl, A) {
   const sale = dl?.devSide?.lastSale;
   if (sale?.tx) p.links.push(links.tx(sale.tx, "Latest dev-side sale"));
   p.evidence = [{ text: noDot(line.detail) }];
-  if (line.status === "fail") return score(p, 0, `${noDot(line.detail)}.`, { cap: { at: CAPS.devsideFail, why: "the dev side holds most of it or is selling" }, short: /selling now/i.test(line.detail) ? "The dev and wallets tied to it are selling now." : "The dev and wallets tied to it hold most of it." });
-  if (line.status === "warn") return score(p, 0.4, `${noDot(line.detail)}.`, { short: "The dev side wallets need a look." });
-  return score(p, 1, `${noDot(line.detail)}.`, { short: "The dev side wallets hold little and aren't selling." });
+  const said = (done && devsideSentence(dl)) || `${noDot(line.detail)}.`;
+  if (line.status === "fail") return score(p, 0, `${dl?.label ? `${dl.label}. ` : ""}${said}`, { cap: { at: CAPS.devsideFail, why: "the dev side holds most of it or is selling" }, short: /selling now/i.test(line.detail) ? "The dev and wallets tied to it are selling now." : "The dev and wallets tied to it hold most of it." });
+  if (line.status === "warn") return score(p, 0.4, said, { short: "The dev side wallets need a look." });
+  return score(p, 1, said, { short: "The dev side wallets hold little and aren't selling." });
 }
 
 export function holdersPart(d, A) {
@@ -218,7 +265,11 @@ export function heelPart(h, A) {
   if (top?.evidence?.url) p.links.push({ label: "Heel's evidence", href: top.evidence.url });
   p.evidence = (h.facts || []).slice(0, 3).map((f) => ({ text: noDot(f.text) }));
   const v = SEV[h.severity] ?? 1;
-  return score(p, v, noDot(h.heel).replace(/^Heel:\s*/, "Weakest spot: ") + ".", { short: v < 0.6 ? `${noDot(h.heel).replace(/^Heel:\s*/, "Weakest spot: ")}.` : "Heel found no serious weak spot." });
+  const said = noDot(h.heel).replace(/^Heel:\s*/, "");
+  // the headline keeps the finding's first clause ("Its $224M market cap is backed by only $15.5k of real money"), the
+  // page keeps all of it
+  const first = noDot(said.split(/:\s+(?=[A-Z])|;\s+|\s+\((?![^)]*%\))/)[0]).slice(0, 140);
+  return score(p, v, `Weakest spot: ${said}.`, { short: v < 0.6 ? `${first.replace(/^./, (c) => c.toUpperCase())}.` : "Heel found no serious weak spot." });
 }
 
 export function clashPart(c, sym, A) {
@@ -295,6 +346,7 @@ export function scoreCheck(f) {
     return { ...base, score: null, label: f.kind === "stock" ? "Tokenized stock" : "Major token", tone: "grey", headline: `${cap1(what)}, not a launch, so it gets no meme-coin score.`, reasons, parts: [gate, m], caps: [], gatePassed: gate.status === "scored" && gate.value >= 0.75 && !gate.cap, partial: gate.status === "not read" };
   }
   const parts = [gate, ringPart(f.gate, f.ring, A), devsidePart(f.gate, f.devlinks, A), holdersPart(f.assay, A), marketPart(f.token, A), heelPart(f.heel, A), clashPart(f.clash, base.symbol, A), agePart(f.bornAt, f.bornSrc, A, base.checkedAt), claimsPart(f.claims)];
+  for (const p of parts) { p.summary = plainText(p.summary); if (p.short) p.short = plainText(p.short); for (const e of p.evidence || []) if (e.text) e.text = plainText(e.text); }
   const read = parts.filter((p) => p.status === "scored" && p.weight > 0);
   const W = read.reduce((s, p) => s + p.weight, 0);
   const caps = parts.filter((p) => p.status === "scored" && p.cap).map((p) => ({ part: p.key, at: p.cap.at, why: p.cap.why }));
@@ -305,7 +357,7 @@ export function scoreCheck(f) {
   for (const p of read) p.points = +(p.weight * p.value).toFixed(1);
   let s = W ? Math.round((100 * read.reduce((t, p) => t + p.weight * p.value, 0)) / W) : null;
   if (s != null && caps.length) s = Math.min(s, caps[0].at);
-  const enough = W >= MIN_READ_WEIGHT;
+  const enough = W >= MIN_READ_WEIGHT || (gate.status === "scored" && W >= MIN_READ_WITH_GATE);
   if (!enough) s = null;
   const band = bandOf(s);
   // the three reasons: what set a cap first, then what cost the most points, then (if fewer than three) the strongest parts
@@ -341,11 +393,22 @@ async function gather(A, waitMs = WAIT_MS, hints = []) {
   const deadline = Date.now() + waitMs;
   const left = () => Math.max(500, deadline - Date.now());
   const tokP = within(M.getRobinhoodToken(A).then((r) => r?.token || null), left());   // no shorter cap: a cold coin took ~14 s here
-  const gateP = within(import("./badge.mjs").then((m) => m.badgeResult(A)).catch((e) => ({ verdict: "error", error: String(e?.message || e).slice(0, 160) })), left());
+  // the Gate, and once more when its route or pool reading failed: one failed quote must not flip a verdict (HOOKR read 60,
+  // then "no route" minutes later). The second answer is the one used; an error or a timeout is "not read", never a fail
+  const gateP = within(import("./badge.mjs").then(async (B) => {
+    const g = await B.badgeResult(A).catch((e) => ({ verdict: "error", error: String(e?.message || e).slice(0, 160) }));
+    const shaky = (g?.checks || []).some((c) => c.status === "fail" && ["route", "depth", "impact", "sim"].includes(c.key));
+    if (!shaky || !B.badgeFresh) return g;
+    const again = await within(B.badgeFresh(A).then((x) => ({ ...x, retried: true })), Math.max(1000, deadline - Date.now() - 1000), null);
+    return again && (again.checks || []).length ? again : g;
+  }), left());
   if (major || stock) {
     const [token, gate] = await Promise.all([tokP, gateP]);
     return { address: A, kind: major ? "major" : "stock", symbol: major?.symbol || token?.symbol || meta.symbol, name: major?.name || token?.name || meta.name, gate, token, now };
   }
+  // Ring Radar: cache first; when it is empty a real read starts now, beside the rest (ringCheck joins the read the Gate
+  // began) and is waited for within the budget, like Telegram's /gate; a slow read goes on and fills the cache for next time
+  const ringP = within(import("./ringradar.mjs").then((m) => m.ringCached?.(A) || m.ringCheck(A)), left());
   const assayP = within(import("./assay.mjs").then((m) => m.assay(A, { deep: true, waitMs: left() })), left() + 500);
   // phase 2: the website and X claims, read beside the rest; checked once the Gate and The Assay are in (or out of time)
   const claimsP = within(tokP.then(async (tok) => {
@@ -365,8 +428,7 @@ async function gather(A, waitMs = WAIT_MS, hints = []) {
   // Ring Radar and the dev side were read by the Gate itself: these are cache hits, never a second read
   // (a "still reading" line means the first read is under way: the cache is asked, never a second read)
   const RR = await import("./ringradar.mjs").catch(() => null);
-  const ringLine = (gate?.checks || []).find((c) => c.key === "ring");
-  const ring = RR?.ringCached?.(A) || (ringLine && !/still reading/i.test(ringLine.detail || "") ? await within(RR.ringCheck(A), 3000) : null);
+  const ring = RR?.ringCached?.(A) || (await ringP);
   const devlinks = await import("./devlinks.mjs").then((m) => m.devLinksCached(A)).catch(() => null);
   const bornSrc = await import("./tokenage.mjs").then((m) => m.bornSource(A)).catch(() => null);
   return { address: A, kind: "coin", symbol: token?.symbol || gate?.symbol || meta.symbol, name: token?.name || gate?.name || meta.name, gate, ring, devlinks, assay, token, heel, clash, claims, bornAt: bornAt || token?.bornAt || null, bornSrc, now };
@@ -391,7 +453,7 @@ export async function troyaCheck(address, { via = "web", by = null, record = tru
   const A = getAddress(String(address).toLowerCase());
   const k = lc(A);
   // again: read once more past a cached partial answer (the parts that finished since are cache hits in their own modules)
-  let res = again && cached(A)?.partial ? null : cached(A), fresh = false;
+  let res = again && (cached(A)?.partial || !settled(cached(A))) ? null : cached(A), fresh = false;
   if (!res) {
     let h = memo.get(k);
     if (!h?.p) {
@@ -406,23 +468,56 @@ export async function troyaCheck(address, { via = "web", by = null, record = tru
   if (record && store && (fresh || via === "x" || via === "telegram")) await saveRow(res, via, by).catch((e) => console.warn("[check] save", e.message));
   return { ...res, cached: !fresh };
 }
-/** The check if one is cached or finishes within ms, else null (the page and the card use it). */
-async function checkWithin(A, ms, opts) {
+
+/* ---------- the web: a cold coin is "reading", never "not enough read" on a first visit ---------- */
+// A result people may see as the answer: a scored coin, or a stock, a major or an unknown address (those have no score).
+export const settled = (r) => !!r && (r.kind !== "coin" || r.score != null);
+const WEB_BUDGET_MS = Math.max(20_000, Number(process.env.CHECK_WEB_BUDGET_MS) || 60_000);
+const runs = new Map();                       // address → { at, p, done, res }: one background read per coin, the polls join it
+/** The web's read of a coin: the cached answer when it is settled, else one background run (checkForChat's re-reads, up to
+ *  WEB_BUDGET_MS) that keeps going after the request that started it. Returns the run. */
+export function webRun(A) {
+  const k = lc(A);
   const hit = cached(A);
-  if (hit) return { ...hit, cached: true };
-  return within(troyaCheck(A, opts), ms, null);
+  if (settled(hit)) return { done: true, res: { ...hit, cached: true }, p: Promise.resolve({ ...hit, cached: true }) };
+  const old = runs.get(k);
+  if (old && (!old.done || Date.now() - old.at < TTL_PARTIAL)) return old;
+  const run = { at: Date.now(), done: false, res: null };
+  // the first read gets the web's usual wait; the re-reads fill in what was still reading. Each answer is kept as it comes,
+  // so the page can show the first score while the rest goes on
+  run.p = checkForChat(A, { via: "web", budgetMs: WEB_BUDGET_MS, firstWaitMs: WAIT_MS, onResult: (r) => { run.res = r; } }).then((r) => { run.res = r; return r; }, (e) => { run.error = e; throw e; }).finally(() => { run.done = true; run.at = Date.now(); });
+  run.p.catch(() => {});
+  runs.set(k, run);
+  if (runs.size > 500) for (const [key, v] of runs) if (v.done && Date.now() - v.at > TTL) runs.delete(key);
+  return run;
+}
+/** GET /api/check/:address: the answer when there is one; otherwise { pending: true } while the reads go on (check.js polls).
+ *  After the whole budget without a score the honest answer is returned with final: true; the page still says "reading". */
+export async function webAnswer(address, waitMs = 8000) {
+  if (!isAddress(String(address || ""))) throw new HttpError(400, "Paste a token address on Robinhood Chain (0x + 40 hex characters).");
+  const A = getAddress(String(address).toLowerCase());
+  const run = webRun(A);
+  const t0 = Date.now();
+  while (!run.done && !settled(run.res) && Date.now() - t0 < waitMs) await sleep(250);
+  const r = run.res;
+  if (run.error && !r) throw run.error;
+  if (settled(r)) return publicResult(r);
+  if (run.done && r) return { ...publicResult(r), final: true };
+  return { address: A, pending: true, startedAt: run.at, budgetSeconds: WEB_BUDGET_MS / 1000, note: "Troya is still reading this coin: the Gate's simulated buy and test sell, Ring Radar, the dev side, The Assay and Heel. Ask again in a few seconds." };
 }
 
 /**
  * X and Telegram (phase 2, cold start): one check within CHECK_WAIT_CHAT_MS, read again while parts are still reading and time
  * is left, so a slow coin is answered with a score instead of "not enough read". Recorded once, at the end.
  */
-export async function checkForChat(address, { via = "telegram", by = null, hints = [], budgetMs = WAIT_CHAT_MS, pauseMs = 3000 } = {}) {
+export async function checkForChat(address, { via = "telegram", by = null, hints = [], budgetMs = WAIT_CHAT_MS, firstWaitMs = budgetMs, pauseMs = 3000, onResult = null } = {}) {
   const end = Date.now() + budgetMs;
-  let r = await troyaCheck(address, { via, by, hints, record: false, waitMs: budgetMs });
-  for (let i = 0; i < 4 && r.kind === "coin" && (r.partial || r.score == null) && end - Date.now() > pauseMs + 4000; i++) {
+  let r = await troyaCheck(address, { via, by, hints, record: false, waitMs: Math.min(firstWaitMs, budgetMs) });
+  onResult?.(r);
+  for (let i = 0; i < 6 && r.kind === "coin" && (r.partial || r.score == null) && end - Date.now() > pauseMs + 4000; i++) {
     await sleep(pauseMs);
-    r = await troyaCheck(address, { via, by, hints, record: false, fresh: true, waitMs: Math.max(3000, end - Date.now() - 500) });
+    r = await troyaCheck(address, { via, by, hints, record: false, fresh: true, waitMs: Math.max(3000, Math.min(end - Date.now() - 500, firstWaitMs)) });
+    onResult?.(r);
   }
   if (store) await saveRow(r, via, by).catch((e) => console.warn("[check] save", e.message));
   return r;
@@ -760,7 +855,9 @@ export async function cardPng(r) {
 }
 const cards = new Map();                        // address → { key, at, png }
 async function cardFor(A) {
-  const r = await checkWithin(A, CARD_WAIT_MS, { via: "web" }).catch(() => null);
+  const run = webRun(A), t0 = Date.now();
+  while (!run.done && !settled(run.res) && Date.now() - t0 < CARD_WAIT_MS) await sleep(300);
+  const r = settled(run.res) ? run.res : null;
   const key = r ? `${r.checkedAt}` : "pending";
   const hit = cards.get(lc(A));
   if (hit && hit.key === key && Date.now() - hit.at < TTL) return { png: hit.png, done: !!r };
@@ -780,7 +877,10 @@ const descOf = (r) => (r ? `${(r.reasons || []).map((x) => noDot(x.short || x.te
 /** html = public/check.html; address = the coin. Replaces the dashboard's meta block and fills the first answer. */
 export async function renderPage(html, address) {
   const A = getAddress(String(address).toLowerCase());
-  const r = await checkWithin(A, PAGE_WAIT_MS, { via: "web" }).catch(() => null);
+  // only a settled answer goes into the page; otherwise the page opens in its "reading" state and check.js polls
+  const run = webRun(A), t0 = Date.now();
+  while (!run.done && !settled(run.res) && Date.now() - t0 < PAGE_WAIT_MS) await sleep(250);
+  const r = settled(run.res) ? run.res : null;
   const v = r ? Math.floor((r.checkedAt || 0) / 60_000).toString(36) : "p";
   const url = `${SITE}/check/${A}`, img = `${SITE}/api/check/${A}/card.png?v=${v}`, title = titleOf(r, A), desc = descOf(r);
   const meta = `<title>${esc(title)}</title>
@@ -818,7 +918,8 @@ export async function register(r, ctx) {
   r.get("/api/check", async () => dashboard(), { weight: 1, perMin: 60 });
   // before /api/check/:address, which would also match this path
   r.get("/api/check/record", async () => recordOf(store ? await store.readJson(FILE, []) : []), { weight: 1, perMin: 60 });
-  r.get("/api/check/:address", async ({ params }) => publicResult(await troyaCheck(params.address, { via: "web" })), { weight: 2, perMin: 20 });
+  // polled every 4 s by the page while a coin is being read, so the limit leaves room for a minute of polling and a few coins
+  r.get("/api/check/:address", async ({ params }) => webAnswer(params.address), { weight: 1, perMin: 40 });
   r.get("/api/check/:address/card.png", async ({ params, req, res }) => {
     if (!isAddress(String(params.address || ""))) throw new HttpError(400, "That is not a token address.");
     try {

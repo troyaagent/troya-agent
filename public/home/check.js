@@ -113,36 +113,65 @@ function showCoin(r) {
   });
   coinBox.querySelector("[data-again]")?.addEventListener("click", () => load(true));
 }
-function showPending() {
+function showPending(secs = 0, slow = false) {
   coinBox.hidden = false;
   $("[data-ck-h1]").textContent = short(ADDR);
-  coinBox.innerHTML = `<div class="ck-card" style="--tone:var(--t-grey)"><div><p class="ck-sym">${short(ADDR)}</p><p class="ck-addr"><code>${esc(ADDR)}</code></p><p class="ck-pending"><i></i>Checking now: Troya Gate runs a simulated buy and a test sell, then Ring Radar, the dev side, The Assay and Heel. This takes up to half a minute.</p></div></div>`;
+  const msg = slow
+    ? `Still reading after ${secs} seconds: some of Troya's reads on this coin are slow right now. They keep running on the server; check again in a minute and the answer will be there.`
+    : `Reading now${secs ? ` (${secs} s)` : ""}: Troya Gate runs a simulated buy and a test sell, then Ring Radar, the dev side, The Assay and Heel. The score shows as soon as there is one, usually within half a minute.`;
+  coinBox.innerHTML = `<div class="ck-card" style="--tone:var(--t-grey)"><div><p class="ck-sym">${short(ADDR)}</p><p class="ck-addr"><code>${esc(ADDR)}</code></p><p class="ck-pending">${slow ? "" : "<i></i>"}${esc(msg)}</p>${slow ? '<p><button class="ck-mini" type="button" data-again>Check again</button></p>' : ""}</div></div>`;
+  coinBox.querySelector("[data-again]")?.addEventListener("click", () => poll());
 }
-let tries = 0;
-async function load(again = false) {
-  if (!again && tries) return;
-  tries++;
-  if (again) showPending();
+// The server answers { pending: true } while it reads a coin; the page asks again every 4 s, for about a minute, and renders
+// only once there is a score (or the coin is a stock, a major or not a token). It never shows "not enough read" as a verdict.
+const POLL_MS = 4000, POLL_FOR_MS = 75_000;
+let polling = false;
+async function poll() {
+  if (polling) return;
+  polling = true;
+  const t0 = Date.now();
+  showPending(0);
   try {
-    const res = await fetch(`/api/check/${ADDR}`);
-    const d = await res.json();
-    if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
-    showCoin(d);
-    // a part still reading is kept only a minute on the server: one more look after that
-    if (d.partial && tries < 2) setTimeout(() => load(true), 62_000);
+    for (;;) {
+      let d = null;
+      try {
+        const res = await fetch(`/api/check/${ADDR}`, { cache: "no-store" });
+        d = await res.json();
+        if (!res.ok && res.status !== 429) throw new Error(d.error || `HTTP ${res.status}`);
+      } catch (e) { if (Date.now() - t0 > POLL_FOR_MS) throw e; }
+      const secs = Math.round((Date.now() - t0) / 1000);
+      const ready = d && !d.pending && !d.final && (d.kind !== "coin" || d.score != null);
+      if (ready) {
+        showCoin(d);
+        // parts still reading: one more look once the server's short cache for them has passed
+        if (d.partial) setTimeout(() => refresh(), 62_000);
+        return;
+      }
+      if (Date.now() - t0 > POLL_FOR_MS || d?.final) { showPending(secs, true); return; }
+      showPending(secs);
+      await new Promise((r) => setTimeout(r, POLL_MS));
+    }
   } catch (e) {
     coinBox.hidden = false;
     coinBox.innerHTML = `<p class="ck-note">This check could not finish just now (${esc(String(e.message || e).slice(0, 140))}). <button class="ck-mini" type="button" data-again>Try again</button></p>`;
-    coinBox.querySelector("[data-again]")?.addEventListener("click", () => load(true));
-  }
+    coinBox.querySelector("[data-again]")?.addEventListener("click", () => poll());
+  } finally { polling = false; }
 }
+// a later look at a coin already shown: replaced only by another settled answer, never by "reading"
+async function refresh() {
+  try {
+    const d = await (await fetch(`/api/check/${ADDR}`, { cache: "no-store" })).json();
+    if (d && !d.pending && !d.final && (d.kind !== "coin" || d.score != null)) showCoin(d);
+  } catch { /* the answer on screen stays */ }
+}
+const load = (again) => (again ? refresh() : poll());
 
 if (ADDR) {
   let first = null;
   try { first = JSON.parse($("#check-data")?.textContent || "null"); } catch { first = null; }
   const inp = $("#ck-in"); if (inp) inp.value = "";
-  if (first?.result) { showCoin(first.result); if (first.result.partial) setTimeout(() => load(true), 62_000); }
-  else { showPending(); load(); }
+  if (first?.result && (first.result.kind !== "coin" || first.result.score != null)) { showCoin(first.result); if (first.result.partial) setTimeout(() => refresh(), 62_000); }
+  else poll();
 }
 $("[data-ck-form]")?.addEventListener("submit", (e) => {
   const v = String($("#ck-in").value || "").trim();

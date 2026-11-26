@@ -207,20 +207,31 @@ export async function modelClaims(sources, { ask } = {}) {
 /* ---------- reading the sources (cached 6 hours per coin) ---------- */
 const TTL = 6 * 3600e3;
 const memo = new Map(), inflight = new Map();
-const xHandle = (s) => { const m = /^(?:https?:\/\/)?(?:www\.|mobile\.)?(?:x|twitter)\.com\/@?([A-Za-z0-9_]{1,15})(?:[/?#]|$)/i.exec(String(s || "").trim()); return m && !/^(home|i|intent|share|search|explore|hashtag)$/i.test(m[1]) ? m[1] : null; };
+// an account link (x.com/handle), never a single post: a coin whose "X" is someone else's post (x.com/DailyLoud/status/…) has
+// no X account of its own
+const xHandle = (s) => { const v = String(s || "").trim(); if (/\/status(?:es)?\/\d/i.test(v)) return null; const m = /^(?:https?:\/\/)?(?:www\.|mobile\.)?(?:x|twitter)\.com\/@?([A-Za-z0-9_]{1,15})(?:[/?#]|$)/i.exec(v); return m && !/^(home|i|intent|share|search|explore|hashtag)$/i.test(m[1]) ? m[1] : null; };
 const isXLink = (s) => /^(?:https?:\/\/)?(?:www\.|mobile\.)?(?:x|twitter)\.com\//i.test(String(s || ""));
-const NOT_SITE = /^(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me|discord\.gg|discord\.com|youtube\.com|youtu\.be|dexscreener\.com|geckoterminal\.com|robinhoodchain\.blockscout\.com|ponsfamily\.com|troya\.codes|linktr\.ee)\b/i;
+// social networks, link hubs, chat apps, charts and launchpads: a link there is never "the project's website" (IShowSpace's
+// "website" was a facebook.com post); a real project domain in the hints is used instead when there is one
+const SOCIAL_HOSTS = ["facebook.com", "fb.com", "fb.me", "instagram.com", "tiktok.com", "youtube.com", "youtu.be", "twitch.tv", "linktr.ee", "linktree.com", "beacons.ai", "bio.link", "lnk.bio", "carrd.co",
+  "t.me", "telegram.me", "telegram.org", "discord.gg", "discord.com", "x.com", "twitter.com", "threads.net", "reddit.com", "medium.com", "substack.com", "mirror.xyz", "warpcast.com", "farcaster.xyz",
+  "linkedin.com", "github.com", "gitlab.com", "dexscreener.com", "dextools.io", "geckoterminal.com", "coingecko.com", "coinmarketcap.com", "robinhoodchain.blockscout.com", "ponsfamily.com", "pump.fun",
+  "fomo.family", "google.com", "docs.google.com", "drive.google.com", "notion.so", "wikipedia.org", "troya.codes"];
+const hostIs = (u, list) => { try { const h = new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`).hostname.toLowerCase().replace(/^www\.|^m\.|^mobile\./, ""); return list.some((d) => h === d || h.endsWith(`.${d}`)); } catch { return true; } };
+export const isSocialLink = (u) => hostIs(String(u || ""), SOCIAL_HOSTS);
+const NOT_SITE = { test: (u) => isSocialLink(u) };
 
 /** The coin's website and X account: the socials Troya already knows, then links handed in (an X request or its parent). */
 export function sourcesOf(token, hints = []) {
   const links = (hints || []).map((x) => String(x || "").trim()).filter(Boolean);
-  let website = token?.website || null, x = xHandle(token?.twitter || "") || (/^@?[A-Za-z0-9_]{1,15}$/.test(String(token?.twitter || "")) ? String(token.twitter).replace(/^@/, "") : null);
+  let website = token?.website && !isSocialLink(token.website) ? token.website : null;
+  let x = xHandle(token?.twitter || "") || (/^@?[A-Za-z0-9_]{1,15}$/.test(String(token?.twitter || "")) ? String(token.twitter).replace(/^@/, "") : null);
   for (const l of links) {
     if (!x && isXLink(l)) x = xHandle(l);
-    else if (!website && !isXLink(l) && !NOT_SITE.test(l) && allowedUrl(l)) website = l;
+    else if (!website && !isXLink(l) && !isSocialLink(l) && allowedUrl(l)) website = l;
   }
-  // troya.codes is only skipped as a hint (a reply carrying a check link); as a coin's own site ($TROYA) it is read
-  if (website && NOT_SITE.test(website) && !/^(?:https?:\/\/)?(?:www\.)?troya\.codes\b/i.test(token?.website === website ? website : "")) website = null;
+  // troya.codes is only skipped as a hint (a reply carrying a check link); as $TROYA's own site it is read
+  if (!website && token?.website && /^(?:https?:\/\/)?(?:www\.)?troya\.codes\b/i.test(token.website)) website = token.website;
   if (website) website = allowedUrl(website)?.href || null;
   return { website, x };
 }

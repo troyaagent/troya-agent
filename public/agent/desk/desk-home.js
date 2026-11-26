@@ -7,7 +7,7 @@
 // 23 Nov 2026 (community request): the first-visit hero and its "What brings you here?" bar moved to their own page,
 // About Troya (#/about, ./about.js), linked from the strip and from the foot of the sidebar, so the app opens on action.
 // The intent ("Buy a coin", "Check a coin" …, picked on About Troya) only reorders the sections; it is kept in this browser.
-import { h, clear, icon, useCss, every, sparkline, pctEl, usd, tiny, toast, store, infoTip, tokenIcon, coinIcon, short, ago, table } from "/agent/js/ui.js";
+import { h, clear, icon, useCss, every, sparkline, pctEl, usd, tiny, toast, store, infoTip, tokenIcon, coinIcon, short, ago, table, chainLogo } from "/agent/js/ui.js";
 import { api, cached } from "/agent/js/api.js";
 import { wallet, onWallet, openConnect, signIn } from "/agent/js/wallet.js";
 import { getStarted } from "/agent/js/pages/start.js";
@@ -282,6 +282,19 @@ export async function mount(view, { go, ask: askDrawer }) {
     h("div", { class: "panel-h" }, h("h2", {}, "Tools"), h("a", { class: "link fine", href: "#/docs" }, "Docs")),
     toolsGrid);
 
+  /* ---------- chains: what works where (community request, lynx_evo 26 Nov 2026: "many people don't know about cross
+     chain"). Each row opens the page already on that network. ---------- */
+  const CHAINS = [
+    ["robinhood", "Robinhood Chain", "Coins, tokenized stocks, launches, Gate", "#/swap"],
+    ["base", "Base", "Swap, or buy a Robinhood Chain coin with Base ETH", "#/swap?chain=base"],
+    ["arbitrum", "Arbitrum", "Swap, or buy a Robinhood Chain coin with Arbitrum ETH", "#/swap?chain=arbitrum"],
+    ["solana", "Solana", "Swap any Solana coin, Gate checked", "#/swap?chain=solana"],
+    ["hyperliquid", "Hyperliquid", "Perps and spot from your own account", "#/perps"],
+  ];
+  const chains = h("section", { class: "panel dk-chains" },
+    h("div", { class: "panel-h" }, h("h2", {}, "Chains", infoTip("One app on five networks. A cross-chain buy pays with ETH on Base or Arbitrum and lands the coin on Robinhood Chain in one step, through bridges that pass Troya's safety bar.")), h("a", { class: "link fine", href: "#/bridge" }, "Bridge")),
+    h("div", { class: "dk-chains-g" }, CHAINS.map(([k, t, d, href]) => h("a", { class: "dk-chain", href }, chainLogo(k, 22), h("b", {}, t), h("span", {}, d)))));
+
   const gate = gatePanel({ go, ask, compact: true });
   stops.push(gate.stop);
 
@@ -349,7 +362,7 @@ export async function mount(view, { go, ask: askDrawer }) {
     parts.push(setup.el,
       h("div", { class: "dk-cols" },
         h("div", { class: "dk-col" }, chart, lead === gate.el ? null : gate.el, brief, lead === hlTable ? null : hlTable),
-        h("div", { class: "dk-col" }, agent, sigs, shortcuts)));
+        h("div", { class: "dk-col" }, agent, chains, sigs, shortcuts)));
     clear(root, parts);
   }
   layout();

@@ -60,6 +60,8 @@ let store = null;
 // say least about getting out (liquidity and holders 9 → 5, Heel 4 → 2: it re-ranks the others, same ticker 4 → 3, age 4 → 3,
 // claims 10 → 8)
 export const WEIGHTS = { gate: 27, ring: 14, devside: 14, holders: 14, powers: 10, market: 5, heel: 2, clash: 3, age: 3, claims: 8 };
+// the scoring method's version: bump it with a line whenever weights or caps change, so old and new scores can be told apart
+export const METHOD = { version: "v2", note: "v2, 27 Nov 2026: Contract powers added (10 points; caps 40 mint, 45 blacklist/pause/trading, 60 upgradeable proxy), other weights rebalanced. v1, 26 Nov 2026: first public weights." };
 export const CAPS = {
   gateFail: 15,       // the Gate failed a check that decides a buy: the test sell, the exact swap, the transfer tax or the fees
   ringRed: 20,        // Ring Radar: a rigged launch pattern
@@ -509,6 +511,7 @@ export function scoreCheck(f) {
   if (badPart || warnReason) { const w = badPart || read.find((p) => p.key === warnReason.part); caps.push({ part: w?.key || warnReason.part, at: CAPS.flagged, why: `${w?.name || "a check"} raised ${badPart ? "a red flag" : "a warning"}` }); }
   caps.sort((a, b) => a.at - b.at);
   let s = W ? Math.round((100 * read.reduce((t, p) => t + p.weight * p.value, 0)) / W) : null;
+  const raw = s;   // the weighted sum before any cap (holder review, 27 Nov 2026: show what is behind the number)
   if (s != null && caps.length) s = Math.min(s, caps[0].at);
   const enough = W >= MIN_READ_WEIGHT || (gate.status === "scored" && W >= MIN_READ_WITH_GATE);
   if (!enough) s = null;
@@ -518,6 +521,9 @@ export function scoreCheck(f) {
     ...base, score: s, label: enough ? band.label : "Not enough read", tone: enough ? band.tone : "grey",
     headline: enough ? (reasons[0]?.short || reasons[0]?.text || "") : "Too few checks could be read just now. Try again in a minute.",
     reasons, parts, caps, readWeight: W, partial,
+    // the line under the score: raw sum, the cap that lowered it (if one did), how many parts were read, the method version
+    basis: { raw, cap: raw != null && caps.length && caps[0].at < raw ? { at: caps[0].at, why: caps[0].why, part: caps[0].part } : null,
+      read: read.length, of: parts.filter((p) => p.weight > 0).length, method: METHOD.version, methodNote: METHOD.note },
     sub: subScores(parts), findings: findingsOf(parts), changes: whatWouldChange(parts), coin: coinFacts(f),
     priceUsd: Number(f.token?.priceUsd) > 0 ? Number(f.token.priceUsd) : null, notSellable: !!gate.notSellable,
     // Buy only after a passed Gate, and never while Ring Radar is red or the dev side fails (the Gate's own result is kept

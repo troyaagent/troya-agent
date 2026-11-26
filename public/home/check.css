@@ -469,3 +469,6 @@ body.ck-coinpage .ck-page::before { height: 900px; }
 }
 .ck-h > span, .ck-h button { color: rgba(142, 223, 245, .62); } .ck-h button:hover, .ck-h button[aria-pressed="true"] { color: var(--ice-2); }
 .ck-page::before { -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent); }
+
+/* the line under the total score: raw sum, cap, parts read, method version */
+.cv-basis { margin: 8px 0 0; font: 500 11.5px/1.5 var(--mono, ui-monospace, monospace); color: var(--muted); overflow-wrap: anywhere; }

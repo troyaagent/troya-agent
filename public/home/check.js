@@ -16,6 +16,15 @@ const num = (v) => (v == null || !isFinite(v) ? "–" : v >= 1e6 ? `${(v / 1e6).
 const pct = (v) => (v == null || !isFinite(v) ? '<span class="mut">–</span>' : `<span class="${v > 0 ? "up" : v < 0 ? "dn" : "mut"}">${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v) >= 1000 ? Math.round(Math.abs(v)).toLocaleString("en-US") : Math.abs(v).toFixed(1)}%</span>`);
 const subTone = (v) => (v == null ? "grey" : v >= 67 ? "good" : v >= 34 ? "warn" : "bad");
 const xCash = (r) => (/^[A-Za-z][A-Za-z0-9]{0,15}$/.test(r.symbol || "") ? `$${r.symbol}` : short(r.address));
+
+// what is behind the number, one line under the score (holder review, 27 Nov 2026): the raw weighted sum, the cap that
+// lowered it, how many parts were read and the method version (the weights changed on 27 Nov: v2)
+function basisLine(r) {
+  const b = r.basis, when = r.checkedAt ? `${new Date(r.checkedAt).toISOString().slice(0, 16).replace("T", " ")} UTC` : "";
+  const bits = [`raw ${b.raw}`, b.cap ? `capped at ${b.cap.at}: ${esc(b.cap.why)}` : "no cap applied", `${b.read} of ${b.of} parts read`, `method ${esc(b.method)}`, when ? `checked ${when}` : ""].filter(Boolean);
+  return `<p class="cv-basis" title="${esc(b.methodNote || "")}">${r.score} / 100 · ${bits.join(" · ")}</p>`;
+}
+
 function toast(text, kind = "") {
   const box = $("[data-toasts]"); if (!box) return;
   const t = document.createElement("div"); t.className = `toast ${kind}`; t.textContent = text; box.append(t); setTimeout(() => t.remove(), 2600);
@@ -263,7 +272,7 @@ function showCoin(r) {
           <p class="cv-kick">Troya Check · checked ${ago(r.checkedAt)} ago${r.partial ? " · some parts still reading" : ""}</p>
           <h2 class="cv-sentence">${esc(sentence(r.headline || r.label))}</h2>
           <div class="cv-scores${scored ? "" : " one"}">
-            <div class="cv-total"><span>Total score</span><b style="color:${tone(r.tone)}">${scored ? r.score : "–"}<small>${scored ? "/100" : ""}</small></b><span class="lbl" style="--c:${tone(r.tone)}">${esc(r.label)}</span><p>${scored ? "Weighted from every part read, then capped by the most serious finding." : esc(r.headline || "")}</p></div>
+            <div class="cv-total"><span>Total score</span><b style="color:${tone(r.tone)}">${scored ? r.score : "–"}<small>${scored ? "/100" : ""}</small></b><span class="lbl" style="--c:${tone(r.tone)}">${esc(r.label)}</span><p>${scored ? "Weighted from every part read, then capped by the most serious finding." : esc(r.headline || "")}</p>${scored && r.basis ? basisLine(r) : ""}</div>
             ${scored ? gauge("Exit", sub.exit, sub.exitWord ? sub.exitWord[0].toUpperCase() + sub.exitWord.slice(1) : "", ["blocked", "risky", "clear"], sub.exitLine) + gauge("Holders", sub.holders, sub.holdersWord ? sub.holdersWord[0].toUpperCase() + sub.holdersWord.slice(1) : "", ["rigged", "concentrated", "spread"], sub.holdersLine) : ""}
           </div>
           ${capped && scored ? `<p class="cv-cap">Capped at ${capped.at}: ${esc(capped.why)}.</p>` : ""}

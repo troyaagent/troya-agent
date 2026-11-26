@@ -232,18 +232,21 @@ async function handleMention(t, { users, media, bot, m, L }) {
   if (checkMode()) {
     const C = await import("./check.mjs").catch(() => null);
     let req = C ? C.parseCheckRequest(text) : null;
+    // links handed to the check (the coin's site or X account in the mention, or in the post it replies to): X writes them
+    // as t.co, so the mention's own expanded links are used; the parent's t.co links are followed by the safe fetcher
+    let hints = (t.entities?.urls || []).map((x) => x.unwound_url || x.expanded_url || x.url).filter(Boolean);
     // a bare "check" under someone's post: the contract comes from that post (one read, only when the word is there)
     if (C && !req && C.mentionsCheck(text) && (t.referenced_tweets || []).some((x) => x.type === "replied_to")) {
       const parent = await parentText(t).catch(() => null);
-      if (parent) { entry.parent = parent.slice(0, 200); req = C.parseCheckRequest(text, parent); }
+      if (parent) { entry.parent = parent.slice(0, 200); req = C.parseCheckRequest(text, parent); hints = [...hints, ...(parent.match(/https?:\/\/\S+/g) || [])]; }
     }
     if (req) {
       entry.kind = "check";
       const lastHour = log.filter((x) => x.authorId === t.author_id && x.kind === "check" && Date.now() - x.at < 3600_000).length;
       if (recent >= 12) { entry.why = `${recent} answers to this account in 6 hours`; return entry; }
       if (lastHour >= 5) { entry.why = `${lastHour} checks for this account in the last hour`; return entry; }
-      const out = await C.xCheckReply(req, { by: u.username || null }).catch((e) => ({ reply: null, error: e.message }));
-      entry.token = out.address || null; entry.why = out.error || null;
+      const out = await C.xCheckReply(req, { by: u.username || null, hints: hints.filter((x) => !/^https?:\/\/(?:www\.)?(?:x|twitter)\.com\/[^/]+\/status\//i.test(x)).slice(0, 4) }).catch((e) => ({ reply: null, error: e.message }));
+      entry.token = out.address || null; entry.why = out.error || out.why || null;
       if (out.result) entry.score = out.result.score;
       if (out.reply) {
         entry.reply = oneCashtag(out.reply);

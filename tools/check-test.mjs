@@ -49,7 +49,7 @@ await t("passed coin: high score, top band, Buy allowed", () => {
   assert.equal(r.gatePassed, true);
   assert.equal(r.reasons.length, 3);
   assert.equal(r.caps.length, 0);
-  assert.equal(r.parts.find((p) => p.key === "claims").weight, 0, "phase 2 claims hook carries no weight yet");
+  assert.equal(r.parts.find((p) => p.key === "claims").status, "not read", "no claims read in this fixture: left out of the score, said so");
   assert.ok(!/\bsafe\b/i.test(JSON.stringify(r.reasons)), "never says safe in reasons");
 });
 

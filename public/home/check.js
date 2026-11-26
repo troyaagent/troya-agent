@@ -36,12 +36,12 @@ async function loadDash() {
   if (tot) tot.textContent = `${Number(d.total || 0).toLocaleString("en-US")} checks recorded · ${Number(d.thisWeek || 0).toLocaleString("en-US")} in the last 7 days. ${d.note || ""}`;
   const wt = $("[data-ck-weights] tbody");
   if (wt && d.weights) {
-    const names = { gate: "Troya Gate: simulated buy and test sell", ring: "Ring Radar: rigged launch pattern", devside: "Dev side wallets", holders: "Holders (The Assay)", market: "Liquidity and holders", heel: "Weak spot (Heel)", clash: "Same ticker on other contracts", age: "Token age", claims: "Website and X claims (coming next)" };
+    const names = { gate: "Troya Gate: simulated buy and test sell", ring: "Ring Radar: rigged launch pattern", devside: "Dev side wallets", holders: "Holders (The Assay)", market: "Liquidity and holders", heel: "Weak spot (Heel)", clash: "Same ticker on other contracts", age: "Token age", claims: "Website and X claims, checked on chain" };
     wt.innerHTML = Object.entries(d.weights).map(([k, w]) => `<tr><td>${esc(names[k] || k)}</td><td>${w}</td></tr>`).join("");
   }
   const cl = $("[data-ck-caps]");
   if (cl && d.caps) {
-    const why = { gateFail: "the Gate fails the test sell, the exact swap, the transfer tax or the fees", ringRed: "Ring Radar flags a rigged launch", noRoute: "no route to buy it", lpPulled: "the dev pulled liquidity", devsideFail: "the dev side holds most of it or is selling now", noSellRoute: "a buy works but no route sells it back", thinFail: "the pool is too thin for a 0.01 ETH buy", gateNotRead: "the Gate could not run", unread: "the Gate, Ring Radar, the dev side or The Assay is not read yet" };
+    const why = { gateFail: "the Gate fails the test sell, the exact swap, the transfer tax or the fees", ringRed: "Ring Radar flags a rigged launch", noRoute: "no route to buy it", lpPulled: "the dev pulled liquidity", devsideFail: "the dev side holds most of it or is selling now", noSellRoute: "a buy works but no route sells it back", thinFail: "the pool is too thin for a 0.01 ETH buy", gateNotRead: "the Gate could not run", claimFalse: "the project claims liquidity locked, renounced, a tax, a supply or a burn that the chain contradicts", unread: "the Gate, Ring Radar, the dev side or The Assay is not read yet" };
     cl.innerHTML = Object.entries(d.caps).sort((a, b) => a[1] - b[1]).map(([k, v]) => `<li><b>${v}</b> when ${esc(why[k] || k)}</li>`).join("");
   }
 }
@@ -61,9 +61,13 @@ function ring(r) {
 }
 function partHtml(p) {
   const chip = p.status === "scored" ? (p.weight > 0 ? `${Math.round(p.points ?? p.weight * p.value)} of ${p.weight}` : "info") : p.status === "n/a" ? "n/a" : "not read";
-  const ev = (p.evidence || []).slice(0, 6).map((e) => `<li>${e.label ? `<b>${esc(e.label)}:</b> ` : ""}${esc(e.text)}</li>`).join("");
+  // claims: the exact words found, where they were found, and what the chain shows
+  const CL = { proven: "var(--t-good)", contradicted: "var(--t-bad)", unverified: "var(--t-grey)" };
+  const claims = (p.claims || []).slice(0, 10).map((c) => { const src = okHref(c.url), ln = okHref(c.link?.href);
+    return `<li style="--c:${CL[c.status] || CL.unverified}"><span class="st">${esc(c.status)}</span><b>${esc(c.name)}</b><q>${esc(c.quote)}</q><small>${esc(c.evidence)}${ln ? ` <a href="${esc(ln)}"${/^https:/.test(ln) ? ' target="_blank" rel="noopener"' : ""}>${esc(c.link.label)}</a>` : ""}${src ? ` · found on <a href="${esc(src)}" target="_blank" rel="noopener nofollow">${esc(src.replace(/^https?:\/\//, "").slice(0, 60))}</a>` : ""}</small></li>`; }).join("");
+  const ev = claims ? "" : (p.evidence || []).slice(0, 6).map((e) => `<li>${e.label ? `<b>${esc(e.label)}:</b> ` : ""}${esc(e.text)}</li>`).join("");
   const lk = (p.links || []).map((l) => { const h = okHref(l.href); return h ? `<a href="${esc(h)}"${/^https:/.test(h) ? ' target="_blank" rel="noopener"' : ""}>${esc(l.label)}</a>` : ""; }).join("");
-  return `<li class="ck-part"><h3>${esc(p.name)}<small>weight ${p.weight}</small></h3><div><p>${esc(p.summary)}</p>${ev ? `<ul>${ev}</ul>` : ""}${lk ? `<div class="lk">${lk}</div>` : ""}</div><span class="ck-chip" style="--c:${p.status === "scored" ? tone(p.tone) : "var(--t-grey)"}">${chip}</span></li>`;
+  return `<li class="ck-part"><h3>${esc(p.name)}<small>weight ${p.weight}</small></h3><div><p>${esc(p.summary)}</p>${ev ? `<ul>${ev}</ul>` : ""}${claims ? `<ul class="ck-claims">${claims}</ul>` : ""}${lk ? `<div class="lk">${lk}</div>` : ""}</div><span class="ck-chip" style="--c:${p.status === "scored" ? tone(p.tone) : "var(--t-grey)"}">${chip}</span></li>`;
 }
 function showCoin(r) {
   coinBox.hidden = false;
@@ -147,4 +151,16 @@ $("[data-ck-form]")?.addEventListener("submit", (e) => {
   if (!a) { toast("Paste a token address: 0x and 40 letters or digits."); return; }
   location.href = `/check/${a}`;
 });
+async function loadRecord() {
+  const box = $("[data-ck-record]"); if (!box) return;
+  let d; try { d = await (await fetch("/api/check/record")).json(); } catch { box.innerHTML = '<p class="ck-empty">The record could not be read just now.</p>'; return; }
+  const n = (v, suf = "") => (v == null ? "–" : `${v}${suf}`);
+  const ch = (v) => (v == null ? "–" : `${v > 0 ? "+" : ""}${v}%`);
+  box.innerHTML = (d.buckets || []).map((b) => `<div class="ck-rec-card" style="--c:${tone(b.tone)}"><h3>${esc(b.label)}</h3><span class="rng">score ${esc(b.band.replace("-", " to "))}</span>
+    <dl><dt>Graded</dt><dd>${b.graded}</dd><dt>Went to zero</dt><dd>${b.graded ? `${b.wentToZero} (${n(b.zeroPct, "%")})` : "–"}</dd><dt>Median 24 h</dt><dd>${ch(b.median24h)}</dd><dt>Still watching</dt><dd>${b.watching}</dd></dl>
+    ${b.smallSample ? `<p class="small">${b.graded ? `Only ${b.graded} graded: too few to read much into.` : "None graded yet."}</p>` : ""}</div>`).join("");
+  const note = $("[data-ck-record-note]");
+  if (note) note.textContent = `${d.note ? d.note + " " : ""}${d.rules || ""}`;
+}
 loadDash();
+loadRecord();

@@ -21,7 +21,10 @@
 //   GET /api/check/:address/card.png  the 1200 × 630 card X and Telegram show for troya.codes/check/<address>
 //   page /check/<address>             server.mjs serves public/check.html with this coin's link preview (renderPage)
 //   page /check                       the dashboard (same file, no address)
-// PHASE 2 HOOK: reading the claims on a coin's website and X account goes in claimsPart() below (weight 0 until then).
+//   Claims         checkclaims.mjs (phase 2): what the coin's website and X posts claim (liquidity locked, renounced, tax,
+//                  supply, burn, audit, team, live product, listing, partner), each proven, contradicted or unverified
+// Phase 2 also grades every tracked check later, as fates.mjs grades launches (GET /api/check/record), and X and Telegram
+// wait for a fuller read before they answer (checkForChat).
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -53,7 +56,7 @@ let store = null;
 /* ---------- how the score is made ---------- */
 // Each part gives a value from 0 to 1. score = 100 × Σ(weight × value) / Σ(weight of the parts that were read), then the
 // lowest cap that applies. The weights add up to 100 when every part is read.
-export const WEIGHTS = { gate: 30, ring: 15, devside: 15, holders: 15, market: 10, heel: 5, clash: 5, age: 5, claims: 0 };
+export const WEIGHTS = { gate: 27, ring: 14, devside: 14, holders: 14, market: 9, heel: 4, clash: 4, age: 4, claims: 10 };
 export const CAPS = {
   gateFail: 15,       // the Gate failed a check that decides a buy: the test sell, the exact swap, the transfer tax or the fees
   ringRed: 20,        // Ring Radar: a rigged launch pattern
@@ -61,6 +64,7 @@ export const CAPS = {
   lpPulled: 25,       // The Assay: the dev pulled liquidity
   devsideFail: 30,    // the dev and the wallets tied to it hold most of it or are selling now (the Gate blocks the buy)
   noSellRoute: 40,    // a buy works, but no route sells it back (on Troya or through KyberSwap)
+  claimFalse: 35,     // the project claims liquidity locked, renounced, a tax, a supply or a burn that the chain contradicts
   thinFail: 45,       // the pool is too thin for a 0.01 ETH buy (price impact or depth failed)
   gateNotRead: 60,    // the Gate could not run: nothing shows it can be sold back
   unread: 74,         // the Gate, Ring Radar, the dev side or The Assay is still unread: never "No major flags" without them
@@ -116,6 +120,7 @@ export function gatePart(g, A) {
     const d = noDot(fail.detail);
     if (fail.key === "route") return score(p, 0, `Blocked: Troya finds no route to buy it (${d}).`, { cap: { at: CAPS.noRoute, why: "the Gate finds no route to buy it" }, short: "Troya finds no route to buy it." });
     if (fail.key === "impact" || fail.key === "depth") return score(p, 0.2, `Blocked: the pool is too thin for a 0.01 ETH buy (${fail.label}: ${d}).`, { cap: { at: CAPS.thinFail, why: "the pool is too thin for a small buy" }, short: "The pool is too thin for even a small buy." });
+    p.notSellable = fail.key === "sell" || fail.key === "sim";
     const what = { sell: "the test sell failed, so it could not be sold back", sim: "the exact swap fails when simulated", tax: `too much is lost on every transfer (${d})`, fee: `fees and taxes are too high (${d})` }[fail.key] || `${lc(fail.label)} failed`;
     return score(p, 0, `Blocked: ${what}.${fail.key === "sell" || fail.key === "sim" ? ` ${d}.` : ""}`, { cap: { at: CAPS.gateFail, why: `the Gate failed: ${what}` }, short: `${cap1(what)}.` });
   }
@@ -236,10 +241,34 @@ export function agePart(bornAt, src, A, now = Date.now()) {
   return score(p, v, `${age} old: born ${new Date(bornAt).toISOString().slice(0, 16).replace("T", " ")} UTC${src === "pool" ? " (the date of its first pool)" : ", read from its creation block"}.`, { short: h < 24 ? `It is only ${age} old.` : `It is ${age} old.` });
 }
 
-// PHASE 2 HOOK: the claims a coin makes on its website and X account (team, partners, audits, "renounced", "locked"), read
-// and compared with the chain. Phase 1 leaves it out of the score (weight 0) and says so on the page.
-export function claimsPart() {
-  return notApplicable(part("claims"), "Coming next: Troya will read the claims on the coin's website and X account and compare them with the chain.");
+// Phase 2: the claims a coin makes on its website and X account, each checked against the chain (checkclaims.mjs). cl =
+// readClaims() + verified: [{ type, quote, url, status: proven | contradicted | unverified, evidence, link }].
+const CLAIM_TYPE_NAMES = { lp: "Liquidity locked or burned", renounced: "Ownership renounced", tax: "Tax", supply: "Total supply", burn: "Supply burned", audit: "Audit", team: "Team", live: "Product live", listing: "Listing", partner: "Partnership" };
+const KEY_CLAIMS = new Set(["lp", "renounced", "tax", "supply", "burn"]);
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
+const clipQ = (q, n = 70) => (String(q).length > n ? `${String(q).slice(0, n - 1).replace(/\s+\S*$/, "")}…` : String(q));
+export function claimsPart(cl) {
+  const p = part("claims");
+  if (!cl) return notRead(p, "Not read: the website and X posts were not read in time.");
+  const srcs = cl.sources || [];
+  p.links = srcs.filter((x) => x.ok).map((x) => ({ label: x.kind === "website" ? "Website" : "X account", href: x.url }));
+  if (!cl.website && !cl.x) return notApplicable(p, "No website or X account is known for this coin, so there were no claims to read.");
+  const ok = srcs.filter((x) => x.ok);
+  const where = ok.map((x) => (x.kind === "website" ? `its website (${hostOf(x.url)})` : "its X posts")).join(" and ");
+  if (!ok.length) return notRead(p, `Not read: ${srcs.map((x) => `${x.kind === "website" ? `the website (${hostOf(x.url) || x.url})` : "X"}: ${x.why || "no answer"}`).join("; ")}.`);
+  const v = (cl.verified || []).filter((c) => c && c.quote && c.url);
+  if (!v.length) return notApplicable(p, `No checkable claim found on ${where}${cl.model ? "" : " (fixed patterns only: the reader model is off)"}.`);
+  p.claims = v.map((c) => ({ type: c.type, name: CLAIM_TYPE_NAMES[c.type] || c.type, quote: c.quote, url: c.url, status: c.status, evidence: c.evidence, link: c.link || null }));
+  p.evidence = v.map((c) => ({ status: c.status === "proven" ? "pass" : c.status === "contradicted" ? "fail" : "warn", label: `${CLAIM_TYPE_NAMES[c.type] || c.type}, ${c.status}`, text: `"${c.quote}" (${hostOf(c.url)}). ${noDot(c.evidence)}` }));
+  const n = (st) => v.filter((c) => c.status === st).length;
+  const pr = n("proven"), co = n("contradicted"), un = n("unverified");
+  const val = (pr + 0.5 * un) / v.length;
+  const bad = v.find((c) => c.status === "contradicted" && KEY_CLAIMS.has(c.type)) || null;
+  const anyBad = bad || v.find((c) => c.status === "contradicted");
+  const tally = `${v.length} claim${v.length === 1 ? "" : "s"} on ${where}: ${pr} proven, ${co} contradicted, ${un} unverified.`;
+  const summary = anyBad ? `${tally} It says "${clipQ(anyBad.quote, 90)}", but ${noDot(anyBad.evidence).replace(/^./, (x) => x.toLowerCase())}.` : tally;
+  const short = bad ? `It claims "${clipQ(bad.quote, 50)}", but the chain shows otherwise.` : anyBad ? `A claim on its site doesn't hold up: "${clipQ(anyBad.quote, 50)}".` : pr ? `${pr} of its ${v.length} claim${v.length === 1 ? "" : "s"} check out on chain.` : `Its ${v.length} claim${v.length === 1 ? "" : "s"} could not be checked.`;
+  return score(p, val, summary, { short, ...(bad ? { cap: { at: CAPS.claimFalse, why: `the project claims "${clipQ(bad.quote, 60)}" and the chain contradicts it` } } : {}) });
 }
 
 /**
@@ -265,7 +294,7 @@ export function scoreCheck(f) {
     ].filter(Boolean).slice(0, 3);
     return { ...base, score: null, label: f.kind === "stock" ? "Tokenized stock" : "Major token", tone: "grey", headline: `${cap1(what)}, not a launch, so it gets no meme-coin score.`, reasons, parts: [gate, m], caps: [], gatePassed: gate.status === "scored" && gate.value >= 0.75 && !gate.cap, partial: gate.status === "not read" };
   }
-  const parts = [gate, ringPart(f.gate, f.ring, A), devsidePart(f.gate, f.devlinks, A), holdersPart(f.assay, A), marketPart(f.token, A), heelPart(f.heel, A), clashPart(f.clash, base.symbol, A), agePart(f.bornAt, f.bornSrc, A, base.checkedAt), claimsPart()];
+  const parts = [gate, ringPart(f.gate, f.ring, A), devsidePart(f.gate, f.devlinks, A), holdersPart(f.assay, A), marketPart(f.token, A), heelPart(f.heel, A), clashPart(f.clash, base.symbol, A), agePart(f.bornAt, f.bornSrc, A, base.checkedAt), claimsPart(f.claims)];
   const read = parts.filter((p) => p.status === "scored" && p.weight > 0);
   const W = read.reduce((s, p) => s + p.weight, 0);
   const caps = parts.filter((p) => p.status === "scored" && p.cap).map((p) => ({ part: p.key, at: p.cap.at, why: p.cap.why }));
@@ -290,6 +319,7 @@ export function scoreCheck(f) {
     ...base, score: s, label: enough ? band.label : "Not enough read", tone: enough ? band.tone : "grey",
     headline: enough ? (reasons[0]?.short || reasons[0]?.text || "") : "Too few checks could be read just now. Try again in a minute.",
     reasons, parts, caps, readWeight: W, partial,
+    priceUsd: Number(f.token?.priceUsd) > 0 ? Number(f.token.priceUsd) : null, notSellable: !!gate.notSellable,
     // Buy only after a passed Gate, and never while Ring Radar is red or the dev side fails (the Gate's own result is kept
     // 10 minutes, so a ring or dev-side read that finished after it still counts here; Swap runs the Gate again anyway)
     gatePassed: gate.status === "scored" && !gate.cap && !gate.noSellRoute && (f.gate?.word === "passed" || f.gate?.word === "notes")
@@ -298,7 +328,7 @@ export function scoreCheck(f) {
 }
 
 /* ---------- reading the facts (the modules above, through their caches) ---------- */
-async function gather(A, waitMs = WAIT_MS) {
+async function gather(A, waitMs = WAIT_MS, hints = []) {
   const R = await import("./robinhood.mjs");
   const code = await R.rpc("robinhood", "eth_getCode", [A, "latest"], { timeoutMs: 12_000 }).catch((e) => { throw Object.assign(new HttpError(502, `Robinhood Chain could not be read just now (${e.message}). Try again in a minute.`), { expose: true }); });
   const now = Date.now();
@@ -310,18 +340,27 @@ async function gather(A, waitMs = WAIT_MS) {
   const stock = !major && (M.isStock(A) || !!S?.isStock?.(A));
   const deadline = Date.now() + waitMs;
   const left = () => Math.max(500, deadline - Date.now());
-  const tokP = within(M.getRobinhoodToken(A).then((r) => r?.token || null), Math.min(left(), 12_000));
+  const tokP = within(M.getRobinhoodToken(A).then((r) => r?.token || null), left());   // no shorter cap: a cold coin took ~14 s here
   const gateP = within(import("./badge.mjs").then((m) => m.badgeResult(A)).catch((e) => ({ verdict: "error", error: String(e?.message || e).slice(0, 160) })), left());
   if (major || stock) {
     const [token, gate] = await Promise.all([tokP, gateP]);
     return { address: A, kind: major ? "major" : "stock", symbol: major?.symbol || token?.symbol || meta.symbol, name: major?.name || token?.name || meta.name, gate, token, now };
   }
-  const [token, gate, assay, heel, clash, bornAt] = await Promise.all([
-    tokP, gateP,
-    within(import("./assay.mjs").then((m) => m.assay(A, { deep: true, waitMs: left() })), left() + 500),
+  const assayP = within(import("./assay.mjs").then((m) => m.assay(A, { deep: true, waitMs: left() })), left() + 500);
+  // phase 2: the website and X claims, read beside the rest; checked once the Gate and The Assay are in (or out of time)
+  const claimsP = within(tokP.then(async (tok) => {
+    const CC = await import("./checkclaims.mjs");
+    const cl = await CC.readClaims(A, { token: tok, hints });
+    if (!cl.claims.length) return { ...cl, verified: [] };
+    const [cf, g, as] = await Promise.all([CC.chainFacts(A), gateP, assayP]);
+    return { ...cl, verified: await CC.verifyClaims(cl.claims, { address: A, gate: g, assay: as, ...cf, siteLinks: cl.siteLinks }) };
+  }), left() + 1500);
+  const [token, gate, assay, heel, clash, bornAt, claims] = await Promise.all([
+    tokP, gateP, assayP,
     within(import("./heel.mjs").then((m) => m.heel(A)), left()),
     within(M.nameClash(A), Math.min(left(), 8000)),
     within(import("./tokenage.mjs").then((m) => m.bornAt(A, { waitMs: Math.min(left(), 6000) })), Math.min(left(), 6500)),
+    claimsP,
   ]);
   // Ring Radar and the dev side were read by the Gate itself: these are cache hits, never a second read
   // (a "still reading" line means the first read is under way: the cache is asked, never a second read)
@@ -330,7 +369,7 @@ async function gather(A, waitMs = WAIT_MS) {
   const ring = RR?.ringCached?.(A) || (ringLine && !/still reading/i.test(ringLine.detail || "") ? await within(RR.ringCheck(A), 3000) : null);
   const devlinks = await import("./devlinks.mjs").then((m) => m.devLinksCached(A)).catch(() => null);
   const bornSrc = await import("./tokenage.mjs").then((m) => m.bornSource(A)).catch(() => null);
-  return { address: A, kind: "coin", symbol: token?.symbol || gate?.symbol || meta.symbol, name: token?.name || gate?.name || meta.name, gate, ring, devlinks, assay, token, heel, clash, bornAt: bornAt || token?.bornAt || null, bornSrc, now };
+  return { address: A, kind: "coin", symbol: token?.symbol || gate?.symbol || meta.symbol, name: token?.name || gate?.name || meta.name, gate, ring, devlinks, assay, token, heel, clash, claims, bornAt: bornAt || token?.bornAt || null, bornSrc, now };
 }
 
 /* ---------- the cache, the queue and the record ---------- */
@@ -347,15 +386,16 @@ const cached = (A) => { const h = memo.get(lc(A)); return h?.res && Date.now() -
 /** The check for one coin (cached 10 minutes; 1 minute while a part is still reading). via: x | telegram | web | api. */
 // X and Telegram wait longer than a web page: a reply should carry as many parts as can be read
 const WAIT_CHAT_MS = Math.max(WAIT_MS, Number(process.env.CHECK_WAIT_CHAT_MS) || 40_000);
-export async function troyaCheck(address, { via = "web", by = null, record = true, waitMs = via === "x" || via === "telegram" ? WAIT_CHAT_MS : WAIT_MS } = {}) {
+export async function troyaCheck(address, { via = "web", by = null, record = true, waitMs = via === "x" || via === "telegram" ? WAIT_CHAT_MS : WAIT_MS, fresh: again = false, hints = [] } = {}) {
   if (!isAddress(String(address || ""))) throw new HttpError(400, "Paste a token address on Robinhood Chain (0x + 40 hex characters).");
   const A = getAddress(String(address).toLowerCase());
   const k = lc(A);
-  let res = cached(A), fresh = false;
+  // again: read once more past a cached partial answer (the parts that finished since are cache hits in their own modules)
+  let res = again && cached(A)?.partial ? null : cached(A), fresh = false;
   if (!res) {
     let h = memo.get(k);
     if (!h?.p) {
-      h = { p: slot(() => gather(A, waitMs)).then((f) => scoreCheck(f)) };
+      h = { p: slot(() => gather(A, waitMs, (hints || []).slice(0, 6))).then((f) => scoreCheck(f)) };
       memo.set(k, h);
       h.p.then((r) => { memo.set(k, { at: Date.now(), ttl: r.partial ? TTL_PARTIAL : TTL, res: r }); if (memo.size > 3000) memo.delete(memo.keys().next().value); }, () => { if (memo.get(k) === h) memo.delete(k); });
       fresh = true;
@@ -373,10 +413,109 @@ async function checkWithin(A, ms, opts) {
   return within(troyaCheck(A, opts), ms, null);
 }
 
+/**
+ * X and Telegram (phase 2, cold start): one check within CHECK_WAIT_CHAT_MS, read again while parts are still reading and time
+ * is left, so a slow coin is answered with a score instead of "not enough read". Recorded once, at the end.
+ */
+export async function checkForChat(address, { via = "telegram", by = null, hints = [], budgetMs = WAIT_CHAT_MS, pauseMs = 3000 } = {}) {
+  const end = Date.now() + budgetMs;
+  let r = await troyaCheck(address, { via, by, hints, record: false, waitMs: budgetMs });
+  for (let i = 0; i < 4 && r.kind === "coin" && (r.partial || r.score == null) && end - Date.now() > pauseMs + 4000; i++) {
+    await sleep(pauseMs);
+    r = await troyaCheck(address, { via, by, hints, record: false, fresh: true, waitMs: Math.max(3000, end - Date.now() - 500) });
+  }
+  if (store) await saveRow(r, via, by).catch((e) => console.warn("[check] save", e.message));
+  return r;
+}
+
 async function saveRow(r, via, by) {
   const row = { address: r.address, symbol: r.symbol, kind: r.kind, score: r.score, label: r.label, tone: r.tone, reasons: (r.reasons || []).map((x) => ({ tone: x.tone, text: String(x.short || x.text).slice(0, 160) })),
     at: Date.now(), via: ["x", "telegram", "web", "api"].includes(via) ? via : "web", by: by ? String(by).replace(/[^A-Za-z0-9_]/g, "").slice(0, 32) || null : null };
-  await store.update(FILE, [], (rows) => { const a = Array.isArray(rows) ? rows : []; a.push(row); return a.slice(-MAX_ROWS); });
+  await store.update(FILE, [], (rows) => {
+    const a = Array.isArray(rows) ? rows : [];
+    row.track = trackOf(row, r, a);
+    a.push(row);
+    return a.slice(-MAX_ROWS);
+  });
+}
+
+/* ---------- the track record: every tracked check graded at 1 hour and 24 hours (the rules fates.mjs uses) ---------- */
+const H = 3600e3, DAY = 24 * H;
+export const GRADE_ZERO = 0.1;                       // "went to zero": the 24 h price is at most 10% of the price at the check
+// One graded check per coin per 24 hours, the first one: the same coin checked again an hour later is the same bet, and
+// counting it twice would let a busy coin outweigh the rest. Stocks, majors and checks with no score are not graded.
+export function trackOf(row, r, rows = []) {
+  if (row.kind !== "coin" || row.score == null) return null;
+  const dup = rows.some((x) => x.track && lc(x.address) === lc(row.address) && row.at - x.at < DAY && ["watching", "graded"].includes(x.track.status));
+  if (dup) return { status: "dup" };
+  if (r.notSellable) return { status: "watching", p0: r.priceUsd ?? null, notSellable: true };
+  return r.priceUsd ? { status: "watching", p0: r.priceUsd } : { status: "no-price" };
+}
+/** One grading step for a tracked row (pure but for priceFn): fills p1h at 1 hour and grades at 24 hours. */
+export async function gradeStep(row, now, priceFn) {
+  const t = row.track;
+  if (!t || t.status !== "watching") return false;
+  const age = now - row.at;
+  let changed = false;
+  if (t.notSellable && age >= DAY) { Object.assign(t, { status: "graded", result: "not-sellable", gradedAt: now }); return true; }
+  if (t.p1h == null && !t.tried1h && age >= H) { t.tried1h = true; t.p1h = await priceFn(row.address).catch(() => null); changed = true; }
+  if (age >= DAY) {
+    const p = await priceFn(row.address).catch(() => null);
+    Object.assign(t, { p24h: p, status: "graded", gradedAt: now, result: t.notSellable ? "not-sellable" : !p || p <= t.p0 * GRADE_ZERO ? "zero" : p > t.p0 ? "up" : "down" });
+    changed = true;
+  }
+  return changed;
+}
+const median = (a) => { if (!a.length) return null; const x = [...a].sort((p, q) => p - q), m = x.length >> 1; return x.length % 2 ? x[m] : (x[m - 1] + x[m]) / 2; };
+// a coin that could not be sold, or has no price left, counts as −100% in the median (as in Two Fates)
+const change24 = (t) => (t.result === "not-sellable" || (t.result === "zero" && !(t.p24h > 0)) ? -100 : t.p0 > 0 && t.p24h > 0 ? (t.p24h / t.p0 - 1) * 100 : null);
+export const SMALL_SAMPLE = 20;
+/** The record by score band, from every graded row (nothing left out): GET /api/check/record. */
+export function recordOf(rows, now = Date.now()) {
+  const tracked = (rows || []).filter((x) => x.track && x.track.status !== "dup" && x.track.status !== "no-price" && x.score != null);
+  const buckets = [[0, 24], [25, 49], [50, 74], [75, 100]].map(([lo, hi]) => {
+    const inB = tracked.filter((x) => x.score >= lo && x.score <= hi);
+    const graded = inB.filter((x) => x.track.status === "graded");
+    const zero = graded.filter((x) => x.track.result === "zero" || x.track.result === "not-sellable").length;
+    const ch = graded.map((x) => change24(x.track)).filter((v) => v != null);
+    const label = bandOf(lo).label;
+    return { band: `${lo}-${hi}`, label, tone: bandOf(lo).tone, tracked: inB.length, watching: inB.filter((x) => x.track.status === "watching").length, graded: graded.length,
+      wentToZero: zero, notSellable: graded.filter((x) => x.track.result === "not-sellable").length, up24h: graded.filter((x) => x.track.result === "up").length,
+      zeroPct: graded.length ? Math.round((zero / graded.length) * 1000) / 10 : null, median24h: ch.length ? Math.round(median(ch) * 10) / 10 : null,
+      smallSample: graded.length < SMALL_SAMPLE };
+  });
+  const graded = buckets.reduce((s, b) => s + b.graded, 0);
+  return {
+    name: "Troya Check record", buckets, graded, watching: buckets.reduce((s, b) => s + b.watching, 0), at: now,
+    note: !graded ? "No check has been graded yet: the first grades come 24 hours after the first checks." : graded < SMALL_SAMPLE * 2 ? `Only ${graded} check${graded === 1 ? "" : "s"} graded so far: too few to read much into yet.` : null,
+    rules: "Every scored check of a coin is tracked, one per coin per 24 hours (the first). Its price at the check is compared with the price 1 hour and 24 hours later. Went to zero: the 24 h price is 10% of the price at the check or less, or there is no price any more. A coin the Gate could not sell in its test sell counts as a full loss. Checks with no price at the check are left out. Every graded check is counted; nothing is picked. What the price did, not a forecast or advice.",
+  };
+}
+async function priceNow(a) {
+  const M = await import("./market.mjs");
+  const r = await M.getRobinhoodToken(a);
+  const p = r?.pons;
+  if (p && !p.graduated && p.priceInPair > 0 && p.pair?.address === "native") { const eu = Number(await M.getEthUsd()) || 0; if (eu) return p.priceInPair * eu; }
+  const v = Number(r?.token?.priceUsd);
+  return v > 0 ? v : null;
+}
+let grading = false;
+async function gradeTick(now = Date.now()) {
+  if (grading || !store) return;
+  grading = true;
+  try {
+    const rows = await store.readJson(FILE, []);
+    const due = new Map();                       // address → the price read once this round
+    const price = (a) => { const k = lc(a); if (!due.has(k)) due.set(k, priceNow(a).catch(() => null)); return due.get(k); };
+    const results = new Map();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      if (row.track?.status !== "watching") continue;
+      const copy = { ...row, track: { ...row.track } };
+      if (await gradeStep(copy, now, price)) results.set(`${row.address}:${row.at}`, copy.track);
+    }
+    if (results.size) await store.update(FILE, [], (a) => { for (const x of Array.isArray(a) ? a : []) { const t = results.get(`${x.address}:${x.at}`); if (t) x.track = t; } return a; });
+  } catch (e) { console.warn("[check] grade", e.message); }
+  finally { grading = false; }
 }
 
 /** Recent checks and this week's boards, from data/checks.json. */
@@ -465,7 +604,7 @@ export function xReplyText(r) {
   return `${head}\n${link}`;
 }
 /** A check request from X → { reply, address?, result? } (the caller posts it within its own caps). */
-export async function xCheckReply(req, { by = null } = {}) {
+export async function xCheckReply(req, { by = null, hints = [] } = {}) {
   let address = req.address || null;
   if (!address && req.ticker) {
     const t = await resolveTicker(req.ticker);
@@ -474,7 +613,11 @@ export async function xCheckReply(req, { by = null } = {}) {
     if (t.many) return { reply: `${t.many} contracts on Robinhood Chain use ${tag}, so Troya won't pick one. Reply "check" with the address you mean.${t.oldest ? `\nOldest: ${SITE}/check/${t.oldest}` : ""}`, many: t.many, address: t.oldest };
     address = t.address;
   }
-  const r = await troyaCheck(address, { via: "x", by });
+  return xAnswer(await checkForChat(address, { via: "x", by, hints }));
+}
+/** What X gets for a finished check: never "not enough read" (no score on a coin = no reply; logged, the next mention reads again). */
+export function xAnswer(r) {
+  if (r.kind === "coin" && r.score == null) return { reply: null, silent: true, why: "no score yet (not enough read): stayed silent", address: r.address, result: r };
   return { reply: xReplyText(r), address: r.address, result: r };
 }
 
@@ -671,7 +814,10 @@ export function pageLimited(ip, n = 60) {
 
 export async function register(r, ctx) {
   store = ctx.store;
+  if (process.env.CHECK_GRADE !== "0") setInterval(() => gradeTick().catch(() => {}), 5 * 60_000).unref?.();
   r.get("/api/check", async () => dashboard(), { weight: 1, perMin: 60 });
+  // before /api/check/:address, which would also match this path
+  r.get("/api/check/record", async () => recordOf(store ? await store.readJson(FILE, []) : []), { weight: 1, perMin: 60 });
   r.get("/api/check/:address", async ({ params }) => publicResult(await troyaCheck(params.address, { via: "web" })), { weight: 2, perMin: 20 });
   r.get("/api/check/:address/card.png", async ({ params, req, res }) => {
     if (!isAddress(String(params.address || ""))) throw new HttpError(400, "That is not a token address.");
@@ -686,4 +832,4 @@ export async function register(r, ctx) {
   }, { weight: 1, perMin: 60 });
 }
 
-export const _test = { cardSvg, measure, wrap2, titleOf, descOf, tagOf, memo, setStore: (s) => { store = s; } };
+export const _test = { gradeTick, cardSvg, measure, wrap2, titleOf, descOf, tagOf, memo, setStore: (s) => { store = s; } };

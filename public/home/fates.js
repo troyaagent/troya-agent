@@ -35,7 +35,7 @@
       </div>
       <div class="rec-wrap"><table class="rec-tbl rec-calls"><thead><tr><th>Coin</th><th>List</th><th>Checked</th><th>1 h</th><th>24 h</th><th>Result</th></tr></thead><tbody>
       ${(d.recent || []).filter((c) => c.status !== "no-price").slice(0, 40).map((c) => `<tr>
-        <td><a class="rec-coin" href="/agent#/gate/${esc(c.token)}">${c.symbol ? "$" + esc(c.symbol) : short(c.token)}</a>${c.reason ? `<small title="${esc(c.reason)}">${esc(c.reason.split(":")[0])}</small>` : ""}</td>
+        <td><a class="rec-coin" href="/agent#/gate/${esc(c.token)}">${c.symbol ? "$" + esc(c.symbol) : short(c.token)}</a>${c.symbol ? ` <code class="rec-ca" title="${esc(c.token)}" style="font-size:11px;opacity:.65">${esc(c.token.slice(0, 6))}…${esc(c.token.slice(-4))}</code>` : ""}${c.reason ? `<small title="${esc(c.reason)}">${esc(c.reason.split(":")[0])}</small>` : ""}</td>
         <td>${c.cohort === "passed" ? "Passed" : "Blocked"}</td><td>${ago(c.at)}</td>
         <td>${c.change1h == null ? '<span class="rec-na">–</span>' : pct(c.change1h)}</td>
         <td>${c.change24h == null ? '<span class="rec-na">–</span>' : pct(c.change24h)}</td>

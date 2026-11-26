@@ -1,5 +1,7 @@
 User-agent: *
 Allow: /
+# the Troya Check card images are link previews for X and Telegram: crawlers must reach them
+Allow: /api/check/
 Disallow: /api/
 Disallow: /agent/api/
 

@@ -745,7 +745,10 @@ export async function xCheckReply(req, { by = null, hints = [] } = {}) {
     if (t.many) return { reply: `${t.many} contracts on Robinhood Chain use ${tag}, so Troya won't pick one. Reply "check" with the address you mean.${t.oldest ? `\nOldest: ${SITE}/check/${t.oldest}` : ""}`, many: t.many, address: t.oldest };
     address = t.address;
   }
-  return xAnswer(await checkForChat(address, { via: "x", by, hints }));
+  const r = await checkForChat(address, { via: "x", by, hints });
+  // render the card before the reply goes out, so X's crawler finds it ready (a cold render took ~20 s, 27 Nov 2026)
+  if (r && r.score != null) await Promise.race([cardFor(getAddress(lc(r.address || address))), sleep(30_000)]).catch(() => {});
+  return xAnswer(r);
 }
 /** What X gets for a finished check: never "not enough read" (no score on a coin = no reply; logged, the next mention reads again). */
 export function xAnswer(r) {

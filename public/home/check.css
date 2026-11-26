@@ -372,3 +372,100 @@ body.ck-coinpage .ck-coinwrap { max-width: 1600px; margin: 0 auto; padding: 104p
   .cv-flist li { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .cv-total b { font-size: 52px; }
 }
+
+/* ===================================================== brand restyle (27 Nov, owner: "differentiate it") =====================================================
+   Troya's ice and deep teal as the identity: teal glow behind the hero and the board, dark glass panels with a teal top edge,
+   the brand gradient on Check and active chips, colour that carries meaning. CSS only; no blur on scrolling elements. */
+:root { --ice: #8edff5; --ice-2: #c6f1fb; --teal-d: #1f3b42; --teal-dd: #101a1c; --grad-b: linear-gradient(135deg, #ffffff 0%, #c6f1fb 30%, #8edff5 62%, #4aa7cf 100%);
+  --glass: linear-gradient(180deg, rgba(142, 223, 245, .055), rgba(142, 223, 245, .012) 38%, rgba(10, 13, 16, .6)); --edge: rgba(142, 223, 245, .16); --row-tint: rgba(142, 223, 245, .045);
+  --t-good: #6fe3b4; --t-ice: #8edff5; }
+.ck-page { position: relative; isolation: isolate; }
+.ck-page::before { content: ""; position: absolute; z-index: -1; inset: 0 0 auto; height: 1400px; pointer-events: none;
+  background: radial-gradient(60% 520px at 18% 120px, rgba(31, 59, 66, .75), transparent 70%), radial-gradient(45% 600px at 85% 760px, rgba(74, 167, 207, .12), transparent 70%); }
+body.ck-coinpage .ck-page::before { height: 900px; }
+/* hero */
+.ck-eyebrow { color: var(--ice); }
+.ck-hero2 h1 { background: linear-gradient(180deg, #ffffff 30%, #c6f1fb 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ck-hero2 h1 .acc { -webkit-text-fill-color: transparent; }
+.ck-search { border-color: var(--edge); background: linear-gradient(180deg, rgba(31, 59, 66, .45), rgba(16, 26, 28, .75)); box-shadow: 0 0 0 1px rgba(142, 223, 245, .04), 0 24px 60px -24px rgba(74, 167, 207, .35); }
+.ck-search:focus-within { border-color: rgba(142, 223, 245, .55); box-shadow: 0 0 0 4px rgba(142, 223, 245, .08), 0 24px 60px -24px rgba(74, 167, 207, .45); }
+.ck-search-ico { stroke: var(--ice); }
+.ck-search button, .ck-btn.solid { background: var(--grad-b); color: #06232b; border-color: transparent; box-shadow: 0 8px 24px -10px rgba(142, 223, 245, .6); }
+.ck-search button:hover, .ck-btn.solid:hover { filter: brightness(1.06); background: var(--grad-b); color: #06232b; }
+.ck-what li { padding: 6px 12px; border-radius: 999px; background: rgba(142, 223, 245, .05); border: 1px solid rgba(142, 223, 245, .1); }
+.ck-what b { color: var(--ice-2); }
+/* panels: dark glass with a teal top edge */
+.ck-pane, .ck-card2, .cv-verdict, .ck-board, .ck-rec-card { background: var(--glass), var(--teal-dd); border: 1px solid rgba(142, 223, 245, .1); box-shadow: inset 0 1px 0 var(--edge); }
+.ck-card2 h3, .ck-board h3, .ck-sub, .cv-change b, .cv-kick { color: var(--ice); }
+.ck-tabs button { color: rgba(198, 241, 251, .35); }
+.ck-tabs button[aria-selected="true"] { color: var(--ice-2); border-image: var(--grad-b) 1; border-bottom-width: 2px; }
+.ck-seg { border-color: rgba(142, 223, 245, .14); background: rgba(16, 26, 28, .6); }
+.ck-seg button[aria-pressed="true"] { background: var(--grad-b); color: #06232b; font-weight: 600; }
+.ck-chips button { border-color: rgba(142, 223, 245, .12); background: rgba(16, 26, 28, .5); }
+.ck-chips button:hover { border-color: rgba(142, 223, 245, .35); }
+.ck-chips button[aria-pressed="true"] { background: var(--grad-b); color: #06232b; border-color: transparent; font-weight: 600; }
+.ck-chips button[aria-pressed="true"] small { color: rgba(6, 35, 43, .7); }
+.ck-chips button[aria-pressed="true"] .t-dot { box-shadow: 0 0 0 2px rgba(6, 35, 43, .35); }
+.ck-find input { border-color: rgba(142, 223, 245, .14); background: rgba(16, 26, 28, .6); }
+.ck-filters { border-bottom-color: rgba(142, 223, 245, .08); }
+/* the table: airy, faint separators, teal hover, the top three lifted */
+.ck-r { border-bottom-color: rgba(142, 223, 245, .05); min-height: 64px; border-radius: 12px; transition: background .15s; }
+.ck-h { color: rgba(142, 223, 245, .6); background: none; border-bottom-color: rgba(142, 223, 245, .12); border-radius: 0; }
+.ck-grid > .ck-r:not(.ck-h):nth-child(even) { background: rgba(255, 255, 255, .012); }
+.ck-grid > .ck-r:not(.ck-h):hover { background: var(--row-tint); }
+.ck-grid:not(.is-checks) > .ck-r:nth-child(2), .ck-grid:not(.is-checks) > .ck-r:nth-child(3), .ck-grid:not(.is-checks) > .ck-r:nth-child(4) { background: linear-gradient(90deg, rgba(142, 223, 245, .07), rgba(142, 223, 245, .015) 45%, transparent); }
+.ck-grid:not(.is-checks) > .ck-r:nth-child(2) .c-n, .ck-grid:not(.is-checks) > .ck-r:nth-child(3) .c-n, .ck-grid:not(.is-checks) > .ck-r:nth-child(4) .c-n { color: var(--ice); font-weight: 600; }
+.cc1 b { font-size: 15px; letter-spacing: -0.01em; }
+.c-coin .ck-ico { width: 40px; height: 40px; border-radius: 12px; border-color: rgba(142, 223, 245, .14); }
+.c-call { color: #c3d3da; }
+.ck-r > .c-mc, .ck-r > .c-ch, .ck-r > .c-vol, .ck-r > .c-tx, .ck-r > .c-liq, .ck-r > .c-hold, .ck-r > .c-since, .ck-r > .c-now, .ck-r > .c-age { font-variant-numeric: tabular-nums; color: #dbe7ec; }
+.ck-page .up { color: var(--t-good); } .ck-page .dn { color: #ff7d8a; }
+/* launchpad badges, colour-coded */
+.pad { border: 0; background: rgba(142, 223, 245, .1); color: var(--ice-2); }
+.pad[data-pad="pons"] { background: rgba(142, 223, 245, .14); color: #8edff5; }
+.pad[data-pad="uniswap"] { background: rgba(255, 122, 198, .13); color: #ff9fd6; }
+.pad[data-pad="clanker"] { background: rgba(167, 139, 250, .15); color: #c4b5fd; }
+.pad[data-pad="flap"] { background: rgba(251, 191, 36, .13); color: #fcd34d; }
+.pad[data-pad="bankr"] { background: rgba(52, 211, 153, .13); color: #6ee7b7; }
+.pad[data-pad="virtuals"] { background: rgba(96, 165, 250, .14); color: #93c5fd; }
+.pad[data-pad="ramses"], .pad[data-pad="frontier"], .pad[data-pad="long"] { background: rgba(244, 114, 182, .1); color: #f9a8d4; }
+/* scores: filled pills in the tone colour with a soft glow */
+.sc { color: #061317; background: var(--c); border: 0; box-shadow: 0 0 18px -4px color-mix(in srgb, var(--c) 70%, transparent), inset 0 1px 0 rgba(255, 255, 255, .35); border-radius: 12px; font-weight: 800; }
+.lbl, .pl { background: color-mix(in srgb, var(--c) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 30%, transparent); }
+.bar i { height: 4px; background: rgba(142, 223, 245, .08); }
+.bar i::after { background: linear-gradient(90deg, color-mix(in srgb, var(--c) 70%, #ffffff 0%), var(--c)); box-shadow: 0 0 8px color-mix(in srgb, var(--c) 60%, transparent); }
+.bar em { color: rgba(198, 241, 251, .55); }
+.vb-n { color: rgba(198, 241, 251, .45); }
+.ck-chk { border-color: rgba(142, 223, 245, .45); color: var(--ice); background: rgba(142, 223, 245, .05); }
+.ck-chk:hover { background: var(--grad-b); color: #06232b; border-color: transparent; }
+.ck-buy { background: linear-gradient(135deg, rgba(111, 227, 180, .22), rgba(111, 227, 180, .1)); border-color: rgba(111, 227, 180, .45); color: #8ff0c8; }
+.ck-buy:hover { background: #6fe3b4; color: #04211a; }
+.rn.up { color: var(--t-good); } .rn.dn { color: #ff7d8a; }
+/* side column */
+.ck-card2 li { border-top-color: rgba(142, 223, 245, .06); }
+.ck-card2 li a:hover b { color: var(--ice-2); }
+.ck-live { background: var(--ice); }
+/* coin page */
+.cv-bar { border-bottom-color: rgba(142, 223, 245, .12); }
+.cv-id h1 { background: linear-gradient(180deg, #ffffff 30%, #c6f1fb); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.cv-ca { border-color: rgba(142, 223, 245, .3); background: rgba(16, 26, 28, .6); }
+.ck-btn { border-color: rgba(142, 223, 245, .22); }
+.ck-btn:hover { border-color: var(--ice); color: var(--ice); }
+.cv-verdict { background: radial-gradient(90% 120% at 0% 0%, color-mix(in srgb, var(--tone) 12%, transparent), transparent 55%), var(--glass), var(--teal-dd); }
+.cv-scores, .cv-scores > div { border-color: rgba(142, 223, 245, .08); }
+.cv-total b { text-shadow: 0 0 40px color-mix(in srgb, currentColor 35%, transparent); }
+.cv-g-track { background: linear-gradient(90deg, #ff7d8a, #f59a5b 30%, #f0c46e 55%, #6fe3b4 80%, #8edff5); }
+.cv-g-track i { background: #ffffff; box-shadow: 0 0 0 3px rgba(16, 26, 28, .9), 0 0 12px rgba(142, 223, 245, .6); }
+.cv-flist li { border-top-color: rgba(142, 223, 245, .07); border-radius: 12px; padding-left: 10px; padding-right: 10px; transition: background .15s; }
+.cv-flist li:hover { background: var(--row-tint); }
+.fk { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 30%, transparent); }
+.cv-change { border-color: rgba(142, 223, 245, .14); background: linear-gradient(90deg, rgba(31, 59, 66, .45), transparent); }
+.cv-facts th, .cv-facts td { border-top-color: rgba(142, 223, 245, .07); }
+.cv-cap { border-color: rgba(255, 125, 138, .3); background: rgba(255, 125, 138, .06); }
+@media (max-width: 900px) {
+  .ck-grid > .ck-r:not(.ck-h) { margin-bottom: 10px; padding: 14px 12px; border: 1px solid rgba(142, 223, 245, .09); background: linear-gradient(180deg, rgba(142, 223, 245, .04), rgba(16, 26, 28, .5)); }
+  .ck-grid > .ck-r:not(.ck-h):nth-child(even) { background: linear-gradient(180deg, rgba(142, 223, 245, .04), rgba(16, 26, 28, .5)); }
+  .ck-r [data-l]::before { color: rgba(142, 223, 245, .6); }
+}
+.ck-h > span, .ck-h button { color: rgba(142, 223, 245, .62); } .ck-h button:hover, .ck-h button[aria-pressed="true"] { color: var(--ice-2); }
+.ck-page::before { -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent); }

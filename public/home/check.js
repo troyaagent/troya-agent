@@ -67,7 +67,7 @@ const valOf = (r, k) => ({ score: r.check?.score, chg: S.win === "1h" ? r.change
 
 function rowHtml(r, i) {
   const c = r.check;
-  const coin = `<a class="c-coin" href="/check/${esc(r.address)}">${icon(r)}<span class="cc"><span class="cc1"><b>${r.symbol ? `$${esc(r.symbol)}` : short(r.address)}</b></span><small>${r.launchpad ? `<em class="pad">${esc(padName(r.launchpad))}</em>` : ""}${esc(r.name || short(r.address))}</small></span></a>`;
+  const coin = `<a class="c-coin" href="/check/${esc(r.address)}">${icon(r)}<span class="cc"><span class="cc1"><b>${r.symbol ? `$${esc(r.symbol)}` : short(r.address)}</b></span><small>${r.launchpad ? `<em class="pad" data-pad="${esc(String(r.launchpad).replace(/^uniswap-v[34]$/, "uniswap"))}">${esc(padName(r.launchpad))}</em>` : ""}${esc(r.name || short(r.address))}</small></span></a>`;
   const call = c ? `<span class="c-call">${esc(c.headline || c.label)}<small>checked ${ago(c.at)} ago${c.checks > 1 ? ` · ${c.checks} checks` : ""}</small></span>` : `<span class="c-call mut">Not checked yet. One click reads its Gate, launch, dev wallets and holders.</span>`;
   const since = `<span class="c-since" data-l="Since check">${c ? pct(c.sinceCheck) : '<span class="mut">–</span>'}</span>`;
   if (S.view === "checks") {

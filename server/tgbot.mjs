@@ -680,7 +680,13 @@ async function aiAnswer(m, tg, me) {
   const P = await personasMod().catch(() => null);
   const voice = P ? await P.effective({ userId: m.from?.id, chatId, isPrivate: m.chat.type === "private" }).catch(() => ({ key: "troya" })) : { key: "troya" };
   const persona = P ? P.personaBlock(voice.key) : "";
-  const reply = await llm.chatWithTools({ system: `${TG_SYSTEM}${await liveFacts()}${teamAnswers()}${persona}\nCurrent time: ${new Date().toISOString().slice(0, 16)} UTC.`, history: mem, user: `[from: ${name}] ${quoted}${text}${links ? "\n" + links : ""}`, tools: TG_TOOLS, exec: tgExec, maxSteps: voice.key === "strategist" || voice.key === "scholar" ? 5 : 4 });
+  // which topic of the group this is (Xivor70, 26 Nov 2026: in Ideas & Bugs the assistant told him to post it in Ideas & Bugs)
+  const ideasThread = Number(process.env.TG_THREAD_IDEAS || 2897), annThread = Number(process.env.TG_THREAD_ANN || 2898);
+  const where = m.chat.type === "private" ? "a private chat with you"
+    : m.is_topic_message && m.message_thread_id === ideasThread ? "the Ideas & Bugs topic of the group: this message is already filed to the team inbox automatically, so never ask the sender to post it in Ideas & Bugs or to use /idea or /bug; say it is filed"
+    : m.is_topic_message && m.message_thread_id === annThread ? "the Announcements topic of the group"
+    : "the General chat of the group (ideas and bug reports belong in the Ideas & Bugs topic, where they are filed automatically)";
+  const reply = await llm.chatWithTools({ system: `${TG_SYSTEM}${await liveFacts()}${teamAnswers()}${persona}\nWhere this message was sent: ${where}.\nCurrent time: ${new Date().toISOString().slice(0, 16)} UTC.`, history: mem, user: `[from: ${name}] ${quoted}${text}${links ? "\n" + links : ""}`, tools: TG_TOOLS, exec: tgExec, maxSteps: voice.key === "strategist" || voice.key === "scholar" ? 5 : 4 });
   if (!reply) return false;
   mem.push({ role: "user", content: `[from: ${name}] ${text}`.slice(0, 500) }, { role: "assistant", content: reply.slice(0, 600) });
   chatMemory.set(chatId, mem.slice(-10));

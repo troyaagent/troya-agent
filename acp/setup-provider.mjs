@@ -9,7 +9,7 @@ console.log("Troya Test Provider setup. Copy each value from app.virtuals.io →
 const addr = await ask("1) Agent EVM wallet address (0x…, shown at the top of the agent page): ", (v) => /^0x[0-9a-fA-F]{40}$/.test(v));
 const id = await ask("2) EVM Wallet ID (Wallet tab → Signers): ", (v) => v.length >= 8 && !/\s/.test(v));
 const key = await ask("3) Signer private key (Wallet tab → Add Key → Generate Key Pair, policy Virtuals-only): ", (v) => v.length >= 32 && !/\s/.test(v));
-const offering = (await rl.question("4) Offering name (press Enter for \"test_task\"): ")).trim() || "test_task";
+const offering = (await rl.question("4) Offering name (press Enter for \"test_task\"): ")).trim() || "token_snapshot";
 rl.close();
 const dir = process.env.HOME + "/.config/troya";
 mkdirSync(dir, { recursive: true });

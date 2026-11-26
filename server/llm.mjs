@@ -21,13 +21,20 @@ async function spentToday() {
 export async function underCap() { return KEY && (await spentToday()).usd < DAILY_USD; }
 async function record(usage) {
   await store.update("llm-usage.json", {}, (u) => {
-    if (u.day !== today()) { u.day = today(); u.calls = 0; u.usd = 0; u.tokensIn = 0; u.tokensOut = 0; }
+    if (u.day !== today()) { u.day = today(); u.calls = 0; u.usd = 0; u.tokensIn = 0; u.tokensOut = 0; u.capAlerted = false; }
     u.calls++;
     u.usd = +(u.usd + (Number(usage?.cost) || 0)).toFixed(6);
     u.tokensIn += usage?.prompt_tokens || 0;
     u.tokensOut += usage?.completion_tokens || 0;
+    // the owner hears once a day when the cap is reached (owner, 27 Nov 2026: "kalo habis kabarin saya")
+    if (u.usd >= DAILY_USD && !u.capAlerted) { u.capAlerted = true; capHit = { usd: u.usd, calls: u.calls }; }
   });
+  if (capHit) {
+    const h = capHit; capHit = null;
+    import("./community.mjs").then((c) => c.notifyAdmins(`Batas biaya AI harian tercapai: $${h.usd.toFixed(2)} dari $${DAILY_USD} (${h.calls} panggilan hari ini, UTC). Sampai 07:00 WIB besok, Troya Check dan bot memakai pembaca pola tanpa AI. Naikkan LLM_DAILY_USD kalau perlu.`)).catch(() => {});
+  }
 }
+let capHit = null;
 export async function usageToday() { const u = await spentToday(); return { ...u, capUsd: DAILY_USD, model: MODEL }; }
 
 async function call(messages, tools, opts = {}) {

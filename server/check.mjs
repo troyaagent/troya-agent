@@ -56,7 +56,10 @@ let store = null;
 /* ---------- how the score is made ---------- */
 // Each part gives a value from 0 to 1. score = 100 × Σ(weight × value) / Σ(weight of the parts that were read), then the
 // lowest cap that applies. The weights add up to 100 when every part is read.
-export const WEIGHTS = { gate: 27, ring: 14, devside: 14, holders: 14, market: 9, heel: 4, clash: 4, age: 4, claims: 10 };
+// contract powers joined on 27 Nov (an X user: "mint authority? otherwise it's a vibe number"): 10, taken from the parts that
+// say least about getting out (liquidity and holders 9 → 5, Heel 4 → 2: it re-ranks the others, same ticker 4 → 3, age 4 → 3,
+// claims 10 → 8)
+export const WEIGHTS = { gate: 27, ring: 14, devside: 14, holders: 14, powers: 10, market: 5, heel: 2, clash: 3, age: 3, claims: 8 };
 export const CAPS = {
   gateFail: 15,       // the Gate failed a check that decides a buy: the test sell, the exact swap, the transfer tax or the fees
   ringRed: 20,        // Ring Radar: a rigged launch pattern
@@ -68,6 +71,10 @@ export const CAPS = {
   thinFail: 45,       // the pool is too thin for a 0.01 ETH buy (price impact or depth failed)
   gateNotRead: 60,    // the Gate could not run: nothing shows it can be sold back
   unread: 74,         // the Gate, Ring Radar, the dev side or The Assay is still unread: never "No major flags" without them
+  powersMint: 40,     // an active owner can mint more of it
+  powersTrap: 45,     // an active owner can blacklist wallets, pause transfers or switch trading off
+  powersUpgrade: 60,  // an upgradeable proxy with a live admin or owner: the code itself can be changed
+  powersFees: 74,     // an active owner can change fees or taxes (no hard maximum read)
   flagged: 74,        // a part read badly, or a reason shown is a warning: never "No major flags" over a serious line (MOW 85, PONS 88)
   devSold: 74,        // the dev wallet sold 80%+ of its coins, or the wallets linked to it sold 80%+ of what they got
   devSoldBoth: 60,    // both of those
@@ -86,7 +93,7 @@ export const BANDS = [
   { min: 0, label: "Red flags", tone: "bad" },
 ];
 export const bandOf = (score) => (score == null ? null : BANDS.find((b) => score >= b.min));
-export const NAMES = { gate: "Troya Gate", ring: "Ring Radar", devside: "Dev side wallets", holders: "Holders (The Assay)", market: "Liquidity and holders", heel: "Weak spot (Heel)", clash: "Same ticker", age: "Token age", claims: "Website and X claims" };
+export const NAMES = { gate: "Troya Gate", ring: "Ring Radar", devside: "Dev side wallets", holders: "Holders (The Assay)", market: "Liquidity and holders", heel: "Weak spot (Heel)", clash: "Same ticker", age: "Token age", claims: "Website and X claims", powers: "Contract powers" };
 
 const links = {
   gate: (A) => ({ label: "Gate page", href: `/agent#/gate/${A}` }),
@@ -313,6 +320,55 @@ export function agePart(bornAt, src, A, now = Date.now()) {
   return score(p, v, `${age} old: born ${new Date(bornAt).toISOString().slice(0, 16).replace("T", " ")} UTC${src === "pool" ? " (the date of its first pool)" : ", read from its creation block"}.`, { short: h < 24 ? `It is only ${age} old.` : `It is ${age} old.` });
 }
 
+// Contract powers (27 Nov): what the token's owner can still do, from tokenHealth (robinhood.mjs: function selectors found in the
+// deployed bytecode, owner(), the EIP-1967 proxy slot) plus the proxy's admin slot. Selectors are a heuristic, not an audit.
+const ZERO_OR_DEAD = /^0x(0{40}|0{38}01|0{36}dead)$/i;
+export function powersPart(h, A) {
+  const p = part("powers", { links: [{ label: "Contract code", href: `${EXPLORER}/address/${A}?tab=contract` }, { label: "Token health (JSON)", href: `/api/token/health?address=${A}` }] });
+  if (!h || h.error) return notRead(p, `Not read: the token's code could not be read just now${h?.error ? ` (${noDot(String(h.error).slice(0, 100))})` : ""}.`);
+  if (h.isContract === false) return notApplicable(p, "There is no contract at this address.");
+  const fn = h.functions || {};
+  const has = (k) => (fn[k] || []).length > 0;
+  const sigs = (k) => (fn[k] || []).slice(0, 2).join(", ");
+  const ownerActive = !!h.owner && h.ownerRenounced === false;
+  const upgradeable = !!h.proxy && /upgradeable/i.test(h.proxy.type || "");
+  const adminLive = upgradeable && (h.proxyAdmin ? !ZERO_OR_DEAD.test(h.proxyAdmin) : ownerActive);
+  if (h.kind === "pons" && !h.owner && !upgradeable) {
+    p.findingKind = "info";
+    return score(p, 1, "A Pons template coin: fixed supply, no owner() and no upgrade path, so nobody can mint, blacklist, pause or change its fees.", { short: "No owner powers: a Pons template coin." });
+  }
+  const live = [], caps = [];
+  let v = 1;
+  if (ownerActive && has("mint")) { v -= 0.6; live.push(`mint (${sigs("mint")})`); caps.push({ at: CAPS.powersMint, why: "an active owner can mint more of it" }); }
+  if (ownerActive && has("blacklist")) { v -= 0.4; live.push(`blacklist (${sigs("blacklist")})`); }
+  if (ownerActive && has("pause")) { v -= 0.3; live.push(`pause (${sigs("pause")})`); }
+  if (ownerActive && has("trading")) { v -= 0.3; live.push(`trading switch (${sigs("trading")})`); }
+  if (ownerActive && (has("blacklist") || has("pause") || has("trading"))) caps.push({ at: CAPS.powersTrap, why: "an active owner can blacklist wallets, pause transfers or switch trading off" });
+  if (ownerActive && has("fees")) { v -= 0.2; live.push(`fee setter (${sigs("fees")})`); caps.push({ at: CAPS.powersFees, why: "an active owner can change fees or taxes (no hard maximum read)" }); }
+  if (ownerActive && has("limits")) { v -= 0.1; live.push(`limits (${sigs("limits")})`); }
+  // powers in the code but no owner() to say who holds them (role-based control is not read here): said, lowered, never capped
+  const orphan = ["mint", "blacklist", "pause", "trading", "fees"].filter((k) => !h.owner && has(k));
+  if (orphan.length) { v -= 0.35; live.push(`${orphan.join(", ")} functions (${orphan.map(sigs).join(", ")}) with no owner() to show who can call them`); }
+  if (adminLive) { v -= 0.4; live.push(`upgradeable proxy (implementation ${short(h.proxy.implementation)}${h.proxyAdmin && !ZERO_OR_DEAD.test(h.proxyAdmin) ? `, admin ${short(h.proxyAdmin)}` : ", upgraded by its owner"})`); caps.push({ at: CAPS.powersUpgrade, why: "it is an upgradeable proxy with a live admin: the code can be changed" }); }
+  else if (upgradeable) { v -= 0.3; live.push(`upgradeable proxy (implementation ${short(h.proxy.implementation)}; who can upgrade it was not found)`); }
+  p.evidence = [
+    { text: h.owner ? `owner() = ${h.owner}${h.ownerRenounced ? " (renounced)" : ""}` : "No owner() function in the contract" },
+    ...live.map((x) => ({ status: "fail", text: x })),
+    ...(h.flags || []).filter((x) => x.level === "risk" || x.level === "warn").slice(0, 3).map((x) => ({ status: x.level === "risk" ? "fail" : "warn", text: noDot(x.text) })),
+  ];
+  if (!live.length) {
+    const why = !h.owner ? "the contract has no owner()" : h.ownerRenounced ? `ownership is renounced (owner() = ${short(h.owner)})` : "no mint, blacklist, pause, trading, fee or limit functions were found";
+    return score(p, 1, `No live owner powers: ${why}${upgradeable ? "" : ", and it is not an upgradeable proxy"}.`, { short: "No live owner powers in the contract." });
+  }
+  caps.sort((a, b) => a.at - b.at);
+  const first = live[0].replace(/ \(.*$/, "");
+  const out = score(p, v, `${ownerActive ? `An active owner (${short(h.owner)}) can still use` : "The contract keeps"} ${live.length === 1 ? "one power" : `${live.length} powers`}: ${live.join("; ")}.`,
+    { short: caps[0]?.at === CAPS.powersMint ? "Its owner can still mint more of it." : caps[0]?.at === CAPS.powersTrap ? "Its owner can still block wallets or stop trading." : caps[0]?.at === CAPS.powersUpgrade ? "Its code can still be changed (upgradeable proxy)." : `Its owner keeps a ${first}.`,
+      ...(caps.length ? { cap: caps[0], caps } : {}) });
+  if (caps.length) out.tone = "bad";
+  return out;
+}
+
 // Phase 2: the claims a coin makes on its website and X account, each checked against the chain (checkclaims.mjs). cl =
 // readClaims() + verified: [{ type, quote, url, status: proven | contradicted | unverified, evidence, link }].
 const CLAIM_TYPE_NAMES = { lp: "Liquidity locked or burned", renounced: "Ownership renounced", tax: "Tax", supply: "Total supply", burn: "Supply burned", audit: "Audit", team: "Team", live: "Product live", listing: "Listing", partner: "Partnership" };
@@ -352,8 +408,8 @@ export function subScores(parts) {
   const pick = (keys) => parts.filter((p) => keys.includes(p.key) && p.status === "scored" && p.weight > 0);
   const avg = (keys) => { const ps = pick(keys); if (!ps.length) return null; const w = ps.reduce((t, p) => t + p.weight, 0); return Math.round((100 * ps.reduce((t, p) => t + p.weight * p.value, 0)) / w); };
   const line = (keys) => { const ps = pick(keys).sort((a, b) => a.value - b.value); return ps[0] ? ps[0].short || ps[0].summary : null; };
-  const exit = avg(["gate", "ring"]), holders = avg(["devside", "holders"]);
-  return { exit, exitWord: wordOf(exit, EXIT_WORDS), exitLine: line(["gate", "ring"]), holders, holdersWord: wordOf(holders, HOLD_WORDS), holdersLine: line(["devside", "holders"]) };
+  const exit = avg(["gate", "ring", "powers"]), holders = avg(["devside", "holders"]);
+  return { exit, exitWord: wordOf(exit, EXIT_WORDS), exitLine: line(["gate", "ring", "powers"]), holders, holdersWord: wordOf(holders, HOLD_WORDS), holdersLine: line(["devside", "holders"]) };
 }
 /** Findings as a reader scans them: RISK, MISSING, WORKS, INFO, from the parts and the claims, each with its evidence links. */
 export function findingsOf(parts) {
@@ -363,7 +419,7 @@ export function findingsOf(parts) {
       for (const c of p.claims) out.push({ kind: c.status === "proven" ? "works" : c.status === "contradicted" ? "risk" : "missing", title: `Claim: ${c.name}`, text: `"${c.quote}". ${noDot(c.evidence)}.`, links: [c.link, { label: "Where it was found", href: c.url }].filter((l) => l && l.href) });
       continue;
     }
-    const kind = p.status === "scored" ? (p.tone === "good" ? "works" : "risk") : p.status === "not read" ? "missing" : "info";
+    const kind = p.findingKind || (p.status === "scored" ? (p.tone === "good" ? "works" : "risk") : p.status === "not read" ? "missing" : "info");
     out.push({ kind, title: p.name, text: p.summary, links: (p.links || []).slice(0, 3) });
   }
   const order = { risk: 0, missing: 1, works: 2, info: 3 };
@@ -389,6 +445,8 @@ export function whatWouldChange(parts) {
   if (m.status === "scored" && m.value < 0.6) out.push("more liquidity and more holders");
   const a = P("age");
   if (a.status === "scored" && a.value < 0.8) out.push("time: it is still young");
+  const pw = P("powers");
+  if (pw.status === "scored" && pw.value < 1) out.unshift("the owner renouncing the powers it still holds");
   const c = P("claims");
   if (c.cap) out.push("the project correcting its claim, or the chain catching up with it");
   if (!out.length) out.push("a failed Gate check, the dev side starting to sell, or a rigged-launch finding");
@@ -426,7 +484,7 @@ export function scoreCheck(f) {
     ].filter(Boolean).slice(0, 3);
     return { ...base, score: null, label: f.kind === "stock" ? "Tokenized stock" : "Major token", tone: "grey", headline: `${cap1(what)}, not a launch, so it gets no meme-coin score.`, reasons, parts: [gate, m], caps: [], gatePassed: gate.status === "scored" && gate.value >= 0.75 && !gate.cap, partial: gate.status === "not read", coin: coinFacts(f), priceUsd: Number(f.token?.priceUsd) > 0 ? Number(f.token.priceUsd) : null };
   }
-  const parts = [gate, ringPart(f.gate, f.ring, A), devsidePart(f.gate, f.devlinks, A), holdersPart(f.assay, A), marketPart(f.token, A), heelPart(f.heel, A), clashPart(f.clash, base.symbol, A), agePart(f.bornAt, f.bornSrc, A, base.checkedAt), claimsPart(f.claims)];
+  const parts = [gate, ringPart(f.gate, f.ring, A), devsidePart(f.gate, f.devlinks, A), holdersPart(f.assay, A), marketPart(f.token, A), heelPart(f.heel, A), clashPart(f.clash, base.symbol, A), agePart(f.bornAt, f.bornSrc, A, base.checkedAt), claimsPart(f.claims), powersPart(f.health, A)];
   for (const p of parts) { p.summary = plainText(p.summary); if (p.short) p.short = plainText(p.short); for (const e of p.evidence || []) if (e.text) e.text = plainText(e.text); }
   const read = parts.filter((p) => p.status === "scored" && p.weight > 0);
   const W = read.reduce((s, p) => s + p.weight, 0);
@@ -446,7 +504,8 @@ export function scoreCheck(f) {
   if (gate.status !== "scored" && reasons.length < 3) reasons.push({ part: "gate", tone: "grey", text: `${gate.name}: ${gate.summary}`, short: "The Gate could not run, so a sell back is not proven.", link: gate.links[0] });
   // "No major flags" only when nothing read badly and no reason shown is a warning: the label must match its own reasons
   const badPart = read.find((p) => p.tone === "bad");
-  const warnReason = reasons.find((x) => ["warn", "risky", "bad"].includes(x.tone));
+  // any part read as a warning counts, shown among the three reasons or not (a small part can drop out of the reasons)
+  const warnReason = reasons.find((x) => ["warn", "risky", "bad"].includes(x.tone)) || (() => { const w = read.find((p) => p.tone === "warn"); return w ? { part: w.key, tone: "warn" } : null; })();
   if (badPart || warnReason) { const w = badPart || read.find((p) => p.key === warnReason.part); caps.push({ part: w?.key || warnReason.part, at: CAPS.flagged, why: `${w?.name || "a check"} raised ${badPart ? "a red flag" : "a warning"}` }); }
   caps.sort((a, b) => a.at - b.at);
   let s = W ? Math.round((100 * read.reduce((t, p) => t + p.weight * p.value, 0)) / W) : null;
@@ -507,12 +566,20 @@ async function gather(A, waitMs = WAIT_MS, hints = []) {
     const [cf, g, as] = await Promise.all([CC.chainFacts(A), gateP, assayP]);
     return { ...cl, verified: await CC.verifyClaims(cl.claims, { address: A, gate: g, assay: as, ...cf, siteLinks: cl.siteLinks }) };
   }), left() + 1500);
-  const [token, gate, assay, heel, clash, bornAt, claims] = await Promise.all([
+  // contract powers: tokenHealth (bytecode selectors, owner(), the proxy slot) and, for a proxy, its EIP-1967 admin slot
+  const healthP = within(R.tokenHealth(A).then(async (h) => {
+    if (h?.proxy && /upgradeable/i.test(h.proxy.type || "")) {
+      const slot = await R.rpc("robinhood", "eth_getStorageAt", [A, "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103", "latest"]).catch(() => null);
+      if (slot && /^0x[0-9a-f]+$/i.test(slot)) h = { ...h, proxyAdmin: "0x" + slot.slice(-40) };
+    }
+    return h;
+  }).catch((e) => ({ error: String(e?.message || e).slice(0, 120) })), Math.min(left(), 15_000));
+  const [token, gate, assay, heel, clash, bornAt, claims, health] = await Promise.all([
     tokP, gateP, assayP,
     within(import("./heel.mjs").then((m) => m.heel(A)), left()),
     within(M.nameClash(A), Math.min(left(), 8000)),
     within(import("./tokenage.mjs").then((m) => m.bornAt(A, { waitMs: Math.min(left(), 6000) })), Math.min(left(), 6500)),
-    claimsP,
+    claimsP, healthP,
   ]);
   // Ring Radar and the dev side were read by the Gate itself: these are cache hits, never a second read
   // (a "still reading" line means the first read is under way: the cache is asked, never a second read)
@@ -520,7 +587,7 @@ async function gather(A, waitMs = WAIT_MS, hints = []) {
   const ring = RR?.ringCached?.(A) || (await ringP);
   const devlinks = await import("./devlinks.mjs").then((m) => m.devLinksCached(A)).catch(() => null);
   const bornSrc = await import("./tokenage.mjs").then((m) => m.bornSource(A)).catch(() => null);
-  return { address: A, kind: "coin", symbol: token?.symbol || gate?.symbol || meta.symbol, name: token?.name || gate?.name || meta.name, gate, ring, devlinks, assay, token, heel, clash, claims, bornAt: bornAt || token?.bornAt || null, bornSrc, now };
+  return { address: A, kind: "coin", symbol: token?.symbol || gate?.symbol || meta.symbol, name: token?.name || gate?.name || meta.name, gate, ring, devlinks, assay, token, heel, clash, claims, health, bornAt: bornAt || token?.bornAt || null, bornSrc, now };
 }
 
 /* ---------- the cache, the queue and the record ---------- */

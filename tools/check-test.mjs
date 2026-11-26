@@ -38,6 +38,7 @@ const cleanRest = {
   heel: { kind: "coin", severity: "none", partial: false, heel: "No weak spot found in what was measured (9 sources read). Not a safe stamp: a coin can change after a check.", facts: [] },
   clash: { ticker: "GOOD", count: 1, others: [], clash: false },
   bornAt: NOW - 10 * 86400_000, bornSrc: "creation",
+  health: { isContract: true, kind: "pons", owner: null, ownerRenounced: null, functions: { mint: [], pause: [], blacklist: [], fees: [], limits: [], trading: [], owner: [] }, proxy: null, flags: [] },
 };
 const coin = (over) => ({ address: A, kind: "coin", symbol: "GOOD", name: "Good Coin", now: NOW, gate: passedGate(), ...cleanRest, ...over });
 const NO_SELL = "Troya can buy this (KyberSwap via flap) but finds no route to sell it back, on Troya or through KyberSwap. You may only be able to sell on the launchpad's own site. Buy only if you know how you will get out.";

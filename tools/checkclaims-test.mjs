@@ -190,7 +190,7 @@ await t("no site known: n/a; site unreachable: not read; nothing claimed: n/a. N
   assert.equal(C.claimsPart({ website: null, x: null, sources: [] }).status, "n/a");
   assert.equal(C.claimsPart({ website: SITE, sources: [{ kind: "website", url: SITE, ok: false, why: "answered 503" }] }).status, "not read");
   assert.equal(C.claimsPart({ ...src, verified: [] }).status, "n/a");
-  assert.equal(C.WEIGHTS.claims, 10);
+  assert.equal(C.WEIGHTS.claims, 8);
   assert.equal(Object.values(C.WEIGHTS).reduce((a, b) => a + b, 0), 100);
 });
 

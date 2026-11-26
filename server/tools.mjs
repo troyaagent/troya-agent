@@ -534,6 +534,9 @@ const V8_TOOLS = [
     } },
 ];
 for (const t of V8_TOOLS) if (!toolByName(t.name)) TOOLS.push(t);
+// Troya Check (check.mjs): one 0-100 score per coin with its three reasons; read-only, cached 10 minutes
+if (!toolByName("troya_check")) TOOLS.push({ name: "troya_check", tier: "read", description: "Troya Check for a Robinhood Chain coin: one score from 0 to 100 with a label (no major flags, some flags, risky, red flags), the three reasons that moved it most (each with its evidence) and every part read: Troya Gate (simulated buy and test sell), Ring Radar, dev side wallets, The Assay, liquidity and holders, same-ticker contracts, token age and Heel. A failed Gate check, a red Ring Radar or a buy with no route to sell back caps the score. Tokenized stocks and majors are named, not scored. Automated checks, not an audit.", schema: S({ address: str("Coin address on Robinhood Chain") }, ["address"]),
+  run: async ({ address }, ctx) => { const m = await import("./check.mjs"); return m.publicResult(await m.troyaCheck(addrT(address, "address"), { via: ctx?.via === "telegram" ? "telegram" : "api" })); } });
 
 // run a tool for an identity; tiers enforced by the caller's context
 export async function runTool(name, args = {}, ctx = {}) {

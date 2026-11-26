@@ -50,6 +50,7 @@ const ROUTES = {
   "/badge": "/badge.html",
   "/gate-bot": "/gate-bot.html",
   "/stats": "/stats.html",
+  "/check": "/check.html",   // Troya Check dashboard; /check/<address> is served below with the coin's own link preview
   "/swap": "/swap.html",
   "/stake": "/stake.html",
   "/zero": "/zero.html",
@@ -226,6 +227,21 @@ async function serve(req, res) {
   // /agent#/token/… cannot have one: the part after "#" never reaches the server, so every coin showed the same og.png
   if (url.pathname.startsWith("/t/") || url.pathname.startsWith("/r/")) { if (await handleShare(req, res, url)) return; }
   if (await handleApi(req, res, url)) return;
+  // Troya Check (server/check.mjs): /check?address=0x… (the dashboard form without JavaScript) goes to /check/<address>, and
+  // /check/<address> is public/check.html with that coin's title, description and card image, so X and Telegram show its card
+  if (url.pathname === "/check" && /^0x[0-9a-fA-F]{40}$/.test(url.searchParams.get("address") || "")) { res.writeHead(302, { location: `/check/${url.searchParams.get("address")}` }).end(); return; }
+  const ck = /^\/check\/(0x[0-9a-fA-F]{40})\/?$/.exec(url.pathname);
+  if (ck && (req.method === "GET" || req.method === "HEAD")) {
+    const C = await import("./server/check.mjs");
+    const { ipOf } = await import("./server/api.mjs");
+    if (C.pageLimited(ipOf(req))) { res.writeHead(429, { "content-type": "text/plain; charset=utf-8", "retry-after": "60" }).end("Too many requests, slow down."); return; }
+    const tpl = await readFile(join(ROOT, "check.html"), "utf8");
+    const out = await C.renderPage(tpl, ck[1]);
+    const data = Buffer.from(out.html, "utf8");
+    res.writeHead(200, { ...headers(TYPES[".html"], "/check.html", data), "cache-control": out.pending ? "no-cache" : "public, max-age=60", "content-length": data.length });
+    res.end(req.method === "HEAD" ? undefined : data);
+    return;
+  }
   let path;
   try { path = decodeURIComponent(url.pathname); } catch { res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }).end("Bad request"); return; }
   if (path.length > 1 && path.endsWith("/") && ROUTES[path.slice(0, -1)]) path = path.slice(0, -1);

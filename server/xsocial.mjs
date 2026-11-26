@@ -225,6 +225,37 @@ async function handleMention(t, { users, media, bot, m, L }) {
     }
     return entry;
   }
+  // Troya Check (check.mjs): "@Troyaagent check 0x…" or "check $TICKER", or "@Troyaagent check" under a post that carries a
+  // contract, gets one line with the score and the troya.codes/check link (X shows the link's card, so no media is attached).
+  // Behind CHECK_X: off by default; "draft" logs the reply without posting; "1" (or "live") posts it within the daily post
+  // cap. The same per-account limit as AI replies applies, plus at most 5 checks an hour per account.
+  if (checkMode()) {
+    const C = await import("./check.mjs").catch(() => null);
+    let req = C ? C.parseCheckRequest(text) : null;
+    // a bare "check" under someone's post: the contract comes from that post (one read, only when the word is there)
+    if (C && !req && C.mentionsCheck(text) && (t.referenced_tweets || []).some((x) => x.type === "replied_to")) {
+      const parent = await parentText(t).catch(() => null);
+      if (parent) { entry.parent = parent.slice(0, 200); req = C.parseCheckRequest(text, parent); }
+    }
+    if (req) {
+      entry.kind = "check";
+      const lastHour = log.filter((x) => x.authorId === t.author_id && x.kind === "check" && Date.now() - x.at < 3600_000).length;
+      if (recent >= 12) { entry.why = `${recent} answers to this account in 6 hours`; return entry; }
+      if (lastHour >= 5) { entry.why = `${lastHour} checks for this account in the last hour`; return entry; }
+      const out = await C.xCheckReply(req, { by: u.username || null }).catch((e) => ({ reply: null, error: e.message }));
+      entry.token = out.address || null; entry.why = out.error || null;
+      if (out.result) entry.score = out.result.score;
+      if (out.reply) {
+        entry.reply = oneCashtag(out.reply);
+        if (checkMode() === "draft") { entry.status = "draft"; entry.why = "CHECK_X=draft: reply drafted, not posted"; }
+        else if (await spend("posts")) {
+          const p = await xApi("/2/tweets", { token: bot.access, method: "POST", body: { text: entry.reply, reply: { in_reply_to_tweet_id: t.id } } }).catch((e) => { entry.why = e.message; return null; });
+          entry.status = p?.data?.id ? "posted" : "failed"; entry.replyId = p?.data?.id || null;
+        } else { entry.status = "draft"; entry.why = "daily post cap reached"; }
+      }
+      return entry;
+    }
+  }
   if (m === "off") entry.why = "AI replies are off";
   else if (!text || text.length < 3) entry.why = "nothing to answer";
   // owner, 23 Nov 2026: on X a promo, collab or DM pitch is simply ignored (no reply, no warning); Telegram removes them
@@ -246,7 +277,9 @@ async function handleMention(t, { users, media, bot, m, L }) {
   }
   return entry;
 }
-const listening = async () => (await mode()) !== "off" || (await import("./launch.mjs").then((x) => x.xLaunchOn()).catch(() => false));
+// Troya Check on X: CHECK_X=1 (or live) posts, CHECK_X=draft only logs, anything else (the default) leaves the X path off
+const checkMode = () => { const v = String(process.env.CHECK_X || "").trim().toLowerCase(); return v === "1" || v === "live" ? "live" : v === "draft" ? "draft" : null; };
+const listening = async () => (await mode()) !== "off" || !!checkMode() || (await import("./launch.mjs").then((x) => x.xLaunchOn()).catch(() => false));
 
 async function poll() {
   if (polling || !on()) return;

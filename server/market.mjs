@@ -1889,6 +1889,8 @@ const MAJORS = [
   [lc(RH.usdg), "USDG", "Global Dollar", ["usdg"]],
   [CBBTC, "cbBTC", "Coinbase Wrapped BTC", ["cbbtc", "btc", "bitcoin"]],
 ];
+/** Troya Check (check.mjs): a major on Robinhood Chain (WETH, USDG, cbBTC) → { symbol, name }, else null. */
+export const majorOf = (a) => { const m = MAJORS.find((x) => x[0] !== "native" && x[0] === lc(a)); return m ? { symbol: m[1], name: m[2] } : null; };
 // tickers that belong to a major (SOL has no Robinhood Chain token: a $SOL there borrows Solana's)
 const MAJOR_TICKERS = { eth: "native", weth: lc(RH.weth), usdg: lc(RH.usdg), cbbtc: CBBTC, btc: CBBTC, sol: null };
 // launch.mjs and sentry.mjs import this module, so they are loaded on first use; the fallbacks keep search answering

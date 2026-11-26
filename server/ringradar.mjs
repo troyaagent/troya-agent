@@ -212,6 +212,8 @@ export async function gateLine(token, { selling = false, waitMs = 6000 } = {}) {
   if (res.verdict === "red") return { name: "Launch ring", status: selling ? "warn" : "fail", detail: `Rigged launch pattern: ${nums}. ${why}${selling ? ". Selling is still allowed" : ""}.` };
   return { name: "Launch ring", status: "warn", detail: `Needs a closer look: ${nums}. ${why}.` };
 }
+/** Troya Check (check.mjs): the last finished radar for a coin from the cache only (never reads), or null. */
+export function ringCached(token) { const hit = memo.get(lc(token)); return hit && Date.now() - hit.at < 10 * 60_000 ? hit.res : null; }
 export function ringFlags(token) {
   const hit = memo.get(lc(token));
   if (!hit || hit.res.verdict === "clear" || hit.res.verdict === "unknown") return [];

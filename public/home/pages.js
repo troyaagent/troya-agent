@@ -13,7 +13,7 @@ const BIG = [["Troya", "/"], ["Open the desk", "/agent"], ["Capabilities", PAGE(
 // One site navigation, shared by the homepage (index.html imports NAV and renderGroups) and every inner page, so the
 // menu and the footer can no longer drift apart. Proof pages sit in their own group: they are why people trust us.
 export const NAV = [
-  ["Product", [["Desk", "/agent"], ["Swap", "/agent#/swap"], ["Perps", "/agent#/perps"], ["Stocks", "/agent#/stocks"], ["Launch", "/agent#/launch"], ["Bridge", "/agent#/bridge"], ["Launch on X", PAGE("launch-on-x")]]],
+  ["Product", [["Desk", "/agent"], ["Swap", "/agent#/swap"], ["Troya Check", PAGE("check")], ["Perps", "/agent#/perps"], ["Stocks", "/agent#/stocks"], ["Launch", "/agent#/launch"], ["Bridge", "/agent#/bridge"], ["Launch on X", PAGE("launch-on-x")]]],
   ["Proof", [["Proof", PAGE("proof")], ["Verify", PAGE("verify")], ["The Record", PAGE("record")], ["Seal", PAGE("seal")], ["Arena", PAGE("arena")], ["Oath", PAGE("oath")], ["Flywheel", PAGE("flywheel")], ["Agent Wallet changelog", "/changelog/agent-wallet"]]],
   ["Build", [["API and MCP", PAGE("api-and-mcp")], ["Gate badge", PAGE("badge")], ["Gate in your group", PAGE("gate-bot")], ["Gate in MetaMask", PAGE("snap")], ["llms.txt", "/llms.txt"], ["Docs", "/agent#/docs"]]],
   ["Company", [["Roadmap", PAGE("roadmap")], ["Community", PAGE("community")], ["Stake $TROYA", "/stake"], ["Plans", PAGE("plans")], ["Capabilities", PAGE("capabilities")], ["Philosophy", PAGE("philosophy")], ["Market analysis", PAGE("market-analysis")], ["Insights", PAGE("insights")], ["Risk controls", PAGE("risk-controls")], ["Safety", PAGE("safety")], ["Privacy Policy", PAGE("privacy")], ["Terms of Use", PAGE("terms")]]],

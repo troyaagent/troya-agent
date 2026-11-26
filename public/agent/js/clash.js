@@ -7,7 +7,7 @@ import { api } from "./api.js";
 useCss("clash");
 
 const fmtUsd = (n) => (n == null ? "–" : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${Math.round(n)}`);
-const gateWord = (g) => (g?.v === "passed" ? "passed" : g?.v === "blocked" ? "blocked" : "not checked");
+const gateWord = (g) => (g?.v === "passed" ? "passed" : g?.v === "notes" ? "passed with notes" : g?.v === "blocked" ? "blocked" : "not checked");
 const memo = new Map();
 
 export function clashData(address) {
@@ -27,7 +27,7 @@ export function clashBox(address) {
     if (!c?.clash || !c.others?.length) return;
     const n = c.others.length;
     const pos = c.thisOne === "oldest" ? " This one is the oldest." : c.thisOne === "newest" ? " This one is the newest." : "";
-    const tally = [c.passed ? `${c.passed} passed` : null, c.blocked ? `${c.blocked} blocked` : null].filter(Boolean).join(", ");
+    const tally = [c.passed ? `${c.passed} passed` : null, c.notes ? `${c.notes} passed with notes` : null, c.blocked ? `${c.blocked} blocked` : null].filter(Boolean).join(", ");
     const me = String(address).toLowerCase();
     const rows = [{ address: me, self: true }, ...c.others];
     clear(box,

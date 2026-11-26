@@ -65,7 +65,7 @@ async function tick() {
       const k = lc(x.token), cohort = cohortOf(x);
       if (!cohort || d.coins[k] || now - x.at > JOIN_MS) continue;
       const fails = Array.isArray(x.fails) ? x.fails : [];
-      const c = { token: k, symbol: x.symbol || null, at: x.at, cohort, reason: cohort === "blocked" ? String(x.reason || "").slice(0, 300) : null, fails,
+      const c = { token: k, symbol: x.symbol || null, at: x.at, cohort, verdict: x.verdict || null, reason: cohort === "blocked" ? String(x.reason || "").slice(0, 300) : null, fails,
         notSellable: cohort === "blocked" && fails.some((f) => NOT_SELLABLE.has(f)), status: "watching" };
       c.p0 = await priceNow(k).catch(() => null);
       c.joinedAt = now;
@@ -111,11 +111,24 @@ function view(c) {
     priceAtCheck: c.p0 ?? null, change1h: pct(c.p0, c.p1h), change24h: c.status === "graded" ? change24(c) : null };
 }
 // what the Gate said about each of these contracts when Sentry checked its launch (V10, Xivor's name-clash idea, 26 Nov
-// 2026): { address: { v: "passed" | "blocked", reason, at } }; a contract Sentry never checked is left out
+// 2026): { address: { v: "passed" | "notes" | "blocked", reason, at } }. "notes" is a pass with notes (Sentry's caution:
+// a check warned, e.g. the sell side could not be tested), kept apart so a plain "passed" never reads as safe when it was
+// not clean (Xivor). Older Two Fates rows did not keep that difference: Sentry's own recent list fills it in when it
+// still has the coin; otherwise the row says "passed". A contract Sentry never checked is left out.
 export async function launchVerdicts(addrs) {
   if (!store) return {};
   const d = await state().catch(() => null), out = {};
-  for (const a of addrs || []) { const c = d?.coins?.[lc(a)]; if (c?.cohort) out[lc(a)] = { v: c.cohort, reason: c.reason || null, at: c.at || null }; }
+  let sv = null;
+  const sentryVerdict = async (k) => {
+    sv ||= new Map(((await store.readJson(SENTRY, {}).catch(() => ({})))?.recent || []).map((x) => [lc(x.token), x.verdict]));
+    return sv.get(k);
+  };
+  for (const a of addrs || []) {
+    const k = lc(a), c = d?.coins?.[k];
+    if (!c?.cohort) continue;
+    const verdict = c.verdict || (c.cohort === "passed" ? await sentryVerdict(k) : null);
+    out[k] = { v: c.cohort === "blocked" ? "blocked" : verdict === "caution" ? "notes" : "passed", reason: c.reason || null, at: c.at || null };
+  }
   return out;
 }
 export async function fatesView({ limit = 100 } = {}) {

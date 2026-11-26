@@ -635,7 +635,7 @@ function openAsk(prefill = "") {
         return { kind: "coin", coin: c, title: `${c.symbol}${c.name && c.name.toLowerCase() !== String(c.symbol).toLowerCase() ? ` · ${c.name}` : ""}`,
           hint: [swapOk(c) ? "Buy on Swap" : null, c.official ? "Official" : c.teamTest ? "Team test" : null,
             c.kind === "stock" ? "Robinhood stock token" : c.kind === "major" ? "Major" : c.launchpad ? padName(c.launchpad) : null,
-            px(usd), liq ? `liq ${fmt(liq)}` : null, c.gate ? `Gate at launch: ${c.gate.v}` : null, c.address === "native" ? "Native" : short(c.address)].filter(Boolean).join(" · "),
+            px(usd), liq ? `liq ${fmt(liq)}` : null, c.gate ? `Gate at launch: ${c.gate.v === "notes" ? "passed with notes" : c.gate.v}` : null, c.address === "native" ? "Native" : short(c.address)].filter(Boolean).join(" · "),
           // a coin Troya can route opens Swap with it selected, ready to buy (community request, 23 Nov 2026: one tap
           // from search to Swap, as the Market's Buy does); the Gate still runs there before anything is signed
           target: c.address === "native" ? "#/swap" : swapOk(c) ? `#/swap?out=${c.address}` : `#/token/${c.address}` };

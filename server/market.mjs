@@ -2090,7 +2090,7 @@ export async function nameClash(address) {
     ticker: me.symbol, count: rows.length, clash: true,
     thisOne: oldest === a ? "oldest" : newest === a ? "newest" : null,
     oldest, newest,
-    passed: rows.filter((r) => r.gate?.v === "passed").length, blocked: rows.filter((r) => r.gate?.v === "blocked").length,
+    passed: rows.filter((r) => r.gate?.v === "passed").length, notes: rows.filter((r) => r.gate?.v === "notes").length, blocked: rows.filter((r) => r.gate?.v === "blocked").length,
     others, updatedAt: Date.now(),
   };
 }
@@ -2099,7 +2099,7 @@ export function clashLine(c) {
   if (!c?.clash || !c.others?.length) return null;
   const n = c.others.length, sh = (x) => `${x.slice(0, 6)}…${x.slice(-4)}`;
   const pos = c.thisOne === "oldest" ? " This one is the oldest." : c.thisOne === "newest" ? " This one is the newest." : "";
-  const tally = [c.passed ? `${c.passed} passed` : null, c.blocked ? `${c.blocked} blocked` : null].filter(Boolean).join(", ");
+  const tally = [c.passed ? `${c.passed} passed` : null, c.notes ? `${c.notes} passed with notes` : null, c.blocked ? `${c.blocked} blocked` : null].filter(Boolean).join(", ");
   return `${n} other contract${n === 1 ? "" : "s"} share${n === 1 ? "s" : ""} the ticker ${c.ticker}.${pos}${tally ? ` Gate at launch: ${tally}.` : ""} Check the address (${sh(c.others[0].address)}${n > 1 ? " and more" : ""}).`;
 }
 

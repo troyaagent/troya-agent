@@ -60,7 +60,7 @@ Wallets the site names: creator wallet [`0x57b09Fe6dab0a7D3776E56e6388c773d6c4D0
 
 ## Troya Gate
 
-Every swap quote goes through `gateCheck` in [`server/robinhood.mjs`](server/robinhood.mjs). The checks run against the live chain:
+Every swap quote goes through `gateCheck` in [`server/robinhood.mjs`](server/robinhood.mjs). The nine checks run against the live chain:
 
 | Check | Pass | Warn | Fail |
 |---|---|---|---|
@@ -71,6 +71,8 @@ Every swap quote goes through `gateCheck` in [`server/robinhood.mjs`](server/rob
 | Transaction simulation | the exact swap succeeds against the current pool | | it reverts |
 | Test sell | selling back what you would receive goes through | | it reverts |
 | Transfer tax | 0.5% or less | over 0.5% | over 10% |
+| Ring Radar | no launch ring found | a ring pattern, not proven | a rigged launch (snipe-tax exemptions, bundles) |
+| Dev side | the dev side holds and sells little | dev-linked wallets selling | the dev side holds most of it or is selling now |
 
 After the Gate:
 

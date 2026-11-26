@@ -38,8 +38,10 @@ claude mcp add troya --env TROYA_BASE_URL=https://troya.codes --env TROYA_API_KE
 
 ## Tools and tiers
 
-- **read** (cannot move funds): `analyze_ticker`, `get_movers`, `get_funding_extremes`, `get_robinhood_tokens` (alias `robinhood_tokens`), `robinhood_token`, `get_new_pairs`, `analyze_token_health`, `quote_swap`, `get_balances`, `get_policy`, `simulate_trade`, `get_social_info` (only when the server has `X_BEARER_TOKEN`; posts are wrapped as untrusted text).
-- **prepare** (needs a token): `prepare_order` `{kind: "perp" | "swap", …}`, `prepare_perp_order`, `prepare_swap`. These run Troya Gate and your limits, then return a one-time `confirmationId` that lasts 120 seconds and is bound to a hash of the parameters.
+39 tools today: 32 read, 6 prepare, 1 execute. The server adds tools over time; the live list with every schema is `GET https://troya.codes/api/tools`, and this MCP always serves that list.
+
+- **read** (cannot move funds, 32 tools): `analyze_ticker`, `get_movers`, `get_funding_extremes`, `robinhood_tokens`, `robinhood_token`, `robinhood_stocks`, `lp_range`, `registry`, `gate_check`, `analyze_token_health`, `quote_swap`, `get_balances`, `get_policy`, `simulate_trade`, `ring_radar`, `council`, `oath`, `aegis_coin`, `smart_money`, `stock_gaps`, `robinhood_app`, `quantum_exposure`, `seal_receipt`, `arena_board`, `owl_week`, `get_robinhood_tokens`, `get_new_pairs`, `get_social_info`, `watchfire`, `tribute`, `allies`, `troya_check`. `get_social_info` answers only when the server has `X_BEARER_TOKEN`; posts are wrapped as untrusted text.
+- **prepare** (needs a token, 6 tools): `prepare_order` `{kind: "perp" | "swap", …}`, `prepare_perp_order`, `prepare_swap`, `prepare_close_position`, `prepare_hl_funding`, and `file_call` (files a public call to The Record). These run Troya Gate and your limits, then return a one-time `confirmationId` that lasts 120 seconds and is bound to a hash of the parameters.
 - **execute** (needs a token with the execute scope): `execute_intent {confirmationId}`. It re-checks your limits and runs through your Agent Wallet. It stays a dry run unless **both** of these are true: you switched dry-run off for that token in the app, and `TROYA_LIVE=1` is set here.
 
 ## REST (same tools)

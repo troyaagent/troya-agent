@@ -1,0 +1,26 @@
+{
+  "name": "@troyaagent/agentkit",
+  "version": "0.1.1",
+  "description": "Coinbase AgentKit ActionProvider for Troya: read-only Robinhood Chain safety checks (Gate pre-trade check, Trident firewall, Scylla bridge safety, Bow agent passport, Heel weak spot, Sirens real depth). Never trades or signs.",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": { "types": "./src/index.d.ts", "import": "./src/index.js", "default": "./src/index.js" }
+  },
+  "files": ["src", "README.md", "LICENSE"],
+  "sideEffects": false,
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@troyaagent/sdk": "^0.1.0"
+  },
+  "peerDependencies": {
+    "@coinbase/agentkit": ">=0.10.0 <1",
+    "zod": "^3.23.8"
+  },
+  "keywords": ["agentkit", "coinbase", "cdp", "action-provider", "troya", "robinhood-chain", "ai-agent", "token-safety", "firewall"],
+  "homepage": "https://troya.codes",
+  "repository": { "type": "git", "url": "git+https://github.com/troyaagent/troya-agent.git", "directory": "plugins/agentkit" },
+  "bugs": { "url": "https://github.com/troyaagent/troya-agent/issues" },
+  "license": "MIT"
+}

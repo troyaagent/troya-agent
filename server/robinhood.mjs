@@ -1286,7 +1286,17 @@ export async function gateCheck({ tokenIn, tokenOut, amountIn, amountInRaw, from
         const tax = sc.transferTaxPct;
         add("tax", tax == null ? "skip" : tax > 10 ? "fail" : tax > 0.5 ? "warn" : "pass", "Transfer tax", tax == null ? "Not measured on this route" : tax > 0.5 ? `About ${tax.toFixed(1)}% is lost on transfer` : sc.transferTaxVia === "transfer" ? "None on a transfer to the pool or to a wallet" : "None detected");
       }
-    } catch (e) { add("sell", "warn", "Test sell", e.message); add("tax", "skip", "Transfer tax", "Not measured"); }
+    } catch (e) {
+      // a buy Troya can route (often through KyberSwap into another launchpad's curve, e.g. flap) with no way back: say
+      // it plainly, the generic "no Uniswap pool" text read as a small note (Xivor, 26 Nov 2026: OASIS 0x3eaf had a Buy
+      // button and no sell route)
+      const noWay = q.side === "buy" && (e?.code === "NO_ROUTE" || e?.extra?.code === "NO_ROUTE" || /No Uniswap v3 or v4 pool connects/i.test(String(e?.message || "")));
+      const via = q.route?.label ? ` (${String(q.route.label).replace(/^KyberSwap · [^ ]+ → [^ ]+ via /, "KyberSwap via ")})` : "";
+      add("sell", "warn", "Test sell", noWay
+        ? `Troya can buy this${via} but finds no route to sell it back, on Troya or through KyberSwap. You may only be able to sell on the launchpad's own site. Buy only if you know how you will get out.`
+        : e.message);
+      add("tax", "skip", "Transfer tax", "Not measured");
+    }
   }
   if (ring && q.side === "buy") { const l = await ring; if (l) add("ring", l.status, l.name, l.detail); }
   if (devlinks && q.side === "buy") { const l = await devlinks; if (l) add(l.key, l.status, l.label, l.detail); }

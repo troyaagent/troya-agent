@@ -134,10 +134,14 @@ const tx = (t, kind) => ({ from: lc(t.from?.hash), to: lc(t.to?.hash), toContrac
 
 /** A wallet's first ETH: the earliest transaction paying it, or the contract call it came through (bridge, exchange, bot
  *  app, batch sender: then the contract and the wallet that sent that call are named). Kept for good. */
+const UNKNOWN_RETRY = 30 * 60_000;
 async function firstFunder(w) {
   w = lc(w);
   const d = await disk();
-  if (d.funders[w]) return d.funders[w];
+  // a found funder is kept for good; "unknown" is read again after 30 minutes (the wallet may not have been funded yet, or
+  // the read came back short: a stored unknown hid a shared funder between two $TROYA holders, 27 Nov 2026)
+  const hit = d.funders[w];
+  if (hit && !(hit.how === "unknown" && Date.now() - (hit.checked || 0) > UNKNOWN_RETRY)) return hit;
   if (!assayF || Date.now() - assayF.at > 10 * 60_000) assayF = { at: Date.now(), v: (await store?.readJson("assay-funders.json", {}).catch(() => null)) || {} };
   const a = assayF.v[w];
   if (a?.funder) return (d.funders[w] = { funder: lc(a.funder), block: a.block ?? null, tx: a.tx || null, how: "direct", src: "assay" });
@@ -155,7 +159,7 @@ async function firstFunder(w) {
     if (e && (!firstOut || e.block <= firstOut.block)) {
       const t = await bs(`/transactions/${e.tx}`).catch(() => null);
       r = { funder: null, via: e.from, viaFrom: lc(t?.from?.hash) || null, block: e.block, at: e.at, tx: e.tx, eth: Number(e.value) / 1e18, how: "contract" };
-    } else r = { funder: null, how: "unknown", block: firstOut?.block ?? null };
+    } else r = { funder: null, how: "unknown", block: firstOut?.block ?? null, checked: Date.now() };
   }
   d.funders[w] = r;
   save();

@@ -273,11 +273,12 @@ async function compute(address) {
   const hubs = [...[...fromX].filter(([, m]) => m.size >= 2).map(([x, m]) => ["sender", x, m]), ...[...toX].filter(([, m]) => m.size >= 2).map(([x, m]) => ["receiver", x, m])]
     .sort((a, b) => b[2].size - a[2].size).slice(0, 12);
   await dl._codeOf(hubs.map((h) => h[1])).catch(() => {});
-  let hubsSkipped = 0;
+  let hubsSkipped = 0, unread = 0;   // unread: Blockscout did not answer for that wallet (never called "busy")
   for (const [kind, x, m] of hubs) {
     if (isCode(x) !== false) { hubsSkipped++; continue; }
     const inf = await dl.infoOf(x).catch(() => null);
-    if (!inf || inf.txs == null || inf.txs > HUB_TXS || inf.contract) { hubsSkipped++; continue; }
+    if (!inf || inf.txs == null) { unread++; continue; }
+    if (inf.txs > HUB_TXS || inf.contract) { hubsSkipped++; continue; }
     const on = [...m.keys()];
     const why = kind === "sender" ? `got coins from the same wallet ${short(x)} (not on the map)` : `sent coins to the same wallet ${short(x)} (not on the map)`;
     for (const a of on.slice(1)) addLink(on[0], a, kind, why, "medium", ev("tx", m.get(a), `the transfer ${kind === "sender" ? "from" : "to"} ${short(x)}`), { via: x });
@@ -306,7 +307,8 @@ async function compute(address) {
     if (toDev) { const d = ensureDev(); for (const m of ms) if (d) addLink(d, m.w, "dev", "its first ETH came from the dev", "high", ev("tx", m.r.tx, "its first ETH") || ev("address", k), { dir: "forward" }); continue; }
     if (onMap) { for (const m of ms) addLink(k, m.w, "funder", `its first ETH came from ${short(k)}, also on the map`, "high", ev("tx", m.r.tx, "its first ETH") || ev("address", k), { dir: "forward" }); continue; }
     const inf = await dl.infoOf(k).catch(() => null);
-    if (!inf || inf.contract || inf.txs == null || inf.txs > HUB_TXS) { busyFunders++; continue; }
+    if (!inf || inf.txs == null) { unread++; continue; }
+    if (inf.contract || inf.txs > HUB_TXS) { busyFunders++; continue; }
     const ats = ms.map((m) => m.r.at).filter(Boolean).sort((a, b) => a - b);
     if (inf.txs > SMALL_TXS && !(ats.length >= 2 && ats.at(-1) - ats[0] <= DAY_MS)) { busyFunders++; continue; }
     const conf = inf.txs <= SMALL_TXS ? "medium" : "low";
@@ -315,6 +317,7 @@ async function compute(address) {
     addVia(k, "funder", why, ms.map((m) => ({ w: m.w, dir: "out", evidence: ev("tx", m.r.tx, `its first ETH, from ${short(k)}`) || ev("address", k, "the shared funder") })));
   }
   if (busyFunders) notes.push(`${plural(busyFunders, "shared funder")} left out as too busy to link anyone (an exchange, a bridge or a bot app funds thousands of wallets)`);
+  if (unread) { notes.push(`${plural(unread, "wallet")} that could link holders could not be read just now (Blockscout did not answer): read again in a few minutes`); }
 
   // 5 · Ring Radar: one transaction delivering curve coins to several wallets in the first seconds
   if (ring?.bundles?.length && curve) {
@@ -364,7 +367,8 @@ async function compute(address) {
   const top10 = r2(wallets.slice(0, 10).reduce((s, n) => s + n.pct, 0));
   const inContracts = r2(list.filter((n) => CONTRACT_LABELS.has(n.label) && n.label !== "burn").reduce((s, n) => s + n.pct, 0));
   const burned = r2(list.filter((n) => n.label === "burn").reduce((s, n) => s + n.pct, 0));
-  const partial = cov.some((c) => c.status === "running");
+  // a wallet Blockscout did not answer for keeps the map "still reading" (30 s cache, the page asks again) instead of a final answer
+  const partial = cov.some((c) => c.status === "running") || unread > 0;
   const reasonOf = (c) => c.kinds.map((k) => REASON[k]).filter((x, i, a) => a.indexOf(x) === i).slice(0, 2).join(", ");
   const cl = clusters.length, clPct = r2(clusters.reduce((s, c) => s + c.pct, 0));
   const summary = `Top 10 wallets hold ${top10}%; ` +

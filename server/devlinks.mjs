@@ -120,7 +120,7 @@ async function bsPages(path, { pages = 2, stop } = {}) {
 async function infoOf(a) {
   a = lc(a);
   const h = info.get(a);
-  if (h && Date.now() - h.at < 6 * 3600_000) return h;
+  if (h && Date.now() - h.at < (h.txs == null ? 120_000 : 6 * 3600_000)) return h;   // a failed read is tried again after 2 minutes
   const [c, d] = await Promise.all([bs(`/addresses/${a}/counters`).catch(() => null), codes.has(a) ? null : bs(`/addresses/${a}`).catch(() => null)]);
   if (d) codes.set(a, !!d.is_contract);
   const v = { txs: c ? Number(c.transactions_count || 0) : null, contract: codes.get(a) ?? null, at: Date.now() };

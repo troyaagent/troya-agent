@@ -189,6 +189,14 @@ export async function mount(view, ctx) {
   const btn = h("button", { class: "btn primary big", type: "button", onclick: () => act() });
   // what the page is doing right now (finding a route, running the checks), under the button as well as in the Gate card
   const statusLine = h("p", { class: "sw2-sign sw-status", hidden: true });
+  // lynx_evo (26 Nov 2026) turned the Agent Wallet on and still got a MetaMask popup here: this page always signs in your own
+  // wallet. Say where the no-popup trades are, for anyone with an Agent Wallet.
+  const awHint = h("p", { class: "sw2-sign", hidden: true });
+  if (wallet.session) api.get("agent-wallet").then((aw) => {
+    if (!aw?.address) return;
+    clear(awHint, "This page signs in your own wallet. For trades without a wallet popup, use the Buy and Sell buttons on a coin's page, or Telegram, which trade from your Agent Wallet (fund it first in ", h("a", { class: "link", href: "#/agent/wallet" }, "Agent Wallet"), ").");
+    awHint.hidden = false;
+  }).catch(() => {});
   const txBox = h("div", { class: "sw-tx" });
   // the quote on screen is fetched again every 25 s while the page is visible; this line says when
   const freshLine = h("p", { class: "sw-fresh", hidden: true });
@@ -207,7 +215,7 @@ export async function mount(view, ctx) {
       h("div", { class: "sw-leg-main" }, buyOut, buyTok), getUsd),
     h("div", { class: "sw-meta" }, h("span", { class: "muted" }, "Slippage"), slipSeg,
       infoTip("The most the price may move against you between quote and inclusion. If it moves further, the swap reverts and only the network fee is spent.", "Slippage")),
-    warnBox, gateStrip, btn, statusLine,
+    warnBox, gateStrip, btn, statusLine, awHint,
     h("p", { class: "sw2-sign" }, "Your wallet signs. Troya never holds your funds. ", h("span", { class: "badge-s", title: "Troya adds no fee of its own to any swap" }, "Troya fee 0%")), rows, freshLine, txBox);
   const note = h("p", { class: "note sw-note" });
   // phones: the network note moves under the Gate card, so the card, the Gate strip and the button come first

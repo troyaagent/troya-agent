@@ -140,14 +140,14 @@ async function poll() {
         if (!res.ok && res.status !== 429) throw new Error(d.error || `HTTP ${res.status}`);
       } catch (e) { if (Date.now() - t0 > POLL_FOR_MS) throw e; }
       const secs = Math.round((Date.now() - t0) / 1000);
-      const ready = d && !d.pending && !d.final && (d.kind !== "coin" || d.score != null);
+      const ready = d && !d.pending && !d.stillReading && (d.kind !== "coin" || d.score != null);
       if (ready) {
         showCoin(d);
         // parts still reading: one more look once the server's short cache for them has passed
         if (d.partial) setTimeout(() => refresh(), 62_000);
         return;
       }
-      if (Date.now() - t0 > POLL_FOR_MS || d?.final) { showPending(secs, true); return; }
+      if (Date.now() - t0 > POLL_FOR_MS || d?.stillReading) { showPending(secs, true); return; }
       showPending(secs);
       await new Promise((r) => setTimeout(r, POLL_MS));
     }
@@ -161,7 +161,7 @@ async function poll() {
 async function refresh() {
   try {
     const d = await (await fetch(`/api/check/${ADDR}`, { cache: "no-store" })).json();
-    if (d && !d.pending && !d.final && (d.kind !== "coin" || d.score != null)) showCoin(d);
+    if (d && !d.pending && !d.stillReading && (d.kind !== "coin" || d.score != null)) showCoin(d);
   } catch { /* the answer on screen stays */ }
 }
 const load = (again) => (again ? refresh() : poll());

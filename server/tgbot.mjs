@@ -576,7 +576,10 @@ async function tgExec(name, a = {}) {
   if (name === "troya_check") {
     const addr = (String(a.address || "").match(/0x[0-9a-fA-F]{40}/) || [])[0];
     if (!addr) return { error: "Give a 0x contract address on Robinhood Chain." };
-    const r = await (await import("./check.mjs")).troyaCheck(addr, { via: "telegram" });
+    const C = await import("./check.mjs");
+    const r = await C.checkForChat(addr, { via: "telegram" });
+    // a provisional score is never given: until every core check is read, the answer is "still reading"
+    if (!C.complete(r)) return { token: r.address, stillReading: true, notRead: (r.parts || []).filter((p) => p.status === "not read").map((p) => p.name), page: `troya.codes/check/${r.address}`, note: "Some checks did not finish in time: say it is still reading and to look again in a minute (or open the page, which keeps reading). Give no score." };
     return { token: r.address, symbol: r.symbol, kind: r.kind, score: r.score, label: r.label, headline: r.headline, reasons: (r.reasons || []).map((x) => x.text), notRead: (r.parts || []).filter((p) => p.status === "not read").map((p) => p.name),
       page: `troya.codes/check/${r.address}`, checkedAt: r.checkedAt ? new Date(r.checkedAt).toISOString().slice(0, 16) + " UTC" : null, note: "Automated checks, not an audit; a snapshot, never a safe stamp and never advice to buy." };
   }
@@ -1100,7 +1103,7 @@ async function checkCmd(arg, m) {
   const by = m?.from?.username || null;
   // a slow coin is read again within the chat budget, so the answer carries a score whenever one can be had
   const r = await C.checkForChat(a, { via: "telegram", by, hints: (String(arg || "").match(/https?:\/\/\S+/g) || []).slice(0, 4) });
-  return { text: C.tgText(r), preview: r.kind === "unknown" ? null : `${SITE}/check/${r.address}`, address: r.address, gatePassed: r.gatePassed };
+  return { text: C.tgText(r), preview: r.kind === "unknown" ? null : `${SITE}/check/${r.address}`, address: r.address, gatePassed: r.gatePassed && C.complete(r) };
 }
 async function badgeText(arg) {
   const a = (/0x[0-9a-fA-F]{40}/.exec(String(arg || "")) || [])[0];

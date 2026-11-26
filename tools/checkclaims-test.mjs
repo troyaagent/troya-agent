@@ -183,7 +183,7 @@ await t("claims all proven: full points; a contradicted product link lowers it b
   const ok = C.scoreCheck(coin({ ...src, verified: [v("renounced", "proven"), v("tax", "proven")] }));
   assert.equal(ok.parts.find((x) => x.key === "claims").value, 1);
   const dead = C.scoreCheck(coin({ ...src, verified: [v("live", "contradicted"), v("tax", "proven")] }));
-  assert.ok(!dead.caps.some((c) => c.part === "claims"));
+  assert.ok(!dead.caps.some((c) => c.at === C.CAPS.claimFalse), "not the 35 cap (a dead product link is no key claim)");
   assert.equal(dead.parts.find((x) => x.key === "claims").value, 0.5);
 });
 await t("no site known: n/a; site unreachable: not read; nothing claimed: n/a. None of them count", () => {

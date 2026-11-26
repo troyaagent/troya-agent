@@ -68,6 +68,11 @@ export const CAPS = {
   thinFail: 45,       // the pool is too thin for a 0.01 ETH buy (price impact or depth failed)
   gateNotRead: 60,    // the Gate could not run: nothing shows it can be sold back
   unread: 74,         // the Gate, Ring Radar, the dev side or The Assay is still unread: never "No major flags" without them
+  flagged: 74,        // a part read badly, or a reason shown is a warning: never "No major flags" over a serious line (MOW 85, PONS 88)
+  devSold: 74,        // the dev wallet sold 80%+ of its coins, or the wallets linked to it sold 80%+ of what they got
+  devSoldBoth: 60,    // both of those
+  washHigh: 74,       // 50%+ of all trades come from wallets trading the same amounts back and forth (bots or wash trading)
+  washVeryHigh: 60,   // 70%+ of them
 };
 // enough read to give a number: 35 of the weight with the Gate among it (the Gate plus liquidity is 36), or 45 without it.
 // A non-Pons coin has no Ring Radar or dev-side reading, so a flat 45 left it unscored whenever The Assay was still reading
@@ -230,11 +235,27 @@ export function holdersPart(d, A) {
   if (facts) p.evidence.push({ text: cap1(facts) });
   if (partial) p.evidence.push({ text: "Partial history: only the most recent transfers were read" });
   const v = 1 - 0.3 * red.length - 0.12 * amber.length;
-  const lp = red.find((f) => f.key === "lp-pulled");
-  const top = red[0] || amber[0];
+  // explicit caps from The Assay's own numbers (27 Nov calibration: MOW 85 and PONS 88 read "No major flags" over a dump and
+  // over wash trading). Every one that applies is listed; the lowest becomes the part's cap
+  const caps = [];
+  if (red.find((f) => f.key === "lp-pulled")) caps.push({ at: CAPS.lpPulled, why: "the dev pulled liquidity" });
+  const devSold = Number(d.dev?.soldPct) || 0, sideSold = Number(d.devSide?.soldOfGotPct) || 0;
+  if (devSold >= 80 && sideSold >= 80) caps.push({ at: CAPS.devSoldBoth, why: `the dev wallet sold ${Math.round(devSold)}% of its coins and the wallets linked to it sold ${Math.round(sideSold)}% of what they got` });
+  else if (devSold >= 80) caps.push({ at: CAPS.devSold, why: `the dev wallet sold ${Math.round(devSold)}% of its coins` });
+  else if (sideSold >= 80) caps.push({ at: CAPS.devSold, why: `the wallets linked to the dev sold ${Math.round(sideSold)}% of what they got` });
+  const wash = Number(d.wash?.washPct) || 0;
+  if ((d.wash?.trades || 0) >= 50 && wash >= 70) caps.push({ at: CAPS.washVeryHigh, why: `${Math.round(wash)}% of all trades look like bots or wash trading` });
+  else if ((d.wash?.trades || 0) >= 50 && wash >= 50) caps.push({ at: CAPS.washHigh, why: `${Math.round(wash)}% of all trades look like bots or wash trading` });
+  caps.sort((a, b) => a.at - b.at);
+  // the flag that set the lowest cap leads, so the headline names the reason for the cap
+  const lead = caps.length && /wash/.test(caps[0].why) ? red.find((f) => f.key === "wash") || amber.find((f) => f.key === "wash") : caps.length && /dev/.test(caps[0].why) && !/liquidity/.test(caps[0].why) ? red.find((f) => f.key === "dev-sold") || amber.find((f) => f.key === "dev-sold") : null;
+  const top = lead || red[0] || amber[0];
   if (!top) return score(p, 1, `No red or amber flags in what was measured${facts ? ` (${facts})` : ""}.`, { short: "The Assay found no red or amber flags in the holders." });
-  return score(p, v, `${red.length ? `${red.length} red` : ""}${red.length && amber.length ? " and " : ""}${amber.length ? `${amber.length} amber` : ""} flag${red.length + amber.length > 1 ? "s" : ""}: ${noDot(top.detail)}.`,
-    { short: `${noDot(top.detail)}.`, ...(lp ? { cap: { at: CAPS.lpPulled, why: "the dev pulled liquidity" } } : {}) });
+  const out = score(p, v, `${red.length ? `${red.length} red` : ""}${red.length && amber.length ? " and " : ""}${amber.length ? `${amber.length} amber` : ""} flag${red.length + amber.length > 1 ? "s" : ""}: ${noDot(top.detail)}.`,
+    { short: `${noDot(top.detail)}.`, ...(caps.length ? { cap: caps[0], caps } : {}) });
+  // a red flag or a cap reads as red on the page and the card, whatever the points say
+  if (red.length || caps.length) out.tone = "bad";
+  return out;
 }
 
 const usd = (v) => (v == null || !isFinite(v) ? null : v >= 1e6 ? `$${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}K` : `$${Number(v).toFixed(v < 10 ? 2 : 0)}`);
@@ -349,23 +370,27 @@ export function scoreCheck(f) {
   for (const p of parts) { p.summary = plainText(p.summary); if (p.short) p.short = plainText(p.short); for (const e of p.evidence || []) if (e.text) e.text = plainText(e.text); }
   const read = parts.filter((p) => p.status === "scored" && p.weight > 0);
   const W = read.reduce((s, p) => s + p.weight, 0);
-  const caps = parts.filter((p) => p.status === "scored" && p.cap).map((p) => ({ part: p.key, at: p.cap.at, why: p.cap.why }));
+  const caps = parts.filter((p) => p.status === "scored" && (p.cap || p.caps)).flatMap((p) => (p.caps || [p.cap]).map((c) => ({ part: p.key, at: c.at, why: c.why })));
   if (gate.status !== "scored") caps.push({ part: "gate", at: CAPS.gateNotRead, why: "the Gate could not run, so nothing shows it can be sold back" });
   const unread = parts.filter((p) => CORE_PARTS.includes(p.key) && p.status === "not read");
   if (unread.length) caps.push({ part: unread[0].key, at: CAPS.unread, why: `${unread.map((p) => p.name).join(", ")} ${unread.length === 1 ? "was" : "were"} not read yet` });
-  caps.sort((a, b) => a.at - b.at);
   for (const p of read) p.points = +(p.weight * p.value).toFixed(1);
+  // the three reasons: what set a cap first, then what cost the most points, then (if fewer than three) the strongest parts
+  const bad = read.filter((p) => p.value < 1 || p.tone !== "good").map((p) => ({ p, k: (p.cap ? 1000 - p.cap.at : 0) + (p.tone === "bad" ? 100 : 0) + p.weight * (1 - p.value) })).sort((a, b) => b.k - a.k).map((x) => x.p);
+  const good = read.filter((p) => p.value >= 0.8 && !bad.includes(p)).sort((a, b) => b.weight - a.weight);
+  const pick = [...bad.filter((p) => p.weight * (1 - p.value) >= 1.5 || p.cap || p.tone === "bad"), ...good, ...bad].filter((p, i, a) => a.indexOf(p) === i).slice(0, 3);
+  const reasons = pick.map((p) => ({ part: p.key, tone: p.tone, text: `${p.name}: ${p.summary}`, short: p.short || p.summary, link: p.links[0] || null }));
+  if (gate.status !== "scored" && reasons.length < 3) reasons.push({ part: "gate", tone: "grey", text: `${gate.name}: ${gate.summary}`, short: "The Gate could not run, so a sell back is not proven.", link: gate.links[0] });
+  // "No major flags" only when nothing read badly and no reason shown is a warning: the label must match its own reasons
+  const badPart = read.find((p) => p.tone === "bad");
+  const warnReason = reasons.find((x) => ["warn", "risky", "bad"].includes(x.tone));
+  if (badPart || warnReason) { const w = badPart || read.find((p) => p.key === warnReason.part); caps.push({ part: w?.key || warnReason.part, at: CAPS.flagged, why: `${w?.name || "a check"} raised ${badPart ? "a red flag" : "a warning"}` }); }
+  caps.sort((a, b) => a.at - b.at);
   let s = W ? Math.round((100 * read.reduce((t, p) => t + p.weight * p.value, 0)) / W) : null;
   if (s != null && caps.length) s = Math.min(s, caps[0].at);
   const enough = W >= MIN_READ_WEIGHT || (gate.status === "scored" && W >= MIN_READ_WITH_GATE);
   if (!enough) s = null;
   const band = bandOf(s);
-  // the three reasons: what set a cap first, then what cost the most points, then (if fewer than three) the strongest parts
-  const bad = read.filter((p) => p.value < 1).map((p) => ({ p, k: (p.cap ? 1000 - p.cap.at : 0) + p.weight * (1 - p.value) })).sort((a, b) => b.k - a.k).map((x) => x.p);
-  const good = read.filter((p) => p.value >= 0.8 && !bad.includes(p)).sort((a, b) => b.weight - a.weight);
-  const pick = [...bad.filter((p) => p.weight * (1 - p.value) >= 1.5 || p.cap), ...good, ...bad].filter((p, i, a) => a.indexOf(p) === i).slice(0, 3);
-  const reasons = pick.map((p) => ({ part: p.key, tone: p.tone, text: `${p.name}: ${p.summary}`, short: p.short || p.summary, link: p.links[0] || null }));
-  if (gate.status !== "scored" && reasons.length < 3) reasons.push({ part: "gate", tone: "grey", text: `${gate.name}: ${gate.summary}`, short: "The Gate could not run, so a sell back is not proven.", link: gate.links[0] });
   const partial = parts.some((p) => p.status === "not read" && /still|did not finish|in time/i.test(p.summary));
   return {
     ...base, score: s, label: enough ? band.label : "Not enough read", tone: enough ? band.tone : "grey",
@@ -465,13 +490,19 @@ export async function troyaCheck(address, { via = "web", by = null, record = tru
     res = await h.p;
   }
   // every check asked from X or Telegram is kept; from the web, once per fresh computation (a reload is not a new check)
-  if (record && store && (fresh || via === "x" || via === "telegram")) await saveRow(res, via, by).catch((e) => console.warn("[check] save", e.message));
+  if (record && store && complete(res) && (fresh || via === "x" || via === "telegram")) await saveRow(res, via, by).catch((e) => console.warn("[check] save", e.message));
   return { ...res, cached: !fresh };
 }
 
 /* ---------- the web: a cold coin is "reading", never "not enough read" on a first visit ---------- */
 // A result people may see as the answer: a scored coin, or a stock, a major or an unknown address (those have no score).
-export const settled = (r) => !!r && (r.kind !== "coin" || r.score != null);
+// Complete (27 Nov, second calibration): a coin's answer is shown only once the Gate and every core part that applies (Ring
+// Radar on a Pons coin, the dev side, the holders) has been read. Provisional scores jumped once the rest came in (DCTY and
+// Rockstar 52 → 35, MOW 74 → 85, CASHCAT 74 → 90). Stocks, majors and unknown addresses have no parts to wait for.
+export const complete = (r) => !!r && (r.kind !== "coin" || (r.score != null && !(r.parts || []).some((p) => CORE_PARTS.includes(p.key) && p.status === "not read")));
+// what may stand once the time is up: the Gate was read and there is a score (shown with its "not read yet" cap)
+export const usable = (r) => !!r && (r.kind !== "coin" || (r.score != null && (r.parts || []).some((p) => p.key === "gate" && p.status === "scored")));
+export const settled = complete;
 const WEB_BUDGET_MS = Math.max(20_000, Number(process.env.CHECK_WEB_BUDGET_MS) || 60_000);
 const runs = new Map();                       // address → { at, p, done, res }: one background read per coin, the polls join it
 /** The web's read of a coin: the cached answer when it is settled, else one background run (checkForChat's re-reads, up to
@@ -502,7 +533,9 @@ export async function webAnswer(address, waitMs = 8000) {
   const r = run.res;
   if (run.error && !r) throw run.error;
   if (settled(r)) return publicResult(r);
-  if (run.done && r) return { ...publicResult(r), final: true };
+  // the budget is spent: the answer stands only when the Gate was read; otherwise the page keeps saying "still reading"
+  if (run.done && usable(r)) return { ...publicResult(r), final: true };
+  if (run.done) return { address: A, pending: false, stillReading: true, note: "Troya could not finish reading this coin within a minute (the Gate or other checks are slow right now). The reads go on; check again in a minute." };
   return { address: A, pending: true, startedAt: run.at, budgetSeconds: WEB_BUDGET_MS / 1000, note: "Troya is still reading this coin: the Gate's simulated buy and test sell, Ring Radar, the dev side, The Assay and Heel. Ask again in a few seconds." };
 }
 
@@ -514,12 +547,13 @@ export async function checkForChat(address, { via = "telegram", by = null, hints
   const end = Date.now() + budgetMs;
   let r = await troyaCheck(address, { via, by, hints, record: false, waitMs: Math.min(firstWaitMs, budgetMs) });
   onResult?.(r);
-  for (let i = 0; i < 6 && r.kind === "coin" && (r.partial || r.score == null) && end - Date.now() > pauseMs + 4000; i++) {
+  for (let i = 0; i < 8 && !complete(r) && end - Date.now() > pauseMs + 4000; i++) {
     await sleep(pauseMs);
     r = await troyaCheck(address, { via, by, hints, record: false, fresh: true, waitMs: Math.max(3000, Math.min(end - Date.now() - 500, firstWaitMs)) });
     onResult?.(r);
   }
-  if (store) await saveRow(r, via, by).catch((e) => console.warn("[check] save", e.message));
+  // a check row (and its track-record price) is kept only for a complete answer
+  if (store && complete(r)) await saveRow(r, via, by).catch((e) => console.warn("[check] save", e.message));
   return r;
 }
 
@@ -712,7 +746,7 @@ export async function xCheckReply(req, { by = null, hints = [] } = {}) {
 }
 /** What X gets for a finished check: never "not enough read" (no score on a coin = no reply; logged, the next mention reads again). */
 export function xAnswer(r) {
-  if (r.kind === "coin" && r.score == null) return { reply: null, silent: true, why: "no score yet (not enough read): stayed silent", address: r.address, result: r };
+  if (!complete(r)) return { reply: null, silent: true, why: r.score == null ? "no score yet (not enough read): stayed silent" : "not every check was read in time (provisional score): stayed silent", address: r.address, result: r };
   return { reply: xReplyText(r), address: r.address, result: r };
 }
 
@@ -720,6 +754,13 @@ const tgEsc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;"
 /** Telegram /check: short HTML, the score first, three reasons, the link (its preview is the card). */
 export function tgText(r) {
   const link = `${SITE}/check/${r.address}`;
+  // a check that did not complete is said as "still reading", never a provisional score
+  if (!complete(r)) {
+    const missing = (r.parts || []).filter((p) => CORE_PARTS.includes(p.key) && p.status === "not read").map((p) => p.name).join(", ") || "some checks";
+    return [`<b>Troya Check</b> · ${r.symbol ? `$${tgEsc(r.symbol)}` : `<code>${short(r.address)}</code>`}`,
+      `Still reading this coin: ${tgEsc(missing)} did not finish in time. Send /check again in a minute, or open <a href="${link}">the page</a>, which keeps reading.`,
+      "<i>Automated checks, not an audit.</i>"].join("\n");
+  }
   const name = r.symbol ? `$${tgEsc(r.symbol)}` : `<code>${short(r.address)}</code>`;
   if (r.kind === "unknown") return `<b>Troya Check</b> · <code>${r.address}</code>\n${tgEsc(r.headline)}`;
   const head = r.score != null ? `<b>${tgEsc(r.label)} · ${r.score}/100</b>` : `<b>${tgEsc(r.label)}</b>`;
@@ -857,7 +898,7 @@ const cards = new Map();                        // address → { key, at, png }
 async function cardFor(A) {
   const run = webRun(A), t0 = Date.now();
   while (!run.done && !settled(run.res) && Date.now() - t0 < CARD_WAIT_MS) await sleep(300);
-  const r = settled(run.res) ? run.res : null;
+  const r = settled(run.res) || (run.done && usable(run.res)) ? run.res : null;
   const key = r ? `${r.checkedAt}` : "pending";
   const hit = cards.get(lc(A));
   if (hit && hit.key === key && Date.now() - hit.at < TTL) return { png: hit.png, done: !!r };
@@ -880,7 +921,7 @@ export async function renderPage(html, address) {
   // only a settled answer goes into the page; otherwise the page opens in its "reading" state and check.js polls
   const run = webRun(A), t0 = Date.now();
   while (!run.done && !settled(run.res) && Date.now() - t0 < PAGE_WAIT_MS) await sleep(250);
-  const r = settled(run.res) ? run.res : null;
+  const r = settled(run.res) || (run.done && usable(run.res)) ? run.res : null;
   const v = r ? Math.floor((r.checkedAt || 0) / 60_000).toString(36) : "p";
   const url = `${SITE}/check/${A}`, img = `${SITE}/api/check/${A}/card.png?v=${v}`, title = titleOf(r, A), desc = descOf(r);
   const meta = `<title>${esc(title)}</title>

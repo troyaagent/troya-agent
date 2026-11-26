@@ -111,7 +111,10 @@ const agent = await AcpAgent.create({
 
 agent.on("entry", async (session, entry) => {
   // 1) the buyer's requirement: a token address → propose the price; anything else → say what is needed (nothing is paid)
-  if (entry.kind === "message" && entry.contentType === "requirement" && session.status === "open") {
+  // Steps 1 and 2 are for jobs where Troya is the PROVIDER only. As a job's evaluator Troya never asks, prices or
+  // submits (the first evaluator test, 26 Nov 2026, saw Troya ask Fun Freak's buyer for a token address)
+  const provider = !session.roles || session.roles.includes("provider");
+  if (provider && entry.kind === "message" && entry.contentType === "requirement" && session.status === "open") {
     return once(session, "budget", async () => {
       const ask = readAsk(entry.content);
       if (!ask.token) {
@@ -124,7 +127,7 @@ agent.on("entry", async (session, entry) => {
     });
   }
   // 2) funded → run the check and submit it
-  if (entry.kind === "system" && entry.event?.type === "job.funded" && session.status === "funded") {
+  if (provider && entry.kind === "system" && entry.event?.type === "job.funded" && session.status === "funded") {
     return once(session, "submit", async () => {
       const ask = askOf(session);
       let out = null, err = null;

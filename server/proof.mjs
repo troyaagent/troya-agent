@@ -228,6 +228,10 @@ async function contractFacts() {
   const src = await sourcifyOf([TROYA, STAKE, PASS, SPLIT_FACTORY, OATH_VAULT]);
   // TroyaFeeRouter, and who Pons pays the $TROYA creator fees to: getLaunchedToken(TROYA) returns a static tuple, word 3 is creatorFeeRecipient
   const recipientCall = { to: PONS_FACTORY, data: SEL.getLaunchedToken + word(TROYA) };
+  // the Safe that owns the router: its signers and how many must sign (holder review, 27 Nov 2026: list the signers on /proof)
+  const [safeOwnersRaw, safeThresholdRaw] = await Promise.all([probe(ROUTER_SAFE, "0xa0e67e2b"), probe(ROUTER_SAFE, "0xe75235b8")]);
+  const safeOwners = (() => { try { const w = String(safeOwnersRaw).slice(2).match(/.{64}/g) || []; const n = Number(BigInt("0x" + w[1])); return w.slice(2, 2 + n).map((x) => getAddress("0x" + x.slice(24))); } catch { return null; } })();
+  const safeThreshold = (() => { try { return Number(BigInt(safeThresholdRaw)); } catch { return null; } })();
   const [rOwner, rPendingOwner, rTimelock, rPendingEta, rPendingTo, rCode, launched] = await Promise.all([
     probe(FEE_ROUTER, SEL.owner), probe(FEE_ROUTER, SEL.pendingOwner), probe(FEE_ROUTER, SEL.timelock), probe(FEE_ROUTER, SEL.pendingConfigEta), probe(FEE_ROUTER, SEL.pendingRecipient),
     chain().then((m) => m.rpc("robinhood", "eth_getCode", [FEE_ROUTER, "latest"])).then((c) => (String(c || "0x").length - 2) / 2).catch(() => null),
@@ -262,7 +266,10 @@ async function contractFacts() {
     { name: "TroyaFeeRouter", address: FEE_ROUTER, by: "Troya (deployed by the creator wallet)", source: `${BS}/address/${FEE_ROUTER}?tab=contract`, url: addrUrl(FEE_ROUTER), codeBytes: rCode, tx: FEE_ROUTER_TX,
       owner: addrOf(rOwner), pendingOwner: addrOf(rPendingOwner), timelockSeconds: rTimelock === "reverts" ? null : Number(BigInt(rTimelock)),
       pendingConfigEta: rPendingEta === "reverts" ? null : Number(BigInt(rPendingEta)), pendingRecipient: BigInt(rPendingTo === "reverts" || !rPendingTo ? 0 : rPendingTo) ? addrOf(rPendingTo) : null, ponsFeeRecipient: feeRecipient, routerIsRecipient: !!feeRecipient && lc(feeRecipient) === lc(FEE_ROUTER),
-      facts: [noOwner(rOwner) + (lc(addrOf(rOwner)) === lc(CREATOR) ? " (the creator wallet)" : ""), `TIMELOCK() = ${rTimelock === "reverts" ? "–" : `${Number(BigInt(rTimelock)) / 86400} days`} before any rule change or recipient move`,
+      safe: lc(addrOf(rOwner)) === lc(ROUTER_SAFE) && safeOwners ? { address: ROUTER_SAFE, threshold: safeThreshold, owners: safeOwners } : null,
+      facts: [noOwner(rOwner) + (lc(addrOf(rOwner)) === lc(CREATOR) ? " (the creator wallet)" : ""),
+        ...(lc(addrOf(rOwner)) === lc(ROUTER_SAFE) && safeOwners?.length ? [`that owner is a Safe: getThreshold() = ${safeThreshold ?? "–"} of ${safeOwners.length} signers, getOwners() = ${safeOwners.join(", ")}`] : []),
+        `TIMELOCK() = ${rTimelock === "reverts" ? "–" : `${Number(BigInt(rTimelock)) / 86400} days`} before any rule change or recipient move`,
         !feeRecipient ? "Pons fee recipient for $TROYA: could not be read" : lc(feeRecipient) === lc(FEE_ROUTER) ? "Pons fee recipient for $TROYA: this router" : `Pons fee recipient for $TROYA: still ${feeRecipient}${lc(feeRecipient) === lc(CREATOR) ? " (the creator wallet)" : ""}, not switched to the router yet`,
         "source verified on Blockscout (full match)"],
       checks: [ownerCall(FEE_ROUTER), { rpc: RPC_PUBLIC, body: { jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: FEE_ROUTER, data: SEL.timelock }, "latest"] } },

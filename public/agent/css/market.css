@@ -1,5 +1,11 @@
 /* Market, Token detail, Launchpad */
-.mk-top { margin: -6px 0 16px; }
+.mk-top { margin: -6px 0 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+/* the other networks beside the tabs (27 Nov 2026) */
+.mk-chains { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mk-chains-t { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+.mk-chain { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 11px; border-radius: 10px; border: 1px solid var(--line-2); font-size: 12.5px; color: var(--fg-2); text-decoration: none; white-space: nowrap; }
+.mk-chain:hover, .mk-chain:focus-visible { color: var(--fg); border-color: var(--line-3); background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.mk-chain-x { border-style: dashed; color: var(--blue); }
 .mk-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
 .mk-filters .chips { flex: 1; min-width: 0; }
 .mk-sub { margin: 2px 0 10px; }
@@ -143,6 +149,10 @@ html[data-theme="light"] .mk-buy { color: var(--blue-3); border-color: rgba(10, 
   .mk-panel .tok .tok-ico { width: 30px; height: 30px; }
   .mk-panel .tbl { font-size: 12.5px; }
   .mk-top .seg { max-width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .mk-top { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .mk-chains { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mk-chains-t { grid-column: 1 / -1; }
+  .mk-chain { justify-content: center; }
   .mk-top .seg button { justify-content: center; }
   .mk2-cats { overflow-x: auto; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
   /* the first screen shows coins: no page description, the four cards in one sideways strip, two lines of the note */

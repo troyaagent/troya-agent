@@ -58,7 +58,16 @@ export async function mount(view, { go, query }) {
   head.classList.add("mk-head");
   const sub = h("p", { class: "mk-desc" });   // phones hide it: the header took 40% of the first screen there
   head.append(sub);
-  clear(view, head, h("div", { class: "mk-top" }, tabSeg), body);
+  // the other networks, right beside the Market tabs (community request, lynx_evo 26–27 Nov 2026: "many people don't know
+  // about cross chain"; the app home's Chains panel was not where he looked). Each opens Swap already on that network.
+  const OTHER = [["base", "Base", "#/swap?chain=base", "Swap on Base, or buy a Robinhood Chain coin with Base ETH in one step"],
+    ["arbitrum", "Arbitrum", "#/swap?chain=arbitrum", "Swap on Arbitrum, or buy a Robinhood Chain coin with Arbitrum ETH in one step"],
+    ["solana", "Solana", "#/swap?chain=solana", "Swap any Solana coin, Gate checked"]];
+  const chainsRow = h("div", { class: "mk-chains" },
+    h("span", { class: "mk-chains-t" }, "Also on", infoTip("Troya trades on five networks. Robinhood Chain coins and stocks are listed here; Perps and Spot are Hyperliquid. On Base and Arbitrum a cross-chain buy pays with ETH there and lands the Robinhood Chain coin in your wallet in one step, through bridges that pass Troya's safety bar.")),
+    OTHER.map(([k, t, href, title]) => h("a", { class: "mk-chain", href, title }, chainLogo(k, 14), t)),
+    h("a", { class: "mk-chain mk-chain-x", href: "#/swap?chain=base", title: "Pay with ETH on Base, receive the coin on Robinhood Chain" }, "Cross-chain buy →"));
+  clear(view, head, h("div", { class: "mk-top" }, tabSeg, chainsRow), body);
 
   function show() {
     try { stopTab?.(); } catch {}

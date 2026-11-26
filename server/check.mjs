@@ -343,6 +343,66 @@ export function claimsPart(cl) {
   return score(p, val, summary, { short, ...(bad ? { cap: { at: CAPS.claimFalse, why: `the project claims "${clipQ(bad.quote, 60)}" and the chain contradicts it` } } : {}) });
 }
 
+/* ---------- the verdict in pieces (the coin page and the dashboard rows) ---------- */
+// Two sub-scores from the parts already read: "Exit" (can you get out: the Gate and Ring Radar) and "Holders" (who holds and
+// what they do: the dev side and The Assay), each the weighted share of its parts' values, with a word for where it sits.
+const EXIT_WORDS = [[67, "clear"], [34, "risky"], [0, "blocked"]], HOLD_WORDS = [[67, "spread"], [34, "concentrated"], [0, "rigged"]];
+const wordOf = (v, words) => (v == null ? null : words.find(([m]) => v >= m)[1]);
+export function subScores(parts) {
+  const pick = (keys) => parts.filter((p) => keys.includes(p.key) && p.status === "scored" && p.weight > 0);
+  const avg = (keys) => { const ps = pick(keys); if (!ps.length) return null; const w = ps.reduce((t, p) => t + p.weight, 0); return Math.round((100 * ps.reduce((t, p) => t + p.weight * p.value, 0)) / w); };
+  const line = (keys) => { const ps = pick(keys).sort((a, b) => a.value - b.value); return ps[0] ? ps[0].short || ps[0].summary : null; };
+  const exit = avg(["gate", "ring"]), holders = avg(["devside", "holders"]);
+  return { exit, exitWord: wordOf(exit, EXIT_WORDS), exitLine: line(["gate", "ring"]), holders, holdersWord: wordOf(holders, HOLD_WORDS), holdersLine: line(["devside", "holders"]) };
+}
+/** Findings as a reader scans them: RISK, MISSING, WORKS, INFO, from the parts and the claims, each with its evidence links. */
+export function findingsOf(parts) {
+  const out = [];
+  for (const p of parts) {
+    if (p.key === "claims" && p.claims?.length) {
+      for (const c of p.claims) out.push({ kind: c.status === "proven" ? "works" : c.status === "contradicted" ? "risk" : "missing", title: `Claim: ${c.name}`, text: `"${c.quote}". ${noDot(c.evidence)}.`, links: [c.link, { label: "Where it was found", href: c.url }].filter((l) => l && l.href) });
+      continue;
+    }
+    const kind = p.status === "scored" ? (p.tone === "good" ? "works" : "risk") : p.status === "not read" ? "missing" : "info";
+    out.push({ kind, title: p.name, text: p.summary, links: (p.links || []).slice(0, 3) });
+  }
+  const order = { risk: 0, missing: 1, works: 2, info: 3 };
+  return out.sort((a, b) => order[a.kind] - order[b.kind]);
+}
+/** What would move the verdict, from what was read: at most three short phrases. */
+export function whatWouldChange(parts) {
+  const P = (k) => parts.find((p) => p.key === k) || {};
+  const out = [];
+  const g = P("gate");
+  if (g.noSellRoute) out.push("a route to sell it back opening, on Troya or through KyberSwap");
+  else if (g.notSellable) out.push("the test sell going through");
+  else if (g.cap && /fees and taxes/i.test(g.summary || "")) out.push("fees and taxes coming down");
+  else if (g.cap && /no route to buy/i.test(g.summary || "")) out.push("a route to buy it appearing");
+  else if (g.status === "scored" && g.value === 0.5) out.push("the first buyers arriving, so a sell back can be tested");
+  const d = P("devside"), h = P("holders");
+  if ((d.status === "scored" && d.value < 1) || (h.status === "scored" && /dev/i.test(h.summary || "") && h.tone !== "good")) out.push("the wallets linked to the dev selling what they still hold");
+  if (h.status === "scored" && /round-trip|wash/i.test(h.summary || "")) out.push("real trading replacing the round-trip trades");
+  else if (h.status === "scored" && /biggest wallets/i.test(h.summary || "") && h.tone !== "good") out.push("the biggest wallets spreading out");
+  const unread = parts.filter((p) => CORE_PARTS.includes(p.key) && p.status === "not read").map((p) => p.name);
+  if (unread.length) out.push(`${unread.join(", ")} being read`);
+  const m = P("market");
+  if (m.status === "scored" && m.value < 0.6) out.push("more liquidity and more holders");
+  const a = P("age");
+  if (a.status === "scored" && a.value < 0.8) out.push("time: it is still young");
+  const c = P("claims");
+  if (c.cap) out.push("the project correcting its claim, or the chain catching up with it");
+  if (!out.length) out.push("a failed Gate check, the dev side starting to sell, or a rigged-launch finding");
+  return out.slice(0, 3);
+}
+/** The coin's facts for the page (all read at check time; null where not read). */
+function coinFacts(f) {
+  const t = f.token || {};
+  const dev = f.devlinks?.dev?.[0]?.wallet || f.assay?.dev?.wallets?.[0] || null;
+  return { launchpad: t.launchpad || null, website: t.website || null, x: t.twitter || null, telegram: t.telegram || null, mcapUsd: t.mcapUsd ?? null, priceUsd: t.priceUsd ?? null,
+    change1h: t.change1h ?? null, change24h: t.change24h ?? null, volume24hUsd: t.volume24hUsd ?? null, liquidityUsd: t.realLiquidityUsd ?? t.liquidityUsd ?? null, holders: t.holders ?? null,
+    bornAt: f.bornAt || t.bornAt || null, dev: dev ? String(dev) : null };
+}
+
 /**
  * The score from the facts read at check time (pure: no network). f = { address, kind, symbol, name, gate, ring, devlinks,
  * assay, token, heel, clash, bornAt, bornSrc, now }. kind "stock" | "major" | "unknown" are named, never scored.
@@ -364,7 +424,7 @@ export function scoreCheck(f) {
       price ? { tone: "grey", text: price, link: links.dex(A) } : null,
       gate.status === "scored" ? { tone: gate.tone, text: `Troya Gate: ${gate.summary}`, link: links.gate(A) } : null,
     ].filter(Boolean).slice(0, 3);
-    return { ...base, score: null, label: f.kind === "stock" ? "Tokenized stock" : "Major token", tone: "grey", headline: `${cap1(what)}, not a launch, so it gets no meme-coin score.`, reasons, parts: [gate, m], caps: [], gatePassed: gate.status === "scored" && gate.value >= 0.75 && !gate.cap, partial: gate.status === "not read" };
+    return { ...base, score: null, label: f.kind === "stock" ? "Tokenized stock" : "Major token", tone: "grey", headline: `${cap1(what)}, not a launch, so it gets no meme-coin score.`, reasons, parts: [gate, m], caps: [], gatePassed: gate.status === "scored" && gate.value >= 0.75 && !gate.cap, partial: gate.status === "not read", coin: coinFacts(f), priceUsd: Number(f.token?.priceUsd) > 0 ? Number(f.token.priceUsd) : null };
   }
   const parts = [gate, ringPart(f.gate, f.ring, A), devsidePart(f.gate, f.devlinks, A), holdersPart(f.assay, A), marketPart(f.token, A), heelPart(f.heel, A), clashPart(f.clash, base.symbol, A), agePart(f.bornAt, f.bornSrc, A, base.checkedAt), claimsPart(f.claims)];
   for (const p of parts) { p.summary = plainText(p.summary); if (p.short) p.short = plainText(p.short); for (const e of p.evidence || []) if (e.text) e.text = plainText(e.text); }
@@ -399,6 +459,7 @@ export function scoreCheck(f) {
     ...base, score: s, label: enough ? band.label : "Not enough read", tone: enough ? band.tone : "grey",
     headline: enough ? (reasons[0]?.short || reasons[0]?.text || "") : "Too few checks could be read just now. Try again in a minute.",
     reasons, parts, caps, readWeight: W, partial,
+    sub: subScores(parts), findings: findingsOf(parts), changes: whatWouldChange(parts), coin: coinFacts(f),
     priceUsd: Number(f.token?.priceUsd) > 0 ? Number(f.token.priceUsd) : null, notSellable: !!gate.notSellable,
     // Buy only after a passed Gate, and never while Ring Radar is red or the dev side fails (the Gate's own result is kept
     // 10 minutes, so a ring or dev-side read that finished after it still counts here; Swap runs the Gate again anyway)
@@ -535,9 +596,9 @@ export async function webAnswer(address, waitMs = 8000) {
   while (!run.done && !settled(run.res) && Date.now() - t0 < waitMs) await sleep(250);
   const r = run.res;
   if (run.error && !r) throw run.error;
-  if (settled(r)) return publicResult(r);
+  if (settled(r)) return publicResult(await enrich(r));
   // the budget is spent: the answer stands only when the Gate was read; otherwise the page keeps saying "still reading"
-  if (run.done && usable(r)) return { ...publicResult(r), final: true };
+  if (run.done && usable(r)) return { ...publicResult(await enrich(r)), final: true };
   if (run.done) return { address: A, pending: false, stillReading: true, note: "Troya could not finish reading this coin within a minute (the Gate or other checks are slow right now). The reads go on; check again in a minute." };
   return { address: A, pending: true, startedAt: run.at, budgetSeconds: WEB_BUDGET_MS / 1000, note: "Troya is still reading this coin: the Gate's simulated buy and test sell, Ring Radar, the dev side, The Assay and Heel. Ask again in a few seconds." };
 }
@@ -562,13 +623,113 @@ export async function checkForChat(address, { via = "telegram", by = null, hints
 
 async function saveRow(r, via, by) {
   const row = { address: r.address, symbol: r.symbol, kind: r.kind, score: r.score, label: r.label, tone: r.tone, reasons: (r.reasons || []).map((x) => ({ tone: x.tone, text: String(x.short || x.text).slice(0, 160) })),
-    at: Date.now(), via: ["x", "telegram", "web", "api"].includes(via) ? via : "web", by: by ? String(by).replace(/[^A-Za-z0-9_]/g, "").slice(0, 32) || null : null };
+    at: Date.now(), via: ["x", "telegram", "web", "api"].includes(via) ? via : "web", by: by ? String(by).replace(/[^A-Za-z0-9_]/g, "").slice(0, 32) || null : null,
+    // for the dashboard: the price at the check (since-check), the two sub-scores, the Gate (Buy) and the dev (dev record)
+    p0: r.priceUsd ?? null, gatePassed: !!r.gatePassed, sub: r.sub ? { exit: r.sub.exit, holders: r.sub.holders } : null, dev: r.coin?.dev ? lc(r.coin.dev) : null, launchpad: r.coin?.launchpad || null };
   await store.update(FILE, [], (rows) => {
     const a = Array.isArray(rows) ? rows : [];
     row.track = trackOf(row, r, a);
     a.push(row);
+    rowsMemo = null;
     return a.slice(-MAX_ROWS);
   });
+}
+
+/* ---------- the dashboard: trending coins joined with their latest check, one request ---------- */
+let rowsMemo = null;                         // { at, rows }: data/checks.json, read at most every 15 s
+async function cachedRows() {
+  if (rowsMemo && Date.now() - rowsMemo.at < 15_000) return rowsMemo.rows;
+  const rows = store ? await store.readJson(FILE, []) : [];
+  rowsMemo = { at: Date.now(), rows: Array.isArray(rows) ? rows : [] };
+  return rowsMemo.rows;
+}
+/** The latest complete check per coin, with the price at the latest check that kept one. */
+export function latestChecks(rows) {
+  const out = new Map();
+  for (const r of rows || []) {
+    if (r.kind !== "coin" || r.score == null) continue;
+    const k = lc(r.address), prev = out.get(k);
+    const p0 = r.p0 ?? r.track?.p0 ?? null;
+    out.set(k, { ...r, p0: p0 ?? prev?.p0 ?? null, checks: (prev?.checks || 0) + 1 });
+  }
+  return out;
+}
+const pctChange = (now, then) => (now > 0 && then > 0 ? Math.round(((now / then - 1) * 100) * 10) / 10 : null);
+/** A board row and its latest check, in the shape the dashboard draws (market numbers only as the board has them). */
+export function joinRow(t, c) {
+  const m = t || {};
+  return {
+    address: getAddress(lc(m.address || c?.address)), symbol: cleanSym(m.symbol || c?.symbol) || null, name: String(m.name || "").slice(0, 60) || null, launchpad: m.launchpad || c?.launchpad || null,
+    stock: !!m.stock, mcapUsd: m.mcapUsd ?? null, priceUsd: m.priceUsd ?? null, change1h: m.change1h ?? null, change24h: m.change24h ?? null, volume24hUsd: m.volume24hUsd ?? null,
+    txns24h: m.txns24h ?? null, liquidityUsd: m.realLiquidityUsd ?? m.liquidityUsd ?? null, holders: m.holders ?? null, bornAt: m.bornAt ?? m.createdAt ?? null, spark: Array.isArray(m.spark) ? m.spark : null,
+    check: c ? { score: c.score, label: c.label, tone: c.tone, headline: c.reasons?.[0]?.text || null, exit: c.sub?.exit ?? null, holders: c.sub?.holders ?? null, gatePassed: !!c.gatePassed,
+      at: c.at, checks: c.checks || 1, sinceCheck: pctChange(m.priceUsd, c.p0) } : null,
+  };
+}
+const boardMemo = new Map();                  // key → { at, v }
+/** GET /api/check/board: trending coins + their checks, the checks lists, and the side panels. Cached 20 s per view. */
+export async function boardView({ sort = "volume", dir = "desc", launchpad = "all" } = {}, now = Date.now(), deps = {}) {
+  const key = `${sort}:${dir}:${launchpad}`;
+  const hit = boardMemo.get(key);
+  if (!deps.market && hit && now - hit.at < 20_000) return hit.v;
+  const M = deps.market || (await import("./market.mjs"));
+  const [board, rows] = await Promise.all([M.getRobinhoodTokens({ sort, dir, launchpad, limit: 60 }).catch(() => null), deps.rows || cachedRows()]);
+  const latest = latestChecks(rows);
+  const tokens = board?.tokens || [];
+  const trending = tokens.map((t) => joinRow(t, latest.get(lc(t.address))));
+  // the checks lists: every coin checked this week, with the board's numbers when the board has the coin
+  const week = [...latest.values()].filter((c) => now - c.at < WEEK);
+  const withMarket = (c) => joinRow(M.indexRow?.(c.address) ? { ...M.indexRow(c.address), spark: M.sparkFor?.(c.address) || null } : { address: c.address, symbol: c.symbol }, c);
+  const counts = new Map();
+  for (const r of rows) if (r.kind === "coin" && now - r.at < WEEK) counts.set(lc(r.address), (counts.get(lc(r.address)) || 0) + 1);
+  const day = new Map();
+  for (const r of rows) if (r.kind === "coin" && r.score != null && now - r.at < 86400e3) day.set(lc(r.address), (day.get(lc(r.address)) || 0) + 1);
+  const checks = {
+    latest: [...week].sort((a, b) => b.at - a.at).slice(0, 40).map(withMarket),
+    mostChecked: [...week].sort((a, b) => (counts.get(lc(b.address)) || 0) - (counts.get(lc(a.address)) || 0) || b.at - a.at).slice(0, 40).map((c) => ({ ...withMarket(c), weekChecks: counts.get(lc(c.address)) || 0 })),
+    highest: [...week].sort((a, b) => b.score - a.score || b.at - a.at).slice(0, 40).map(withMarket),
+    lowest: [...week].sort((a, b) => a.score - b.score || b.at - a.at).slice(0, 40).map(withMarket),
+  };
+  // side panels
+  const live = [...runs.entries()].filter(([, v]) => !v.done).slice(0, 8).map(([a, v]) => { const t = M.indexRow?.(a); return { address: getAddress(a), symbol: cleanSym(t?.symbol) || null, startedAt: v.at }; });
+  const seen = new Set();
+  const just = [...rows].reverse().filter((r) => r.kind === "coin" && r.score != null && !seen.has(lc(r.address)) && seen.add(lc(r.address))).slice(0, 8)
+    .map((r) => ({ address: getAddress(lc(r.address)), symbol: r.symbol, score: r.score, label: r.label, tone: r.tone, at: r.at }));
+  const mostChecked24h = [...day.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([a, n]) => { const c = latest.get(a); return { address: getAddress(a), symbol: c?.symbol || null, score: c?.score ?? null, label: c?.label || null, tone: c?.tone || "grey", checks: n }; });
+  // devs whose coins checked out: only from rows that kept the dev wallet (none before 27 Nov), so the panel can be empty
+  const byDev = new Map();
+  for (const c of latest.values()) if (c.dev) { const d = byDev.get(c.dev) || { dev: c.dev, coins: 0, good: 0 }; d.coins++; if (c.score >= 50) d.good++; byDev.set(c.dev, d); }
+  const devs = [...byDev.values()].sort((a, b) => b.good - a.good || b.coins - a.coins).slice(0, 5).map((d) => ({ ...d, dev: getAddress(d.dev) }));
+  const pads = new Map();
+  for (const t of trending) if (t.launchpad) pads.set(t.launchpad, (pads.get(t.launchpad) || 0) + 1);
+  const v = {
+    name: "Troya Check board", at: now, updatedAt: board?.updatedAt || null, total: board?.total ?? tokens.length, trending, checks, live, just, mostChecked24h, devs,
+    launchpads: [...pads.entries()].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ id, n })),
+    windows: { change: ["1h", "24h"], volume: "24h", trades: "24h" },
+    sorts: ["volume", "mcap", "change", "liquidity", "newest", "txns", "holders"],
+    note: "Market numbers from Troya's Robinhood Chain board. A coin with no complete Troya Check reads Not checked; nothing is filled in.",
+  };
+  if (!deps.market) boardMemo.set(key, { at: now, v });
+  if (boardMemo.size > 50) boardMemo.delete(boardMemo.keys().next().value);
+  return v;
+}
+/** The coin page's extras: every check of this coin, the dev's record from stored checks, and the board's sparkline. */
+export async function enrich(r, deps = {}) {
+  if (!r?.address) return r;
+  const rows = deps.rows || (await cachedRows().catch(() => []));
+  const k = lc(r.address);
+  const history = rows.filter((x) => lc(x.address) === k && (x.score != null || x.kind !== "coin")).slice(-15).reverse().map((x) => ({ at: x.at, score: x.score, label: x.label, tone: x.tone, via: x.via }));
+  const first = rows.find((x) => lc(x.address) === k && (x.p0 ?? x.track?.p0));
+  let devRecord = null;
+  const dev = r.coin?.dev ? lc(r.coin.dev) : null;
+  if (dev) {
+    const mine = [...latestChecks(rows).values()].filter((c) => c.dev === dev && lc(c.address) !== k);
+    devRecord = { dev: getAddress(dev), checked: mine.length, good: mine.filter((c) => c.score >= 50).length, coins: mine.slice(0, 6).map((c) => ({ address: getAddress(lc(c.address)), symbol: c.symbol, score: c.score, tone: c.tone })) };
+  }
+  const M = deps.market || (await import("./market.mjs").catch(() => null));
+  const spark = M?.sparkFor?.(r.address) || null;
+  const p0 = first ? first.p0 ?? first.track?.p0 : null;
+  return { ...r, history, devRecord, spark, sinceFirstCheck: first ? { at: first.at, change: pctChange(r.coin?.priceUsd ?? r.priceUsd, p0) } : null };
 }
 
 /* ---------- the track record: every tracked check graded at 1 hour and 24 hours (the rules fates.mjs uses) ---------- */
@@ -943,7 +1104,7 @@ export async function renderPage(html, address) {
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@Troyaagent">
 <meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(img)}">`;
   // the first answer for the script (no second request) and for readers without JavaScript; never executed (type json)
-  const data = JSON.stringify({ address: A, result: r ? publicResult(r) : null }).replace(/</g, "\\u003c");
+  const data = JSON.stringify({ address: A, result: r ? publicResult(await enrich(r)) : null }).replace(/</g, "\\u003c");
   const noscript = r ? `<p class="ck-ssr"><b>${esc(title)}</b><br>${(r.reasons || []).map((x) => esc(x.text)).join("<br>")}</p>` : `<p class="ck-ssr">Checking ${esc(A)}…</p>`;
   return { html: html.replace(/<!--meta-->[\s\S]*?<!--\/meta-->/, meta).replace("<!--check-data-->", `<script type="application/json" id="check-data">${data}</script>`).replace("<!--check-ssr-->", noscript), pending: !r };
 }
@@ -963,7 +1124,16 @@ export async function register(r, ctx) {
   store = ctx.store;
   if (process.env.CHECK_GRADE !== "0") setInterval(() => gradeTick().catch(() => {}), 5 * 60_000).unref?.();
   r.get("/api/check", async () => dashboard(), { weight: 1, perMin: 60 });
-  // before /api/check/:address, which would also match this path
+  // before /api/check/:address, which would also match these paths
+  r.get("/api/check/board", async ({ query }) => boardView({ sort: ["volume", "mcap", "change", "liquidity", "newest", "txns", "holders"].includes(query.sort) ? query.sort : "volume",
+    dir: query.dir === "asc" ? "asc" : "desc", launchpad: /^[a-z0-9-]{1,20}$/.test(query.launchpad || "") ? query.launchpad : "all" }), { weight: 1, perMin: 40 });
+  // the paste box: a $TICKER → its contract, or "N contracts share it" (with the oldest), or none
+  r.get("/api/check/resolve", async ({ query }) => {
+    const q = String(query.q || "").trim().replace(/^\$/, "");
+    if (/^0x[0-9a-fA-F]{40}$/.test(q)) return { address: getAddress(q.toLowerCase()) };
+    if (!/^[A-Za-z][A-Za-z0-9]{0,15}$/.test(q)) throw new HttpError(400, "Paste a contract address or a ticker like $TROYA.");
+    return resolveTicker(q);
+  }, { weight: 1, perMin: 30 });
   r.get("/api/check/record", async () => recordOf(store ? await store.readJson(FILE, []) : []), { weight: 1, perMin: 60 });
   // polled every 4 s by the page while a coin is being read, so the limit leaves room for a minute of polling and a few coins
   r.get("/api/check/:address", async ({ params }) => webAnswer(params.address), { weight: 1, perMin: 40 });
@@ -980,4 +1150,4 @@ export async function register(r, ctx) {
   }, { weight: 1, perMin: 60 });
 }
 
-export const _test = { gradeTick, cardSvg, measure, wrap2, titleOf, descOf, tagOf, memo, setStore: (s) => { store = s; } };
+export const _test = { saveRow, gradeTick, cardSvg, measure, wrap2, titleOf, descOf, tagOf, memo, setStore: (s) => { store = s; } };

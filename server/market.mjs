@@ -495,6 +495,8 @@ function notePrices(rows) {
   if (SPARK_FILE && now - sparkSaveAt > 5 * 60_000) { sparkSaveAt = now; writeFile(SPARK_FILE + ".tmp", JSON.stringify(Object.fromEntries(SPARK))).then(() => rename(SPARK_FILE + ".tmp", SPARK_FILE)).catch(() => {}); }
 }
 // 24 points over the last 24 hours: the recorded prices, with the start and the last hour anchored by the 24h and 1h changes
+/** Troya Check (check.mjs): a board coin's 24 h sparkline, the same points the board shows, or null. */
+export const sparkFor = (address) => { const t = board.rows.get(lc(address)); return t ? sparkOf(honest(t)) : null; };
 function sparkOf(t) {
   if (!(t.priceUsd > 0)) return null;
   const now = Date.now(), pts = (SPARK.get(t.address) || []).filter(([ms]) => now - ms <= 24 * 3600_000);

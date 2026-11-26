@@ -47,29 +47,69 @@
 </header>
 <nav class="pn-menu" id="pn-menu" aria-label="Site" data-pn-menu></nav>
 
-<main id="main">
-  <section class="page-hero short ck-hero" aria-labelledby="ph">
+<main id="main" class="ck-page">
+  <section class="ck-hero2" data-ck-hero aria-labelledby="ph">
     <canvas class="rain" data-rain aria-hidden="true"></canvas>
-    <span class="eyebrow"><i class="dot"></i>Troya Check</span>
-    <h1 id="ph" data-ck-h1>One score for any coin</h1>
-    <p class="lead" data-ck-lead>Paste a Robinhood Chain coin. Troya runs its Gate (a simulated buy and a test sell), Ring Radar, the dev side wallets, The Assay and Heel, and turns them into one score from 0 to 100 with the three reasons that moved it most. Every number is read from the chain at that moment.</p>
-    <form class="ck-form" action="/check" method="get" data-ck-form>
-      <label class="sr" for="ck-in">Token address</label>
-      <input id="ck-in" name="address" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="Paste a token address, 0x…" pattern="0x[0-9a-fA-F]{40}" required>
-      <button type="submit">Check</button>
-    </form>
-    <p class="ck-also">Also on X: post <code>@Troyaagent check 0x…</code> or reply <code>@Troyaagent check</code> under a post with the contract. In Telegram: <code>/check 0x…</code> to <a class="ulink" href="https://t.me/TrojanTroya_bot" target="_blank" rel="noopener">the Troya bot</a>.</p>
-    <p class="ck-also"><b>How to tell the real Troya:</b> on X a Troya Check only comes from <b>@Troyaagent</b>, starts with the verdict in plain words, and links only to <b>troya.codes/check/</b>. Troya never sends DMs, never asks you to connect a wallet from a reply, and never links anywhere else. Anything else is a copycat.</p>
+    <div class="ck-hero-in">
+      <span class="ck-eyebrow"><i class="dot"></i>Troya Check · free, no sign-in</span>
+      <h1 id="ph" data-ck-h1>Know the coin before you <em class="acc">buy</em></h1>
+      <p class="ck-lead" data-ck-lead>Paste a Robinhood Chain coin. Troya runs a simulated buy and a test sell, reads the launch, the dev's wallets and the holders, checks what the project claims, and gives one score with the reasons behind it. Every number comes from the chain at that moment.</p>
+      <form class="ck-search" action="/check" method="get" data-ck-form role="search">
+        <svg class="ck-search-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13.2 13.2 3.6 3.6"/></svg>
+        <label class="sr" for="ck-in">Token address or ticker</label>
+        <input id="ck-in" name="address" type="text" autocomplete="off" spellcheck="false" placeholder="Paste a contract address, or a $TICKER" required>
+        <button type="submit">Check</button>
+      </form>
+      <ul class="ck-what" aria-label="What Troya checks">
+        <li><b>Exit</b> can you sell it back</li><li><b>Launch ring</b> was the launch rigged</li><li><b>Dev wallets</b> what the dev side does</li><li><b>Holders</b> who holds it</li><li><b>Claims</b> does the site tell the truth</li>
+      </ul>
+      <p class="ck-also">Also on X: <code>@Troyaagent check 0x…</code>, or reply <code>@Troyaagent check</code> under a post with the contract · Telegram: <code>/check 0x…</code> to <a class="ulink" href="https://t.me/TrojanTroya_bot" target="_blank" rel="noopener">the Troya bot</a>. A real Troya Check on X only comes from <b>@Troyaagent</b>, leads with the verdict and links only to <b>troya.codes/check/</b>.</p>
+    </div>
   </section>
 
   <!--check-data-->
-  <section class="ip ck-coin" data-ck-coin hidden aria-live="polite">
+  <section class="ck-coinwrap" data-ck-coin hidden aria-live="polite">
     <!--check-ssr-->
   </section>
 
-  <section class="ip ck-dash" data-ck-dash aria-labelledby="dash-h">
+  <section class="ck-board2" data-ck-dashwrap aria-label="Coins on Robinhood Chain">
+    <div class="ck-layout">
+      <div class="ck-pane">
+        <div class="ck-panehead">
+          <div class="ck-tabs" role="tablist" aria-label="View">
+            <button type="button" role="tab" aria-selected="true" data-view="trending">Trending</button>
+            <button type="button" role="tab" aria-selected="false" data-view="checks">Checks</button>
+          </div>
+          <div class="ck-seg" data-ck-sub="trending" aria-label="Price change window">
+            <span>Change</span><button type="button" data-win="1h" aria-pressed="true">1h</button><button type="button" data-win="24h" aria-pressed="false">24h</button>
+          </div>
+          <div class="ck-seg" data-ck-sub="checks" hidden aria-label="Order">
+            <button type="button" data-list="latest" aria-pressed="true">Latest</button><button type="button" data-list="mostChecked" aria-pressed="false">Most checked</button><button type="button" data-list="highest" aria-pressed="false">Highest</button><button type="button" data-list="lowest" aria-pressed="false">Lowest</button>
+          </div>
+          <span class="ck-meta" data-ck-meta></span>
+        </div>
+        <div class="ck-filters">
+          <div class="ck-chips" data-ck-pads aria-label="Launchpad"></div>
+          <div class="ck-chips" data-ck-verdicts aria-label="Verdict">
+            <button type="button" data-v="all" aria-pressed="true">Any verdict</button><button type="button" data-v="good" aria-pressed="false"><i class="t-dot" style="--c:var(--t-good)"></i>No major flags</button><button type="button" data-v="warn" aria-pressed="false"><i class="t-dot" style="--c:var(--t-warn)"></i>Some flags</button><button type="button" data-v="risky" aria-pressed="false"><i class="t-dot" style="--c:var(--t-risky)"></i>Risky</button><button type="button" data-v="bad" aria-pressed="false"><i class="t-dot" style="--c:var(--t-bad)"></i>Red flags</button><button type="button" data-v="none" aria-pressed="false">Not checked</button>
+          </div>
+          <label class="ck-find"><span class="sr">Filter by ticker, name or address</span><input type="search" placeholder="Ticker, name or address" data-ck-find autocomplete="off" spellcheck="false"></label>
+        </div>
+        <div class="ck-grid" data-ck-grid role="table" aria-label="Coins and their Troya Check"><p class="ck-empty">Loading the board…</p></div>
+        <p class="ck-foot" data-ck-boardnote></p>
+      </div>
+      <aside class="ck-side" aria-label="Live">
+        <div class="ck-card2"><h3><i class="ck-live"></i>Checking now</h3><ol data-ck-live><li class="ck-empty">Nothing is being read right now.</li></ol></div>
+        <div class="ck-card2"><h3>Just checked</h3><ol data-ck-just><li class="ck-empty">Loading…</li></ol></div>
+        <div class="ck-card2"><h3>Most checked · 24 h</h3><ol data-ck-most><li class="ck-empty">Loading…</li></ol></div>
+        <div class="ck-card2" data-ck-devsbox hidden><h3>Devs whose coins checked out</h3><ol data-ck-devs></ol><p class="ck-mini-note">Checked coins per dev wallet that scored 50 or more.</p></div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="ip ck-dash ck-compact" data-ck-dash aria-labelledby="dash-h">
     <div class="eyebrow-line"><span>Every check made</span></div>
-    <h2 id="dash-h" class="h2 sm" style="margin-bottom:28px">This week on Troya Check</h2>
+    <h2 id="dash-h" class="h2 sm" style="margin-bottom:22px">This week on Troya Check</h2>
     <div class="ck-boards">
       <div class="ck-board"><h3>Highest scores</h3><ol data-board="safest"><li class="ck-empty">Loading…</li></ol></div>
       <div class="ck-board"><h3>Most red flags</h3><ol data-board="flagged"><li class="ck-empty">Loading…</li></ol></div>

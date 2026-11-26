@@ -378,7 +378,10 @@ export function scoreCheck(f) {
   // the three reasons: what set a cap first, then what cost the most points, then (if fewer than three) the strongest parts
   const bad = read.filter((p) => p.value < 1 || p.tone !== "good").map((p) => ({ p, k: (p.cap ? 1000 - p.cap.at : 0) + (p.tone === "bad" ? 100 : 0) + p.weight * (1 - p.value) })).sort((a, b) => b.k - a.k).map((x) => x.p);
   const good = read.filter((p) => p.value >= 0.8 && !bad.includes(p)).sort((a, b) => b.weight - a.weight);
-  const pick = [...bad.filter((p) => p.weight * (1 - p.value) >= 1.5 || p.cap || p.tone === "bad"), ...good, ...bad].filter((p, i, a) => a.indexOf(p) === i).slice(0, 3);
+  // two parts can tell the same fact (the dev side and The Assay both report dev-linked selling): show it once
+  const seenShort = new Set();
+  const pick = [...bad.filter((p) => p.weight * (1 - p.value) >= 1.5 || p.cap || p.tone === "bad"), ...good, ...bad].filter((p, i, a) => a.indexOf(p) === i)
+    .filter((p) => { const k = String(p.short || p.summary || "").trim().toLowerCase(); if (!k || seenShort.has(k)) return false; seenShort.add(k); return true; }).slice(0, 3);
   const reasons = pick.map((p) => ({ part: p.key, tone: p.tone, text: `${p.name}: ${p.summary}`, short: p.short || p.summary, link: p.links[0] || null }));
   if (gate.status !== "scored" && reasons.length < 3) reasons.push({ part: "gate", tone: "grey", text: `${gate.name}: ${gate.summary}`, short: "The Gate could not run, so a sell back is not proven.", link: gate.links[0] });
   // "No major flags" only when nothing read badly and no reason shown is a warning: the label must match its own reasons

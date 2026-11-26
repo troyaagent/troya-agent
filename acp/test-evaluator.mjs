@@ -15,7 +15,7 @@ const env = Object.fromEntries(readFileSync(process.env.HOME + "/.config/troya/a
 let own = null;
 try { own = Object.fromEntries(readFileSync(process.env.HOME + "/.config/troya/acp-provider.env", "utf8").split("\n").filter((l) => /^ACP_/.test(l)).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1).trim()])); } catch { own = null; }
 const PROVIDER = process.env.TEST_PROVIDER || own?.ACP_WALLET_ADDRESS || "0x5c1f1a8214da64125fa9450a6fc55e8931779dda";
-const OFFERING = process.env.TEST_OFFERING || (own ? own.ACP_OFFERING || "Test task" : "Fun Freak Picks feed");
+const OFFERING = process.env.TEST_OFFERING || (own ? own.ACP_OFFERING || "test_task" : "Fun Freak Picks feed");
 const EVALUATOR = "0x1731a0D264A4fd6aB6702bD849Aa6A13533c7E6C";   // Troya Gate
 const PRICE = Number(process.env.TEST_PRICE || (own ? own.ACP_PRICE_USDC || 0.01 : 0.05));
 const t0 = Date.now(), log = (...a) => console.log(`[test +${((Date.now() - t0) / 1000).toFixed(0)}s]`, ...a);

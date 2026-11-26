@@ -1,0 +1,15 @@
+/* V10 name clash box (public/agent/js/clash.js) */
+.clash{margin:12px 0 0;border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);border-radius:12px;padding:10px 12px;background:color-mix(in srgb,var(--warn) 7%,transparent);font-size:13px;line-height:1.45;color:var(--fg-2)}
+.clash>b{display:block;margin-bottom:2px;color:var(--fg)}
+.clash summary{cursor:pointer;margin-top:6px;font-size:12.5px;color:var(--muted)}
+.clash .wrap{overflow-x:auto}
+.clash table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;font-variant-numeric:tabular-nums}
+.clash td,.clash th{padding:4px 6px;text-align:left;border-top:1px solid var(--line);white-space:nowrap}
+.clash th{font-weight:500;color:var(--muted)}
+.clash td a{font-family:var(--mono)}
+.clash .g-passed{color:var(--up)}
+.clash .g-blocked{color:var(--down)}
+.clash .g-none{color:var(--muted)}
+.d-pal-gate{font-weight:600}
+.d-pal-gate.g-passed{color:var(--up)}
+.d-pal-gate.g-blocked{color:var(--down)}

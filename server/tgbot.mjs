@@ -118,9 +118,11 @@ async function gate(arg) {
   if (!h?.contract) return "There is no contract at that address on Robinhood Chain.";
   // The Assay (up to 9 s) and, for a Pons coin, Ring Radar's launch ring (up to 4 s) run side by side, so the ring adds no
   // wait of its own; a slow first ring read keeps going and fills the cache for the next ask (Xivor, 25 Nov 2026)
-  const [as, ring] = await Promise.all([
+  const [as, ring, clash] = await Promise.all([
     import("./assay.mjs").then((m) => m.assay(a, { deep: false, waitMs: 9000 })).catch(() => null),
     h.pons ? import("./ringradar.mjs").then((m) => m.gateLine(a, { waitMs: 4000 })).catch(() => null) : null,
+    // V10 name clash (Xivor, 26 Nov 2026): other contracts under the same ticker, so a copy is plain to see
+    import("./market.mjs").then((m) => Promise.race([m.nameClash(a).then((c) => m.clashLine(c)), new Promise((r) => setTimeout(() => r(null), 6000))])).catch(() => null),
   ]);
   const assayFlags = as?.status === "done" ? (as.flags || []).filter((x) => x.key !== "partial") : [];
   const ringSlow = ring?.status === "warn" && /still reading/i.test(ring.detail || "");
@@ -151,6 +153,7 @@ async function gate(arg) {
   }
   if (as?.status === "running") lines.push("The Assay is still reading this coin's history. Ask again in a minute.");
   else if (as?.status === "done") lines.push((await import("./assay.mjs")).assayLines(as).map((l) => esc(l)).join("\n"));
+  if (clash) lines.push(`! <b>Name clash.</b> ${esc(clash)} <a href="${SITE}/agent#/token/${a}">See them all</a>`);
   lines.push(`<i>Automated checks, not an audit.</i> Full check with a sell test: <a href="${SITE}/agent#/gate/${a}">open in Troya</a>`);
   return lines.join("\n");
 }

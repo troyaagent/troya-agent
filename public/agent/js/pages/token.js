@@ -4,6 +4,7 @@ import { h, clear, useCss, icon, tokenIcon, padLogo, tiny, price, usd, compact, 
 import { api, cached } from "../api.js";
 import { padName, ethAmount, ageText } from "../marketlib.js";
 import { clusterSection } from "/agent/desk/clusters.js";
+import { clashBox } from "../clash.js";
 import { startBoard, watchfirePanel, tradePanel, renderTrades, renderEarly, chartMarks, tagEl, renderCallouts, calloutLayer, tributePanel, panelTitle, snapTime } from "./wartable.js";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
@@ -134,7 +135,9 @@ export async function mount(view, { parts, ask }) {
         strip,
         // the full address on a wide screen; a phone shows 0x1fa8…a074 (it wrapped over two lines) with the same copy icon
         h("div", { class: "tk-addr" }, h("span", { class: "mono tk2-ca tk-ca-full" }, address), h("span", { class: "mono tk2-ca tk-ca-short" }, short(address, 4)), h("button", { type: "button", "aria-label": "Copy address", onclick: () => copyText(address, "Address copied") }, icon("copy"))),
-        socialRow(t))),
+        socialRow(t),
+        // V10 name clash (Xivor, 26 Nov 2026): other contracts under this ticker, with what the Gate said at each launch
+        stockish ? null : clashBox(address))),
     h("div", { class: "tk-px" }, pxP, pxU, pxAt, gChip("tk-gchip")));
 
   // one Buy on the page: the Trade panel, plus the Gate card's button once the Gate passed. The address copies from the

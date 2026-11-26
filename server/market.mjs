@@ -2042,10 +2042,62 @@ export async function searchCoins(q, limit = 12) {
   let coins = [...out.values()].sort((x, y) => x._sus - y._sus || x._rank - y._rank || y.official - x.official || y.verified - x.verified || kindRank(x) - kindRank(y)
     || x.teamTest - y.teamTest || x.copy - y.copy || y._score - x._score || (y.holders || 0) - (x.holders || 0) || (y.liquidityUsd || 0) - (x.liquidityUsd || 0));
   coins = coins.map(({ _src, _dsLiq, _dsVol, _words, _rank, _sus, _score, ...c }) => ({ ...c, image: c.kind === "stock" ? `/api/stocks/logo/${c.address}?v=4` : c.image || null }));
-  const v = { q: raw, coins, majorQuery: MAJOR_Q.test(ql), sources: ["Troya index", "Robinhood stock tokens", "DexScreener", "Hyperliquid"], updatedAt: Date.now() };
+  // V10 (Xivor's name-clash idea, 26 Nov 2026): every row says what the Gate found when Sentry checked its launch, and
+  // how many contracts in the whole result carry its ticker, so a list cut short still says "8 share this name"
+  const verdicts = await within(import("./fates.mjs").then((m) => m.launchVerdicts(coins.map((c) => c.address))), 1500, {});
+  const tk = await flagHelpers(), keyOf = (x) => { try { return tk.tickerKey(x); } catch { return String(x || "").toLowerCase(); } };
+  const perKey = new Map();
+  for (const c of coins) if (c.kind === "coin") { const k = keyOf(c.symbol); if (k) perKey.set(k, (perKey.get(k) || 0) + 1); }
+  for (const c of coins) {
+    c.gate = verdicts[c.address] || null;
+    c.sameTicker = c.kind === "coin" ? perKey.get(keyOf(c.symbol)) || 1 : 1;
+  }
+  const v = { q: raw, coins, total: coins.length, majorQuery: MAJOR_Q.test(ql), sources: ["Troya index", "Robinhood stock tokens", "DexScreener", "Hyperliquid"], updatedAt: Date.now() };
   COIN_SEARCH.set(ql, { t: Date.now(), v });
   if (COIN_SEARCH.size > 500) COIN_SEARCH.delete(COIN_SEARCH.keys().next().value);
   return { ...v, coins: coins.slice(0, limit), perps: await perpsP };
+}
+
+/** V10 name clash (Xivor's idea, 26 Nov 2026): the other contracts on Robinhood Chain that carry this coin's ticker or
+ *  name, each with its age, liquidity and what the Gate said at its launch; plus which one is the oldest and the newest.
+ *  Stock tokens, majors and the official $TROYA own their ticker and have no clash. null when the coin is unknown. */
+export async function nameClash(address) {
+  const a = lc(address);
+  if (!ADDR_RE.test(a)) return null;
+  let me = board.rows.get(a);
+  if (!me) { const r = await getRobinhoodToken(a).catch(() => null); me = r?.token ? { address: a, symbol: r.token.symbol, name: r.token.name } : null; }
+  if (!me?.symbol) return null;
+  const tk = await flagHelpers(), keyOf = (x) => { try { return tk.tickerKey(x); } catch { return String(x || "").toLowerCase(); } };
+  const key = keyOf(me.symbol), nm = String(me.name || "").trim().toLowerCase();
+  if (!key) return null;
+  const res = await searchCoins(me.symbol, 30).catch(() => null);
+  const same = (res?.coins || []).filter((c) => c.kind === "coin" && (keyOf(c.symbol) === key || (nm.length >= 3 && String(c.name || "").trim().toLowerCase() === nm)));
+  const all = same.some((c) => c.address === a) ? same : [{ ...me, kind: "coin", gate: null }, ...same];
+  if (all.length < 2 || all.some((c) => c.address === a && (c.official || c.verified))) return { ticker: me.symbol, count: all.length, others: [], clash: false };
+  const births = await bornOf(all.map((c) => c.address));
+  const rows = all.map((c, i) => ({
+    address: c.address, symbol: c.symbol, name: c.name || null, launchpad: c.launchpad || null,
+    liquidityUsd: c.liquidityUsd ?? null, realLiquidityUsd: c.realLiquidityUsd ?? null, holders: c.holders ?? null,
+    bornAt: births[i] ?? board.rows.get(c.address)?.createdAt ?? null, gate: c.gate || null, copy: !!c.copy,
+  }));
+  const dated = rows.filter((r) => r.bornAt).sort((x, y) => x.bornAt - y.bornAt);
+  const oldest = dated[0]?.address || null, newest = dated.length > 1 ? dated[dated.length - 1].address : null;
+  const others = rows.filter((r) => r.address !== a);
+  return {
+    ticker: me.symbol, count: rows.length, clash: true,
+    thisOne: oldest === a ? "oldest" : newest === a ? "newest" : null,
+    oldest, newest,
+    passed: rows.filter((r) => r.gate?.v === "passed").length, blocked: rows.filter((r) => r.gate?.v === "blocked").length,
+    others, updatedAt: Date.now(),
+  };
+}
+/** One plain line for a Gate check, Telegram /gate and Sentry posts, or null when nothing clashes. */
+export function clashLine(c) {
+  if (!c?.clash || !c.others?.length) return null;
+  const n = c.others.length, sh = (x) => `${x.slice(0, 6)}…${x.slice(-4)}`;
+  const pos = c.thisOne === "oldest" ? " This one is the oldest." : c.thisOne === "newest" ? " This one is the newest." : "";
+  const tally = [c.passed ? `${c.passed} passed` : null, c.blocked ? `${c.blocked} blocked` : null].filter(Boolean).join(", ");
+  return `${n} other contract${n === 1 ? "" : "s"} share${n === 1 ? "s" : ""} the ticker ${c.ticker}.${pos}${tally ? ` Gate at launch: ${tally}.` : ""} Check the address (${sh(c.others[0].address)}${n > 1 ? " and more" : ""}).`;
 }
 
 export function hlMovers(markets, { top = 7, sort = "change" } = {}) {
@@ -2061,6 +2113,7 @@ export async function register(r) {
     try { const ca = (readFileSync(new URL("../public/config.js", import.meta.url), "utf8").match(/\bca:\s*"(0x[0-9a-fA-F]{40})"/) || [])[1]; if (ca) chainTrades(lc(ca)).catch(() => {}); } catch { /* no config */ }
   }, 15_000).unref?.();
   r.get("/api/search/coins", ({ query }) => searchCoins(query.q, query.limit), { weight: 1, perMin: 240 });
+  r.get("/api/clash/:token", ({ params }) => nameClash(params.token).then((c) => c || { clash: false, others: [] }), { weight: 1, perMin: 120 });
   r.get("/api/market/robinhood/holders", async ({ query }) => {
     const a = lc(query.address);
     if (!ADDR_RE.test(a)) throw httpErr(400, "That is not a valid token address.");

@@ -110,6 +110,14 @@ function view(c) {
   return { token: c.token, symbol: c.symbol, at: c.at, cohort: c.cohort, status: c.status, result: c.result || null, reason: c.reason, notSellable: !!c.notSellable,
     priceAtCheck: c.p0 ?? null, change1h: pct(c.p0, c.p1h), change24h: c.status === "graded" ? change24(c) : null };
 }
+// what the Gate said about each of these contracts when Sentry checked its launch (V10, Xivor's name-clash idea, 26 Nov
+// 2026): { address: { v: "passed" | "blocked", reason, at } }; a contract Sentry never checked is left out
+export async function launchVerdicts(addrs) {
+  if (!store) return {};
+  const d = await state().catch(() => null), out = {};
+  for (const a of addrs || []) { const c = d?.coins?.[lc(a)]; if (c?.cohort) out[lc(a)] = { v: c.cohort, reason: c.reason || null, at: c.at || null }; }
+  return out;
+}
 export async function fatesView({ limit = 100 } = {}) {
   const d = await state();
   const all = Object.values(d.coins).sort((a, b) => b.at - a.at);

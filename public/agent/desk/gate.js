@@ -6,6 +6,7 @@ import { api } from "/agent/js/api.js";
 import { coinSuggest, findCoin } from "/agent/js/coinsearch.js";
 import { verdictOf, tallyOf } from "/agent/js/verdict.js";
 import { clusterSection } from "./clusters.js";
+import { clashBox } from "/agent/js/clash.js";
 
 // token age on the Gate (community request, 20 Nov 2026): how long ago the coin was created, from its creation block.
 // /api/token-age reads Robinhood Chain only, so a coin checked on Base, Arbitrum or Solana shows no age rather than the
@@ -324,6 +325,7 @@ export function gatePanel({ go, ask, compact = false, start = "", chain: startCh
         has("amounts") ? h("div", { class: "chips", role: "group", "aria-label": `Buy ${sym} with`, style: { alignItems: "center" } },
           BUYS.map((x, i) => h("a", { class: "chip", href: swapHref(a, chain, x, true), "aria-label": `Review a buy of ${sym} with ${x} ${nat}`, style: { height: compact ? "28px" : "32px", padding: "0 10px", fontVariantNumeric: "tabular-nums" } }, i === BUYS.length - 1 ? `${x} ${nat}` : x))) : null) : null,
       meta(a, r, example, moved),
+      rh && !example ? clashBox(a) : null,
       opts,
       example ? h("p", { class: "fine dk-gate-ex" }, "Live example: NVDA, a Robinhood stock token. Paste any coin above to check it.") : null,
       h("ol", { class: "dk-checks" }, r.checks.map((x) => h("li", { class: `c-${x.status}` },

@@ -581,7 +581,7 @@ function openAsk(prefill = "") {
     coinTimer = setTimeout(async () => {
       const my = ++coinSeq;
       try {
-        const r = await api.get(`search/coins?q=${encodeURIComponent(raw)}&limit=6`);
+        const r = await api.get(`search/coins?q=${encodeURIComponent(raw)}&limit=8`);
         if (my !== coinSeq) return;
         coins = r.coins || []; perps = r.perps || []; majorQ = !!r.majorQuery; coinQ = raw; render();
       } catch {}
@@ -629,11 +629,13 @@ function openAsk(prefill = "") {
       const rows = coins.map((c) => {
         const ethLike = c.kind === "major" && (c.address === "native" || c.symbol === "WETH");
         const usd = c.priceUsd ?? (ethLike ? ethPrice() : null);
-        const liq = c.realLiquidityUsd ?? c.liquidityUsd;
+        // the money side when it is known, else the pool figure, so the rows of one ticker compare like for like (a
+        // $0.00000000000004 money side read as "liq $0" next to $2.8K rows, Xivor 26 Nov 2026)
+        const liq = c.realLiquidityUsd != null && c.realLiquidityUsd >= 1 ? c.realLiquidityUsd : c.liquidityUsd;
         return { kind: "coin", coin: c, title: `${c.symbol}${c.name && c.name.toLowerCase() !== String(c.symbol).toLowerCase() ? ` · ${c.name}` : ""}`,
           hint: [swapOk(c) ? "Buy on Swap" : null, c.official ? "Official" : c.teamTest ? "Team test" : null,
             c.kind === "stock" ? "Robinhood stock token" : c.kind === "major" ? "Major" : c.launchpad ? padName(c.launchpad) : null,
-            px(usd), liq ? `liq ${fmt(liq)}` : null, c.address === "native" ? "Native" : short(c.address)].filter(Boolean).join(" · "),
+            px(usd), liq ? `liq ${fmt(liq)}` : null, c.gate ? `Gate at launch: ${c.gate.v}` : null, c.address === "native" ? "Native" : short(c.address)].filter(Boolean).join(" · "),
           // a coin Troya can route opens Swap with it selected, ready to buy (community request, 23 Nov 2026: one tap
           // from search to Swap, as the Market's Buy does); the Gate still runs there before anything is signed
           target: c.address === "native" ? "#/swap" : swapOk(c) ? `#/swap?out=${c.address}` : `#/token/${c.address}` };
@@ -642,6 +644,9 @@ function openAsk(prefill = "") {
       if (t && t.address !== "native" && swapOk(t)) rows.splice(1, 0,
         { kind: "page", title: `Open the ${t.symbol} page`, hint: "Price, chart, holders and trades", icon: "market", target: `#/token/${t.address}` },
         ...(quickOk(t) ? [{ kind: "page", title: `Gate ${t.symbol}`, hint: "Nine checks before you buy", icon: "gate", target: `#/gate/${t.address}` }] : []));
+      // V10 name clash: more contracts carry this ticker than the list shows, so say how many and open them all
+      const shown = coins.filter((c) => c.kind === "coin" && String(c.symbol).toLowerCase() === String(t?.symbol).toLowerCase()).length;
+      if (t?.kind === "coin" && (t.sameTicker || 1) > 1) rows.push({ kind: "page", title: `${t.sameTicker} contracts share the ticker ${t.symbol}`, hint: shown < t.sameTicker ? `${t.sameTicker - shown} more not shown here · see all with liquidity` : "Same name, different coins · see all side by side", icon: "market", target: `#/market?q=${encodeURIComponent(t.symbol)}` });
       coinSec.push(["Coins", rows]);
     }
     if (perps.length && fresh) {

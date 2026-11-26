@@ -270,6 +270,13 @@ async function warmUp(s) {
 const saveWallets = () => store.writeJson(WALLETS, { coins: Object.fromEntries([...hist].map(([k, v]) => [k, { t: v.t, w: [...v.w] }])) });
 const mins = (ms) => (ms < 90e3 ? `${Math.max(1, Math.round(ms / 1000))} s` : `${Math.round(ms / 60e3)} min`);
 
+// V10 name clash (Xivor, 26 Nov 2026): one line when other contracts carry this ticker, read in at most 5 s so a post is never held up
+async function clashFor(token) {
+  try {
+    const m = await import("./market.mjs");
+    return await Promise.race([m.nameClash(token).then((c) => m.clashLine(c)), new Promise((r) => setTimeout(() => r(null), 5000).unref?.())]);
+  } catch { return null; }
+}
 export function formatPost(r) {
   const head = r.v === "passed" ? "Passed" : r.v === "caution" ? "Caution" : "Failed";
   const sym = r.symbol ? `$${esc(r.symbol)}` : "unnamed";
@@ -291,6 +298,7 @@ export function formatPost(r) {
   if (r.ring && (r.ring.verdict === "red" || r.ring.verdict === "amber") && r.why?.label !== "Ring Radar") lines.push(`Ring Radar ${r.ring.verdict === "red" ? "red" : "amber"}: ${esc(r.ring.reasons.slice(0, 2).join("; ").slice(0, 220))}`);
   if (r.oath?.status === "kept") lines.push(`Oath kept: the dev pledged to sell at most ${r.oath.pledge.maxSellPctPerDay}% of the supply a day${r.oath.pledge.feeLockDays ? ` and leave creator fees for ${r.oath.pledge.feeLockDays} days` : ""}`);
   if (r.assay?.length) for (const l of r.assay) lines.push(esc(l));
+  if (r.clash && !r.alsoTicker) lines.push(esc(r.clash));
   lines.push(`<code>${r.token}</code>`);
   return lines.join("\n");
 }
@@ -575,6 +583,7 @@ async function work(s) {
       if (why) { bump(s, r.v); record(s, r, false, why, null); continue; }                 // deep enough, but bots, a copy or too few buyers
       if (POOLS === "dry") { await store.append("sentry-pools-preview.jsonl", { t: Date.now(), token: r.token, pool: q.pool, text: formatPost(r) }); continue; }
       r.assay = await quickAssay(r.token);
+      r.clash = await clashFor(r.token);
       // $TROYA stakers first (their DMs now, the channel post on a timer), or exactly as before when nobody has a lead
       const leadsP = await stakerLeads();
       let jp = { ok: false }, laterP = null;
@@ -614,6 +623,7 @@ async function work(s) {
     if (post) {
       const logo = await logoFor(r.token).catch(() => null);
       r.assay = await quickAssay(r.token);
+      r.clash = await clashFor(r.token);
       // $TROYA stakers first (their DMs now, the channel post on a timer), or exactly as before when nobody has a lead
       const leads = await stakerLeads();
       if (leads.length || waiting) later = postWithLead({ r, text: formatPost(r), markup: buttons(r.token), logo, leads, pool: false });

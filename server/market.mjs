@@ -2052,6 +2052,9 @@ export async function searchCoins(q, limit = 12) {
     c.gate = verdicts[c.address] || null;
     c.sameTicker = c.kind === "coin" ? perKey.get(keyOf(c.symbol)) || 1 : 1;
   }
+  // a coin the Gate blocked at its launch never leads the list (a blocked OASIS came first, Xivor 26 Nov 2026); the sort
+  // is stable, so everything else keeps its order
+  coins.sort((x, y) => (x.gate?.v === "blocked") - (y.gate?.v === "blocked"));
   const v = { q: raw, coins, total: coins.length, majorQuery: MAJOR_Q.test(ql), sources: ["Troya index", "Robinhood stock tokens", "DexScreener", "Hyperliquid"], updatedAt: Date.now() };
   COIN_SEARCH.set(ql, { t: Date.now(), v });
   if (COIN_SEARCH.size > 500) COIN_SEARCH.delete(COIN_SEARCH.keys().next().value);

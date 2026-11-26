@@ -135,9 +135,15 @@ const SCAM = RULES[4][1];
 // growing $TROYA next 100x 🚀" was removed); it still counts when another coin, another @handle or a link comes with it
 const GAINS = RULES.find(([, re]) => re.source.startsWith("\\b\\d{2,4}\\s?x\\b"))?.[1];
 const HYPE = RULES.find(([, re]) => re.source.startsWith("\\bprinting\\b"))?.[1];
+// "We are re.launching the t0kens to a V2 t0kens with clean ca ... swap your old t0ken to get new air.drop, D.m now"
+// (26 Nov 2026, "LULU Coin"): dots and zeros inside words slip past the rules, so a fake relaunch that asks for a DM is
+// read once more with them taken out. Weight 6: a ban at once (severeOf).
+const deob = (x) => fold(x).replace(/(?<=[a-z])[.\u00b7*_](?=[a-z])/gi, "").replace(/(?<=[a-z])0|0(?=[a-z])/gi, "o").replace(/(?<=[a-z])1(?=[a-z])/gi, "i").replace(/(?<=[a-z])3(?=[a-z])/gi, "e");
+const RELAUNCH_DM = /\b(?:re-?launch\w*|v2\s+tokens?|tokens?\s+v2|migrat\w*|swap\s+(?:your\s+)?old\s+tokens?|new\s+airdrop|clean\s+ca|claim\s+(?:your\s+)?(?:new\s+)?tokens?)\b[^]{0,400}?\b(?:dm|d\s?m|inbox|pm|message\s+(?:me|us|admin)|hit\s+(?:me|us)\s+up|text\s+me|contact\s+(?:me|us|admin))\b/i;
 export function score(text) {
   const t = fold(text);
   if (!t.trim()) return 0;
+  if (RELAUNCH_DM.test(deob(text))) return 6;
   const handles = [...t.matchAll(/@([A-Za-z0-9_]{4,32})/g)].map((x) => x[1]).filter((h) => !OWN_HANDLES.test(h));
   const tickers = [...t.matchAll(/\$([A-Za-z][A-Za-z0-9]{1,11})\b/g)].map((x) => x[1]).filter((x) => !MAJORS.test(x));
   const cheer = /\btroya\b/i.test(t) && !handles.length && !tickers.length && !/https?:\/\/|\bt\.me\/|\bwww\./i.test(t);

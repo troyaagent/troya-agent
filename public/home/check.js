@@ -23,8 +23,10 @@ const coinBox = $("[data-ck-coin]");
 const icon = (r, cls = "ck-ico") => {
   const letters = esc(String(r.symbol || r.address || "?").replace(/^\$/, "").slice(0, 2).toUpperCase());
   const q = r.kind === "stock" ? "" : "";
-  return `<span class="${cls}" aria-hidden="true"><i>${letters}</i><img src="/api/icon/token/${esc(r.address)}${q}" alt="" loading="lazy" onload="this.parentNode.classList.add('ok')" onerror="this.remove()"></span>`;
+  return `<span class="${cls}" aria-hidden="true"><i>${letters}</i><img src="/api/icon/token/${esc(r.address)}${q}" alt="" loading="lazy"></span>`;
 };
+// a logo that fails to load is removed, so the letters behind it show (no inline handlers: the page CSP forbids them)
+document.addEventListener("error", (e) => { const t = e.target; if (t && t.tagName === "IMG" && t.parentNode?.classList?.contains("ck-ico")) t.remove(); }, true);
 const row = (r, extra = "") => {
   const name = r.symbol ? `$${esc(r.symbol)}` : short(r.address);
   const badge = r.score != null ? r.score : r.kind === "stock" ? "Stock" : r.kind === "major" ? "Major" : "–";

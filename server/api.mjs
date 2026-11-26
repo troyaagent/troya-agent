@@ -106,6 +106,7 @@ const MODULES = [
   "./chiron.mjs",      // V9 F48 Chiron: paste a trader wallet → the one habit that costs it most, from its own swaps; one tap makes it a rule the Agent Wallet enforces
   "./clusters.mjs",    // Cluster map (community request, 24 Nov): a coin's 50 largest holders and which are linked (dev side, shared funders, transfers, bundles), each link with its proof
   "./check.mjs",       // Troya Check (26 Nov): one 0-100 score per coin from the Gate, Ring Radar, dev side, Assay, Heel, market and age; X, Telegram, web, public dashboard
+  "./index-keeper.mjs", // Troya Index (TIDX, 26 Nov): GET /api/index, /api/index/me/:wallet, /api/index/keeper; the keeper (off unless INDEX_KEEPER=1) and public alerts on timelocked changes (INDEX_ALERTS=1)
   "./activity.mjs",    // activity feed (22 Nov): real launches, stakers, agents, Gate use, graduations, payouts → the Telegram group + an X digest (ACTIVITY_FEED / ACTIVITY_X, dry by default)
 ];
 

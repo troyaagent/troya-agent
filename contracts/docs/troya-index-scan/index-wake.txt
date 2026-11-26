@@ -1,0 +1,343 @@
+# Wake 4.22.2 on TroyaIndex*.sol, pass 1 (run by the coordinator, 27 Nov 2026): all detectors, every impact and confidence level
+# command, run in a scratch copy of contracts/: wake detect --export json all --min-impact info --min-confidence low
+# config: index-wake.toml (detectors.exclude_paths leaves only src/TroyaIndex*.sol); the pass-1 JSON export was overwritten by pass 2
+# ---- raw output below ----
+[00:46:37] Found 25 *.sol files in 0.08 s                          detect.py:731
+           Failed to load previous build artifacts               compiler.py:908
+[00:46:53] Compiled 75 files using 15 solc runs in 16.34 s      compiler.py:1305
+[00:47:34] Processed compilation results in 40.48 s             compiler.py:1558
+[00:47:41] Wrote build artifacts in 7.11 s                      compiler.py:1686
+
+
+╭─ [HIGH][MEDIUM] Possible reentrancy in `TroyaIndex.deposit(uint256,address,u─╮
+│   314         emit Deposited(msg.sender, receiver, shares, amounts, fee);    │
+│   315         uint256 spare = msg.value - amounts[0] - fee;                  │
+│   316         if (spare != 0) {                                              │
+│ ❱ 317             (bool ok,) = msg.sender.call{value: spare}("");            │
+│   318             if (!ok) revert TransferFailed();                          │
+│   319         }                                                              │
+│   320     }                                                                  │
+╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────────╯
+└── ╭─ Exploitable from `TroyaIndexZap.zap(uint256,address,uint256[])` ────────╮
+    │   71             t.forceApprove(address(vault), need[i]);                │
+    │   72         }                                                           │
+    │   73         // the vault takes its ETH part + fee from this value and r │
+    │ ❱ 74         vault.deposit{value: address(this).balance - start}(shares, │
+    │   75         uint256 left = address(this).balance - start;               │
+    │   76         ethSpent = msg.value - left;                                │
+    │   77         for (uint256 i = 1; i < list.length; ++i) {                 │
+    ╰─ src/TroyaIndexZap.sol ──────────────────────────────────────────────────╯
+
+
+╭─ [HIGH][LOW] Possible reentrancy in `TroyaIndexSwapper._swap(struct Venue,bo─╮
+│   163             _v3TokenIn = zeroForOne ? v.token0 : v.token1;             │
+│   164             _maxIn = maxIn;                                            │
+│   165             // v3: positive = exact input, negative = exact output     │
+│ ❱ 166             IUniswapV3Pool(v.pool).swap(address(this), zeroForOne, exa │
+│   167             _v3Pool = address(0);                                      │
+│   168             _v3TokenIn = address(0);                                   │
+│   169         } else {                                                       │
+╰─ src/TroyaIndexSwapper.sol ──────────────────────────────────────────────────╯
+├── ╭─ Exploitable from `TroyaIndexZap.zap(uint256,address,uint256[])` ────────╮
+│   │   64                 // buy exactly what is missing with at most the ETH │
+│   │   65                 uint256 budget = address(this).balance - start;     │
+│   │   66                 uint160 limit = zeroForOne ? MIN_SQRT_PRICE + 1 : _ │
+│   │ ❱ 67                 swapper.swap{value: budget}(v, zeroForOne, false, n │
+│   │   68                 have = t.balanceOf(address(this));                  │
+│   │   69                 if (have < need[i]) revert ReceivedLess(list[i], ne │
+│   │   70             }                                                       │
+│   ╰─ src/TroyaIndexZap.sol ──────────────────────────────────────────────────╯
+├── ╭─ Exploitable from `TroyaIndexSwapper.swap(struct Venue,bool,bool,uint256─╮
+│   │   131     {                                                              │
+│   │   132         (address assetIn, address assetOut) = zeroForOne ? (v.asse │
+│   │   133         uint256 inBefore = _bal(assetIn);                          │
+│   │ ❱ 134         _swap(v, zeroForOne, exactIn, amount, maxIn, limit);       │
+│   │   135         uint256 inLeft = _bal(assetIn);                            │
+│   │   136         spent = inBefore - inLeft;                                 │
+│   │   137         received = _bal(assetOut);                                 │
+│   ╰─ src/TroyaIndexSwapper.sol ──────────────────────────────────────────────╯
+└── ╭─ Exploitable from `TroyaIndex.rebalance(uint256,bool,uint256,uint256)` ──╮
+    │   411         if (swapper.spot(v) == 0) revert SpotUnreadable();         │
+    │   412                                                                    │
+    │   413         lastRebalanceAt = uint64(block.timestamp);                 │
+    │ ❱ 414         (spent, received) = _trade(v, zeroForOne, amountIn, _price │
+    │   415         uint256 floor = (_valueAt(median, zeroForOne, spent) * (10 │
+    │   416         if (floor < minOut) floor = minOut;                        │
+    │   417         if (received < floor || received == 0) revert OutputTooLow │
+    ╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   265         if (depositsPaused) revert DepositsPaused();                   │
+│   266         if (receiver == address(0)) revert ZeroAddress();              │
+│   267         if (msg.value == 0) revert ZeroAmount();                       │
+│ ❱ 268         _accrue();                                                     │
+│   269         uint256 fee;                                                   │
+│   270         (shares, fee) = _ethShares(msg.value, msg.value);              │
+│   271         if (shares < minShares) revert SharesBelowMinimum(shares, minS │
+╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   294         if (shares == 0) revert ZeroAmount();                          │
+│   295         address[] memory list = _assets;                               │
+│   296         if (maxAmounts.length != list.length) revert WrongLength();    │
+│ ❱ 297         _accrue();                                                     │
+│   298         (amounts, fee) = _required(shares, msg.value);                 │
+│   299         if (amounts[0] + fee > msg.value) revert NotEnoughEth(amounts[ │
+│   300         _checkCaps(receiver, shares);                                  │
+╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   340     function redeem(uint256 shares, address receiver) external nonReen │
+│   341         if (shares == 0) revert ZeroAmount();                          │
+│   342         if (receiver == address(0)) revert ZeroAddress();              │
+│ ❱ 343         _accrue();                                                     │
+│   344         amounts = previewRedeem(shares);                               │
+│   345         _burn(msg.sender, shares);                                     │
+│   346         emit Redeemed(msg.sender, receiver, shares, amounts);          │
+╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   404         uint256 next = uint256(lastRebalanceAt) + cooldown;            │
+│   405         if (lastRebalanceAt != 0 && block.timestamp < next) revert Coo │
+│   406         Venue memory v = _checkMove(venueId, zeroForOne, amountIn);    │
+│ ❱ 407         _accrue();                                                     │
+│   408         _observe(venueId, v);                                          │
+│   409         (uint160 median, uint256 n) = medianSqrtPrice(venueId);        │
+│   410         if (n < MIN_OBSERVATIONS) revert NotEnoughObservations(n);     │
+╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   405         if (lastRebalanceAt != 0 && block.timestamp < next) revert Coo │
+│   406         Venue memory v = _checkMove(venueId, zeroForOne, amountIn);    │
+│   407         _accrue();                                                     │
+│ ❱ 408         _observe(venueId, v);                                          │
+│   409         (uint160 median, uint256 n) = medianSqrtPrice(venueId);        │
+│   410         if (n < MIN_OBSERVATIONS) revert NotEnoughObservations(n);     │
+│   411         if (swapper.spot(v) == 0) revert SpotUnreadable();             │
+╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   431         uint256 value;                                                 │
+│   432         if (assetIn == ETH) value = amountIn;                          │
+│   433         else IERC20(assetIn).safeTransfer(address(swapper), amountIn); │
+│ ❱ 434         swapper.swap{value: value}(v, zeroForOne, true, amountIn, amou │
+│   435         uint256 inAfter = _balance(assetIn);                           │
+│   436         uint256 outAfter = _balance(assetOut);                         │
+│   437         spent = inBefore > inAfter ? inBefore - inAfter : 0;           │
+╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ──╮
+│   459     /// @notice poke() for every active venue.               │
+│   460     function pokeAll() external nonReentrant {               │
+│   461         for (uint256 i; i < _venues.length; ++i) {           │
+│ ❱ 462             if (_venues[i].active) _observe(i, _venueAt(i)); │
+│   463         }                                                    │
+│   464     }                                                        │
+│   465                                                              │
+╰─ src/TroyaIndex.sol ───────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   765             VenueInput memory p = abi.decode(data, (VenueInput));      │
+│   766             // at propose time the sides may be assets an earlier prop │
+│   767             if (apply_) _addVenue(p);                                  │
+│ ❱ 768             else _buildVenue(p, false);                                │
+│   769         } else if (op == Op.MgmtFee) {                                 │
+│   770             (address r, uint16 bps) = abi.decode(data, (address, uint1 │
+│   771             _checkMgmtFee(r, bps);                                     │
+╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   770             (address r, uint16 bps) = abi.decode(data, (address, uint1 │
+│   771             _checkMgmtFee(r, bps);                                     │
+│   772             if (apply_) {                                              │
+│ ❱ 773                 _accrue(); // the old rate up to now, the new one from │
+│   774                 _setMgmtFee(r, bps);                                   │
+│   775             }                                                          │
+│   776         } else {                                                       │
+╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   846         if (info.buyable) revert BadAsset(); // already active (a reti │
+│   847         if (!info.listed && _assets.length >= MAX_ASSETS) revert TooMa │
+│   848         // must look like an ERC-20                                    │
+│ ❱ 849         IERC20(a).balanceOf(address(this));                            │
+│   850         IERC20(a).totalSupply();                                       │
+│   851     }                                                                  │
+│   852                                                                        │
+╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   847         if (!info.listed && _assets.length >= MAX_ASSETS) revert TooMa │
+│   848         // must look like an ERC-20                                    │
+│   849         IERC20(a).balanceOf(address(this));                            │
+│ ❱ 850         IERC20(a).totalSupply();                                       │
+│   851     }                                                                  │
+│   852                                                                        │
+│   853     function _addAsset(address a) private {                            │
+╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   163             _v3TokenIn = zeroForOne ? v.token0 : v.token1;             │
+│   164             _maxIn = maxIn;                                            │
+│   165             // v3: positive = exact input, negative = exact output     │
+│ ❱ 166             IUniswapV3Pool(v.pool).swap(address(this), zeroForOne, exa │
+│   167             _v3Pool = address(0);                                      │
+│   168             _v3TokenIn = address(0);                                   │
+│   169         } else {                                                       │
+╰─ src/TroyaIndexSwapper.sol ──────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   170             _maxIn = maxIn == 0 ? 1 : maxIn;                           │
+│   171             V4PoolKey memory key = V4PoolKey(v.token0, v.token1, v.fee │
+│   172             // v4: negative = exact input, positive = exact output     │
+│ ❱ 173             poolManager.unlock(abi.encode(key, zeroForOne, exactIn ? - │
+│   174         }                                                              │
+│   175         _maxIn = 0;                                                    │
+│   176         uint256 w = IERC20(address(weth)).balanceOf(address(this));    │
+╰─ src/TroyaIndexSwapper.sol ──────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   216         if (owed > maxIn) revert TooMuchIn(owed, maxIn);               │
+│   217         if (owed != 0) {                                               │
+│   218             if (cIn == address(0)) {                                   │
+│ ❱ 219                 poolManager.settle{value: owed}();                     │
+│   220             } else {                                                   │
+│   221                 poolManager.sync(cIn);                                 │
+│   222                 if (cIn == address(weth)) weth.deposit{value: owed}(); │
+╰─ src/TroyaIndexSwapper.sol ──────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   221                 poolManager.sync(cIn);                                 │
+│   222                 if (cIn == address(weth)) weth.deposit{value: owed}(); │
+│   223                 IERC20(cIn).safeTransfer(address(poolManager), owed);  │
+│ ❱ 224                 poolManager.settle();                                  │
+│   225             }                                                          │
+│   226         }                                                              │
+│   227         if (dOut > 0) poolManager.take(cOut, address(this), uint256(ui │
+╰─ src/TroyaIndexSwapper.sol ──────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   64                 // buy exactly what is missing with at most the ETH lef │
+│   65                 uint256 budget = address(this).balance - start;         │
+│   66                 uint160 limit = zeroForOne ? MIN_SQRT_PRICE + 1 : _upLi │
+│ ❱ 67                 swapper.swap{value: budget}(v, zeroForOne, false, need[ │
+│   68                 have = t.balanceOf(address(this));                      │
+│   69                 if (have < need[i]) revert ReceivedLess(list[i], need[i │
+│   70             }                                                           │
+╰─ src/TroyaIndexZap.sol ──────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][HIGH] Unchecked return value [unchecked-return-value] ────────────╮
+│   71             t.forceApprove(address(vault), need[i]);                    │
+│   72         }                                                               │
+│   73         // the vault takes its ETH part + fee from this value and refun │
+│ ❱ 74         vault.deposit{value: address(this).balance - start}(shares, rec │
+│   75         uint256 left = address(this).balance - start;                   │
+│   76         ethSpent = msg.value - left;                                    │
+│   77         for (uint256 i = 1; i < list.length; ++i) {                     │
+╰─ src/TroyaIndexZap.sol ──────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][MEDIUM] Not all execution paths have assigned return values [miss─╮
+│   575                                                                        │
+│   576     /// @notice The median sqrtPriceX96 of venue `venueId`'s hourly re │
+│   577     /// (For an even count, the mean of the middle two.)               │
+│ ❱ 578     function medianSqrtPrice(uint256 venueId) public view returns (uin │
+│   579         uint256 nowHour = block.timestamp / 1 hours;                   │
+│   580         uint256[] memory x = new uint256[](OBSERVATIONS);              │
+│   581         for (uint256 i; i < OBSERVATIONS; ++i) {                       │
+╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][MEDIUM] Possible reentrancy in `TroyaIndexSwapper._send(address,u─╮
+│   146     function _send(address asset, uint256 amount) private {            │
+│   147         if (amount == 0) return;                                       │
+│   148         if (asset == address(0)) {                                     │
+│ ❱ 149             (bool ok,) = msg.sender.call{value: amount}("");           │
+│   150             if (!ok) revert TransferFailed();                          │
+│   151         } else {                                                       │
+│   152             IERC20(asset).safeTransfer(msg.sender, amount);            │
+╰─ src/TroyaIndexSwapper.sol ──────────────────────────────────────────────────╯
+├── ╭─ Exploitable from `TroyaIndexZap.zap(uint256,address,uint256[])` ────────╮
+│   │   64                 // buy exactly what is missing with at most the ETH │
+│   │   65                 uint256 budget = address(this).balance - start;     │
+│   │   66                 uint160 limit = zeroForOne ? MIN_SQRT_PRICE + 1 : _ │
+│   │ ❱ 67                 swapper.swap{value: budget}(v, zeroForOne, false, n │
+│   │   68                 have = t.balanceOf(address(this));                  │
+│   │   69                 if (have < need[i]) revert ReceivedLess(list[i], ne │
+│   │   70             }                                                       │
+│   ╰─ src/TroyaIndexZap.sol ──────────────────────────────────────────────────╯
+├── ╭─ Exploitable from `TroyaIndexSwapper.swap(struct Venue,bool,bool,uint256─╮
+│   │   135         uint256 inLeft = _bal(assetIn);                            │
+│   │   136         spent = inBefore - inLeft;                                 │
+│   │   137         received = _bal(assetOut);                                 │
+│   │ ❱ 138         _send(assetOut, received);                                 │
+│   │   139         _send(assetIn, inLeft);                                    │
+│   │   140     }                                                              │
+│   │   141                                                                    │
+│   ╰─ src/TroyaIndexSwapper.sol ──────────────────────────────────────────────╯
+└── ╭─ Exploitable from `TroyaIndex.rebalance(uint256,bool,uint256,uint256)` ──╮
+    │   411         if (swapper.spot(v) == 0) revert SpotUnreadable();         │
+    │   412                                                                    │
+    │   413         lastRebalanceAt = uint64(block.timestamp);                 │
+    │ ❱ 414         (spent, received) = _trade(v, zeroForOne, amountIn, _price │
+    │   415         uint256 floor = (_valueAt(median, zeroForOne, spent) * (10 │
+    │   416         if (floor < minOut) floor = minOut;                        │
+    │   417         if (received < floor || received == 0) revert OutputTooLow │
+    ╰─ src/TroyaIndex.sol ─────────────────────────────────────────────────────╯
+
+
+╭─ [WARNING][LOW] Use of address.balance [balance-relied-on] ────────────╮
+│   46         nonReentrant                                              │
+│   47         returns (uint256 ethSpent)                                │
+│   48     {                                                             │
+│ ❱ 49         uint256 start = address(this).balance - msg.value;        │
+│   50         address[] memory list = vault.assets();                   │
+│   51         if (venueIds.length != list.length) revert WrongLength(); │
+│   52         (uint256[] memory need,) = vault.previewDeposit(shares);  │
+╰─ src/TroyaIndexZap.sol ────────────────────────────────────────────────╯
+└── ╭─ In strict comparison here ─────────────────────────────────────╮
+    │   80             uint256 b = t.balanceOf(address(this));        │
+    │   81             if (b != 0) t.safeTransfer(msg.sender, b);     │
+    │   82         }                                                  │
+    │ ❱ 83         if (left != 0) {                                   │
+    │   84             (bool ok,) = msg.sender.call{value: left}(""); │
+    │   85             if (!ok) revert TransferFailed();              │
+    │   86         }                                                  │
+    ╰─ src/TroyaIndexZap.sol ─────────────────────────────────────────╯
+
+
+╭─ [WARNING][LOW] Use of address.balance [balance-relied-on] ──────────────────╮
+│   72         }                                                               │
+│   73         // the vault takes its ETH part + fee from this value and refun │
+│   74         vault.deposit{value: address(this).balance - start}(shares, rec │
+│ ❱ 75         uint256 left = address(this).balance - start;                   │
+│   76         ethSpent = msg.value - left;                                    │
+│   77         for (uint256 i = 1; i < list.length; ++i) {                     │
+│   78             IERC20 t = IERC20(list[i]);                                 │
+╰─ src/TroyaIndexZap.sol ──────────────────────────────────────────────────────╯
+└── ╭─ In strict comparison here ─────────────────────────────────────╮
+    │   80             uint256 b = t.balanceOf(address(this));        │
+    │   81             if (b != 0) t.safeTransfer(msg.sender, b);     │
+    │   82         }                                                  │
+    │ ❱ 83         if (left != 0) {                                   │
+    │   84             (bool ok,) = msg.sender.call{value: left}(""); │
+    │   85             if (!ok) revert TransferFailed();              │
+    │   86         }                                                  │
+    ╰─ src/TroyaIndexZap.sol ─────────────────────────────────────────╯

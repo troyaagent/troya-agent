@@ -89,6 +89,7 @@ contract IndexHandler is Test {
         address a = _who(seed);
         amt = bound(amt, 0.002 ether, 5 ether);
         vm.deal(a, a.balance + amt);
+        vault.accrue();   // the fee due so far is the management fee, not a dilution by this deposit
         (uint256[] memory h0, uint256 s0) = _snap();
         vm.prank(a);
         try vault.depositEth{value: amt}(0, a) {
@@ -113,6 +114,7 @@ contract IndexHandler is Test {
             IERC20(list[i]).approve(address(vault), need[i]);
         }
         vm.deal(a, a.balance + need[0] + fee);
+        vault.accrue();
         (uint256[] memory h0, uint256 s0) = _snap();
         vm.prank(a);
         try vault.deposit{value: need[0] + fee, gas: 5_000_000}(shares, a, need) {
@@ -126,6 +128,7 @@ contract IndexHandler is Test {
         uint256 bal = vault.balanceOf(a);
         if (bal == 0) return;
         uint256 shares = bound(frac, 1, bal);
+        vault.accrue();
         (uint256[] memory h0, uint256 s0) = _snap();
         vm.prank(a);
         try vault.redeem{gas: 8_000_000}(shares, a) {
@@ -280,8 +283,11 @@ contract IndexHandler is Test {
 contract TroyaIndexInvariantTest is IndexFixture {
     IndexHandler handler;
 
+    uint256 start;
+
     function setUp() public override {
         super.setUp();
+        start = block.timestamp;
         address[] memory t = new address[](3);
         t[0] = address(toka);
         t[1] = address(usdx);
@@ -328,7 +334,7 @@ contract TroyaIndexInvariantTest is IndexFixture {
 
     /// shares: the holders' balances add up to the supply, and the dead shares never move
     function invariant_sharesAddUp() public view {
-        uint256 sum = vault.balanceOf(vault.DEAD()) + vault.balanceOf(alice);
+        uint256 sum = vault.balanceOf(vault.DEAD()) + vault.balanceOf(alice) + vault.balanceOf(mgmtTo);
         for (uint256 i; i < handler.actorCount(); ++i) sum += vault.balanceOf(handler.actors(i));
         assertEq(sum, vault.totalSupply());
         assertEq(vault.balanceOf(vault.DEAD()), vault.DEAD_SHARES());
@@ -342,9 +348,17 @@ contract TroyaIndexInvariantTest is IndexFixture {
         for (uint256 i; i < handler.tokenCount(); ++i) assertEq(IERC20(handler.tokens(i)).balanceOf(address(swapper)), 0);
     }
 
-    /// the supply never passes the cap through deposits
+    /// deposits never push the supply past the cap (the management fee's TIDX are minted on top of deposits, not by them)
     function invariant_withinCap() public view {
-        assertLe(vault.totalSupply(), vault.totalCap());
+        assertLe(vault.totalSupply() - vault.balanceOf(mgmtTo), vault.totalCap());
+    }
+
+    /// the management fee never mints more than 1% a year of the supply for the time that passed since the start
+    function invariant_mgmtFeeWithinRate() public view {
+        uint256 elapsed = block.timestamp - start;
+        // fees accrue on a supply at most totalCap + the fees themselves; a generous upper bound on what 1% a year can mint
+        uint256 bound_ = (vault.totalCap() * 2 * 100 * elapsed) / (10_000 * 365 days) + 1;
+        assertLe(vault.balanceOf(mgmtTo), bound_);
     }
 
     /// after each run: the successful paths really ran (shown with -vv)

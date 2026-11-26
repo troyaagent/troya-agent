@@ -33,6 +33,10 @@
 !/tools/tgmod-test.mjs
 !/tools/launch-test.mjs
 !/tools/launch-fork-test.mjs
+!/tools/build-index-artifacts.mjs
+!/tools/index-keeper-test.mjs
+!/tools/index-fork-test.mjs
+!/tools/index-ui-test.mjs
 !/tools/botcmds-test.mjs
 !/tools/security-test.mjs
 !/tools/hlfund-test.mjs

@@ -40,7 +40,9 @@ interface IPonsFactoryView {
 ///   INDEX_KEEPER           (required) the rebalancing wallet; it can only make the vault swap with itself
 ///   INDEX_GUARDIAN         [0] a watchdog key that can only pause
 ///   INDEX_FEE_RECIPIENT    [TroyaFeeRouter 0x76d9...Ff3B]
-///   INDEX_FEE_BPS          [50] deposit fee on the ETH part, at most 100 (1%)
+///   INDEX_FEE_BPS          [50] deposit fee on the ETH part, at most 200 (2%)
+///   INDEX_MGMT_FEE_BPS     [100] management fee per year, minted in TIDX, at most 200 (2% a year)
+///   INDEX_MGMT_FEE_RECIPIENT [the creator wallet 0x57b0...D09E4] receives the management fee (TIDX)
 ///   INDEX_TOTAL_CAP        [2e18] total TIDX supply cap (1 TIDX = 1 ETH at the first deposit)
 ///   INDEX_WALLET_CAP       [5e17] TIDX one wallet may hold after a deposit
 ///   INDEX_MAX_MOVE_BPS     [2000] the most of an asset one rebalance may sell (hard max 5000)
@@ -60,6 +62,7 @@ contract DeployTroyaIndex is Script {
     address constant PONS_FACTORY = 0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e;
     address constant SAFE = 0xbF418C9e3a56acae5Bf5AeA7905Ea127763D7Fbb;
     address constant FEE_ROUTER = 0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B;
+    address constant CREATOR = 0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4;
     string constant BLOCKSCOUT_API = "https://robinhoodchain.blockscout.com/api/";
 
     function run() external {
@@ -86,6 +89,8 @@ contract DeployTroyaIndex is Script {
         p.guardian = vm.envOr("INDEX_GUARDIAN", address(0));
         p.feeRecipient = vm.envOr("INDEX_FEE_RECIPIENT", FEE_ROUTER);
         p.feeBps = uint16(vm.envOr("INDEX_FEE_BPS", uint256(50)));
+        p.mgmtFeeRecipient = vm.envOr("INDEX_MGMT_FEE_RECIPIENT", CREATOR);
+        p.mgmtFeeBps = uint16(vm.envOr("INDEX_MGMT_FEE_BPS", uint256(100)));
         p.totalCap = vm.envOr("INDEX_TOTAL_CAP", uint256(2 ether));
         p.walletCap = vm.envOr("INDEX_WALLET_CAP", uint256(0.5 ether));
         p.maxMoveBps = uint16(vm.envOr("INDEX_MAX_MOVE_BPS", uint256(2_000)));
@@ -130,6 +135,8 @@ contract DeployTroyaIndex is Script {
         console2.log("  guardian()     ", vault.guardian());
         console2.log("  feeRecipient() ", vault.feeRecipient());
         console2.log("  feeBps()       ", vault.feeBps());
+        console2.log("  mgmtFeeBps()   ", vault.mgmtFeeBps());
+        console2.log("  mgmtFeeRecipient()", vault.mgmtFeeRecipient());
         console2.log("  totalCap()     ", vault.totalCap());
         console2.log("  walletCap()    ", vault.walletCap());
         console2.log("  maxMoveBps()   ", vault.maxMoveBps());

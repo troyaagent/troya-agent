@@ -84,12 +84,9 @@ contract TroyaIndexSwapper is ReentrancyGuard {
     using SafeCast for uint256;
 
     uint8 internal constant KIND_V3 = 1;
-    uint8 internal constant KIND_V4 = 2;
     /// @dev v4-core Lock.IS_UNLOCKED_SLOT (transient) and the PoolManager's `_pools` mapping slot (StateLibrary.POOLS_SLOT)
     bytes32 private constant IS_UNLOCKED_SLOT = 0xc090fc4683624cfc3884e9d8de5eca132f2d0ec062aff75d43c0465d5ceeab23;
     uint256 private constant POOLS_SLOT = 6;
-    /// @dev TickMath.MIN_SQRT_PRICE (v3 MIN_SQRT_RATIO); a price limit must stay strictly above it
-    uint160 internal constant MIN_SQRT_PRICE = 4295128739;
 
     /// @notice Wrapped ETH of Robinhood Chain (only ever held inside a swap).
     IWETH9 public immutable weth;
@@ -108,8 +105,11 @@ contract TroyaIndexSwapper is ReentrancyGuard {
     error TooMuchIn(uint256 asked, uint256 budget);
     error UnexpectedDelta();
     error TransferFailed();
+    error ZeroAddress();
+    error NotSettled();
 
     constructor(address weth_, address v3Factory_, address poolManager_, address ponsHook_) {
+        if (weth_ == address(0) || v3Factory_ == address(0) || poolManager_ == address(0) || ponsHook_ == address(0)) revert ZeroAddress();
         weth = IWETH9(weth_);
         v3Factory = IUniswapV3Factory(v3Factory_);
         poolManager = IPoolManagerV4(poolManager_);
@@ -215,14 +215,17 @@ contract TroyaIndexSwapper is ReentrancyGuard {
         uint256 owed = uint256(uint128(-dIn));
         if (owed > maxIn) revert TooMuchIn(owed, maxIn);
         if (owed != 0) {
+            uint256 paid;
             if (cIn == address(0)) {
-                poolManager.settle{value: owed}();
+                paid = poolManager.settle{value: owed}();
             } else {
                 poolManager.sync(cIn);
                 if (cIn == address(weth)) weth.deposit{value: owed}();
                 IERC20(cIn).safeTransfer(address(poolManager), owed);
-                poolManager.settle();
+                paid = poolManager.settle();
             }
+            // the PoolManager must book exactly what is owed (a short payment would also fail its own unlock check)
+            if (paid != owed) revert NotSettled();
         }
         if (dOut > 0) poolManager.take(cOut, address(this), uint256(uint128(dOut)));
         return "";

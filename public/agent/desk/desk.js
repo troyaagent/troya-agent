@@ -58,6 +58,7 @@ const SI = {
   swift: "M3 7h9M3 12h13M3 17h9M14 5l6 7-6 7",
   clusters: "M7 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM9 20a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM9.6 7.6l3.7 1M8 9.8l.6 5.2M14.5 11.4l-4 4.4",   // Cluster map
   trident: "M12 22V8M7 3v5a5 5 0 0 0 10 0V3M12 3v5",   // V10 F58 Trident
+  vault: "M4 4h16v15H4zM6 19v2M18 19v2M14.5 11.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zM12 9V7.5M12 15.5V14M17 9v5",   // Troya Index (26 Nov)
   bow: "M6 3c5 3 7 6 7 9s-2 6-7 9M6 3v18M3 12h17M17 8.5l3.5 3.5-3.5 3.5",   // V10
   sirens: "M14 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14",   // V10
   proteus: "M4 7h12l-3-3M20 17H8l3 3",   // V10
@@ -90,7 +91,7 @@ export const GROUPS = [
   ["Launch", [["Create coin", "#/create", "create"], ["My coins & fees", "#/creator", "creator"]]],
   // Autopilot keeps its place until the owner decides where it belongs
   ["Agent", [["Chat", "#/agent", "chat"], ["Agent control", "#/agent/scepter", "scepter"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Launch Autopilot", "#/agent/sentry", "sentry"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Exit guard", "#/agent/aegis", "aegis"], ["Strategy arena", "#/agent/arena", "arena"], ["What the agents learned", "#/phoenix", "phoenix"]]],
-  ["Portfolio", [["Overview", "#/portfolio", "portfolio"], ["Stake $TROYA", "#/stake", "stake"], ["History", "#/portfolio/history", "history"], ["Weekly review", "#/portfolio/owl", "news"]]],
+  ["Portfolio", [["Overview", "#/portfolio", "portfolio"], ["Stake $TROYA", "#/stake", "stake"], ["Troya Index", "#/vault", "vault"], ["History", "#/portfolio/history", "history"], ["Weekly review", "#/portfolio/owl", "news"]]],
   // Safety, Verify and The Record are public pages: one entry, opened in a new tab so the app keeps its place
   ["More", [["Invite & earn", "#/herald", "herald"], ["Holder tiers", "#/treasury", "treasury"], ["$TROYA flywheel", "#/flywheel", "flywheel"], ["AI calls", "#/registry", "agent"], ["Robinhood MCP rail", "#/rail", "rail"], ["Social", "#/social", "social"], ["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Safety", "/safety", "verify"], ["What's new", "/roadmap#v8", "news"], ["Plans and tiers", "/plans", "plans"], ["Report a bug", "/community", "bug"]]],
 ];
@@ -117,6 +118,7 @@ const ROUTES = {
   heelhunt: "heelhunt",                                      // V9 F50 Heel Hunt: ./heelhunt.js (loads its own heelhunt.css)
   warroom: "warroom",                                        // V9 F52 War Room + F53 Myrmidons: ./warroom.js
   trident: "trident",                                        // V10 F58 Trident, the Troya Firewall: ./trident.js
+  vault: "vault",                                            // Troya Index (26 Nov): ./index-vault.js (#/vault, and the owner's #/vault/deploy)
   tiresias: "tiresias",                        // V10
   nekyia: "nekyia",                            // V10
   mentor: "mentor",                            // V10
@@ -129,7 +131,7 @@ const ROUTES = {
   bow: "bow",                                  // V10
   u: "portfolio",                                            // profiles (21 Nov): #/u/<username> → a wallet's public page
 };
-const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", chiron: "./chiron.js", clusters: "./clusters.js", swift: "./swift.js", about: "./about.js", phoenix: "./phoenix.js", heelhunt: "./heelhunt.js", warroom: "./warroom.js", trident: "./trident.js", bow: "./bow.js", sirens: "./sirens.js", proteus: "./proteus.js", voyage: "./voyage.js", argus: "./argus.js", scylla: "./scylla.js", mentor: "./mentor.js", nekyia: "./nekyia.js", tiresias: "./tiresias.js" };
+const LOCAL = { home: "./desk-home.js", gate: "./gate.js", spot: "./spot.js", lighter: "./lighter.js", stocks: "./stocks.js", liquidity: "./liquidity.js", flywheel: "./flywheel.js", social: "./social.js", registry: "./registry.js", rail: "./rail.js", hippodrome: "./hippodrome.js", create: "./create.js", creator: "./creator.js", heel: "./heel.js", chiron: "./chiron.js", clusters: "./clusters.js", swift: "./swift.js", about: "./about.js", phoenix: "./phoenix.js", heelhunt: "./heelhunt.js", warroom: "./warroom.js", trident: "./trident.js", vault: "./index-vault.js", bow: "./bow.js", sirens: "./sirens.js", proteus: "./proteus.js", voyage: "./voyage.js", argus: "./argus.js", scylla: "./scylla.js", mentor: "./mentor.js", nekyia: "./nekyia.js", tiresias: "./tiresias.js" };
 // The sheets each page asks for with useCss at mount. route() requests them together with the module, so the stylesheet
 // is not one more round trip after the code. The boot script in /agent/index.html keeps a copy of this table and of the
 // routes above to start the same downloads before this file has even arrived: change both together.

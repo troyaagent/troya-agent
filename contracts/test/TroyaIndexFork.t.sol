@@ -23,6 +23,7 @@ contract TroyaIndexForkTest is Test {
     address constant NVDA_WETH_500 = 0x62AB521f71431f78ac374CdbadC6cda3c8916b6C;
     address constant SAFE = 0xbF418C9e3a56acae5Bf5AeA7905Ea127763D7Fbb; // owns TroyaFeeRouter (2-of-2)
     address constant FEE_ROUTER = 0x76d97f6A3b97d856dBC7FaA6E59a892D87C3Ff3B;
+    address constant CREATOR = 0x57b09Fe6dab0a7D3776E56e6388c773d6c4D09E4;
     bytes32 constant TROYA_POOL_ID = 0x050f1f047e1753d3058519c50e522b1f80c9e1eb208eb1f10867adab67bb38c1;
 
     TroyaIndexSwapper swapper;
@@ -55,6 +56,8 @@ contract TroyaIndexForkTest is Test {
         p.guardian = guardian;
         p.feeRecipient = FEE_ROUTER;
         p.feeBps = 50;
+        p.mgmtFeeRecipient = CREATOR;
+        p.mgmtFeeBps = 100;
         p.totalCap = 2 ether;
         p.walletCap = 0.5 ether;
         p.maxMoveBps = 2_000;
@@ -178,6 +181,12 @@ contract TroyaIndexForkTest is Test {
             assertGt(out[1] * out[2] * out[3], 0, "a slice of every holding");
             assertEq(vault.owed(who[i], USDG) + vault.owed(who[i], NVDA), 0, "nothing had to be kept");
         }
+        // the management fee (1% a year over the ~12 hours of this run) went to the creator wallet in TIDX
+        uint256 fee = vault.balanceOf(CREATOR);
+        assertGt(fee, 0, "management fee minted in TIDX");
+        assertEq(vault.totalSupply(), vault.DEAD_SHARES() + fee);
+        vm.prank(CREATOR);
+        vault.redeem(fee, CREATOR);
         assertEq(vault.totalSupply(), vault.DEAD_SHARES());
         assertLt(vault.holdings(address(0)), 1e10, "only the dead shares' dust is left");
 

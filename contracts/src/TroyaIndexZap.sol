@@ -56,7 +56,7 @@ contract TroyaIndexZap is ReentrancyGuard {
             uint256 have = t.balanceOf(address(this));
             if (have < need[i]) {
                 Venue memory v = vault.getVenue(venueIds[i]);
-                bool zeroForOne;
+                bool zeroForOne = false;
                 if (!v.active) revert BadVenue();
                 if (v.asset0 == address(0) && v.asset1 == list[i]) zeroForOne = true;
                 else if (v.asset1 == address(0) && v.asset0 == list[i]) zeroForOne = false;

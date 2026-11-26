@@ -35,7 +35,7 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
     /// @notice Timelocked changes. Data encodings:
     ///   Keeper (address), Guardian (address), Fee (address recipient, uint16 bps), Caps (uint256 total, uint256 wallet),
     ///   RebalanceRules (uint16 maxMoveBps, uint32 cooldown), AddAsset (address), RetireAsset (address),
-    ///   AddVenue (VenueInput), RemoveVenue (uint256 id).
+    ///   AddVenue (VenueInput), RemoveVenue (uint256 id), MgmtFee (address recipient, uint16 bpsPerYear).
     enum Op {
         Keeper,
         Guardian,
@@ -45,7 +45,8 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
         AddAsset,
         RetireAsset,
         AddVenue,
-        RemoveVenue
+        RemoveVenue,
+        MgmtFee
     }
 
     /// @notice A pool to list. kind 1: Uniswap v3, `pool` is the pool address (the rest is read from it). kind 2: Uniswap
@@ -84,7 +85,9 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
     /// @notice Hard limits no owner can cross.
     uint256 public constant MAX_ASSETS = 8; // ETH included
     uint256 public constant MAX_VENUES = 16;
-    uint16 public constant MAX_FEE_BPS = 100; // 1% deposit fee, in ETH
+    uint16 public constant MAX_FEE_BPS = 200; // 2% deposit fee, in ETH
+    uint16 public constant MAX_MGMT_FEE_BPS = 200; // 2% a year management fee, in TIDX
+    uint256 public constant YEAR = 365 days;
     uint16 public constant MAX_MOVE_BPS = 5_000; // one rebalance sells at most half of an asset
     uint16 public constant MAX_SLIPPAGE_BPS = 1_000; // never more than 10% under the median, pool fees included
     uint32 public constant MIN_COOLDOWN = 1 hours;
@@ -112,6 +115,11 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
     address public guardian;
     address public feeRecipient;
     uint16 public feeBps;
+    /// @notice The management fee: `mgmtFeeBps` a year, paid by minting TIDX to `mgmtFeeRecipient` pro rata to time and
+    /// supply (no price involved). Accrued on every deposit, redeem, rebalance, fee change and accrue().
+    address public mgmtFeeRecipient;
+    uint16 public mgmtFeeBps;
+    uint64 public lastAccrual;
     /// @notice Caps in shares (1 share = 1 wei of ETH at the first deposit): total supply, and the TIDX a wallet may hold
     /// after a deposit to it.
     uint256 public totalCap;
@@ -149,6 +157,8 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
     event OwedRecorded(address indexed account, address indexed asset, uint256 amount);
     event OwedClaimed(address indexed account, address indexed asset, address to, uint256 amount);
     event FeesFlushed(address indexed recipient, uint256 amount);
+    event FeeAccrued(address indexed recipient, uint256 shares, uint256 elapsed);
+    event MgmtFeeSet(address recipient, uint16 bpsPerYear);
     event Paused(bool deposits, bool rebalances, address by);
     event ChangeProposed(bytes32 indexed id, Op op, bytes data, uint256 eta);
     event ChangeExecuted(bytes32 indexed id, Op op, bytes data);
@@ -207,6 +217,8 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
         address guardian;
         address feeRecipient;
         uint16 feeBps;
+        address mgmtFeeRecipient;
+        uint16 mgmtFeeBps;
         uint256 totalCap;
         uint256 walletCap;
         uint16 maxMoveBps;
@@ -231,6 +243,8 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
         _setKeeper(p.keeper);
         _setGuardian(p.guardian);
         _setFee(p.feeRecipient, p.feeBps);
+        _setMgmtFee(p.mgmtFeeRecipient, p.mgmtFeeBps);
+        lastAccrual = uint64(block.timestamp);
         _setCaps(p.totalCap, p.walletCap);
         _setRebalanceRules(p.maxMoveBps, p.cooldown);
         for (uint256 i; i < p.assets.length; ++i) _addAsset(p.assets[i]);
@@ -251,6 +265,7 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
         if (depositsPaused) revert DepositsPaused();
         if (receiver == address(0)) revert ZeroAddress();
         if (msg.value == 0) revert ZeroAmount();
+        _accrue();
         uint256 fee;
         (shares, fee) = _ethShares(msg.value, msg.value);
         if (shares < minShares) revert SharesBelowMinimum(shares, minShares);
@@ -279,6 +294,7 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
         if (shares == 0) revert ZeroAmount();
         address[] memory list = _assets;
         if (maxAmounts.length != list.length) revert WrongLength();
+        _accrue();
         (amounts, fee) = _required(shares, msg.value);
         if (amounts[0] + fee > msg.value) revert NotEnoughEth(amounts[0] + fee, msg.value);
         _checkCaps(receiver, shares);
@@ -324,6 +340,7 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
     function redeem(uint256 shares, address receiver) external nonReentrant returns (uint256[] memory amounts) {
         if (shares == 0) revert ZeroAmount();
         if (receiver == address(0)) revert ZeroAddress();
+        _accrue();
         amounts = previewRedeem(shares);
         _burn(msg.sender, shares);
         emit Redeemed(msg.sender, receiver, shares, amounts);
@@ -341,7 +358,7 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
 
     /// @notice What redeem(shares) pays now, per asset in the order of assets().
     function previewRedeem(uint256 shares) public view returns (uint256[] memory amounts) {
-        uint256 supply = totalSupply();
+        uint256 supply = _supplyNow();
         uint256 n = _assets.length;
         amounts = new uint256[](n);
         if (supply == 0) return amounts;
@@ -387,6 +404,7 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
         uint256 next = uint256(lastRebalanceAt) + cooldown;
         if (lastRebalanceAt != 0 && block.timestamp < next) revert CooldownActive(next);
         Venue memory v = _checkMove(venueId, zeroForOne, amountIn);
+        _accrue();
         _observe(venueId, v);
         (uint160 median, uint256 n) = medianSqrtPrice(venueId);
         if (n < MIN_OBSERVATIONS) revert NotEnoughObservations(n);
@@ -410,7 +428,7 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
         uint256 inBefore = _balance(assetIn);
         uint256 outBefore = _balance(assetOut);
         // hand exactly amountIn to the swapper; it must send the output (and any unspent input) back in this same call
-        uint256 value;
+        uint256 value = 0;
         if (assetIn == ETH) value = amountIn;
         else IERC20(assetIn).safeTransfer(address(swapper), amountIn);
         swapper.swap{value: value}(v, zeroForOne, true, amountIn, amountIn, limit);
@@ -443,6 +461,14 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
         for (uint256 i; i < _venues.length; ++i) {
             if (_venues[i].active) _observe(i, _venueAt(i));
         }
+    }
+
+    /// @notice Mints the management fee due since the last accrual. Anyone may call it; every deposit, redeem and
+    /// rebalance does it first.
+    function accrue() external nonReentrant returns (uint256 minted) {
+        uint256 before = totalSupply();
+        _accrue();
+        minted = totalSupply() - before;
     }
 
     /// @notice Sends the accrued ETH deposit fees to the fee recipient. Anyone may call it.
@@ -549,11 +575,6 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
         return swapper.spot(_venueAt(venueId));
     }
 
-    function observation(uint256 venueId, uint256 slot) external view returns (uint160 sqrtPriceX96, uint64 hour) {
-        Observation memory o = _obs[venueId][slot];
-        return (o.sqrtPriceX96, o.hour);
-    }
-
     /// @notice The median sqrtPriceX96 of venue `venueId`'s hourly reads of the last 24 hours, and how many there are.
     /// (For an even count, the mean of the middle two.)
     function medianSqrtPrice(uint256 venueId) public view returns (uint160 median, uint256 n) {
@@ -602,7 +623,7 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
     function _ethShares(uint256 value, uint256 incoming) private view returns (uint256 shares, uint256 fee) {
         fee = (value * feeBps) / 10_000;
         uint256 net = value - fee;
-        uint256 supply = totalSupply();
+        uint256 supply = _supplyNow();
         if (supply == 0) {
             if (net < MIN_FIRST_DEPOSIT) revert FirstDepositTooSmall();
             return (net - DEAD_SHARES, fee);
@@ -620,11 +641,11 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
     /// @dev Per asset: ceil(holding x shares / supply); `incoming` ETH (msg.value) is not yet a holding. Fee: feeBps of
     /// the ETH part.
     function _required(uint256 shares, uint256 incoming) private view returns (uint256[] memory amounts, uint256 fee) {
-        uint256 supply = totalSupply();
+        uint256 supply = _supplyNow();
         if (supply == 0) revert NoSharesYet();
         uint256 n = _assets.length;
         amounts = new uint256[](n);
-        bool backed;
+        bool backed = false;
         for (uint256 i; i < n; ++i) {
             uint256 h = _holdings(_assets[i]);
             if (i == 0) h = h > incoming ? h - incoming : 0;
@@ -634,6 +655,30 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
         }
         if (!backed) revert NothingBacking();
         fee = (amounts[0] * feeBps) / 10_000;
+    }
+
+    /// @dev The management fee due now: supply x bpsPerYear x elapsed / (10,000 x YEAR) new TIDX. Minted as a share of the
+    /// supply before it, so after t years at rate r the holders keep 1 / (1 + r t) of the vault: never less than 1 - r t,
+    /// for any idle period (no compounding, no division by a shrinking number, nothing to overflow).
+    function _pendingFee() private view returns (uint256) {
+        uint256 supply = totalSupply();
+        if (supply == 0 || mgmtFeeBps == 0) return 0;
+        return Math.mulDiv(supply, uint256(mgmtFeeBps) * (block.timestamp - lastAccrual), 10_000 * YEAR);
+    }
+
+    /// @dev The supply with the fee due now minted (what deposits and redeems are priced against).
+    function _supplyNow() private view returns (uint256) {
+        return totalSupply() + _pendingFee();
+    }
+
+    function _accrue() private {
+        uint256 elapsed = block.timestamp - lastAccrual;
+        uint256 minted = _pendingFee();
+        lastAccrual = uint64(block.timestamp);
+        if (minted != 0) {
+            _mint(mgmtFeeRecipient, minted);
+            emit FeeAccrued(mgmtFeeRecipient, minted, elapsed);
+        }
     }
 
     function _checkCaps(address receiver, uint256 shares) private view {
@@ -723,6 +768,13 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
             // at propose time the sides may be assets an earlier proposal is still adding; execute checks they are listed
             if (apply_) _addVenue(p);
             else _buildVenue(p, false);
+        } else if (op == Op.MgmtFee) {
+            (address r, uint16 bps) = abi.decode(data, (address, uint16));
+            _checkMgmtFee(r, bps);
+            if (apply_) {
+                _accrue(); // the old rate up to now, the new one from now
+                _setMgmtFee(r, bps);
+            }
         } else {
             uint256 id = abi.decode(data, (uint256));
             Venue memory v = _activeVenue(id);
@@ -756,6 +808,18 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
         emit FeeSet(r, bps);
     }
 
+    function _checkMgmtFee(address r, uint16 bps) private view {
+        if (r == address(0)) revert ZeroAddress();
+        if (r == address(this) || bps > MAX_MGMT_FEE_BPS) revert OutOfBounds();
+    }
+
+    function _setMgmtFee(address r, uint16 bps) private {
+        _checkMgmtFee(r, bps);
+        mgmtFeeRecipient = r;
+        mgmtFeeBps = bps;
+        emit MgmtFeeSet(r, bps);
+    }
+
     function _checkCapsArgs(uint256 t, uint256 w) private pure {
         if (t == 0 || w == 0 || w > t) revert OutOfBounds();
     }
@@ -783,9 +847,9 @@ contract TroyaIndex is ERC20, Ownable2Step, ReentrancyGuard {
         AssetInfo memory info = assetInfo[a];
         if (info.buyable) revert BadAsset(); // already active (a retired one may be re-activated)
         if (!info.listed && _assets.length >= MAX_ASSETS) revert TooMany();
-        // must look like an ERC-20
-        IERC20(a).balanceOf(address(this));
-        IERC20(a).totalSupply();
+        // must look like an ERC-20 with a supply (and answer both reads sensibly)
+        uint256 supply = IERC20(a).totalSupply();
+        if (supply == 0 || IERC20(a).balanceOf(address(this)) > supply) revert BadAsset();
     }
 
     function _addAsset(address a) private {

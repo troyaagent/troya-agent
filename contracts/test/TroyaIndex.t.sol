@@ -44,6 +44,7 @@ abstract contract IndexFixture is Test {
     address keeper = makeAddr("keeper");
     address guardian = makeAddr("guardian");
     address feeTo = makeAddr("fee-router");
+    address mgmtTo = makeAddr("creator-mgmt-fee");
     address ponsHook = makeAddr("pons-hook");
     address alice = makeAddr("alice");
     address bob = makeAddr("bob");
@@ -86,6 +87,8 @@ abstract contract IndexFixture is Test {
         p.guardian = guardian;
         p.feeRecipient = feeTo;
         p.feeBps = 50;
+        p.mgmtFeeRecipient = mgmtTo;
+        p.mgmtFeeBps = 100;
         p.totalCap = 100 ether;
         p.walletCap = 50 ether;
         p.maxMoveBps = 2_000;
@@ -220,7 +223,7 @@ contract TroyaIndexTest is IndexFixture {
 
     function test_Constructor_RejectsOutOfBounds() public {
         TroyaIndex.Init memory p = _init();
-        p.feeBps = 101;
+        p.feeBps = 201;
         vm.expectRevert(TroyaIndex.OutOfBounds.selector);
         new TroyaIndex(p);
 
@@ -269,9 +272,22 @@ contract TroyaIndexTest is IndexFixture {
         p = _init();
         p.venues = new TroyaIndex.VenueInput[](0);
         p.assets = new address[](8); // 8 + ETH = 9 > MAX_ASSETS
-        for (uint256 i; i < 8; ++i) p.assets[i] = address(new MockToken("T", 18));
+        for (uint256 i; i < 8; ++i) { MockToken t = new MockToken("T", 18); t.mint(address(this), 1); p.assets[i] = address(t); }
         vm.expectRevert(TroyaIndex.TooMany.selector);
         new TroyaIndex(p);
+
+        // a token with no supply is not an asset (the ERC-20 probe reads must answer sensibly)
+        p = _init();
+        p.assets[0] = address(new MockToken("EMPTY", 18));
+        vm.expectRevert(TroyaIndex.BadAsset.selector);
+        new TroyaIndex(p);
+    }
+
+    function test_Swapper_RejectsZeroAddresses() public {
+        vm.expectRevert(TroyaIndexSwapper.ZeroAddress.selector);
+        new TroyaIndexSwapper(address(weth), address(factory), address(pm), address(0));
+        vm.expectRevert(TroyaIndexSwapper.ZeroAddress.selector);
+        new TroyaIndexSwapper(address(0), address(factory), address(pm), ponsHook);
     }
 
     function test_Constructor_RejectsBadVenues() public {
@@ -378,6 +394,7 @@ contract TroyaIndexTest is IndexFixture {
 
     function test_DepositInKind_ExactProportionsAndRefund() public {
         _seedBasket();
+        vault.accrue(); // the management fee due so far, so the supply read below is the one the deposit prices against
         uint256 supply = vault.totalSupply();
         uint256 hEth = vault.holdings(address(0));
         uint256 hA = vault.holdings(address(toka));
@@ -543,6 +560,7 @@ contract TroyaIndexTest is IndexFixture {
     function test_Redeem_InKindProRata() public {
         _seedBasket();
         _depositInKind(bob, 2 ether);
+        vault.accrue();
         uint256 supply = vault.totalSupply();
         uint256 hEth = vault.holdings(address(0));
         uint256 hA = vault.holdings(address(toka));
@@ -561,8 +579,8 @@ contract TroyaIndexTest is IndexFixture {
         uint256 sb = vault.balanceOf(bob);
         vm.prank(bob);
         vault.redeem(sb, bob);
-        assertEq(vault.totalSupply(), vault.DEAD_SHARES());
-        assertLt(vault.holdings(address(0)), 0.0001 ether);
+        assertEq(vault.totalSupply(), vault.DEAD_SHARES() + vault.balanceOf(mgmtTo), "the dead shares and the fee recipient's");
+        assertGt(vault.balanceOf(mgmtTo), 0, "the management fee was paid in TIDX");
     }
 
     function _evilBasket() internal {
@@ -941,7 +959,7 @@ contract TroyaIndexTest is IndexFixture {
     function test_Timelock_BoundsAtProposeAndExecute() public {
         vm.startPrank(safe);
         vm.expectRevert(TroyaIndex.OutOfBounds.selector);
-        vault.propose(TroyaIndex.Op.Fee, abi.encode(feeTo, uint16(101)));
+        vault.propose(TroyaIndex.Op.Fee, abi.encode(feeTo, uint16(201)));
         vm.expectRevert(TroyaIndex.OutOfBounds.selector);
         vault.propose(TroyaIndex.Op.Fee, abi.encode(address(vault), uint16(10)));
         vm.expectRevert(TroyaIndex.OutOfBounds.selector);
@@ -1109,6 +1127,7 @@ contract TroyaIndexTest is IndexFixture {
     /// an in-kind deposit of any size, into any basket, never lowers what one share holds of any asset
     function testFuzz_InKindDepositNeverDilutes(uint256 shares, uint96 donA, uint64 donU, uint96 donE) public {
         _seedBasket();
+        vault.accrue();
         toka.mint(address(vault), donA);
         usdx.mint(address(vault), donU);
         evil.mint(address(vault), donE);
@@ -1126,6 +1145,7 @@ contract TroyaIndexTest is IndexFixture {
     function testFuzz_RedeemIsProRataRoundedDown(uint256 frac) public {
         _seedBasket();
         _depositInKind(bob, 3 ether);
+        vault.accrue();
         uint256 bal = vault.balanceOf(alice);
         uint256 shares = bound(frac, 1, bal);
         uint256 s0 = vault.totalSupply();
@@ -1155,6 +1175,162 @@ contract TroyaIndexTest is IndexFixture {
             uint256[] memory out = vault.redeem(s, bob);
             assertLe(out[0], amt);
         } catch {}
+    }
+
+
+    /* ---------------- management fee (owner decision 26 Nov 2026: 1% a year, max 2%) ---------------- */
+
+    function test_MgmtFee_OneYearIsOnePercentOfSupply() public {
+        _depositEth(alice, 10 ether);
+        uint256 s0 = vault.totalSupply();
+        vm.warp(block.timestamp + 365 days);
+        assertEq(vault.previewRedeem(s0)[0], vault.holdings(address(0)) * s0 / (s0 + s0 / 100), "previews already include the fee due");
+        vm.prank(eve);
+        uint256 minted = vault.accrue();                  // anyone may call it
+        assertEq(minted, s0 / 100, "1% of the supply for one year");
+        assertEq(vault.balanceOf(mgmtTo), s0 / 100, "paid in TIDX to the management-fee recipient");
+        assertEq(vault.feesAccrued(), 0.05 ether, "the ETH deposit fee is separate and unchanged");
+        assertEq(vault.lastAccrual(), block.timestamp);
+        assertEq(vault.accrue(), 0, "nothing more in the same second");
+        // the holders keep 1 / 1.01 of the vault
+        uint256 aliceShares = vault.balanceOf(alice);
+        vm.prank(alice);
+        uint256[] memory out = vault.redeem(aliceShares, alice);
+        assertApproxEqRel(out[0], (uint256(9.95 ether) * 100) / 101, 1e12);
+    }
+
+    function test_MgmtFee_IdleYearThenRedeemPaysTheRedeemerNetOfFee() public {
+        _depositEth(alice, 10 ether);
+        uint256 sh = vault.balanceOf(alice);
+        vm.warp(block.timestamp + 365 days);              // nobody touched the vault for a year
+        uint256[] memory exp = vault.previewRedeem(sh);
+        vm.prank(alice);
+        uint256[] memory out = vault.redeem(sh, alice);   // the redeem accrues first
+        assertEq(out[0], exp[0], "preview = what the redeem paid");
+        assertGt(vault.balanceOf(mgmtTo), 0);
+        // the recipient's TIDX redeem like any other
+        uint256 m = vault.balanceOf(mgmtTo);
+        vm.prank(mgmtTo);
+        uint256[] memory f = vault.redeem(m, mgmtTo);
+        assertApproxEqRel(f[0], uint256(9.95 ether) / 101, 1e12, "~1% of the vault for the year");
+    }
+
+    function test_MgmtFee_CenturyIdleIsBoundedAndNeverReverts() public {
+        _proposeAndExecute(TroyaIndex.Op.MgmtFee, abi.encode(mgmtTo, uint16(200)));
+        _depositEth(alice, 10 ether);
+        uint256 s0 = vault.totalSupply();
+        vm.warp(block.timestamp + 100 * 365 days);
+        uint256 sh = vault.balanceOf(alice);
+        vm.prank(alice);
+        uint256[] memory out = vault.redeem(sh, alice);   // still works after a century
+        uint256 m = vault.balanceOf(mgmtTo);
+        assertEq(m, s0 * 2, "2% x 100 years of the supply, linear, never compounding");
+        // holders keep 1 / (1 + r t) = 1/3, more than 1 - r t (which would be below zero) and than (1 - r)^t (13%)
+        assertApproxEqRel(out[0], (9.95 ether * sh / s0) / 3, 1e12);
+    }
+
+    function test_MgmtFee_RateChangeMidPeriod() public {
+        _depositEth(alice, 10 ether);
+        uint256 s0 = vault.totalSupply();
+        uint256 t0 = block.timestamp;
+        bytes memory d = abi.encode(mgmtTo, uint16(200));
+        vm.warp(t0 + 180 days);
+        _propose(TroyaIndex.Op.MgmtFee, d);
+        vm.warp(block.timestamp + 48 hours);
+        vault.execute(TroyaIndex.Op.MgmtFee, d);          // accrues at 1% up to now, then 2% from now
+        uint256 firstPart = (s0 * 100 * (182 days)) / (10_000 * 365 days);
+        assertEq(vault.balanceOf(mgmtTo), firstPart, "the old rate for the time before the change");
+        assertEq(vault.mgmtFeeBps(), 200);
+        uint256 s1 = vault.totalSupply();
+        vm.warp(block.timestamp + 183 days);
+        vault.accrue();
+        assertEq(vault.balanceOf(mgmtTo) - firstPart, (s1 * 200 * (183 days)) / (10_000 * 365 days), "the new rate after");
+    }
+
+    function test_MgmtFee_CapAtMaxAndOnlyThroughTimelock() public {
+        TroyaIndex.Init memory p = _init();
+        p.mgmtFeeBps = 201;
+        vm.expectRevert(TroyaIndex.OutOfBounds.selector);
+        new TroyaIndex(p);
+        p = _init();
+        p.mgmtFeeRecipient = address(0);
+        vm.expectRevert(TroyaIndex.ZeroAddress.selector);
+        new TroyaIndex(p);
+        vm.startPrank(safe);
+        vm.expectRevert(TroyaIndex.OutOfBounds.selector);
+        vault.propose(TroyaIndex.Op.MgmtFee, abi.encode(mgmtTo, uint16(201)));
+        vm.expectRevert(TroyaIndex.OutOfBounds.selector);
+        vault.propose(TroyaIndex.Op.MgmtFee, abi.encode(address(vault), uint16(100)));
+        vm.stopPrank();
+        // the deposit fee's maximum is 2% now
+        _proposeAndExecute(TroyaIndex.Op.Fee, abi.encode(feeTo, uint16(200)));
+        assertEq(vault.feeBps(), 200);
+        // a new recipient only after 48 hours; nothing else can set it
+        address next = makeAddr("next-mgmt");
+        _propose(TroyaIndex.Op.MgmtFee, abi.encode(next, uint16(200)));
+        assertEq(vault.mgmtFeeRecipient(), mgmtTo);
+        vm.warp(block.timestamp + 48 hours);
+        vault.execute(TroyaIndex.Op.MgmtFee, abi.encode(next, uint16(200)));
+        assertEq(vault.mgmtFeeRecipient(), next);
+        assertEq(vault.mgmtFeeBps(), 200);
+        assertEq(vault.MAX_MGMT_FEE_BPS(), 200);
+        assertEq(vault.MAX_FEE_BPS(), 200);
+    }
+
+    function test_MgmtFee_NothingBeforeTheFirstDeposit() public {
+        vm.warp(block.timestamp + 3 * 365 days);          // deployed, then idle with no supply
+        uint256 s = _depositEth(alice, 1 ether);
+        assertEq(vault.balanceOf(mgmtTo), 0, "no supply, no fee");
+        assertEq(s, 1 ether - 0.005 ether - vault.DEAD_SHARES(), "first deposit still 1 share per wei");
+        assertEq(vault.lastAccrual(), block.timestamp);
+    }
+
+    function test_MgmtFee_ZeroRateMintsNothing() public {
+        _proposeAndExecute(TroyaIndex.Op.MgmtFee, abi.encode(mgmtTo, uint16(0)));
+        _depositEth(alice, 1 ether);
+        vm.warp(block.timestamp + 365 days);
+        assertEq(vault.accrue(), 0);
+    }
+
+    function test_MgmtFee_DoesNotCountAgainstDepositsButDoesNotBypassCaps() public {
+        _depositEth(alice, 49 ether);
+        _depositEth(bob, 49 ether);
+        vm.warp(block.timestamp + 365 days);
+        vault.accrue();
+        // the fee shares may take the supply past the cap; deposits still stop at it
+        uint256 room = vault.totalCap() > vault.totalSupply() ? vault.totalCap() - vault.totalSupply() : 0;
+        vm.prank(carol);
+        vm.expectRevert(TroyaIndex.TotalCapExceeded.selector);
+        vault.depositEth{value: room + 1 ether}(0, carol);
+    }
+
+    function test_MgmtFee_InflationDefenceStillHolds() public {
+        vm.prank(eve);
+        uint256 s = vault.depositEth{value: 0.002 ether}(0, eve);
+        vm.prank(eve);
+        vault.redeem(s - 1, eve);
+        vm.warp(block.timestamp + 365 days);
+        vm.prank(eve);
+        (bool ok,) = address(vault).call{value: 100 ether}("");
+        assertTrue(ok);
+        uint256 shares = _depositEth(bob, 1 ether);
+        assertGt(shares, 0);
+        vm.prank(bob);
+        uint256[] memory out = vault.redeem(shares, bob);
+        assertGe(out[0] + 1e12, 1 ether - 0.005 ether, "bob loses at most one share of rounding");
+    }
+
+    /// whatever the rate, the time and the supply, one accrual mints at most supply x rate x time / year
+    function testFuzz_MgmtFeeNeverAboveRate(uint16 bps, uint32 dt, uint256 amt) public {
+        bps = uint16(bound(bps, 0, 200));
+        amt = bound(amt, 0.002 ether, 40 ether);
+        _proposeAndExecute(TroyaIndex.Op.MgmtFee, abi.encode(mgmtTo, bps));
+        _depositEth(alice, amt);
+        uint256 s0 = vault.totalSupply();
+        vm.warp(block.timestamp + dt);
+        uint256 m = vault.accrue();
+        assertLe(m, (s0 * bps * uint256(dt)) / (10_000 * 365 days));
+        assertGe(m + 1, (s0 * bps * uint256(dt)) / (10_000 * 365 days));
     }
 
     receive() external payable {}

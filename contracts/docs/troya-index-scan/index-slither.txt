@@ -1,0 +1,380 @@
+# Slither 0.11.6 on TroyaIndex.sol, TroyaIndexSwapper.sol, TroyaIndexZap.sol, pass 1: the code as handed over after phase 2 (run by the coordinator, 27 Nov 2026)
+# command, run in a scratch copy of contracts/: slither . --foundry-compile-all --json index-slither.json (findings in other contracts left out of the triage)
+# solc 0.8.24, Python 3.12; scanners from tools/scan/.venv
+# ---- raw output below ----
+Impossible to generate IR for TroyaStake._settle (src/TroyaStake.sol#200-205):
+ 'NoneType' object has no attribute 'parameters'
+
+Detector: arbitrary-send-eth
+TroyaIndexSwapper._send(address,uint256) (src/TroyaIndexSwapper.sol#146-154) sends eth to arbitrary user
+	Dangerous calls:
+	- (ok,None) = msg.sender.call{value: amount}() (src/TroyaIndexSwapper.sol#149)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#functions-that-send-ether-to-arbitrary-destinations
+
+Detector: weak-prng
+TroyaIndex._observe(uint256,Venue) (src/TroyaIndex.sol#705-714) uses a weak PRNG: "_obs[venueId][hour % OBSERVATIONS] = Observation(p,uint64(hour)) (src/TroyaIndex.sol#710)" 
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#weak-PRNG
+
+Detector: reentrancy-balance
+Reentrancy in TroyaIndex._trade(Venue,bool,uint256,uint160) (src/TroyaIndex.sol#423-440):
+	External call allowing reentrancy:
+	- swapper.swap{value: value}(v,zeroForOne,true,amountIn,amountIn,limit) (src/TroyaIndex.sol#434)
+	Balance read before the call:
+	- inBefore = _balance(assetIn) (src/TroyaIndex.sol#428)
+	Possible stale balance used after the call in a condition:
+	- spent > amountIn (src/TroyaIndex.sol#439)
+		- stale variable `spent`
+Reentrancy in TroyaIndex.rebalance(uint256,bool,uint256,uint256) (src/TroyaIndex.sol#397-419):
+	External call allowing reentrancy:
+	- (spent,received) = _trade(v,zeroForOne,amountIn,_priceLimit(median,zeroForOne,v.slippageBps)) (src/TroyaIndex.sol#414)
+		- swapper.swap{value: value}(v,zeroForOne,true,amountIn,amountIn,limit) (src/TroyaIndex.sol#434)
+	Balance read before the call:
+	- v = _checkMove(venueId,zeroForOne,amountIn) (src/TroyaIndex.sol#406)
+	Possible stale balance used after the call in a condition:
+	- received < floor || received == 0 (src/TroyaIndex.sol#417)
+		- stale variable `received`
+Reentrancy in TroyaIndexZap.zap(uint256,address,uint256[]) (src/TroyaIndexZap.sol#43-87):
+	External call allowing reentrancy:
+	- swapper.swap{value: budget}(v,zeroForOne,false,need[i] - have,budget,limit) (src/TroyaIndexZap.sol#67)
+	Balance read before the call:
+	- have = t.balanceOf(address(this)) (src/TroyaIndexZap.sol#56)
+	Possible stale balance used after the call in a condition:
+	- have < need[i] (src/TroyaIndexZap.sol#69)
+		- stale variable `have`
+Reentrancy in TroyaIndexZap.zap(uint256,address,uint256[]) (src/TroyaIndexZap.sol#43-87):
+	External call allowing reentrancy:
+	- swapper.swap{value: budget}(v,zeroForOne,false,need[i] - have,budget,limit) (src/TroyaIndexZap.sol#67)
+	Balance read before the call:
+	- have = t.balanceOf(address(this)) (src/TroyaIndexZap.sol#68)
+	Possible stale balance used after the call in a condition:
+	- have < need[i] (src/TroyaIndexZap.sol#69)
+		- stale variable `have`
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities
+
+Detector: incorrect-equality
+TroyaIndex._ethShares(uint256,uint256) (src/TroyaIndex.sol#621-637) uses a dangerous strict equality:
+	- supply == 0 (src/TroyaIndex.sol#625)
+TroyaIndex._ethShares(uint256,uint256) (src/TroyaIndex.sol#621-637) uses a dangerous strict equality:
+	- ethHeld == 0 (src/TroyaIndex.sol#634)
+TroyaIndex._ethShares(uint256,uint256) (src/TroyaIndex.sol#621-637) uses a dangerous strict equality:
+	- shares == 0 (src/TroyaIndex.sol#636)
+TroyaIndex._observe(uint256,Venue) (src/TroyaIndex.sol#705-714) uses a dangerous strict equality:
+	- hour == lastObservedHour[venueId] (src/TroyaIndex.sol#707)
+TroyaIndex._pendingFee() (src/TroyaIndex.sol#661-665) uses a dangerous strict equality:
+	- supply == 0 || mgmtFeeBps == 0 (src/TroyaIndex.sol#663)
+TroyaIndex._required(uint256,uint256) (src/TroyaIndex.sol#641-656) uses a dangerous strict equality:
+	- supply == 0 (src/TroyaIndex.sol#643)
+TroyaIndex._required(uint256,uint256) (src/TroyaIndex.sol#641-656) uses a dangerous strict equality:
+	- h == 0 (src/TroyaIndex.sol#650)
+TroyaIndex.depositEth(uint256,address) (src/TroyaIndex.sol#264-279) uses a dangerous strict equality:
+	- totalSupply() == 0 (src/TroyaIndex.sol#272)
+TroyaIndex.nextRebalanceAt() (src/TroyaIndex.sol#599-601) uses a dangerous strict equality:
+	- lastRebalanceAt == 0 (src/TroyaIndex.sol#600)
+TroyaIndex.previewRedeem(uint256) (src/TroyaIndex.sol#360-366) uses a dangerous strict equality:
+	- supply == 0 (src/TroyaIndex.sol#364)
+TroyaIndex.rebalance(uint256,bool,uint256,uint256) (src/TroyaIndex.sol#397-419) uses a dangerous strict equality:
+	- received < floor || received == 0 (src/TroyaIndex.sol#417)
+TroyaIndex.redeem(uint256,address) (src/TroyaIndex.sol#340-357) uses a dangerous strict equality:
+	- a == 0 (src/TroyaIndex.sol#350)
+TroyaIndexSwapper._send(address,uint256) (src/TroyaIndexSwapper.sol#146-154) uses a dangerous strict equality:
+	- amount == 0 (src/TroyaIndexSwapper.sol#147)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#dangerous-strict-equalities
+
+Detector: uninitialized-local
+TroyaIndex._trade(Venue,bool,uint256,uint160).value (src/TroyaIndex.sol#431) is a local variable never initialized
+TroyaIndex._required(uint256,uint256).backed (src/TroyaIndex.sol#646) is a local variable never initialized
+TroyaIndexZap.zap(uint256,address,uint256[]).zeroForOne (src/TroyaIndexZap.sol#59) is a local variable never initialized
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#uninitialized-local-variables
+
+Detector: unused-return
+TroyaIndex._trade(Venue,bool,uint256,uint160) (src/TroyaIndex.sol#423-440) ignores return value by swapper.swap{value: value}(v,zeroForOne,true,amountIn,amountIn,limit) (src/TroyaIndex.sol#434)
+TroyaIndex._checkNewAsset(address) (src/TroyaIndex.sol#843-851) ignores return value by IERC20(a).balanceOf(address(this)) (src/TroyaIndex.sol#849)
+TroyaIndex._checkNewAsset(address) (src/TroyaIndex.sol#843-851) ignores return value by IERC20(a).totalSupply() (src/TroyaIndex.sol#850)
+TroyaIndexSwapper._swap(Venue,bool,bool,uint256,uint256,uint160) (src/TroyaIndexSwapper.sol#159-178) ignores return value by IUniswapV3Pool(v.pool).swap(address(this),zeroForOne,spec,limit,) (src/TroyaIndexSwapper.sol#166)
+TroyaIndexSwapper._swap(Venue,bool,bool,uint256,uint256,uint160) (src/TroyaIndexSwapper.sol#159-178) ignores return value by IUniswapV3Pool(v.pool).swap(address(this),zeroForOne,- spec,limit,) (src/TroyaIndexSwapper.sol#166)
+TroyaIndexSwapper._swap(Venue,bool,bool,uint256,uint256,uint160) (src/TroyaIndexSwapper.sol#159-178) ignores return value by poolManager.unlock(abi.encode(key,zeroForOne,- spec,limit,maxIn)) (src/TroyaIndexSwapper.sol#173)
+TroyaIndexSwapper._swap(Venue,bool,bool,uint256,uint256,uint160) (src/TroyaIndexSwapper.sol#159-178) ignores return value by poolManager.unlock(abi.encode(key,zeroForOne,spec,limit,maxIn)) (src/TroyaIndexSwapper.sol#173)
+TroyaIndexSwapper.unlockCallback(bytes) (src/TroyaIndexSwapper.sol#204-229) ignores return value by poolManager.settle{value: owed}() (src/TroyaIndexSwapper.sol#219)
+TroyaIndexSwapper.unlockCallback(bytes) (src/TroyaIndexSwapper.sol#204-229) ignores return value by poolManager.settle() (src/TroyaIndexSwapper.sol#224)
+TroyaIndexSwapper._spot(Venue) (src/TroyaIndexSwapper.sol#238-245) ignores return value by (p,None,None,None,None,None,unlocked) = IUniswapV3Pool(v.pool).slot0() (src/TroyaIndexSwapper.sol#240)
+TroyaIndexZap.zap(uint256,address,uint256[]) (src/TroyaIndexZap.sol#43-87) ignores return value by (need,None) = vault.previewDeposit(shares) (src/TroyaIndexZap.sol#52)
+TroyaIndexZap.zap(uint256,address,uint256[]) (src/TroyaIndexZap.sol#43-87) ignores return value by swapper.swap{value: budget}(v,zeroForOne,false,need[i] - have,budget,limit) (src/TroyaIndexZap.sol#67)
+TroyaIndexZap.zap(uint256,address,uint256[]) (src/TroyaIndexZap.sol#43-87) ignores return value by vault.deposit{value: address(this).balance - start}(shares,receiver,need) (src/TroyaIndexZap.sol#74)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#unused-return
+
+Detector: missing-zero-check
+TroyaIndexSwapper.constructor(address,address,address,address).ponsHook_ (src/TroyaIndexSwapper.sol#112) lacks a zero-check on :
+		- ponsHook = ponsHook_ (src/TroyaIndexSwapper.sol#116)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-zero-address-validation
+
+Detector: calls-loop
+TroyaIndex._checkNewAsset(address) (src/TroyaIndex.sol#843-851) has external calls inside a loop: IERC20(a).balanceOf(address(this)) (src/TroyaIndex.sol#849)
+	Calls stack containing the loop:
+		TroyaIndex.constructor(TroyaIndex.Init)
+		TroyaIndex._addAsset(address)
+TroyaIndex._checkNewAsset(address) (src/TroyaIndex.sol#843-851) has external calls inside a loop: IERC20(a).totalSupply() (src/TroyaIndex.sol#850)
+	Calls stack containing the loop:
+		TroyaIndex.constructor(TroyaIndex.Init)
+		TroyaIndex._addAsset(address)
+TroyaIndex._buildVenue(TroyaIndex.VenueInput,bool) (src/TroyaIndex.sol#862-892) has external calls inside a loop: v.token0 = IUniswapV3Pool(p.pool).token0() (src/TroyaIndex.sol#871)
+	Calls stack containing the loop:
+		TroyaIndex.constructor(TroyaIndex.Init)
+		TroyaIndex._addVenue(TroyaIndex.VenueInput)
+TroyaIndex._buildVenue(TroyaIndex.VenueInput,bool) (src/TroyaIndex.sol#862-892) has external calls inside a loop: v.token1 = IUniswapV3Pool(p.pool).token1() (src/TroyaIndex.sol#872)
+	Calls stack containing the loop:
+		TroyaIndex.constructor(TroyaIndex.Init)
+		TroyaIndex._addVenue(TroyaIndex.VenueInput)
+TroyaIndex._buildVenue(TroyaIndex.VenueInput,bool) (src/TroyaIndex.sol#862-892) has external calls inside a loop: v.fee = IUniswapV3Pool(p.pool).fee() (src/TroyaIndex.sol#873)
+	Calls stack containing the loop:
+		TroyaIndex.constructor(TroyaIndex.Init)
+		TroyaIndex._addVenue(TroyaIndex.VenueInput)
+TroyaIndex._buildVenue(TroyaIndex.VenueInput,bool) (src/TroyaIndex.sol#862-892) has external calls inside a loop: IUniswapV3FactoryLike(v3Factory).getPool(v.token0,v.token1,v.fee) != p.pool (src/TroyaIndex.sol#874)
+	Calls stack containing the loop:
+		TroyaIndex.constructor(TroyaIndex.Init)
+		TroyaIndex._addVenue(TroyaIndex.VenueInput)
+TroyaIndex._buildVenue(TroyaIndex.VenueInput,bool) (src/TroyaIndex.sol#862-892) has external calls inside a loop: swapper.spot(v) == 0 (src/TroyaIndex.sol#883)
+	Calls stack containing the loop:
+		TroyaIndex.constructor(TroyaIndex.Init)
+		TroyaIndex._addVenue(TroyaIndex.VenueInput)
+TroyaIndex._balance(address) (src/TroyaIndex.sol#608-610) has external calls inside a loop: IERC20(asset).balanceOf(address(this)) (src/TroyaIndex.sol#609)
+	Calls stack containing the loop:
+		TroyaIndex.depositEth(uint256,address)
+		TroyaIndex._ethShares(uint256,uint256)
+		TroyaIndex._holdings(address)
+TroyaIndex._balance(address) (src/TroyaIndex.sol#608-610) has external calls inside a loop: IERC20(asset).balanceOf(address(this)) (src/TroyaIndex.sol#609)
+	Calls stack containing the loop:
+		TroyaIndex.deposit(uint256,address,uint256[])
+		TroyaIndex._required(uint256,uint256)
+		TroyaIndex._holdings(address)
+TroyaIndex.deposit(uint256,address,uint256[]) (src/TroyaIndex.sol#286-320) has external calls inside a loop: before = t.balanceOf(address(this)) (src/TroyaIndex.sol#307)
+TroyaIndex.deposit(uint256,address,uint256[]) (src/TroyaIndex.sol#286-320) has external calls inside a loop: got = t.balanceOf(address(this)) - before (src/TroyaIndex.sol#309)
+TroyaIndex._balance(address) (src/TroyaIndex.sol#608-610) has external calls inside a loop: IERC20(asset).balanceOf(address(this)) (src/TroyaIndex.sol#609)
+	Calls stack containing the loop:
+		TroyaIndex.previewDeposit(uint256)
+		TroyaIndex._required(uint256,uint256)
+		TroyaIndex._holdings(address)
+TroyaIndex._balance(address) (src/TroyaIndex.sol#608-610) has external calls inside a loop: IERC20(asset).balanceOf(address(this)) (src/TroyaIndex.sol#609)
+	Calls stack containing the loop:
+		TroyaIndex.previewDepositEth(uint256)
+		TroyaIndex._ethShares(uint256,uint256)
+		TroyaIndex._holdings(address)
+TroyaIndex._balance(address) (src/TroyaIndex.sol#608-610) has external calls inside a loop: IERC20(asset).balanceOf(address(this)) (src/TroyaIndex.sol#609)
+	Calls stack containing the loop:
+		TroyaIndex.redeem(uint256,address)
+		TroyaIndex.previewRedeem(uint256)
+		TroyaIndex._holdings(address)
+TroyaIndex._balance(address) (src/TroyaIndex.sol#608-610) has external calls inside a loop: IERC20(asset).balanceOf(address(this)) (src/TroyaIndex.sol#609)
+	Calls stack containing the loop:
+		TroyaIndex.previewRedeem(uint256)
+		TroyaIndex._holdings(address)
+TroyaIndex._observe(uint256,Venue) (src/TroyaIndex.sol#705-714) has external calls inside a loop: p = swapper.spot(v) (src/TroyaIndex.sol#708)
+	Calls stack containing the loop:
+		TroyaIndex.pokeAll()
+TroyaIndexZap.zap(uint256,address,uint256[]) (src/TroyaIndexZap.sol#43-87) has external calls inside a loop: have = t.balanceOf(address(this)) (src/TroyaIndexZap.sol#56)
+TroyaIndexZap.zap(uint256,address,uint256[]) (src/TroyaIndexZap.sol#43-87) has external calls inside a loop: v = vault.getVenue(venueIds[i]) (src/TroyaIndexZap.sol#58)
+TroyaIndexZap.zap(uint256,address,uint256[]) (src/TroyaIndexZap.sol#43-87) has external calls inside a loop: swapper.swap{value: budget}(v,zeroForOne,false,need[i] - have,budget,limit) (src/TroyaIndexZap.sol#67)
+TroyaIndexZap.zap(uint256,address,uint256[]) (src/TroyaIndexZap.sol#43-87) has external calls inside a loop: have = t.balanceOf(address(this)) (src/TroyaIndexZap.sol#68)
+TroyaIndexZap.zap(uint256,address,uint256[]) (src/TroyaIndexZap.sol#43-87) has external calls inside a loop: limit = _upLimit(vault.spotSqrtPrice(venueIds[i])) (src/TroyaIndexZap.sol#66)
+TroyaIndexZap.zap(uint256,address,uint256[]) (src/TroyaIndexZap.sol#43-87) has external calls inside a loop: b = t_scope_1.balanceOf(address(this)) (src/TroyaIndexZap.sol#80)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation/#calls-inside-a-loop
+
+Detector: reentrancy-benign
+Reentrancy in TroyaIndexSwapper._swap(Venue,bool,bool,uint256,uint256,uint160) (src/TroyaIndexSwapper.sol#159-178):
+	External calls:
+	- IUniswapV3Pool(v.pool).swap(address(this),zeroForOne,spec,limit,) (src/TroyaIndexSwapper.sol#166)
+	- IUniswapV3Pool(v.pool).swap(address(this),zeroForOne,- spec,limit,) (src/TroyaIndexSwapper.sol#166)
+	State variables written after the call(s):
+	- _v3Pool = address(0) (src/TroyaIndexSwapper.sol#167)
+	- _v3TokenIn = address(0) (src/TroyaIndexSwapper.sol#168)
+Reentrancy in TroyaIndexSwapper._swap(Venue,bool,bool,uint256,uint256,uint160) (src/TroyaIndexSwapper.sol#159-178):
+	External calls:
+	- IUniswapV3Pool(v.pool).swap(address(this),zeroForOne,spec,limit,) (src/TroyaIndexSwapper.sol#166)
+	- IUniswapV3Pool(v.pool).swap(address(this),zeroForOne,- spec,limit,) (src/TroyaIndexSwapper.sol#166)
+	- poolManager.unlock(abi.encode(key,zeroForOne,- spec,limit,maxIn)) (src/TroyaIndexSwapper.sol#173)
+	- poolManager.unlock(abi.encode(key,zeroForOne,spec,limit,maxIn)) (src/TroyaIndexSwapper.sol#173)
+	State variables written after the call(s):
+	- _maxIn = 0 (src/TroyaIndexSwapper.sol#175)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-3
+
+Detector: timestamp
+TroyaIndex.depositEth(uint256,address) (src/TroyaIndex.sol#264-279) uses timestamp for comparisons
+	Dangerous comparisons:
+	- shares < minShares (src/TroyaIndex.sol#271)
+	- totalSupply() == 0 (src/TroyaIndex.sol#272)
+TroyaIndex.redeem(uint256,address) (src/TroyaIndex.sol#340-357) uses timestamp for comparisons
+	Dangerous comparisons:
+	- a == 0 (src/TroyaIndex.sol#350)
+TroyaIndex.previewRedeem(uint256) (src/TroyaIndex.sol#360-366) uses timestamp for comparisons
+	Dangerous comparisons:
+	- supply == 0 (src/TroyaIndex.sol#364)
+TroyaIndex.rebalance(uint256,bool,uint256,uint256) (src/TroyaIndex.sol#397-419) uses timestamp for comparisons
+	Dangerous comparisons:
+	- lastRebalanceAt != 0 && block.timestamp < next (src/TroyaIndex.sol#405)
+TroyaIndex.execute(TroyaIndex.Op,bytes) (src/TroyaIndex.sol#528-537) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp < eta (src/TroyaIndex.sol#532)
+	- block.timestamp > eta + EXECUTION_WINDOW (src/TroyaIndex.sol#533)
+TroyaIndex.medianSqrtPrice(uint256) (src/TroyaIndex.sol#578-596) uses timestamp for comparisons
+	Dangerous comparisons:
+	- o.hour != 0 && uint256(o.hour) + OBSERVATIONS > nowHour (src/TroyaIndex.sol#583)
+TroyaIndex.nextRebalanceAt() (src/TroyaIndex.sol#599-601) uses timestamp for comparisons
+	Dangerous comparisons:
+	- lastRebalanceAt == 0 (src/TroyaIndex.sol#600)
+TroyaIndex._ethShares(uint256,uint256) (src/TroyaIndex.sol#621-637) uses timestamp for comparisons
+	Dangerous comparisons:
+	- supply == 0 (src/TroyaIndex.sol#625)
+	- shares == 0 (src/TroyaIndex.sol#636)
+TroyaIndex._required(uint256,uint256) (src/TroyaIndex.sol#641-656) uses timestamp for comparisons
+	Dangerous comparisons:
+	- supply == 0 (src/TroyaIndex.sol#643)
+TroyaIndex._pendingFee() (src/TroyaIndex.sol#661-665) uses timestamp for comparisons
+	Dangerous comparisons:
+	- supply == 0 || mgmtFeeBps == 0 (src/TroyaIndex.sol#663)
+TroyaIndex._accrue() (src/TroyaIndex.sol#672-680) uses timestamp for comparisons
+	Dangerous comparisons:
+	- minted != 0 (src/TroyaIndex.sol#676)
+TroyaIndex._checkCaps(address,uint256) (src/TroyaIndex.sol#682-685) uses timestamp for comparisons
+	Dangerous comparisons:
+	- totalSupply() + shares > totalCap (src/TroyaIndex.sol#683)
+	- balanceOf(receiver) + shares > walletCap (src/TroyaIndex.sol#684)
+TroyaIndex._observe(uint256,Venue) (src/TroyaIndex.sol#705-714) uses timestamp for comparisons
+	Dangerous comparisons:
+	- hour == lastObservedHour[venueId] (src/TroyaIndex.sol#707)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+
+Detector: assembly
+TroyaIndex._trySend(address,address,uint256) (src/TroyaIndex.sol#688-703) uses assembly
+	- INLINE ASM (src/TroyaIndex.sol#691-693)
+	- INLINE ASM (src/TroyaIndex.sol#697-702)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#assembly-usage
+
+Detector: pragma
+4 different versions of Solidity are used:
+	- Version constraint >=0.8.13<0.9.0 is used by:
+		->=0.8.13<0.9.0 (lib/forge-std/src/Base.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/Script.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdAssertions.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdChains.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdCheats.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdConstants.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdError.sol#3)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdInvariant.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdJson.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdMath.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdStorage.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdStyle.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdToml.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/StdUtils.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/Test.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/Vm.sol#4)
+		->=0.8.13<0.9.0 (lib/forge-std/src/console.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/console2.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/interfaces/IMulticall3.sol#2)
+		->=0.8.13<0.9.0 (lib/forge-std/src/safeconsole.sol#2)
+	- Version constraint ^0.8.20 is used by:
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/access/Ownable.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/access/Ownable2Step.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/interfaces/IERC1363.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/interfaces/IERC165.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/interfaces/draft-IERC6093.sol#3)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/proxy/Clones.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/IERC721.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/IERC721Receiver.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/extensions/IERC721Metadata.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Utils.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Address.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Base64.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Context.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Errors.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Panic.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/Strings.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/introspection/ERC165.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/introspection/IERC165.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/math/Math.sol#4)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/math/SafeCast.sol#5)
+		-^0.8.20 (lib/openzeppelin-contracts/contracts/utils/math/SignedMath.sol#4)
+	- Version constraint ^0.8.24 is used by:
+		-^0.8.24 (script/DeployTroyaIndex.s.sol#2)
+		-^0.8.24 (src/TroyaOathVault.sol#2)
+		-^0.8.24 (src/TroyaPass.sol#2)
+		-^0.8.24 (src/TroyaStake.sol#2)
+		-^0.8.24 (test/TroyaFeeRouter.t.sol#2)
+		-^0.8.24 (test/TroyaFeeRouterFork.t.sol#2)
+		-^0.8.24 (test/TroyaFeeSplitter.t.sol#2)
+		-^0.8.24 (test/TroyaFeeSplitterFork.t.sol#2)
+		-^0.8.24 (test/TroyaIndex.t.sol#2)
+		-^0.8.24 (test/TroyaIndexFork.t.sol#2)
+		-^0.8.24 (test/TroyaIndexInvariant.t.sol#2)
+		-^0.8.24 (test/TroyaIndexMocks.sol#2)
+		-^0.8.24 (test/TroyaOathVault.t.sol#2)
+		-^0.8.24 (test/TroyaPass.t.sol#2)
+		-^0.8.24 (test/TroyaPassFork.t.sol#2)
+		-^0.8.24 (test/TroyaStake.t.sol#2)
+		-^0.8.24 (test/TroyaStakeFork.t.sol#2)
+		-^0.8.24 (test/TroyaStakeInvariant.t.sol#2)
+		-^0.8.24 (test/halmos/TroyaFeeSplitter.halmos.t.sol#2)
+		-^0.8.24 (test/halmos/TroyaOathVault.halmos.t.sol#2)
+		-^0.8.24 (test/halmos/TroyaPass.halmos.t.sol#2)
+	- Version constraint 0.8.24 is used by:
+		-0.8.24 (src/TroyaFeeRouter.sol#2)
+		-0.8.24 (src/TroyaFeeSplitter.sol#2)
+		-0.8.24 (src/TroyaIndex.sol#2)
+		-0.8.24 (src/TroyaIndexSwapper.sol#2)
+		-0.8.24 (src/TroyaIndexZap.sol#2)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#different-pragma-directives-are-used
+
+Detector: cyclomatic-complexity
+TroyaIndex.deposit(uint256,address,uint256[]) (src/TroyaIndex.sol#286-320) has a high cyclomatic complexity (12).
+TroyaIndex._change(TroyaIndex.Op,bytes,bool) (src/TroyaIndex.sol#734-785) has a high cyclomatic complexity (21).
+TroyaIndex._buildVenue(TroyaIndex.VenueInput,bool) (src/TroyaIndex.sol#862-892) has a high cyclomatic complexity (15).
+TroyaIndexZap.zap(uint256,address,uint256[]) (src/TroyaIndexZap.sol#43-87) has a high cyclomatic complexity (15).
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#cyclomatic-complexity
+
+Detector: low-level-calls
+Low level call in TroyaIndex.deposit(uint256,address,uint256[]) (src/TroyaIndex.sol#286-320):
+	- (ok,None) = msg.sender.call{value: spare}() (src/TroyaIndex.sol#317)
+Low level call in TroyaIndex.claimOwed(address,address) (src/TroyaIndex.sol#370-383):
+	- (ok,None) = to.call{value: a}() (src/TroyaIndex.sol#378)
+Low level call in TroyaIndex.flushFees() (src/TroyaIndex.sol#473-481):
+	- (ok,None) = to.call{value: amount}() (src/TroyaIndex.sol#479)
+Low level call in TroyaIndexSwapper._send(address,uint256) (src/TroyaIndexSwapper.sol#146-154):
+	- (ok,None) = msg.sender.call{value: amount}() (src/TroyaIndexSwapper.sol#149)
+Low level call in TroyaIndexZap.zap(uint256,address,uint256[]) (src/TroyaIndexZap.sol#43-87):
+	- (ok,None) = msg.sender.call{value: left}() (src/TroyaIndexZap.sol#84)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#low-level-calls
+
+Detector: missing-inheritance
+TroyaIndexSwapper (src/TroyaIndexSwapper.sol#82-251) should inherit from IUnlockCallback (src/TroyaFeeRouter.sol#48-50)
+TroyaIndexSwapper (src/TroyaIndexSwapper.sol#82-251) should inherit from IV3CallbackLike (test/TroyaIndexMocks.sol#69-71)
+MockWETH (test/TroyaIndexMocks.sol#9-18) should inherit from IWETH9 (src/TroyaIndexSwapper.sol#9-12)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-inheritance
+
+Detector: unindexed-event-address
+Event TroyaIndex.MgmtFeeSet(address,uint16) (src/TroyaIndex.sol#161) has address parameters but no indexed parameters
+Event TroyaIndex.Paused(bool,bool,address) (src/TroyaIndex.sol#162) has address parameters but no indexed parameters
+Event TroyaIndex.KeeperSet(address) (src/TroyaIndex.sol#166) has address parameters but no indexed parameters
+Event TroyaIndex.GuardianSet(address) (src/TroyaIndex.sol#167) has address parameters but no indexed parameters
+Event TroyaIndex.FeeSet(address,uint16) (src/TroyaIndex.sol#168) has address parameters but no indexed parameters
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#unindexed-event-address-parameters
+
+Detector: unused-state
+TroyaIndexSwapper.KIND_V4 (src/TroyaIndexSwapper.sol#87) is never used in TroyaIndexSwapper (src/TroyaIndexSwapper.sol#82-251)
+TroyaIndexSwapper.MIN_SQRT_PRICE (src/TroyaIndexSwapper.sol#92) is never used in TroyaIndexSwapper (src/TroyaIndexSwapper.sol#82-251)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#unused-state-variable
+
+Detector: cache-array-length
+Loop condition i < _venues.length (src/TroyaIndex.sol#461) should use cached array length instead of referencing `length` member of the storage array.
+ Loop condition i < _assets.length (src/TroyaIndex.sol#629) should use cached array length instead of referencing `length` member of the storage array.
+ Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#cache-array-length
+. analyzed (141 contracts with 102 detectors), 96 result(s) found
+'forge clean' running (wd: /private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts)
+'forge config --json' running
+'forge build --build-info --deny never' running (wd: /private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts)

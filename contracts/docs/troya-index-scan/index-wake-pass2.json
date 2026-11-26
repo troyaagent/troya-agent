@@ -1,0 +1,501 @@
+[
+  {
+    "detector_name": "reentrancy",
+    "impact": "high",
+    "confidence": "medium",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/reentrancy",
+    "detection": {
+      "message": "Possible reentrancy in `TroyaIndex.deposit(uint256,address,uint256[])`",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndex.sol",
+        "relative_path": "src/TroyaIndex.sol",
+        "contract": "TroyaIndex",
+        "source_start_line": 314,
+        "source_unit_name": "src/TroyaIndex.sol",
+        "start_offset": 15980,
+        "end_offset": 15995,
+        "start_line": 317,
+        "start_col": 26,
+        "end_line": 317,
+        "end_col": 41,
+        "source": "        emit Deposited(msg.sender, receiver, shares, amounts, fee);\n        uint256 spare = msg.value - amounts[0] - fee;\n        if (spare != 0) {\n            (bool ok,) = msg.sender.call{value: spare}(\"\");\n            if (!ok) revert TransferFailed();\n        }\n    }"
+      },
+      "subdetections": [
+        {
+          "message": "Exploitable from `TroyaIndexZap.zap(uint256,address,uint256[])`",
+          "location": {
+            "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexZap.sol",
+            "relative_path": "src/TroyaIndexZap.sol",
+            "contract": "TroyaIndexZap",
+            "source_start_line": 71,
+            "source_unit_name": "src/TroyaIndexZap.sol",
+            "start_offset": 3831,
+            "end_offset": 3906,
+            "start_line": 74,
+            "start_col": 9,
+            "end_line": 74,
+            "end_col": 84,
+            "source": "            t.forceApprove(address(vault), need[i]);\n        }\n        // the vault takes its ETH part + fee from this value and refunds the rest here\n        vault.deposit{value: address(this).balance - start}(shares, receiver, need);\n        uint256 left = address(this).balance - start;\n        ethSpent = msg.value - left;\n        for (uint256 i = 1; i < list.length; ++i) {"
+          }
+        }
+      ]
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "reentrancy",
+    "impact": "high",
+    "confidence": "medium",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/reentrancy",
+    "detection": {
+      "message": "Possible reentrancy in `TroyaIndexSwapper._send(address,uint256)`",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexSwapper.sol",
+        "relative_path": "src/TroyaIndexSwapper.sol",
+        "contract": "TroyaIndexSwapper",
+        "source_start_line": 146,
+        "source_unit_name": "src/TroyaIndexSwapper.sol",
+        "start_offset": 7072,
+        "end_offset": 7087,
+        "start_line": 149,
+        "start_col": 26,
+        "end_line": 149,
+        "end_col": 41,
+        "source": "    function _send(address asset, uint256 amount) private {\n        if (amount == 0) return;\n        if (asset == address(0)) {\n            (bool ok,) = msg.sender.call{value: amount}(\"\");\n            if (!ok) revert TransferFailed();\n        } else {\n            IERC20(asset).safeTransfer(msg.sender, amount);"
+      },
+      "subdetections": [
+        {
+          "message": "Exploitable from `TroyaIndexZap.zap(uint256,address,uint256[])`",
+          "location": {
+            "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexZap.sol",
+            "relative_path": "src/TroyaIndexZap.sol",
+            "contract": "TroyaIndexZap",
+            "source_start_line": 64,
+            "source_unit_name": "src/TroyaIndexZap.sol",
+            "start_offset": 3444,
+            "end_offset": 3524,
+            "start_line": 67,
+            "start_col": 17,
+            "end_line": 67,
+            "end_col": 97,
+            "source": "                // buy exactly what is missing with at most the ETH left in this call; the swapper returns the change\n                uint256 budget = address(this).balance - start;\n                uint160 limit = zeroForOne ? MIN_SQRT_PRICE + 1 : _upLimit(vault.spotSqrtPrice(venueIds[i]));\n                swapper.swap{value: budget}(v, zeroForOne, false, need[i] - have, budget, limit);\n                have = t.balanceOf(address(this));\n                if (have < need[i]) revert ReceivedLess(list[i], need[i], have);\n            }"
+          }
+        },
+        {
+          "message": "Exploitable from `TroyaIndexSwapper.swap(struct Venue,bool,bool,uint256,uint256,uint160)`",
+          "location": {
+            "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexSwapper.sol",
+            "relative_path": "src/TroyaIndexSwapper.sol",
+            "contract": "TroyaIndexSwapper",
+            "source_start_line": 135,
+            "source_unit_name": "src/TroyaIndexSwapper.sol",
+            "start_offset": 6679,
+            "end_offset": 6704,
+            "start_line": 138,
+            "start_col": 9,
+            "end_line": 138,
+            "end_col": 34,
+            "source": "        uint256 inLeft = _bal(assetIn);\n        spent = inBefore - inLeft;\n        received = _bal(assetOut);\n        _send(assetOut, received);\n        _send(assetIn, inLeft);\n    }"
+          }
+        },
+        {
+          "message": "Exploitable from `TroyaIndex.rebalance(uint256,bool,uint256,uint256)`",
+          "location": {
+            "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndex.sol",
+            "relative_path": "src/TroyaIndex.sol",
+            "contract": "TroyaIndex",
+            "source_start_line": 411,
+            "source_unit_name": "src/TroyaIndex.sol",
+            "start_offset": 20878,
+            "end_offset": 20977,
+            "start_line": 414,
+            "start_col": 9,
+            "end_line": 414,
+            "end_col": 108,
+            "source": "        if (swapper.spot(v) == 0) revert SpotUnreadable();\n\n        lastRebalanceAt = uint64(block.timestamp);\n        (spent, received) = _trade(v, zeroForOne, amountIn, _priceLimit(median, zeroForOne, v.slippageBps));\n        uint256 floor = (_valueAt(median, zeroForOne, spent) * (10_000 - v.slippageBps)) / 10_000;\n        if (floor < minOut) floor = minOut;\n        if (received < floor || received == 0) revert OutputTooLow(received, floor);"
+          }
+        }
+      ]
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "reentrancy",
+    "impact": "high",
+    "confidence": "low",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/reentrancy",
+    "detection": {
+      "message": "Possible reentrancy in `TroyaIndexSwapper._swap(struct Venue,bool,bool,uint256,uint256,uint160)`",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexSwapper.sol",
+        "relative_path": "src/TroyaIndexSwapper.sol",
+        "contract": "TroyaIndexSwapper",
+        "source_start_line": 163,
+        "source_unit_name": "src/TroyaIndexSwapper.sol",
+        "start_offset": 8000,
+        "end_offset": 8027,
+        "start_line": 166,
+        "start_col": 13,
+        "end_line": 166,
+        "end_col": 40,
+        "source": "            _v3TokenIn = zeroForOne ? v.token0 : v.token1;\n            _maxIn = maxIn;\n            // v3: positive = exact input, negative = exact output\n            IUniswapV3Pool(v.pool).swap(address(this), zeroForOne, exactIn ? spec : -spec, limit, \"\");\n            _v3Pool = address(0);\n            _v3TokenIn = address(0);\n        } else {"
+      },
+      "subdetections": [
+        {
+          "message": "Exploitable from `TroyaIndexZap.zap(uint256,address,uint256[])`",
+          "location": {
+            "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexZap.sol",
+            "relative_path": "src/TroyaIndexZap.sol",
+            "contract": "TroyaIndexZap",
+            "source_start_line": 64,
+            "source_unit_name": "src/TroyaIndexZap.sol",
+            "start_offset": 3444,
+            "end_offset": 3524,
+            "start_line": 67,
+            "start_col": 17,
+            "end_line": 67,
+            "end_col": 97,
+            "source": "                // buy exactly what is missing with at most the ETH left in this call; the swapper returns the change\n                uint256 budget = address(this).balance - start;\n                uint160 limit = zeroForOne ? MIN_SQRT_PRICE + 1 : _upLimit(vault.spotSqrtPrice(venueIds[i]));\n                swapper.swap{value: budget}(v, zeroForOne, false, need[i] - have, budget, limit);\n                have = t.balanceOf(address(this));\n                if (have < need[i]) revert ReceivedLess(list[i], need[i], have);\n            }"
+          }
+        },
+        {
+          "message": "Exploitable from `TroyaIndexSwapper.swap(struct Venue,bool,bool,uint256,uint256,uint160)`",
+          "location": {
+            "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexSwapper.sol",
+            "relative_path": "src/TroyaIndexSwapper.sol",
+            "contract": "TroyaIndexSwapper",
+            "source_start_line": 131,
+            "source_unit_name": "src/TroyaIndexSwapper.sol",
+            "start_offset": 6508,
+            "end_offset": 6559,
+            "start_line": 134,
+            "start_col": 9,
+            "end_line": 134,
+            "end_col": 60,
+            "source": "    {\n        (address assetIn, address assetOut) = zeroForOne ? (v.asset0, v.asset1) : (v.asset1, v.asset0);\n        uint256 inBefore = _bal(assetIn);\n        _swap(v, zeroForOne, exactIn, amount, maxIn, limit);\n        uint256 inLeft = _bal(assetIn);\n        spent = inBefore - inLeft;\n        received = _bal(assetOut);"
+          }
+        },
+        {
+          "message": "Exploitable from `TroyaIndex.rebalance(uint256,bool,uint256,uint256)`",
+          "location": {
+            "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndex.sol",
+            "relative_path": "src/TroyaIndex.sol",
+            "contract": "TroyaIndex",
+            "source_start_line": 411,
+            "source_unit_name": "src/TroyaIndex.sol",
+            "start_offset": 20878,
+            "end_offset": 20977,
+            "start_line": 414,
+            "start_col": 9,
+            "end_line": 414,
+            "end_col": 108,
+            "source": "        if (swapper.spot(v) == 0) revert SpotUnreadable();\n\n        lastRebalanceAt = uint64(block.timestamp);\n        (spent, received) = _trade(v, zeroForOne, amountIn, _priceLimit(median, zeroForOne, v.slippageBps));\n        uint256 floor = (_valueAt(median, zeroForOne, spent) * (10_000 - v.slippageBps)) / 10_000;\n        if (floor < minOut) floor = minOut;\n        if (received < floor || received == 0) revert OutputTooLow(received, floor);"
+          }
+        }
+      ]
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "unchecked-return-value",
+    "impact": "warning",
+    "confidence": "high",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/unchecked-return-value",
+    "detection": {
+      "message": "Unchecked return value",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndex.sol",
+        "relative_path": "src/TroyaIndex.sol",
+        "contract": "TroyaIndex",
+        "source_start_line": 405,
+        "source_unit_name": "src/TroyaIndex.sol",
+        "start_offset": 20606,
+        "end_offset": 20626,
+        "start_line": 408,
+        "start_col": 9,
+        "end_line": 408,
+        "end_col": 29,
+        "source": "        if (lastRebalanceAt != 0 && block.timestamp < next) revert CooldownActive(next);\n        Venue memory v = _checkMove(venueId, zeroForOne, amountIn);\n        _accrue();\n        _observe(venueId, v);\n        (uint160 median, uint256 n) = medianSqrtPrice(venueId);\n        if (n < MIN_OBSERVATIONS) revert NotEnoughObservations(n);\n        if (swapper.spot(v) == 0) revert SpotUnreadable();"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "unchecked-return-value",
+    "impact": "warning",
+    "confidence": "high",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/unchecked-return-value",
+    "detection": {
+      "message": "Unchecked return value",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndex.sol",
+        "relative_path": "src/TroyaIndex.sol",
+        "contract": "TroyaIndex",
+        "source_start_line": 431,
+        "source_unit_name": "src/TroyaIndex.sol",
+        "start_offset": 22106,
+        "end_offset": 22180,
+        "start_line": 434,
+        "start_col": 9,
+        "end_line": 434,
+        "end_col": 83,
+        "source": "        uint256 value = 0;\n        if (assetIn == ETH) value = amountIn;\n        else IERC20(assetIn).safeTransfer(address(swapper), amountIn);\n        swapper.swap{value: value}(v, zeroForOne, true, amountIn, amountIn, limit);\n        uint256 inAfter = _balance(assetIn);\n        uint256 outAfter = _balance(assetOut);\n        spent = inBefore > inAfter ? inBefore - inAfter : 0;"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "unchecked-return-value",
+    "impact": "warning",
+    "confidence": "high",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/unchecked-return-value",
+    "detection": {
+      "message": "Unchecked return value",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndex.sol",
+        "relative_path": "src/TroyaIndex.sol",
+        "contract": "TroyaIndex",
+        "source_start_line": 459,
+        "source_unit_name": "src/TroyaIndex.sol",
+        "start_offset": 23652,
+        "end_offset": 23676,
+        "start_line": 462,
+        "start_col": 36,
+        "end_line": 462,
+        "end_col": 60,
+        "source": "    /// @notice poke() for every active venue.\n    function pokeAll() external nonReentrant {\n        for (uint256 i; i < _venues.length; ++i) {\n            if (_venues[i].active) _observe(i, _venueAt(i));\n        }\n    }"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "unchecked-return-value",
+    "impact": "warning",
+    "confidence": "high",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/unchecked-return-value",
+    "detection": {
+      "message": "Unchecked return value",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndex.sol",
+        "relative_path": "src/TroyaIndex.sol",
+        "contract": "TroyaIndex",
+        "source_start_line": 767,
+        "source_unit_name": "src/TroyaIndex.sol",
+        "start_offset": 37696,
+        "end_offset": 37717,
+        "start_line": 770,
+        "start_col": 18,
+        "end_line": 770,
+        "end_col": 39,
+        "source": "            VenueInput memory p = abi.decode(data, (VenueInput));\n            // at propose time the sides may be assets an earlier proposal is still adding; execute checks they are listed\n            if (apply_) _addVenue(p);\n            else _buildVenue(p, false);\n        } else if (op == Op.MgmtFee) {\n            (address r, uint16 bps) = abi.decode(data, (address, uint16));\n            _checkMgmtFee(r, bps);"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "unchecked-return-value",
+    "impact": "warning",
+    "confidence": "high",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/unchecked-return-value",
+    "detection": {
+      "message": "Unchecked return value",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexSwapper.sol",
+        "relative_path": "src/TroyaIndexSwapper.sol",
+        "contract": "TroyaIndexSwapper",
+        "source_start_line": 163,
+        "source_unit_name": "src/TroyaIndexSwapper.sol",
+        "start_offset": 8000,
+        "end_offset": 8089,
+        "start_line": 166,
+        "start_col": 13,
+        "end_line": 166,
+        "end_col": 102,
+        "source": "            _v3TokenIn = zeroForOne ? v.token0 : v.token1;\n            _maxIn = maxIn;\n            // v3: positive = exact input, negative = exact output\n            IUniswapV3Pool(v.pool).swap(address(this), zeroForOne, exactIn ? spec : -spec, limit, \"\");\n            _v3Pool = address(0);\n            _v3TokenIn = address(0);\n        } else {"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "unchecked-return-value",
+    "impact": "warning",
+    "confidence": "high",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/unchecked-return-value",
+    "detection": {
+      "message": "Unchecked return value",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexSwapper.sol",
+        "relative_path": "src/TroyaIndexSwapper.sol",
+        "contract": "TroyaIndexSwapper",
+        "source_start_line": 170,
+        "source_unit_name": "src/TroyaIndexSwapper.sol",
+        "start_offset": 8400,
+        "end_offset": 8485,
+        "start_line": 173,
+        "start_col": 13,
+        "end_line": 173,
+        "end_col": 98,
+        "source": "            _maxIn = maxIn == 0 ? 1 : maxIn;\n            V4PoolKey memory key = V4PoolKey(v.token0, v.token1, v.fee, v.tickSpacing, v.hooks);\n            // v4: negative = exact input, positive = exact output\n            poolManager.unlock(abi.encode(key, zeroForOne, exactIn ? -spec : spec, limit, maxIn));\n        }\n        _maxIn = 0;\n        uint256 w = IERC20(address(weth)).balanceOf(address(this));"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "unchecked-return-value",
+    "impact": "warning",
+    "confidence": "high",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/unchecked-return-value",
+    "detection": {
+      "message": "Unchecked return value",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexZap.sol",
+        "relative_path": "src/TroyaIndexZap.sol",
+        "contract": "TroyaIndexZap",
+        "source_start_line": 64,
+        "source_unit_name": "src/TroyaIndexZap.sol",
+        "start_offset": 3444,
+        "end_offset": 3524,
+        "start_line": 67,
+        "start_col": 17,
+        "end_line": 67,
+        "end_col": 97,
+        "source": "                // buy exactly what is missing with at most the ETH left in this call; the swapper returns the change\n                uint256 budget = address(this).balance - start;\n                uint160 limit = zeroForOne ? MIN_SQRT_PRICE + 1 : _upLimit(vault.spotSqrtPrice(venueIds[i]));\n                swapper.swap{value: budget}(v, zeroForOne, false, need[i] - have, budget, limit);\n                have = t.balanceOf(address(this));\n                if (have < need[i]) revert ReceivedLess(list[i], need[i], have);\n            }"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "unchecked-return-value",
+    "impact": "warning",
+    "confidence": "high",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/unchecked-return-value",
+    "detection": {
+      "message": "Unchecked return value",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexZap.sol",
+        "relative_path": "src/TroyaIndexZap.sol",
+        "contract": "TroyaIndexZap",
+        "source_start_line": 71,
+        "source_unit_name": "src/TroyaIndexZap.sol",
+        "start_offset": 3831,
+        "end_offset": 3906,
+        "start_line": 74,
+        "start_col": 9,
+        "end_line": 74,
+        "end_col": 84,
+        "source": "            t.forceApprove(address(vault), need[i]);\n        }\n        // the vault takes its ETH part + fee from this value and refunds the rest here\n        vault.deposit{value: address(this).balance - start}(shares, receiver, need);\n        uint256 left = address(this).balance - start;\n        ethSpent = msg.value - left;\n        for (uint256 i = 1; i < list.length; ++i) {"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "missing-return",
+    "impact": "warning",
+    "confidence": "medium",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/missing-return",
+    "detection": {
+      "message": "Not all execution paths have assigned return values",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndex.sol",
+        "relative_path": "src/TroyaIndex.sol",
+        "contract": "TroyaIndex",
+        "source_start_line": 577,
+        "source_unit_name": "src/TroyaIndex.sol",
+        "start_offset": 28611,
+        "end_offset": 29388,
+        "start_line": 580,
+        "start_col": 5,
+        "end_line": 598,
+        "end_col": 6,
+        "source": "\n    /// @notice The median sqrtPriceX96 of venue `venueId`'s hourly reads of the last 24 hours, and how many there are.\n    /// (For an even count, the mean of the middle two.)\n    function medianSqrtPrice(uint256 venueId) public view returns (uint160 median, uint256 n) {\n        uint256 nowHour = block.timestamp / 1 hours;\n        uint256[] memory x = new uint256[](OBSERVATIONS);\n        for (uint256 i; i < OBSERVATIONS; ++i) {"
+      }
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "balance-relied-on",
+    "impact": "warning",
+    "confidence": "low",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/balance-relied-on",
+    "detection": {
+      "message": "Use of address.balance",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexZap.sol",
+        "relative_path": "src/TroyaIndexZap.sol",
+        "contract": "TroyaIndexZap",
+        "source_start_line": 46,
+        "source_unit_name": "src/TroyaIndexZap.sol",
+        "start_offset": 2330,
+        "end_offset": 2351,
+        "start_line": 49,
+        "start_col": 25,
+        "end_line": 49,
+        "end_col": 46,
+        "source": "        nonReentrant\n        returns (uint256 ethSpent)\n    {\n        uint256 start = address(this).balance - msg.value;\n        address[] memory list = vault.assets();\n        if (venueIds.length != list.length) revert WrongLength();\n        (uint256[] memory need,) = vault.previewDeposit(shares);"
+      },
+      "subdetections": [
+        {
+          "message": "In strict comparison here",
+          "location": {
+            "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexZap.sol",
+            "relative_path": "src/TroyaIndexZap.sol",
+            "contract": "TroyaIndexZap",
+            "source_start_line": 80,
+            "source_unit_name": "src/TroyaIndexZap.sol",
+            "start_offset": 4285,
+            "end_offset": 4294,
+            "start_line": 83,
+            "start_col": 13,
+            "end_line": 83,
+            "end_col": 22,
+            "source": "            uint256 b = t.balanceOf(address(this));\n            if (b != 0) t.safeTransfer(msg.sender, b);\n        }\n        if (left != 0) {\n            (bool ok,) = msg.sender.call{value: left}(\"\");\n            if (!ok) revert TransferFailed();\n        }"
+          }
+        }
+      ]
+    },
+    "suppressed": false
+  },
+  {
+    "detector_name": "balance-relied-on",
+    "impact": "warning",
+    "confidence": "low",
+    "uri": "https://ackee.xyz/wake/docs/4.22.2/static-analysis/detectors/balance-relied-on",
+    "detection": {
+      "message": "Use of address.balance",
+      "location": {
+        "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexZap.sol",
+        "relative_path": "src/TroyaIndexZap.sol",
+        "contract": "TroyaIndexZap",
+        "source_start_line": 72,
+        "source_unit_name": "src/TroyaIndexZap.sol",
+        "start_offset": 3931,
+        "end_offset": 3952,
+        "start_line": 75,
+        "start_col": 24,
+        "end_line": 75,
+        "end_col": 45,
+        "source": "        }\n        // the vault takes its ETH part + fee from this value and refunds the rest here\n        vault.deposit{value: address(this).balance - start}(shares, receiver, need);\n        uint256 left = address(this).balance - start;\n        ethSpent = msg.value - left;\n        for (uint256 i = 1; i < list.length; ++i) {\n            IERC20 t = IERC20(list[i]);"
+      },
+      "subdetections": [
+        {
+          "message": "In strict comparison here",
+          "location": {
+            "path": "/private/tmp/claude-501/-Users-danang/35cdd170-1808-42dc-8195-249e339a797e/scratchpad/scan-contracts/src/TroyaIndexZap.sol",
+            "relative_path": "src/TroyaIndexZap.sol",
+            "contract": "TroyaIndexZap",
+            "source_start_line": 80,
+            "source_unit_name": "src/TroyaIndexZap.sol",
+            "start_offset": 4285,
+            "end_offset": 4294,
+            "start_line": 83,
+            "start_col": 13,
+            "end_line": 83,
+            "end_col": 22,
+            "source": "            uint256 b = t.balanceOf(address(this));\n            if (b != 0) t.safeTransfer(msg.sender, b);\n        }\n        if (left != 0) {\n            (bool ok,) = msg.sender.call{value: left}(\"\");\n            if (!ok) revert TransferFailed();\n        }"
+          }
+        }
+      ]
+    },
+    "suppressed": false
+  }
+]

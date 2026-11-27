@@ -216,6 +216,13 @@ export async function botCommand(cmd, arg, m) {
     return l.length ? `<b>You follow ${l.length} coin${l.length === 1 ? "" : "s"}</b>\n${l.map((a) => `<code>${a}</code> · <a href="${SITE}/check/${a}">check</a>`).join("\n")}\n\n/unfollow 0x… to stop one.` : "You don't follow any coin yet. /follow 0x… (or /follow $TICKER) and Troya tells you here when its fee recipient, code, owner or liquidity changes, with the new Troya Check.";
   }
   let a = (String(arg || "").match(/0x[0-9a-fA-F]{40}/) || [])[0];
+  // a bare /unfollow: the only followed coin is stopped at once; with several, each one's command ready to copy
+  if (!a && cmd === "unfollow" && !String(arg || "").trim()) {
+    const l = mine();
+    if (!l.length) return "You don't follow any coin. /follow 0x… to start.";
+    if (l.length === 1) a = l[0];
+    else return `Which one? Tap a line to copy it, then send it:\n${l.map((x) => `<code>/unfollow ${x}</code>`).join("\n")}`;
+  }
   if (!a) {
     const tk = (/\$?([A-Za-z][A-Za-z0-9]{0,15})\b/.exec(String(arg || "").trim()) || [])[1];
     if (!tk) return `Usage: /${cmd} 0x… (a coin on Robinhood Chain), or /${cmd} $TICKER`;

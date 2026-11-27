@@ -46,6 +46,8 @@ await t("unknown coin needs a check first", async () => assert.match(await botCo
 await t("in a group: points to the private chat", async () => assert.match(await botCommand("follow", A, { chat: { id: -100, type: "supergroup" } }), /private chat/));
 await t("usage", async () => assert.match(await botCommand("follow", "", dm), /^Usage/));
 await t("unfollow", async () => { assert.match(await botCommand("unfollow", A, dm), /^Stopped/); assert.match(await botCommand("following", "", dm), /don't follow any coin/); });
+await t("bare /unfollow with one coin stops it", async () => { await botCommand("follow", A, dm); assert.match(await botCommand("unfollow", "", dm), /^Stopped/); });
+await t("bare /unfollow with none", async () => assert.match(await botCommand("unfollow", "", dm), /don't follow any coin/));
 await t("unfollow twice", async () => assert.match(await botCommand("unfollow", A, dm), /were not following/));
 
 console.log(`${pass} passed, ${fail} failed`);

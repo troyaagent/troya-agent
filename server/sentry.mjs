@@ -304,20 +304,21 @@ export function formatPost(r) {
 }
 const quickAssay = async (token) => { try { const m = await import("./assay.mjs"); return m.assayLines(await m.assay(token, { deep: false, waitMs: 12000 })); } catch { return []; } };
 const TRADE = process.env.TG_TRADE === "1";
-// the data before any buy (community request, lynx_evo 27 Nov 2026: "Check in Troya" opened Swap first): Troya Check (score,
-// the project's X and contract checked, Gate, dev side, holders) and the coin page (chart, market cap, Cluster map)
+// the data before any buy (community request, lynx_evo 27 Nov 2026: "Check in Troya" opened Swap first): Check in Troya opens
+// the coin page (the project's X beside the contract, market cap, chart, Gate verdict, Cluster map), then the Troya Check score
 const buttons = (a) => ({ inline_keyboard: [
   ...(TRADE ? [[{ text: "Trade in Telegram", url: `https://t.me/${process.env.TG_BOT_USERNAME || "TrojanTroya_bot"}?start=t_${a}` }]] : []),
-  [{ text: "Troya Check", url: `${SITE}/check/${a}` }, { text: "Chart & holders", url: `${SITE}/agent#/token/${a}` }],
-  [{ text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${a}` }, { text: "Pons", url: PONS + a.toLowerCase() }],
-  [{ text: "DexScreener", url: `https://dexscreener.com/robinhood/${a}` }],
+  [{ text: "Check in Troya", url: `${SITE}/agent#/token/${a}` }],
+  [{ text: "Troya Check score", url: `${SITE}/check/${a}` }, { text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${a}` }],
+  [{ text: "Pons", url: PONS + a.toLowerCase() }, { text: "DexScreener", url: `https://dexscreener.com/robinhood/${a}` }],
   [{ text: "Every call graded: The Record", url: `${SITE}/record` }],
 ] });
 
 const poolButtons = (a) => ({ inline_keyboard: [
   ...(TRADE ? [[{ text: "Trade in Telegram", url: `https://t.me/${process.env.TG_BOT_USERNAME || "TrojanTroya_bot"}?start=t_${a}` }]] : []),
-  [{ text: "Troya Check", url: `${SITE}/check/${a}` }, { text: "Chart & holders", url: `${SITE}/agent#/token/${a}` }],
-  [{ text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${a}` }, { text: "DexScreener", url: `https://dexscreener.com/robinhood/${a}` }],
+  [{ text: "Check in Troya", url: `${SITE}/agent#/token/${a}` }],
+  [{ text: "Troya Check score", url: `${SITE}/check/${a}` }, { text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${a}` }],
+  [{ text: "DexScreener", url: `https://dexscreener.com/robinhood/${a}` }],
   [{ text: "Every call graded: The Record", url: `${SITE}/record` }],
 ] });
 

@@ -32,7 +32,8 @@
       <tr><th>Troya passed it</th><td class="rec-miss">${c(t.passed.wentBad)} <small>missed</small></td><td class="rec-win">${c(t.passed.stillTradable)} <small>right</small></td></tr>
       <tr><th>Troya blocked it</th><td class="rec-win">${c(t.blocked.wentBad)} <small>right</small></td><td class="rec-miss">${c(t.blocked.stillTradable)} <small>false alarm</small></td></tr>
       </tbody></table>
-      <small>Base rate: ${share(t.baseRate)} of all graded coins went bad · passed and went bad: ${share(t.passedWentBad)} · blocked but still tradable: ${share(t.blockedStillTradable)}</small></div>`;
+      <small>Base rate: ${share(t.baseRate)} of all graded coins went bad · passed and went bad: ${share(t.passedWentBadShare)} · blocked but still tradable: ${share(t.blockedStillTradableShare)}</small>
+      <small>Second column, outside the rule: down 50% or more by then: passed ${c(t.passed.down50 ?? 0)} of ${c(t.passed.graded)} (${share(t.passedDown50Share)}) · blocked ${c(t.blocked.down50 ?? 0)} of ${c(t.blocked.graded)} (${share(t.blockedDown50Share)})</small></div>`;
   }
   function csv(list) {
     const head = ["token", "symbol", "list", "checked_utc", "price_at_check", "change_1h", "change_24h", "result_24h", "change_7d", "went_bad_7d", "sellable_7d", "change_30d", "went_bad_30d", "sellable_30d"];

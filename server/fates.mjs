@@ -133,14 +133,26 @@ async function laterRead(c, now) {
 }
 // went bad by a horizon: true, false, or null while it is not graded at that horizon yet
 const badAt = (c, h) => (h === "24h" ? (c.status === "graded" ? c.result === "zero" || c.result === "not-sellable" : null) : (c[h] ? !!c[h].bad : null));
+// the change at a horizon, for the second column (down 50% or more); a coin with no price left or not sellable counts as -100%
+// (change24 is defined further down: these run only after the module has loaded)
+const changeAt = (c, h) => (h === "24h" ? (c.status === "graded" ? change24(c) : null) : c[h] ? (c[h].bad && c[h].change == null ? -100 : c[h].change) : null);
 function tableOf(priced, h) {
-  const cell = (cohort) => { const l = priced.filter((c) => c.cohort === cohort).map((c) => badAt(c, h)).filter((x) => x != null); return { graded: l.length, wentBad: l.filter(Boolean).length, stillTradable: l.filter((x) => !x).length }; };
+  const cell = (cohort) => {
+    const list = priced.filter((c) => c.cohort === cohort && badAt(c, h) != null);
+    const bad = list.filter((c) => badAt(c, h));
+    // a second column that leaves the main rule alone (Xivor, 27 Nov 2026): down 50% or more, went-bad coins included
+    const down50 = list.filter((c) => { const x = changeAt(c, h); return x != null && x <= -50; }).length;
+    return { graded: list.length, wentBad: bad.length, stillTradable: list.length - bad.length, down50 };
+  };
   const passed = cell("passed"), blocked = cell("blocked"), n = passed.graded + blocked.graded;
+  // shares are 0 to 1 and named so; counts are in passed and blocked
   return { passed, blocked, graded: n,
     // the base rate: how many of all graded coins went bad (when most do, "block everything" already looks accurate)
     baseRate: n ? (passed.wentBad + blocked.wentBad) / n : null,
-    passedWentBad: passed.graded ? passed.wentBad / passed.graded : null,     // missed: Troya passed it, it went bad
-    blockedStillTradable: blocked.graded ? blocked.stillTradable / blocked.graded : null };   // false alarms
+    passedWentBadShare: passed.graded ? passed.wentBad / passed.graded : null,               // missed: Troya passed it, it went bad
+    blockedStillTradableShare: blocked.graded ? blocked.stillTradable / blocked.graded : null,  // false alarms
+    passedDown50Share: passed.graded ? passed.down50 / passed.graded : null,
+    blockedDown50Share: blocked.graded ? blocked.down50 / blocked.graded : null };
 }
 function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 // a not-sellable coin and a coin with no price left count as -100% in the median, the same for both lists

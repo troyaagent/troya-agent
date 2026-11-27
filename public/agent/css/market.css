@@ -197,7 +197,12 @@ html[data-theme="light"] .mk-buy { color: var(--blue-3); border-color: rgba(10, 
   .tk2.tk2 .tk-id h1 { font-size: 0; gap: 6px; flex-wrap: nowrap; }
   .tk2.tk2 .tk-id h1 .sym { font-size: 19px; color: var(--fg); font-weight: 700; letter-spacing: -0.02em; }
   .tk2.tk2 .tk-id h1 .badge-s { display: none; }
-  .tk2.tk2 .tk2-strip, .tk2.tk2 .tk2-soc, .tk2.tk2 .tk2-nosoc, .tk2.tk2 .tk-px-at { display: none !important; }
+  .tk2.tk2 .tk2-strip, .tk2.tk2 .tk2-nosoc, .tk2.tk2 .tk-px-at { display: none !important; }
+  /* the coin's X and other accounts stay right under the address on a phone, small, so the contract can be matched with
+     what the project posts (community request, lynx_evo 27 Nov 2026: they were hidden further down) */
+  .tk2.tk2 .tk2-soc { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .tk2.tk2 .tk2-soc-a { height: 28px; padding: 0 10px 0 9px; gap: 6px; font-size: 12px; }
+  .tk2.tk2 .tk2-soc-a svg { width: 12px; height: 12px; }
   .tk2.tk2 .tk-addr { margin-top: 2px; }
   .tk2.tk2 .tk-ca-full { display: none; }
   .tk2.tk2 .tk-ca-short { display: inline; font-size: 11px; word-break: normal; }

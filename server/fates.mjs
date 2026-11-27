@@ -9,7 +9,13 @@
 // or the simulation failed) has no honest 24 h price: it is filed as "not sellable", counted as a full loss in the totals
 // and shown apart from coins that simply fell.
 // Nothing here is a forecast or advice: it is what the price did after the check, whatever that turns out to say.
-//   GET /api/fates → { passed, blocked, rules, recent, since, updatedAt }
+// 7 and 30 days (Xivor's holder review, idea A, 27 Nov 2026): a coin graded at 24 h is read again at 7 and 30 days, with a
+// fresh Gate test sell, because a delayed honeypot passes the sell test at launch and switches on a blacklist or a 100% tax
+// later. "Went bad" (rule v1, written down before any 7 or 30 day grade existed): the price is 10% of the price at the check
+// or less, or there is no price any more, or the coin cannot be sold (the re-test sell, the simulation or the route fails;
+// for a coin blocked as not sellable at the check, until a re-test sells it). One 2x2 table per horizon: passed or blocked
+// at the check, against went bad or still tradable, with the base rate (how many of all graded coins went bad).
+//   GET /api/fates → { passed, blocked, tables, wentBadRule, rules, recent, since, updatedAt }
 import { getRobinhoodToken, getEthUsd } from "./market.mjs";
 
 const FILE = "fates.json";
@@ -19,6 +25,11 @@ const JOIN_MS = 20 * 60e3;      // a check noticed later than this has no fair "
 const KEEP = 3000;
 const ZERO = 0.1;               // "went to zero": the 24 h price is at most 10% of the price at the check
 const NOT_SELLABLE = new Set(["sell", "sim"]);
+const W7 = 7 * DAY, W30 = 30 * DAY;
+const RETEST_PER_TICK = 3;     // Gate re-tests per minute at most (each one simulates a buy and a sell on the chain)
+const RETEST_ETH = "0.01";
+export const WENT_BAD_RULE = { version: "v1", setAt: "2026-11-27", text: "A coin went bad by a horizon (24 hours, 7 days, 30 days) when, at that time, its price is 10% of the price at the Sentry check or less, or it has no price any more, or it cannot be sold: the Gate's test sell, simulation or route fails at the re-test (7 and 30 days), or it was blocked as not sellable at the check and no re-test has sold it since. Anything else is still tradable. Written down on 27 Nov 2026, before the first 7 day grade." };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let store, busy = false, mem = null;
 
 const lc = (s) => String(s || "").toLowerCase();
@@ -84,6 +95,18 @@ async function tick() {
         c.result = c.notSellable ? "not-sellable" : !p || p <= c.p0 * ZERO ? "zero" : p > c.p0 ? "up" : "down";
       }
     }
+    // 7 and 30 days: a price read and a fresh Gate test sell, a few per minute, the oldest first
+    let budget = RETEST_PER_TICK;
+    const due = Object.values(d.coins).filter((c) => c.status === "graded").sort((a, b) => a.at - b.at);
+    for (const c of due) {
+      if (budget <= 0) break;
+      for (const [key, win] of [["d7", W7], ["d30", W30]]) {
+        if (budget <= 0 || c[key] || now - c.at < win) continue;
+        budget--;
+        const r = await laterRead(c, now).catch(() => null);
+        if (r) c[key] = r;
+      }
+    }
     await save();
   } catch (e) {
     console.warn("[fates]", e.message);
@@ -91,6 +114,34 @@ async function tick() {
 }
 
 const pct = (a, b) => (num(a) && num(b) ? (b / a - 1) * 100 : null);
+// one later read: the price now and a fresh Gate run; sellable is true (the test sell went through), false (the sell, the
+// simulation or the route failed) or null (the Gate could not say: no answer in time, or the sell was not tested)
+async function laterRead(c, now) {
+  const p = num(await priceNow(c.token).catch(() => null));
+  let sellable = null;
+  try {
+    const { gateCheck } = await import("./robinhood.mjs");
+    const g = await Promise.race([gateCheck({ tokenIn: "ETH", tokenOut: c.token, amountIn: RETEST_ETH, slippageBps: 100 }), sleep(45_000).then(() => null)]);
+    const ch = Array.isArray(g?.checks) ? g.checks : [];
+    if (ch.some((x) => ["sell", "sim", "route"].includes(x.key) && x.status === "fail")) sellable = false;
+    else if (ch.some((x) => x.key === "sell" && (x.status === "pass" || x.status === "warn"))) sellable = true;
+  } catch { /* the Gate could not run: sellable stays unknown */ }
+  const gone = !p || (num(c.p0) && p <= c.p0 * ZERO);
+  const stuck = sellable === false || (c.notSellable && sellable !== true);
+  return { at: now, p, change: num(c.p0) && p ? pct(c.p0, p) : gone ? -100 : null, sellable, bad: gone || stuck,
+    why: sellable === false ? "could not be sold at the re-test" : gone ? (p ? "price 10% of the check or less" : "no price any more") : stuck ? "blocked as not sellable, no re-test sold it" : null };
+}
+// went bad by a horizon: true, false, or null while it is not graded at that horizon yet
+const badAt = (c, h) => (h === "24h" ? (c.status === "graded" ? c.result === "zero" || c.result === "not-sellable" : null) : (c[h] ? !!c[h].bad : null));
+function tableOf(priced, h) {
+  const cell = (cohort) => { const l = priced.filter((c) => c.cohort === cohort).map((c) => badAt(c, h)).filter((x) => x != null); return { graded: l.length, wentBad: l.filter(Boolean).length, stillTradable: l.filter((x) => !x).length }; };
+  const passed = cell("passed"), blocked = cell("blocked"), n = passed.graded + blocked.graded;
+  return { passed, blocked, graded: n,
+    // the base rate: how many of all graded coins went bad (when most do, "block everything" already looks accurate)
+    baseRate: n ? (passed.wentBad + blocked.wentBad) / n : null,
+    passedWentBad: passed.graded ? passed.wentBad / passed.graded : null,     // missed: Troya passed it, it went bad
+    blockedStillTradable: blocked.graded ? blocked.stillTradable / blocked.graded : null };   // false alarms
+}
 function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 // a not-sellable coin and a coin with no price left count as -100% in the median, the same for both lists
 const change24 = (c) => (c.result === "not-sellable" || (c.result === "zero" && !num(c.p24h)) ? -100 : pct(c.p0, c.p24h));
@@ -108,7 +159,9 @@ function statsOf(list) {
 }
 function view(c) {
   return { token: c.token, symbol: c.symbol, at: c.at, cohort: c.cohort, status: c.status, result: c.result || null, reason: c.reason, notSellable: !!c.notSellable,
-    priceAtCheck: c.p0 ?? null, change1h: pct(c.p0, c.p1h), change24h: c.status === "graded" ? change24(c) : null };
+    priceAtCheck: c.p0 ?? null, change1h: pct(c.p0, c.p1h), change24h: c.status === "graded" ? change24(c) : null,
+    change7d: c.d7?.change ?? null, bad7d: c.d7 ? !!c.d7.bad : null, sellable7d: c.d7?.sellable ?? null, why7d: c.d7?.why ?? null,
+    change30d: c.d30?.change ?? null, bad30d: c.d30 ? !!c.d30.bad : null, sellable30d: c.d30?.sellable ?? null, why30d: c.d30?.why ?? null };
 }
 // what the Gate said about each of these contracts when Sentry checked its launch (V10, Xivor's name-clash idea, 26 Nov
 // 2026): { address: { v: "passed" | "notes" | "blocked", reason, at } }. "notes" is a pass with notes (Sentry's caution:
@@ -138,9 +191,11 @@ export async function fatesView({ limit = 100 } = {}) {
   return {
     passed: statsOf(priced.filter((c) => c.cohort === "passed")),
     blocked: statsOf(priced.filter((c) => c.cohort === "blocked")),
-    recent: all.slice(0, Math.min(500, Math.max(1, Number(limit) || 100))).map(view),
+    tables: { "24h": tableOf(priced, "24h"), "7d": tableOf(priced, "d7"), "30d": tableOf(priced, "d30") },
+    wentBadRule: WENT_BAD_RULE,
+    recent: all.slice(0, Math.min(3000, Math.max(1, Number(limit) || 100))).map(view),
     since: d.since, updatedAt: Date.now(),
-    rules: "Every launch Troya Sentry checks goes on one of two lists. Passed: the Gate let it through (passed, or passed with notes). Blocked: the Gate blocked it for a safety reason; a coin blocked only because its curve trades against USDG or a stock token is left out. Both are priced when Sentry checked them and again at 1 hour and 24 hours. Went to zero means the 24 h price is 10% of the price at the check or less, or there is no price any more. A blocked coin whose test sell or simulation failed is filed as not sellable and counted as a full loss, apart from coins that simply fell. Coins with no price at the check are listed but left out of the numbers. What the price did, not a forecast or advice.",
+    rules: "Every launch Troya Sentry checks goes on one of two lists. Passed: the Gate let it through (passed, or passed with notes). Blocked: the Gate blocked it for a safety reason; a coin blocked only because its curve trades against USDG or a stock token is left out. Both are priced when Sentry checked them and again at 1 hour and 24 hours. Went to zero means the 24 h price is 10% of the price at the check or less, or there is no price any more. A blocked coin whose test sell or simulation failed is filed as not sellable and counted as a full loss, apart from coins that simply fell. Coins with no price at the check are listed but left out of the numbers. Coins graded at 24 hours are read again at 7 and 30 days with a fresh Gate test sell, and each horizon has a 2x2 table: passed or blocked against went bad or still tradable, with the base rate. " + WENT_BAD_RULE.text + " What the price did, not a forecast or advice.",
   };
 }
 

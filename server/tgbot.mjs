@@ -59,6 +59,7 @@ Or just write it: "long ETH $20 at 3x" gets you a ticket to confirm.
 <b>Check</b>
 /gate 0x… · Troya Gate token check
 /check 0x… · Troya Check: one score from 0 to 100 with its three reasons and a shareable card
+/follow 0x… · a note here when the coin's fee recipient, code, owner or liquidity changes, with a fresh Troya Check (/following, /unfollow)
 /assay 0x… · The Assay: dev, holders, bundles, wash trades
 /ring 0x… · Ring Radar: a rigged Pons launch? (exempt wallets, bundles, decoys)
 /council 0x… · three reasons not to buy, then a bull/bear/risk debate on Troya's data
@@ -989,6 +990,13 @@ export async function handleBotMessage(m, tg, me) {
       if (parts.length < 2) { await say("Write it as: <code>/lesson what the bot got wrong =&gt; what is right</code>"); return; }
       const r = await ph.addBotLesson({ wrong: parts[0], right: parts.slice(1).join(" => "), source: "team, /lesson in the admin chat" }).catch((e) => ({ ok: false, why: e.message }));
       await say(r.ok ? `Saved. The bot follows it from its next answer (${r.active} correction${r.active === 1 ? "" : "s"} active).` : esc(r.why || "Could not save it."));
+      return;
+    }
+    // idea E: Check Watch follows (a note in this chat when a followed coin changes on chain, with its new Troya Check)
+    if (cmd === "follow" || cmd === "unfollow" || cmd === "following" || (cmd === "start" && /^follow_0x[0-9a-fA-F]{40}$/.test(arg.trim()))) {
+      const W = await import("./checkwatch.mjs");
+      const out = await W.botCommand(cmd === "start" ? "follow" : cmd, cmd === "start" ? arg.trim().slice(7) : arg, m).catch((e) => "Could not do that just now: " + esc(e.message));
+      await tg("sendMessage", { chat_id: chatId, text: out, parse_mode: "HTML", link_preview_options: { is_disabled: true } });
       return;
     }
     if (cmd === "reports" && m.chat.type === "private") {

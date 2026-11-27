@@ -25,6 +25,14 @@ function disputeLine(d) {
   return `<p class="cv-dispute"><b>Disputed${when ? ` since ${when}` : ""}.</b> The token team contested this score and the Troya team is reviewing it. The score stays as read from the chain until the review ends.${d.note ? ` Note: ${esc(d.note)}` : ""}</p>`;
 }
 
+// idea E: Check Watch, what changed on chain since Troya started reading this coin (each change → a fresh check)
+function watchCard(r) {
+  const w = r.watch || {};
+  const list = (w.changes || []).map((c) => `<li><span>${esc(c.text)}${c.after != null ? ` <b class="cv-dc-v">· checked again: ${c.before ?? "–"} → ${c.after}</b>` : ""}</span><span class="cv-dc-at">${ago(c.at)} ago</span></li>`).join("");
+  const none = `<p class="cv-basis">${w.since ? `No change since Troya started watching this coin ${ago(w.since)} ago.` : "Troya starts watching this coin now that it has been checked."} Read every few minutes: creator fee recipient and tax, graduation, code upgrades, owner, pool liquidity. Any change runs the check again.</p>`;
+  return `<div class="ck-card2 cv-watch"><h3>Watched for changes</h3>${list ? `<ul>${list}</ul>` : none}<p class="cv-follow"><a href="https://t.me/TrojanTroya_bot?start=follow_${esc(r.address)}" target="_blank" rel="noopener">Alert me on Telegram when this changes</a>${w.followers ? ` · ${w.followers} following` : ""}</p></div>`;
+}
+
 // idea D: the creator fee recipient and what that wallet has collected (the escrow counts per wallet, across its coins)
 function creatorFeeRow(c) {
   const who = c.recipient ? `<a href="https://robinhoodchain.blockscout.com/address/${esc(c.recipient)}" target="_blank" rel="noopener"><code>${short(c.recipient)}</code></a>${c.recipientIsDeployer ? " (the deployer)" : " (not the deployer)"}` : "–";
@@ -304,6 +312,7 @@ function showCoin(r) {
           <dl><dt>Market cap</dt><dd>${usd(k.mcapUsd)}</dd><dt>Since first check</dt><dd>${r.sinceFirstCheck?.change != null ? pct(r.sinceFirstCheck.change) : "–"}</dd><dt>Volume 24h</dt><dd>${usd(k.volume24hUsd)}</dd><dt>Liquidity</dt><dd>${usd(k.liquidityUsd)}</dd></dl></div>
         <div class="ck-card2"><table class="cv-facts">${facts.map(([a, b]) => `<tr><th>${a}</th><td>${b}</td></tr>`).join("")}</table>
           ${r.devRecord?.coins?.length ? `<ul class="cv-devcoins">${r.devRecord.coins.map((c) => `<li><a href="/check/${esc(c.address)}">${c.symbol ? `$${esc(c.symbol)}` : short(c.address)}</a><b class="sc sm" style="--c:${tone(c.tone)}">${c.score}</b></li>`).join("")}</ul>` : ""}</div>
+        ${r.kind === "coin" ? watchCard(r) : ""}
         ${r.creator?.deployerCoins?.others?.length ? `<div class="ck-card2"><h3>The deployer's other coins</h3><ul class="cv-devcoins">${r.creator.deployerCoins.others.map((c) => `<li><a href="/check/${esc(c.address)}">${short(c.address)}</a><span class="cv-dc-at">${ago(c.at)} ago</span><b class="cv-dc-v">${c.launchVerdict === "blocked" ? "Gate blocked at launch" : c.launchVerdict === "notes" ? "Gate passed with notes" : c.launchVerdict === "passed" ? "Gate passed at launch" : "not checked at launch"}</b></li>`).join("")}</ul></div>` : ""}
         <div class="ck-card2"><h3>Every check of this coin</h3>${hist ? `<ol class="cv-hist">${hist}</ol>` : '<p class="ck-empty">This is the first.</p>'}</div>
       </aside>

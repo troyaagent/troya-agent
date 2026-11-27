@@ -479,3 +479,8 @@ body.ck-coinpage .ck-page::before { height: 900px; }
 /* idea D: the deployer's other launches */
 .cv-dc-at { margin-left: auto; opacity: .65; font-size: 12px; }
 .cv-dc-v { font-weight: 500; font-size: 12px; opacity: .85; }
+
+/* idea E: Check Watch */
+.cv-watch li > span:first-child { min-width: 0; }
+.cv-follow { margin: 10px 0 0; font-size: 13px; }
+.cv-follow a { color: var(--accent); font-weight: 600; }

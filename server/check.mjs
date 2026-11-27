@@ -636,6 +636,8 @@ export async function troyaCheck(address, { via = "web", by = null, record = tru
 // Complete (27 Nov, second calibration): a coin's answer is shown only once the Gate and every core part that applies (Ring
 // Radar on a Pons coin, the dev side, the holders) has been read. Provisional scores jumped once the rest came in (DCTY and
 // Rockstar 52 → 35, MOW 74 → 85, CASHCAT 74 → 90). Stocks, majors and unknown addresses have no parts to wait for.
+/** drop the cached answer for a coin so the next check reads it from scratch (Check Watch, after an on-chain change) */
+export const forget = (address) => { memo.delete(lc(address)); };
 export const complete = (r) => !!r && (r.kind !== "coin" || (r.score != null && !(r.parts || []).some((p) => CORE_PARTS.includes(p.key) && p.status === "not read")));
 // what may stand once the time is up: the Gate was read and there is a score (shown with its "not read yet" cap)
 export const usable = (r) => !!r && (r.kind !== "coin" || (r.score != null && (r.parts || []).some((p) => p.key === "gate" && p.status === "scored")));
@@ -696,7 +698,7 @@ export async function checkForChat(address, { via = "telegram", by = null, hints
 
 async function saveRow(r, via, by) {
   const row = { address: r.address, symbol: r.symbol, kind: r.kind, score: r.score, label: r.label, tone: r.tone, reasons: (r.reasons || []).map((x) => ({ tone: x.tone, text: String(x.short || x.text).slice(0, 160) })),
-    at: Date.now(), via: ["x", "telegram", "web", "api"].includes(via) ? via : "web", by: by ? String(by).replace(/[^A-Za-z0-9_]/g, "").slice(0, 32) || null : null,
+    at: Date.now(), via: ["x", "telegram", "web", "api", "watch"].includes(via) ? via : "web", by: by ? String(by).replace(/[^A-Za-z0-9_]/g, "").slice(0, 32) || null : null,
     // for the dashboard: the price at the check (since-check), the two sub-scores, the Gate (Buy) and the dev (dev record)
     p0: r.priceUsd ?? null, gatePassed: !!r.gatePassed, sub: r.sub ? { exit: r.sub.exit, holders: r.sub.holders } : null, dev: r.coin?.dev ? lc(r.coin.dev) : null, launchpad: r.coin?.launchpad || null };
   await store.update(FILE, [], (rows) => {
@@ -815,7 +817,9 @@ export async function enrich(r, deps = {}) {
   // idea D: who takes the creator fee and how much that wallet collected, and the deployer's other launches (not scored)
   const creator = deps.market ? null : await Promise.race([import("./creatorlens.mjs").then((m) => m.creatorLens(r.address)), sleep(6000).then(() => null)]).catch(() => null);
   const p0 = first ? first.p0 ?? first.track?.p0 : null;
-  return { ...r, history, devRecord, creator: creator?.pons ? creator : null, spark, sinceFirstCheck: first ? { at: first.at, change: pctChange(r.coin?.priceUsd ?? r.priceUsd, p0) } : null };
+  // idea E: since when Check Watch reads this coin and what changed on chain (each change triggered a fresh check)
+  const watch = deps.market ? null : await import("./checkwatch.mjs").then((m) => m.watchOf(r.address)).catch(() => null);
+  return { ...r, history, devRecord, creator: creator?.pons ? creator : null, watch, spark, sinceFirstCheck: first ? { at: first.at, change: pctChange(r.coin?.priceUsd ?? r.priceUsd, p0) } : null };
 }
 
 /* ---------- the track record: every tracked check graded at 1 hour and 24 hours (the rules fates.mjs uses) ---------- */

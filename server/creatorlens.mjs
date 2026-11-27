@@ -24,8 +24,22 @@ async function logs(q) {
   const key = process.env.BLOCKSCOUT_API_KEY || "";
   if (!key) return null;
   const u = `https://api.blockscout.com/4663/api?module=logs&action=getLogs&fromBlock=0&toBlock=latest&apikey=${key}&${q}`;
-  const j = await fetch(u, { signal: AbortSignal.timeout(15_000) }).then((r) => r.json()).catch(() => null);
-  return Array.isArray(j?.result) ? j.result : j?.message === "No records found" ? [] : null;
+  // Blockscout's log index is sometimes slow on a wide filter (7 s to over 15 s for the same query): 30 s, then one retry
+  for (let i = 0; i < 2; i++) {
+    const j = await fetch(u, { signal: AbortSignal.timeout(30_000) }).then((r) => r.json()).catch(() => null);
+    if (Array.isArray(j?.result)) return j.result;
+    if (j?.message === "No records found") return [];
+  }
+  return null;
+}
+// a deployer's launches change rarely: kept 6 hours once read
+const devMemo = new Map();
+async function launchesOf(deployer) {
+  const k = lc(deployer), hit = devMemo.get(k);
+  if (hit && Date.now() - hit.at < 6 * 3600e3) return hit.v;
+  const v = await logs(`address=${ADDR.ponsFactory}&topic0=${LAUNCH}&topic3=${pad(deployer)}&topic0_3_opr=and`);
+  if (v) { devMemo.set(k, { at: Date.now(), v }); if (devMemo.size > 2000) devMemo.delete(devMemo.keys().next().value); }
+  return v;
 }
 
 async function compute(token) {
@@ -34,7 +48,7 @@ async function compute(token) {
   const deployer = ps.deployer ? getAddress(lc(ps.deployer)) : null;
   const recipient = ps.creatorFeeRecipient ? getAddress(lc(ps.creatorFeeRecipient)) : null;
   const [launches, credits, claims] = await Promise.all([
-    deployer ? logs(`address=${ADDR.ponsFactory}&topic0=${LAUNCH}&topic3=${pad(deployer)}&topic0_3_opr=and`) : null,
+    deployer ? launchesOf(deployer) : null,
     recipient ? logs(`address=${ESCROW}&topic0=${CREDITED}&topic1=${pad(recipient)}&topic0_1_opr=and`) : null,
     recipient ? logs(`address=${ESCROW}&topic0=${CLAIMED}&topic1=${pad(recipient)}&topic0_1_opr=and`) : null,
   ]);
@@ -60,7 +74,8 @@ export async function creatorLens(token) {
   const hit = memo.get(k);
   if (hit && Date.now() - hit.at < TTL) return hit.v;
   const v = await compute(token).catch(() => null);
-  if (v) memo.set(k, { at: Date.now(), v });
+  // a read with a part missing (Blockscout did not answer) is tried again after a minute instead of ten
+  if (v) memo.set(k, { at: Date.now() - (v.pons && (!v.deployerCoins || !v.fees) ? TTL - 60_000 : 0), v });
   if (memo.size > 2000) memo.delete(memo.keys().next().value);
   return v;
 }

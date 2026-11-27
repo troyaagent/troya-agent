@@ -832,6 +832,8 @@ export async function guardJoin (m, tg, me) {
 }
 
 export async function handleCallback (cq, tg) {
+  // Check Watch buttons: Alert me on changes / Stop alerts
+  if (/^cw:[fu]:0x[0-9a-fA-F]{40}$/.test(cq.data || '')) return import('./checkwatch.mjs').then((W) => W.onCallback(cq, tg))
   // /persona buttons: whoever taps sets their own voice (a toast, the shared message stays as it is)
   if (/^pz:/.test(cq.data || '')) {
     const P = await personasMod()
@@ -996,7 +998,8 @@ export async function handleBotMessage(m, tg, me) {
     if (cmd === "follow" || cmd === "unfollow" || cmd === "following" || (cmd === "start" && /^follow_0x[0-9a-fA-F]{40}$/.test(arg.trim()))) {
       const W = await import("./checkwatch.mjs");
       const out = await W.botCommand(cmd === "start" ? "follow" : cmd, cmd === "start" ? arg.trim().slice(7) : arg, m).catch((e) => "Could not do that just now: " + esc(e.message));
-      await tg("sendMessage", { chat_id: chatId, text: out, parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+      const o = typeof out === "string" ? { text: out } : out;
+      await tg("sendMessage", { chat_id: chatId, text: o.text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, ...(o.markup ? { reply_markup: o.markup } : {}) });
       return;
     }
     if (cmd === "reports" && m.chat.type === "private") {
@@ -1038,7 +1041,11 @@ Nobody from Troya DMs first or asks for a seed phrase or private key.` });
     else if (cmd === "raid") { const r = await raidCmd(m, tg, arg); text = r.text; if (r.markup) markup = r.markup; replyTo = r.replyTo || null; board = !!r.board; }
     else if (cmd === "persona" || cmd === "personas") { const r = await personaCmd(m, tg, arg); text = r.text; if (r.markup) markup = r.markup; replyTo = r.replyTo || null; }
     else if (cmd === "gatebuttons") text = await gateButtonsCmd(m, tg, arg, isGroup, cfg);
-    else if (cmd === "check") { const r = await checkCmd(arg, m); text = r.text; preview = r.preview || null; if (r.address && r.gatePassed) markup = kb(r.address); }
+    else if (cmd === "check") {
+      const r = await checkCmd(arg, m); text = r.text; preview = r.preview || null; if (r.address && r.gatePassed) markup = kb(r.address);
+      // Check Watch: follow the coin from the answer (a tap in a private chat, the bot's chat link in a group)
+      if (r.address && r.coin) { const W = await import("./checkwatch.mjs"); markup = { inline_keyboard: [...(markup?.inline_keyboard || []), [W.followBtn(r.address, m.chat.type === "private")]] }; }
+    }
     else {
       text = await gate(arg);
       const ok = coinOf(arg) && !/no contract|Usage/i.test(text);
@@ -1111,7 +1118,7 @@ async function checkCmd(arg, m) {
   const by = m?.from?.username || null;
   // a slow coin is read again within the chat budget, so the answer carries a score whenever one can be had
   const r = await C.checkForChat(a, { via: "telegram", by, hints: (String(arg || "").match(/https?:\/\/\S+/g) || []).slice(0, 4) });
-  return { text: C.tgText(r), preview: r.kind === "unknown" ? null : `${SITE}/check/${r.address}`, address: r.address, gatePassed: r.gatePassed && C.complete(r) };
+  return { text: C.tgText(r), preview: r.kind === "unknown" ? null : `${SITE}/check/${r.address}`, address: r.address, gatePassed: r.gatePassed && C.complete(r), coin: r.kind === "coin" };
 }
 async function badgeText(arg) {
   const a = (/0x[0-9a-fA-F]{40}/.exec(String(arg || "")) || [])[0];

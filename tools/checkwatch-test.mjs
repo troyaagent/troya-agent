@@ -4,7 +4,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initStore } from "../server/store.mjs";
-import { _test, botCommand, watchOf, summary } from "../server/checkwatch.mjs";
+import { _test, botCommand as bc0, watchOf, summary, onCallback, alertMessage } from "../server/checkwatch.mjs";
+const botCommand = async (...a) => { const o = await bc0(...a); return typeof o === "string" ? o : o.text; };
 
 let pass = 0, fail = 0;
 const t = async (name, fn) => { try { await fn(); pass++; } catch (e) { fail++; console.log("FAIL", name, "\n ", e.message); } };
@@ -49,6 +50,50 @@ await t("unfollow", async () => { assert.match(await botCommand("unfollow", A, d
 await t("bare /unfollow with one coin stops it", async () => { await botCommand("follow", A, dm); assert.match(await botCommand("unfollow", "", dm), /^Stopped/); });
 await t("bare /unfollow with none", async () => assert.match(await botCommand("unfollow", "", dm), /don't follow any coin/));
 await t("unfollow twice", async () => assert.match(await botCommand("unfollow", A, dm), /were not following/));
+
+// buttons
+const calls = [];
+const tg = async (method, body) => { calls.push({ method, body }); return { ok: true }; };
+const cq = (data, text = "Following 0x…", kb = [[{ text: "Troya Check", url: "x" }, { text: "Stop alerts", callback_data: `cw:u:0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074` }]]) =>
+  ({ id: "q1", data, from: { id: 42 }, message: { message_id: 7, chat: { id: 42, type: "private" }, text, reply_markup: { inline_keyboard: kb } } });
+await t("follow reply has Stop + Check buttons", async () => { const o = await bc0("follow", A, dm); assert.equal(o.markup.inline_keyboard[0][1].callback_data, "cw:u:0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074"); });
+await t("Stop button unfollows and swaps to Alert me", async () => {
+  calls.length = 0;
+  await onCallback(cq("cw:u:0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074"), tg);
+  assert.match(calls[0].body.text, /^Stopped/);
+  assert.equal(calls[1].method, "editMessageReplyMarkup");
+  assert.equal(calls[1].body.reply_markup.inline_keyboard[0][1].callback_data, "cw:f:0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074");
+  assert.equal(watchOf(A).followers, 0);
+});
+await t("Alert me button follows again", async () => {
+  calls.length = 0;
+  await onCallback(cq("cw:f:0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", "Following …", [[{ text: "Alert me on changes", callback_data: "cw:f:0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" }]]), tg);
+  assert.match(calls[0].body.text, /^Following: alerts/);
+  assert.equal(watchOf(A).followers, 1);
+});
+await t("Stop on the /following list redraws it", async () => {
+  calls.length = 0;
+  await onCallback(cq("cw:u:0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", "You follow 1 coin"), tg);
+  assert.equal(calls[1].method, "editMessageText");
+  assert.match(calls[1].body.text, /don't follow any coin/);
+});
+await t("buttons in a group only point to the private chat", async () => {
+  calls.length = 0;
+  const c = cq("cw:f:0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074"); c.message.chat = { id: -100, type: "supergroup" };
+  await onCallback(c, tg);
+  assert.match(calls[0].body.text, /private chat/); assert.equal(watchOf(A).followers, 0);
+});
+await t("following list shows the ticker and a Stop button per coin", async () => {
+  await bc0("follow", A, dm);
+  const o = await bc0("following", "", dm);
+  assert.match(o.text, /\$TROYA · <code>0x1FA8/); assert.match(o.text, /now 71/);
+  assert.equal(o.markup.inline_keyboard[0][1].text, "Stop $TROYA");
+});
+await t("alert text and buttons", () => {
+  const o = alertMessage({ address: "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", symbol: "TROYA", text: "Ownership was renounced", before: 74, after: 80, label: "Fair" });
+  assert.match(o.text, /\$TROYA\nWhat changed: Ownership was renounced\.\nTroya checked it again: <b>74 → 80<\/b>/);
+  assert.equal(o.markup.inline_keyboard[0].length, 2);
+});
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

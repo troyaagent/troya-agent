@@ -104,12 +104,12 @@ export function changesOf(old, cur, now = Date.now()) {
   return out;
 }
 
-async function tgSend(chat, text) {
+async function tgSend(chat, text, markup = null) {
   const T = process.env.TELEGRAM_BOT_TOKEN;
   if (!T) return false;
   const r = await fetch(`https://api.telegram.org/bot${T}/sendMessage`, {
     method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(10_000),
-    body: JSON.stringify({ chat_id: chat, text: text.slice(0, 3800), parse_mode: "HTML", link_preview_options: { is_disabled: true } }),
+    body: JSON.stringify({ chat_id: chat, text: text.slice(0, 3800), parse_mode: "HTML", link_preview_options: { is_disabled: true }, ...(markup ? { reply_markup: markup } : {}) }),
   }).then((x) => x.json()).catch(() => null);
   // a chat that blocked the bot is dropped from the follow list
   if (r && !r.ok && /blocked|chat not found|deactivated/i.test(r.description || "")) await saveFollows((f) => { delete f.chats[String(chat)]; });
@@ -134,10 +134,8 @@ async function recheck(a, list, fp) {
   state.events.push(ev);
   const chats = Object.entries(follows.chats || {}).filter(([, l]) => (l || []).some((x) => lc(x) === a)).map(([c]) => c);
   if (chats.length) {
-    const sym = ev.symbol ? `$${esc(ev.symbol)}` : short(ev.address);
-    const score = after != null ? `Troya checked it again: <b>${ev.before ?? "–"} → ${after}</b> (${esc(ev.label || "")})` : "Troya is checking it again: the new score will be on its page shortly.";
-    const msg = `<b>Troya Check Watch</b> · ${sym}\nWhat changed: ${esc(ev.text)}.\n${score}\n${SITE}/check/${ev.address}\n\n/unfollow ${ev.address} to stop these notes.`;
-    for (const c of chats) await tgSend(c, msg);
+    const { text, markup } = alertMessage(ev);
+    for (const c of chats) await tgSend(c, text, markup);
     ev.told = chats.length;
   }
   console.log(`[checkwatch] ${ev.symbol || a}: ${ev.text} · ${ev.before ?? "–"} → ${after ?? "–"} · told ${ev.told || 0}`);
@@ -186,6 +184,69 @@ async function tick() {
   } finally { busy = false; }
 }
 
+// buttons: tapping one in a private chat follows or stops a coin without typing its address (callback data cw:f:/cw:u:)
+const checkBtn = (a) => ({ text: "Troya Check", url: `${SITE}/check/${a}` });
+export const followBtn = (a, isPrivate = true) => (isPrivate ? { text: "Alert me on changes", callback_data: `cw:f:${a}` } : { text: "Alert me on changes", url: `https://t.me/${BOT}?start=follow_${a}` });
+const stopBtn = (a, label = "Stop alerts") => ({ text: label, callback_data: `cw:u:${a}` });
+
+/** the Telegram note for one change (what changed, the score before and after, the page) */
+export function alertMessage(ev, { sample = false } = {}) {
+  const sym = ev.symbol ? `$${esc(ev.symbol)}` : short(ev.address);
+  const score = ev.after != null ? `Troya checked it again: <b>${ev.before ?? "–"} → ${ev.after}</b> (${esc(ev.label || "")})` : "Troya is checking it again: the new score will be on its page shortly.";
+  const head = sample ? "<b>Troya Check Watch</b> · sample note (nothing changed, this shows what an alert looks like)" : `<b>Troya Check Watch</b> · ${sym}`;
+  return {
+    text: `${head}\n${sample ? `Coin: ${sym}\n` : ""}What changed: ${esc(ev.text)}.\n${score}`,
+    markup: { inline_keyboard: [[checkBtn(ev.address), stopBtn(ev.address)]] },
+  };
+}
+
+/** a sample alert to one chat, so a follower sees the format before anything changes */
+export async function sendSample(chat, address) {
+  const a = getAddress(lc(address));
+  const rows = await store.readJson("checks.json", []).catch(() => []);
+  const C = await import("./check.mjs");
+  const last = C.latestChecks(rows).get(lc(a));
+  const ev = { address: a, symbol: last?.symbol || null, text: "The creator fee now goes to 0x1234…abcd (it went to 0x57b0…09E4)", before: last?.score ?? 74, after: Math.max(0, (last?.score ?? 74) - 16), label: "Some flags" };
+  return tgSend(chat, alertMessage(ev, { sample: true }).text, alertMessage(ev).markup);
+}
+
+const symbols = async () => {
+  const C = await import("./check.mjs");
+  return C.latestChecks(await store.readJson("checks.json", []).catch(() => []));
+};
+async function followingView(chat) {
+  const l = follows.chats[chat] || [];
+  if (!l.length) return { text: "You don't follow any coin yet. /follow 0x… (or /follow $TICKER) and Troya tells you here when its fee recipient, code, owner or liquidity changes, with the new Troya Check." };
+  const last = await symbols();
+  const name = (a) => last.get(lc(a))?.symbol ? `$${last.get(lc(a)).symbol}` : short(a);
+  return {
+    text: `<b>You follow ${l.length} coin${l.length === 1 ? "" : "s"}</b>\n${l.map((a) => `${esc(name(a))} · <code>${a}</code>${last.get(lc(a))?.score != null ? ` · now ${last.get(lc(a)).score}` : ""}`).join("\n")}\n\nTap Stop under a coin to end its alerts.`,
+    markup: { inline_keyboard: l.map((a) => [checkBtn(a), stopBtn(a, `Stop ${String(name(a)).slice(0, 24)}`)]) },
+  };
+}
+
+/** a tap on Alert me / Stop (callback data cw:f:0x… or cw:u:0x…); private chats only */
+export async function onCallback(cq, tg) {
+  const m = /^cw:([fu]):(0x[0-9a-fA-F]{40})$/.exec(cq.data || "");
+  const msg = cq.message;
+  if (!m || !msg) return tg("answerCallbackQuery", { callback_query_id: cq.id });
+  if (msg.chat?.type !== "private") return tg("answerCallbackQuery", { callback_query_id: cq.id, text: `Follow coins in a private chat with @${BOT}.`, show_alert: true });
+  const chat = String(msg.chat.id), a = getAddress(lc(m[2]));
+  const out = await botCommand(m[1] === "f" ? "follow" : "unfollow", a, { chat: msg.chat, from: cq.from }).catch(() => null);
+  const text = String(out?.text || out || "");
+  const toast = m[1] === "f" ? (/^(Following|Already following)/.test(text) ? "Following: alerts arrive in this chat." : text.replace(/<[^>]+>/g, "").slice(0, 190)) : "Stopped: no more alerts for this coin.";
+  await tg("answerCallbackQuery", { callback_query_id: cq.id, text: toast });
+  // the message the button sat on: a /following list is redrawn, any other message gets the opposite button
+  if (/^You follow|^You don't follow/.test(String(msg.text || ""))) {
+    const v = await followingView(chat);
+    await tg("editMessageText", { chat_id: chat, message_id: msg.message_id, text: v.text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, ...(v.markup ? { reply_markup: v.markup } : {}) }).catch(() => {});
+  } else {
+    const kb = (msg.reply_markup?.inline_keyboard || []).map((row) => row.map((b) => (b.callback_data === `cw:u:${a}` || b.callback_data === `cw:f:${a}` ? (m[1] === "f" ? stopBtn(a) : followBtn(a)) : b)));
+    if (kb.length) await tg("editMessageReplyMarkup", { chat_id: chat, message_id: msg.message_id, reply_markup: { inline_keyboard: kb } }).catch(() => {});
+  }
+  return true;
+}
+
 /** for the coin page (enrich): since when the coin is watched and what changed */
 export function watchOf(address) {
   const a = lc(address), f = state.fp[a];
@@ -211,17 +272,14 @@ export async function botCommand(cmd, arg, m) {
     return `Follow a coin in a private chat with me, so the notes reach only you: <a href="https://t.me/${BOT}?start=follow_${a0 || ""}">open the chat</a>`;
   }
   const mine = () => (follows.chats[chat] || []);
-  if (cmd === "following") {
-    const l = mine();
-    return l.length ? `<b>You follow ${l.length} coin${l.length === 1 ? "" : "s"}</b>\n${l.map((a) => `<code>${a}</code> · <a href="${SITE}/check/${a}">check</a>`).join("\n")}\n\n/unfollow 0x… to stop one.` : "You don't follow any coin yet. /follow 0x… (or /follow $TICKER) and Troya tells you here when its fee recipient, code, owner or liquidity changes, with the new Troya Check.";
-  }
+  if (cmd === "following") return followingView(chat);
   let a = (String(arg || "").match(/0x[0-9a-fA-F]{40}/) || [])[0];
   // a bare /unfollow: the only followed coin is stopped at once; with several, each one's command ready to copy
   if (!a && cmd === "unfollow" && !String(arg || "").trim()) {
     const l = mine();
     if (!l.length) return "You don't follow any coin. /follow 0x… to start.";
     if (l.length === 1) a = l[0];
-    else return `Which one? Tap a line to copy it, then send it:\n${l.map((x) => `<code>/unfollow ${x}</code>`).join("\n")}`;
+    else return followingView(chat);
   }
   if (!a) {
     const tk = (/\$?([A-Za-z][A-Za-z0-9]{0,15})\b/.exec(String(arg || "").trim()) || [])[1];
@@ -251,9 +309,12 @@ export async function botCommand(cmd, arg, m) {
   });
   if (full) return `You follow ${PER_CHAT} coins already. /following lists them; /unfollow one to add another.`;
   const last = C.latestChecks(await store.readJson("checks.json", []).catch(() => [])).get(lc(a));
-  return `${already ? "Already following" : "Following"} <code>${a}</code>${last?.symbol ? ` ($${esc(last.symbol)})` : ""}.
+  return {
+    text: `${already ? "Already following" : "Following"} <code>${a}</code>${last?.symbol ? ` ($${esc(last.symbol)})` : ""}.
 Troya reads it every few minutes and tells you here when the creator fee recipient or tax changes, its code is upgraded, the owner changes or its pool liquidity halves, with a fresh Troya Check${last?.score != null ? ` (now ${last.score}, ${esc(last.label || "")})` : ""}.
-/unfollow ${a} to stop · /following lists your coins`;
+/following lists your coins`,
+    markup: { inline_keyboard: [[checkBtn(a), stopBtn(a)]] },
+  };
 }
 
 export async function register(r, ctx) {

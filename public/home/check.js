@@ -19,6 +19,12 @@ const xCash = (r) => (/^[A-Za-z][A-Za-z0-9]{0,15}$/.test(r.symbol || "") ? `$${r
 
 // what is behind the number, one line under the score (holder review, 27 Nov 2026): the raw weighted sum, the cap that
 // lowered it, how many parts were read and the method version (the weights changed on 27 Nov: v2)
+// a score the token team has contested (idea J): said plainly, the number stays as read from the chain
+function disputeLine(d) {
+  const when = d.since ? new Date(d.since).toISOString().slice(0, 10) : "";
+  return `<p class="cv-dispute"><b>Disputed${when ? ` since ${when}` : ""}.</b> The token team contested this score and the Troya team is reviewing it. The score stays as read from the chain until the review ends.${d.note ? ` Note: ${esc(d.note)}` : ""}</p>`;
+}
+
 function basisLine(r) {
   const b = r.basis, when = r.checkedAt ? `${new Date(r.checkedAt).toISOString().slice(0, 16).replace("T", " ")} UTC` : "";
   const bits = [`raw ${b.raw}`, b.cap ? `capped at ${b.cap.at}: ${esc(b.cap.why)}` : "no cap applied", `${b.read} of ${b.of} parts read`, `method ${esc(b.method)}`, when ? `checked ${when}` : ""].filter(Boolean);
@@ -272,7 +278,7 @@ function showCoin(r) {
           <p class="cv-kick">Troya Check · checked ${ago(r.checkedAt)} ago${r.partial ? " · some parts still reading" : ""}</p>
           <h2 class="cv-sentence">${esc(sentence(r.headline || r.label))}</h2>
           <div class="cv-scores${scored ? "" : " one"}">
-            <div class="cv-total"><span>Total score</span><b style="color:${tone(r.tone)}">${scored ? r.score : "–"}<small>${scored ? "/100" : ""}</small></b><span class="lbl" style="--c:${tone(r.tone)}">${esc(r.label)}</span><p>${scored ? "Weighted from every part read, then capped by the most serious finding." : esc(r.headline || "")}</p>${scored && r.basis ? basisLine(r) : ""}</div>
+            <div class="cv-total"><span>Total score</span><b style="color:${tone(r.tone)}">${scored ? r.score : "–"}<small>${scored ? "/100" : ""}</small></b><span class="lbl" style="--c:${tone(r.tone)}">${esc(r.label)}</span><p>${scored ? "Weighted from every part read, then capped by the most serious finding." : esc(r.headline || "")}</p>${scored && r.basis ? basisLine(r) : ""}${r.dispute ? disputeLine(r.dispute) : ""}</div>
             ${scored ? gauge("Exit", sub.exit, sub.exitWord ? sub.exitWord[0].toUpperCase() + sub.exitWord.slice(1) : "", ["blocked", "risky", "clear"], sub.exitLine) + gauge("Holders", sub.holders, sub.holdersWord ? sub.holdersWord[0].toUpperCase() + sub.holdersWord.slice(1) : "", ["rigged", "concentrated", "spread"], sub.holdersLine) : ""}
           </div>
           ${capped && scored ? `<p class="cv-cap">Capped at ${capped.at}: ${esc(capped.why)}.</p>` : ""}

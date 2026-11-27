@@ -919,9 +919,14 @@ export async function dashboard(now = Date.now()) {
 }
 
 /** What the API and the tools hand out. */
+// a score a token team has contested by email (team@troya.codes): marked "disputed" while the team reviews it (holder review
+// idea J, 27 Nov 2026). The score itself stays as read from the chain; the mark only says a review is open.
+let disputes = {};
+async function loadDisputes() { try { const d = store ? await store.readJson("check-disputes.json", {}) : {}; disputes = d && typeof d === "object" ? d : {}; } catch { /* keep the last list */ } }
+export const disputeOf = (address) => { const d = disputes[lc(address)]; return d ? { status: "disputed", since: d.since || null, note: d.note || null } : null; };
 export function publicResult(r) {
   const A = r.address;
-  return { ...r, page: `${SITE}/check/${A}`, card: `${SITE}/api/check/${A}/card.png`, swap: r.gatePassed ? `${SITE}/agent#/swap?out=${A}` : null,
+  return { ...r, dispute: disputeOf(A), page: `${SITE}/check/${A}`, card: `${SITE}/api/check/${A}/card.png`, swap: r.gatePassed ? `${SITE}/agent#/swap?out=${A}` : null,
     note: "Automated checks, not an audit. A snapshot from the chain at checkedAt; a coin can change after a check. Never a safe stamp and never advice to buy." };
 }
 
@@ -1231,6 +1236,7 @@ export async function register(r, ctx) {
   }, { weight: 1, perMin: 30 });
   r.get("/api/check/record", async () => recordOf(store ? await store.readJson(FILE, []) : []), { weight: 1, perMin: 60 });
   // polled every 4 s by the page while a coin is being read, so the limit leaves room for a minute of polling and a few coins
+  loadDisputes(); setInterval(loadDisputes, 60_000).unref?.();
   r.get("/api/check/:address", async ({ params }) => webAnswer(params.address), { weight: 1, perMin: 40 });
   r.get("/api/check/:address/card.png", async ({ params, req, res }) => {
     if (!isAddress(String(params.address || ""))) throw new HttpError(400, "That is not a token address.");

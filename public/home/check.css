@@ -472,3 +472,6 @@ body.ck-coinpage .ck-page::before { height: 900px; }
 
 /* the line under the total score: raw sum, cap, parts read, method version */
 .cv-basis { margin: 8px 0 0; font: 500 11.5px/1.5 var(--mono, ui-monospace, monospace); color: var(--muted); overflow-wrap: anywhere; }
+
+/* a contested score (idea J) */
+.cv-dispute { margin: 10px 0 0; padding: 8px 10px; border-radius: 10px; border: 1px dashed color-mix(in srgb, #f5c451 60%, transparent); background: color-mix(in srgb, #f5c451 8%, transparent); font-size: 12.5px; line-height: 1.5; }

@@ -370,7 +370,7 @@ async function mountDeploy(view) {
         h("span", {}, "Pending owner"), h("span", {}, live.pending && !/^0x0{40}$/i.test(live.pending) ? addrLink(live.pending, lc(live.pending) === lc(L.SAFE) ? "the Safe (waiting for it to accept)" : short(live.pending)) : accepted ? "none" : "–"),
         h("span", {}, "Keeper"), h("span", {}, live.keeper ? addrLink(live.keeper) : "–")),
       h("h3", { style: { marginTop: "14px" } }, "1. The Safe accepts ownership"),
-      h("p", { class: "fine" }, "Until the Safe accepts, your wallet stays the owner (every change still waits 48 hours). In the Safe app (app.safe.global, Robinhood Chain): New transaction → Transaction Builder → address ", h("span", { class: "mono" }, r.vault.address), ", enter the raw data below with value 0, then both signers sign and execute."),
+      h("p", { class: "fine" }, "Until the Safe accepts, your wallet stays the owner (every change still waits 48 hours). In the Safe app (app.safe.global, Robinhood Chain): New transaction → Transaction Builder → address ", h("span", { class: "mono" }, r.vault.address), ", enter the raw data below with value 0, then two of the three signers sign and one executes."),
       h("pre", { class: "iv-pre" }, `to:    ${r.vault.address}\nvalue: 0\ndata:  ${L.acceptData()}   (acceptOwnership())`),
       copyBtn(L.acceptData(), "Copy data"),
       h("h3", { style: { marginTop: "14px" } }, "2. Source verification on Blockscout (for the team, from contracts/)"),

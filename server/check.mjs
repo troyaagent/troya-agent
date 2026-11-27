@@ -746,9 +746,15 @@ export async function boardView({ sort = "volume", dir = "desc", launchpad = "al
   const hit = boardMemo.get(key);
   if (!deps.market && hit && now - hit.at < 20_000) return hit.v;
   const M = deps.market || (await import("./market.mjs"));
-  const [board, rows] = await Promise.all([M.getRobinhoodTokens({ sort, dir, launchpad, limit: 60 }).catch(() => null), deps.rows || cachedRows()]);
+  // "All" also carries the top Pons coins: Troya lives on Pons, but the 60 busiest coins were all Uniswap and Clanker pools,
+  // so no Pons coin (not even $TROYA) and no Pons filter showed (owner, 27 Nov 2026)
+  const [board, rows, ponsTop] = await Promise.all([M.getRobinhoodTokens({ sort, dir, launchpad, limit: 60 }).catch(() => null), deps.rows || cachedRows(),
+    launchpad === "all" ? M.getRobinhoodTokens({ sort, dir, launchpad: "pons", limit: 20 }).catch(() => null) : null]);
   const latest = latestChecks(rows);
-  const tokens = board?.tokens || [];
+  const tokens = [...(board?.tokens || [])];
+  const have = new Set(tokens.map((t) => lc(t.address)));
+  for (const t of ponsTop?.tokens || []) if (!have.has(lc(t.address))) { tokens.push(t); have.add(lc(t.address)); }
+  if (ponsTop?.tokens?.length && sort === "volume") tokens.sort((x, y) => (dir === "asc" ? 1 : -1) * ((x.volume24hUsd || 0) - (y.volume24hUsd || 0)));
   const trending = tokens.map((t) => joinRow(t, latest.get(lc(t.address))));
   // the checks lists: every coin checked this week, with the board's numbers when the board has the coin
   const week = [...latest.values()].filter((c) => now - c.at < WEEK);
@@ -773,8 +779,10 @@ export async function boardView({ sort = "volume", dir = "desc", launchpad = "al
   const byDev = new Map();
   for (const c of latest.values()) if (c.dev) { const d = byDev.get(c.dev) || { dev: c.dev, coins: 0, good: 0 }; d.coins++; if (c.score >= 50) d.good++; byDev.set(c.dev, d); }
   const devs = [...byDev.values()].sort((a, b) => b.good - a.good || b.coins - a.coins).slice(0, 5).map((d) => ({ ...d, dev: getAddress(d.dev) }));
+  // the launchpad filter lists every launchpad the market board has (with its coin count), not only those among these rows
   const pads = new Map();
-  for (const t of trending) if (t.launchpad) pads.set(t.launchpad, (pads.get(t.launchpad) || 0) + 1);
+  if (board?.counts) for (const [id, n] of Object.entries(board.counts)) { if (id !== "all" && n > 0) pads.set(id, n); }
+  else for (const t of trending) if (t.launchpad) pads.set(t.launchpad, (pads.get(t.launchpad) || 0) + 1);
   const v = {
     name: "Troya Check board", at: now, updatedAt: board?.updatedAt || null, total: board?.total ?? tokens.length, trending, checks, live, just, mostChecked24h, devs,
     launchpads: [...pads.entries()].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ id, n })),

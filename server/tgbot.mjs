@@ -943,7 +943,7 @@ export async function handleBotMessage(m, tg, me) {
   const [, cmdRaw, at, arg = ""] = cm;
   if (at && me?.username && at.toLowerCase() !== me.username.toLowerCase()) return;
   const cmd = cmdRaw.toLowerCase();
-  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "assay", "ring", "council", "oath", "aegis", "smart", "raid", "persona", "personas", "rules", "sentry", "badge", "perks", "reports", "flywheel", "lesson", "gatebuttons"].includes(cmd)) return;
+  if (!["start", "help", "links", "ca", "price", "p", "gas", "gate", "check", "follow", "unfollow", "following", "assay", "ring", "council", "oath", "aegis", "smart", "raid", "persona", "personas", "rules", "sentry", "badge", "perks", "reports", "flywheel", "lesson", "gatebuttons"].includes(cmd)) return;
   // one answer per person every 3 s keeps the group readable
   const who = `${chatId}:${m.from?.id}`;
   if (Date.now() - (lastReply.get(who) || 0) < 3000) return;

@@ -49,9 +49,12 @@ async function mount(canvas) {
   if (!gpuOk()) return;                          // no WebGL, or only a slow/software one: the still picture stays
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // the model download and the loader code start now, in parallel with building the renderer and the environment
-  const loading = Promise.all([import("/vendor/three/addons/loaders/GLTFLoader.js"), import("/vendor/three/addons/libs/meshopt_decoder.module.js")])
-    .then(([{ GLTFLoader }, { MeshoptDecoder }]) => new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync("/img/hero/horse.glb"));
+  // the 920 KB model and its loader wait until the page itself has loaded and the browser is idle: the still picture is the
+  // hero until then (owner, 27 Nov 2026: the first load felt heavy; the model used to download alongside the page)
+  const afterLoad = new Promise((r) => (document.readyState === "complete" ? r() : addEventListener("load", () => r(), { once: true })))
+    .then(() => new Promise((r) => ("requestIdleCallback" in window ? requestIdleCallback(() => r(), { timeout: 1500 }) : setTimeout(r, 300))));
+  const loading = afterLoad.then(() => Promise.all([import("/vendor/three/addons/loaders/GLTFLoader.js"), import("/vendor/three/addons/libs/meshopt_decoder.module.js")])
+    .then(([{ GLTFLoader }, { MeshoptDecoder }]) => new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync("/img/hero/horse.glb")));
   loading.catch(() => {});                       // handled below; avoids an unhandled rejection if we bail out first
 
   let renderer, failed = false, raf = 0, io = null;

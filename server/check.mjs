@@ -610,6 +610,7 @@ const cached = (A) => { const h = memo.get(lc(A)); return h?.res && Date.now() -
 /** The check for one coin (cached 10 minutes; 1 minute while a part is still reading). via: x | telegram | web | api. */
 // X and Telegram wait longer than a web page: a reply should carry as many parts as can be read
 const WAIT_CHAT_MS = Math.max(WAIT_MS, Number(process.env.CHECK_WAIT_CHAT_MS) || 40_000);
+const X_BUDGET_MS = Math.max(WAIT_CHAT_MS, Number(process.env.CHECK_X_BUDGET_MS) || 150_000);
 export async function troyaCheck(address, { via = "web", by = null, record = true, waitMs = via === "x" || via === "telegram" ? WAIT_CHAT_MS : WAIT_MS, fresh: again = false, hints = [] } = {}) {
   if (!isAddress(String(address || ""))) throw new HttpError(400, "Paste a token address on Robinhood Chain (0x + 40 hex characters).");
   const A = getAddress(String(address).toLowerCase());
@@ -1007,7 +1008,9 @@ export async function xCheckReply(req, { by = null, hints = [] } = {}) {
     if (t.many) return { reply: `${t.many} contracts on Robinhood Chain use ${tag}, so Troya won't pick one. Reply "check" with the address you mean.${t.oldest ? `\nOldest: ${SITE}/check/${t.oldest}` : ""}`, many: t.many, address: t.oldest };
     address = t.address;
   }
-  const r = await checkForChat(address, { via: "x", by, hints });
+  // X has time: a reply a minute or two later is fine, a silent skip is not (28 Nov 2026: $TROYA asked from @AgentSentry
+  // right after a restart stayed silent because The Assay took longer than the 40 s chat budget). Up to 150 s here.
+  const r = await checkForChat(address, { via: "x", by, hints, budgetMs: X_BUDGET_MS, firstWaitMs: WAIT_CHAT_MS });
   // render the card before the reply goes out, so X's crawler finds it ready (a cold render took ~20 s, 27 Nov 2026)
   if (r && r.score != null) await Promise.race([cardFor(getAddress(lc(r.address || address))), sleep(30_000)]).catch(() => {});
   return xAnswer(r);

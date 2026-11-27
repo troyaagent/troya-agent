@@ -274,14 +274,17 @@ export async function onCallback(cq, tg) {
 /** for the coin page (enrich): since when the coin is watched and what changed */
 export function watchOf(address) {
   const a = lc(address), f = state.fp[a];
-  const changes = state.events.filter((e) => lc(e.address) === a).slice(-8).reverse().map((e) => ({ at: e.at, text: e.text, changes: e.changes, before: e.before, after: e.after }));
+  const changes = state.events.filter((e) => lc(e.address) === a && shown(e)).slice(-8).reverse().map((e) => ({ at: e.at, text: e.text, changes: e.changes, before: e.before, after: e.after }));
   return { since: f?.since || null, changes, followers: followed().get(a) || 0 };
 }
+
+// a liquidity-only event on a Pons coin (from before the 28 Nov rule: Pons liquidity is locked) is kept in the log, not shown
+const shown = (e) => !(e.changes?.length === 1 && e.changes[0] === "liquidity" && state.fp[lc(e.address)]?.pons === true);
 
 /** the latest on-chain changes (the Troya Check board's "Changed on chain" panel), newest first */
 export function recentChanges(n = 8, days = 7) {
   const since = Date.now() - days * 86400e3;
-  return state.events.filter((e) => e.at >= since && !e.queued).slice(-n).reverse()
+  return state.events.filter((e) => e.at >= since && !e.queued && shown(e)).slice(-n).reverse()
     .map((e) => ({ address: e.address, symbol: e.symbol || null, at: e.at, kinds: e.changes || [], text: e.text, before: e.before ?? null, after: e.after ?? null }));
 }
 

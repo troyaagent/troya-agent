@@ -29,7 +29,7 @@ function disputeLine(d) {
 function watchCard(r) {
   const w = r.watch || {};
   const list = (w.changes || []).map((c) => `<li><span>${esc(c.text)}${c.after != null ? ` <b class="cv-dc-v">· checked again: ${c.before ?? "–"} → ${c.after}</b>` : ""}</span><span class="cv-dc-at">${ago(c.at)} ago</span></li>`).join("");
-  const none = `<p class="cv-basis">${w.since ? `No change since Troya started watching this coin ${ago(w.since)} ago.` : "Troya starts watching this coin now that it has been checked."} Read every few minutes: creator fee recipient and tax, graduation, code upgrades, owner, pool liquidity. Any change runs the check again.</p>`;
+  const none = `<p class="cv-basis">${w.since ? `No change since Troya started watching this coin ${ago(w.since)} ago.` : "Troya starts watching this coin now that it has been checked."} Read every few minutes: creator fee recipient and tax, graduation, code upgrades, owner, and pool liquidity where it can be pulled (not on Pons, where it is locked). Any change runs the check again.</p>`;
   return `<div class="ck-card2 cv-watch"><h3>Watched for changes</h3>${list ? `<ul>${list}</ul>` : none}<p class="cv-follow"><a href="https://t.me/TrojanTroya_bot?start=follow_${esc(r.address)}" target="_blank" rel="noopener">Alert me on Telegram when this changes</a>${w.followers ? ` · ${w.followers} following` : ""}</p></div>`;
 }
 

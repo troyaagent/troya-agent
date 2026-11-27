@@ -25,10 +25,12 @@ await t("upgrade", () => assert.match(_test.changesOf({ ...base, impl: pad(R1) }
 await t("owner renounced", () => assert.match(_test.changesOf({ ...base, owner: pad(R1) }, { ...base, owner: "0x" + "0".repeat(64) }, now)[0].text, /renounced/));
 await t("owner moved", () => assert.match(_test.changesOf({ ...base, owner: pad(R1) }, { ...base, owner: pad(R2) }, now)[0].text, /changed from 0x57b0…d4e4 to 0x9999…0001/i));
 await t("owner first read (was unknown) is not an event", () => assert.equal(_test.changesOf(base, { ...base, owner: pad(R2) }, now).length, 0));
-await t("liquidity halves", () => assert.match(_test.changesOf(base, { ...base, liq: 9000 }, now)[0].text, /\$20\.0K to \$9\.0K/));
-await t("liquidity down 40% is quiet", () => assert.equal(_test.changesOf(base, { ...base, liq: 12000 }, now).length, 0));
-await t("tiny pools are quiet", () => assert.equal(_test.changesOf({ ...base, liqRef: 1500 }, { ...base, liq: 100 }, now).length, 0));
-await t("one liquidity note per 6 hours", () => assert.equal(_test.changesOf({ ...base, liqAt: now - 3600e3 }, { ...base, liq: 5000 }, now).length, 0));
+const np = { ...base, pons: false };
+await t("liquidity halves (a non-Pons pool)", () => assert.match(_test.changesOf(np, { ...np, liq: 9000 }, now)[0].text, /\$20\.0K to \$9\.0K/));
+await t("a Pons coin never fires a liquidity note", () => assert.equal(_test.changesOf(base, { ...base, liq: 100 }, now).length, 0));
+await t("liquidity down 40% is quiet", () => assert.equal(_test.changesOf(np, { ...np, liq: 12000 }, now).length, 0));
+await t("tiny pools are quiet", () => assert.equal(_test.changesOf({ ...np, liqRef: 1500 }, { ...np, liq: 100 }, now).length, 0));
+await t("one liquidity note per 6 hours", () => assert.equal(_test.changesOf({ ...np, liqAt: now - 3600e3 }, { ...np, liq: 5000 }, now).length, 0));
 
 // the /follow commands with a scratch store (a coin already checked, so no chain read is needed)
 const store = await initStore(mkdtempSync(join(tmpdir(), "cw-")));

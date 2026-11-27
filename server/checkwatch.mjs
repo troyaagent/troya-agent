@@ -98,7 +98,9 @@ export function changesOf(old, cur, now = Date.now()) {
     const dead = !to || /^0x0{36}dead$/i.test(lc(to));
     out.push({ kind: "owner", text: dead ? `Ownership was renounced (the owner was ${short(from)})` : `The owner changed from ${from ? short(from) : "none"} to ${short(to)}` });
   }
-  if (old.liqRef >= LIQ_MIN_USD && cur.liq !== undefined && cur.liq <= old.liqRef * LIQ_DROP && now - (old.liqAt || 0) > LIQ_GAP) {
+  // a Pons coin's liquidity cannot be pulled (the curve, then a pool the Pons hook locks for good), so a drop there is the
+  // price or a data source switching (STAGEKIN, 28 Nov: "$2.9K to $0" on a curve nobody had bought on): only other pools
+  if (cur.pons === false && old.pons === false && old.liqRef >= LIQ_MIN_USD && cur.liq !== undefined && cur.liq <= old.liqRef * LIQ_DROP && now - (old.liqAt || 0) > LIQ_GAP) {
     out.push({ kind: "liquidity", text: `Pool liquidity fell from ${usd(old.liqRef)} to ${usd(cur.liq)}` });
   }
   return out;
@@ -287,7 +289,7 @@ export function summary() {
   return {
     name: "Troya Check Watch", watching: Object.keys(state.fp).length, followedCoins: followed().size, followingChats: Object.keys(follows.chats || {}).length,
     lastPassAt: state.passAt || null, everyMinutes: TICK_MS / 60_000,
-    watched: "creator fee recipient, creator tax, graduation, code upgrades (EIP-1967), owner, pool liquidity (falls by half)",
+    watched: "creator fee recipient, creator tax, graduation, code upgrades (EIP-1967), owner, pool liquidity falling by half (pools that can be pulled; a Pons coin's liquidity is locked)",
     events: state.events.slice(-25).reverse(),
     howToFollow: `/follow 0x… in a private chat with @${BOT}, or t.me/${BOT}?start=follow_0x…`,
   };
@@ -344,7 +346,7 @@ export async function botCommand(cmd, arg, m) {
   const last = C.latestChecks(await store.readJson("checks.json", []).catch(() => [])).get(lc(a));
   return {
     text: `${already ? "Already following" : "Following"} <code>${a}</code>${last?.symbol ? ` ($${esc(last.symbol)})` : ""}.
-Troya reads it every few minutes and tells you here when the creator fee recipient or tax changes, its code is upgraded, the owner changes or its pool liquidity halves, with a fresh Troya Check${last?.score != null ? ` (now ${last.score}, ${esc(last.label || "")})` : ""}.
+Troya reads it every few minutes and tells you here when the creator fee recipient or tax changes, its code is upgraded, the owner changes or (outside Pons, where liquidity is locked) its pool liquidity halves, with a fresh Troya Check${last?.score != null ? ` (now ${last.score}, ${esc(last.label || "")})` : ""}.
 /following lists your coins`,
     markup: { inline_keyboard: [[checkBtn(a), stopBtn(a)]] },
   };

@@ -5,6 +5,7 @@ Allow: /api/check/
 # The Record and the Phaeacians feed: graded calls anyone can check (holder review, 27 Nov 2026)
 Allow: /api/record
 Allow: /api/phaeacians
+Allow: /api/fates
 Disallow: /api/
 Disallow: /agent/api/
 

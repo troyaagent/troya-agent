@@ -936,6 +936,12 @@ export const mentionsCheck = (text) => CHECK_WORD.test(String(text || "")) && !N
 export function parseCheckRequest(text, parent = null) {
   const t = String(text || "").replace(/https?:\/\/\S+/g, " ");
   if (!mentionsCheck(t)) return null;
+  // a request, not a sentence that happens to hold the word (a review saying "let Troya check the route… $TROYA" got a
+  // score reply, 27 Nov 2026): "check" opens the post after its @mentions, follows @Troyaagent, or sits right before the coin
+  const lead = t.replace(/^(?:\s*@\w+)+/, "").trim();
+  const asked = /^check\b/i.test(lead) || /@troyaagent\s+check\b/i.test(t) || /\bcheck\s+(?:this\s+|out\s+|on\s+)?(?:\$[A-Za-z]|0x[0-9a-fA-F]{40})/i.test(t)
+    || /\b(?:(?:can|could|would|will)\s+(?:you|u)\s+(?:please\s+|pls\s+)?|please\s+|pls\s+|plz\s+)check\b/i.test(t);
+  if (!asked) return null;
   const a = ADDR_RE.exec(t)?.[0];
   if (a) return { address: getAddress(a.toLowerCase()) };
   const tk = TICKER_RE.exec(t)?.[1];

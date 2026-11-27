@@ -475,3 +475,7 @@ body.ck-coinpage .ck-page::before { height: 900px; }
 
 /* a contested score (idea J) */
 .cv-dispute { margin: 10px 0 0; padding: 8px 10px; border-radius: 10px; border: 1px dashed color-mix(in srgb, #f5c451 60%, transparent); background: color-mix(in srgb, #f5c451 8%, transparent); font-size: 12.5px; line-height: 1.5; }
+
+/* idea D: the deployer's other launches */
+.cv-dc-at { margin-left: auto; opacity: .65; font-size: 12px; }
+.cv-dc-v { font-weight: 500; font-size: 12px; opacity: .85; }

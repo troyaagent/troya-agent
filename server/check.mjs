@@ -812,8 +812,10 @@ export async function enrich(r, deps = {}) {
   }
   const M = deps.market || (await import("./market.mjs").catch(() => null));
   const spark = M?.sparkFor?.(r.address) || null;
+  // idea D: who takes the creator fee and how much that wallet collected, and the deployer's other launches (not scored)
+  const creator = deps.market ? null : await Promise.race([import("./creatorlens.mjs").then((m) => m.creatorLens(r.address)), sleep(6000).then(() => null)]).catch(() => null);
   const p0 = first ? first.p0 ?? first.track?.p0 : null;
-  return { ...r, history, devRecord, spark, sinceFirstCheck: first ? { at: first.at, change: pctChange(r.coin?.priceUsd ?? r.priceUsd, p0) } : null };
+  return { ...r, history, devRecord, creator: creator?.pons ? creator : null, spark, sinceFirstCheck: first ? { at: first.at, change: pctChange(r.coin?.priceUsd ?? r.priceUsd, p0) } : null };
 }
 
 /* ---------- the track record: every tracked check graded at 1 hour and 24 hours (the rules fates.mjs uses) ---------- */

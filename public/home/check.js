@@ -25,6 +25,15 @@ function disputeLine(d) {
   return `<p class="cv-dispute"><b>Disputed${when ? ` since ${when}` : ""}.</b> The token team contested this score and the Troya team is reviewing it. The score stays as read from the chain until the review ends.${d.note ? ` Note: ${esc(d.note)}` : ""}</p>`;
 }
 
+// idea D: the creator fee recipient and what that wallet has collected (the escrow counts per wallet, across its coins)
+function creatorFeeRow(c) {
+  const who = c.recipient ? `<a href="https://robinhoodchain.blockscout.com/address/${esc(c.recipient)}" target="_blank" rel="noopener"><code>${short(c.recipient)}</code></a>${c.recipientIsDeployer ? " (the deployer)" : " (not the deployer)"}` : "–";
+  const tax = c.creatorTaxPct != null ? `${c.creatorTaxPct}% tax · ` : "";
+  const f = c.fees;
+  const money = f ? ` · this wallet received ${f.creditedEth != null ? f.creditedEth.toFixed(3) : "–"} ETH and claimed ${f.claimedEth != null ? f.claimedEth.toFixed(3) : "–"} ETH${f.claims ? ` in ${f.claims} claim${f.claims === 1 ? "" : "s"}` : ""}${f.lastClaimAt ? `, last ${ago(f.lastClaimAt)} ago` : ""} (across all its coins)` : "";
+  return `${tax}${who}${money}`;
+}
+
 function basisLine(r) {
   const b = r.basis, when = r.checkedAt ? `${new Date(r.checkedAt).toISOString().slice(0, 16).replace("T", " ")} UTC` : "";
   const bits = [`raw ${b.raw}`, b.cap ? `capped at ${b.cap.at}: ${esc(b.cap.why)}` : "no cap applied", `${b.read} of ${b.of} parts read`, `method ${esc(b.method)}`, when ? `checked ${when}` : ""].filter(Boolean);
@@ -254,6 +263,8 @@ function showCoin(r) {
     ["Contract", `<code>${short(r.address)}</code> <button type="button" class="cv-copy" data-copy="${esc(r.address)}" aria-label="Copy the contract address">${ICON.copy}</button>`],
     k.dev ? ["Dev wallet", `<a href="https://robinhoodchain.blockscout.com/address/${esc(k.dev)}" target="_blank" rel="noopener"><code>${short(k.dev)}</code></a>`] : null,
     r.devRecord ? ["Dev record", r.devRecord.checked ? `${r.devRecord.checked} other coin${r.devRecord.checked === 1 ? "" : "s"} checked, ${r.devRecord.good} scored 50+` : "No other coin of this dev checked yet"] : null,
+    r.creator ? ["Creator fee", creatorFeeRow(r.creator)] : null,
+    r.creator?.deployerCoins ? ["Deployer's launches", r.creator.deployerCoins.count <= 1 ? "This is the deployer's only Pons coin" : `${r.creator.deployerCoins.count} Pons coins, ${r.creator.deployerCoins.count - 1} besides this one`] : null,
     ["Launched", [k.launchpad ? esc(padName(k.launchpad)) : null, k.bornAt ? `${ago(k.bornAt)} ago` : null].filter(Boolean).join(" · ") || "–"],
     ["Links", [k.website && okHref(k.website) ? `<a href="${esc(k.website)}" target="_blank" rel="noopener nofollow">Site</a>` : "", k.x ? `<a href="${esc(/^https:/.test(k.x) ? k.x : `https://x.com/${String(k.x).replace(/^@/, "")}`)}" target="_blank" rel="noopener nofollow">X</a>` : "",
       `<a href="https://dexscreener.com/robinhood/${esc(r.address.toLowerCase())}" target="_blank" rel="noopener">DexScreener</a>`, `<a href="https://robinhoodchain.blockscout.com/token/${esc(r.address)}" target="_blank" rel="noopener">Blockscout</a>`].filter(Boolean).join(" ")],
@@ -293,6 +304,7 @@ function showCoin(r) {
           <dl><dt>Market cap</dt><dd>${usd(k.mcapUsd)}</dd><dt>Since first check</dt><dd>${r.sinceFirstCheck?.change != null ? pct(r.sinceFirstCheck.change) : "–"}</dd><dt>Volume 24h</dt><dd>${usd(k.volume24hUsd)}</dd><dt>Liquidity</dt><dd>${usd(k.liquidityUsd)}</dd></dl></div>
         <div class="ck-card2"><table class="cv-facts">${facts.map(([a, b]) => `<tr><th>${a}</th><td>${b}</td></tr>`).join("")}</table>
           ${r.devRecord?.coins?.length ? `<ul class="cv-devcoins">${r.devRecord.coins.map((c) => `<li><a href="/check/${esc(c.address)}">${c.symbol ? `$${esc(c.symbol)}` : short(c.address)}</a><b class="sc sm" style="--c:${tone(c.tone)}">${c.score}</b></li>`).join("")}</ul>` : ""}</div>
+        ${r.creator?.deployerCoins?.others?.length ? `<div class="ck-card2"><h3>The deployer's other coins</h3><ul class="cv-devcoins">${r.creator.deployerCoins.others.map((c) => `<li><a href="/check/${esc(c.address)}">${short(c.address)}</a><span class="cv-dc-at">${ago(c.at)} ago</span><b class="cv-dc-v">${c.launchVerdict === "blocked" ? "Gate blocked at launch" : c.launchVerdict === "notes" ? "Gate passed with notes" : c.launchVerdict === "passed" ? "Gate passed at launch" : "not checked at launch"}</b></li>`).join("")}</ul></div>` : ""}
         <div class="ck-card2"><h3>Every check of this coin</h3>${hist ? `<ol class="cv-hist">${hist}</ol>` : '<p class="ck-empty">This is the first.</p>'}</div>
       </aside>
     </div>

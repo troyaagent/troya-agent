@@ -1,0 +1,66 @@
+// Creator lens (holder review idea D, 27 Nov 2026): for a Pons coin, who takes its creator fee and how much that wallet has
+// collected, and every coin the same deployer launched, with what Troya's Gate said at each launch. The VLAD case on Robinhood
+// Chain (liquidity locked for good while the creator kept claiming trading fees) is what this makes visible.
+// Read from the chain through Blockscout PRO's log index, one call each:
+//   PonsFactory TokenLaunched  topics [sig, token, curve, deployer]        → the deployer's coins
+//   Pons fee escrow Credited   topics [sig, recipient, source], data amount → ETH credited to the fee recipient
+//   Pons fee escrow Claimed    topics [sig, recipient], data amount         → ETH the recipient took out
+// The escrow keys credits by wallet, not by coin, so the fee figures cover every coin that wallet receives fees from; the
+// page says so. Shown as information, not scored. Cached 10 minutes per coin. Nothing here trades.
+import { getAddress } from "ethers";
+import { ADDR, ponsState } from "./robinhood.mjs";
+
+const LAUNCH = "0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607";
+const ESCROW = "0xd3afeb2a57f70ef218aa82451c51b2fb0416ac9e";
+const CREDITED = "0x4e45da441832cf53bdaa69235704fc0575e68210f459ee1562911024b12967d5";
+const CLAIMED = "0xd8138f8a3f377c5259ca548e70e4c2de94f129f5a11036a15b69513cba2b426a";
+const TTL = 10 * 60_000;
+const memo = new Map();
+const lc = (a) => String(a || "").toLowerCase();
+const pad = (a) => "0x" + lc(a).replace(/^0x/, "").padStart(64, "0");
+const eth = (logs) => Number(logs.reduce((s, l) => s + BigInt("0x" + (String(l.data || "0x").slice(2, 66) || "0")), 0n)) / 1e18;
+
+async function logs(q) {
+  const key = process.env.BLOCKSCOUT_API_KEY || "";
+  if (!key) return null;
+  const u = `https://api.blockscout.com/4663/api?module=logs&action=getLogs&fromBlock=0&toBlock=latest&apikey=${key}&${q}`;
+  const j = await fetch(u, { signal: AbortSignal.timeout(15_000) }).then((r) => r.json()).catch(() => null);
+  return Array.isArray(j?.result) ? j.result : j?.message === "No records found" ? [] : null;
+}
+
+async function compute(token) {
+  const ps = await ponsState(token).catch(() => null);
+  if (!ps) return { pons: false };
+  const deployer = ps.deployer ? getAddress(lc(ps.deployer)) : null;
+  const recipient = ps.creatorFeeRecipient ? getAddress(lc(ps.creatorFeeRecipient)) : null;
+  const [launches, credits, claims] = await Promise.all([
+    deployer ? logs(`address=${ADDR.ponsFactory}&topic0=${LAUNCH}&topic3=${pad(deployer)}&topic0_3_opr=and`) : null,
+    recipient ? logs(`address=${ESCROW}&topic0=${CREDITED}&topic1=${pad(recipient)}&topic0_1_opr=and`) : null,
+    recipient ? logs(`address=${ESCROW}&topic0=${CLAIMED}&topic1=${pad(recipient)}&topic0_1_opr=and`) : null,
+  ]);
+  const coins = (launches || []).map((l) => ({ address: getAddress("0x" + l.topics[1].slice(26)), at: Number(BigInt(l.timeStamp)) * 1000 }))
+    .sort((a, b) => b.at - a.at);
+  // what the Gate said when Sentry checked each of the deployer's launches (Two Fates), and their latest Troya Check
+  const F = await import("./fates.mjs").catch(() => null);
+  const verdicts = F ? await F.launchVerdicts(coins.map((c) => c.address)).catch(() => ({})) : {};
+  const last = claims?.length ? claims.reduce((a, b) => (Number(BigInt(b.timeStamp)) > Number(BigInt(a.timeStamp)) ? b : a)) : null;
+  return {
+    pons: true, deployer, recipient, recipientIsDeployer: !!deployer && !!recipient && lc(deployer) === lc(recipient),
+    creatorTaxPct: ps.taxBps != null ? Number(ps.taxBps) / 100 : null,
+    fees: credits || claims ? { creditedEth: credits ? eth(credits) : null, claimedEth: claims ? eth(claims) : null, claims: claims ? claims.length : null,
+      lastClaimAt: last ? Number(BigInt(last.timeStamp)) * 1000 : null, scope: "every coin this wallet receives creator fees from" } : null,
+    deployerCoins: launches ? { count: coins.length, others: coins.filter((c) => lc(c.address) !== lc(token)).slice(0, 12).map((c) => ({ ...c, launchVerdict: verdicts[lc(c.address)]?.v || null })) } : null,
+    note: launches || credits ? null : "Blockscout's log index did not answer just now: creator fees and the deployer's other coins were not read",
+  };
+}
+
+/** The creator lens for one coin, or null when it is not a Pons coin or nothing could be read. */
+export async function creatorLens(token) {
+  const k = lc(token);
+  const hit = memo.get(k);
+  if (hit && Date.now() - hit.at < TTL) return hit.v;
+  const v = await compute(token).catch(() => null);
+  if (v) memo.set(k, { at: Date.now(), v });
+  if (memo.size > 2000) memo.delete(memo.keys().next().value);
+  return v;
+}

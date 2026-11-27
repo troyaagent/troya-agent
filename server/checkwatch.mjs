@@ -293,7 +293,9 @@ export async function botCommand(cmd, arg, m) {
   if (cmd === "unfollow") {
     let had = false;
     await saveFollows((f) => { const l = f.chats[chat] || []; had = l.some((x) => lc(x) === lc(a)); f.chats[chat] = l.filter((x) => lc(x) !== lc(a)); if (!f.chats[chat].length) delete f.chats[chat]; });
-    return had ? `Stopped: no more notes for <code>${a}</code>.` : `You were not following <code>${a}</code>.`;
+    const sym = (await symbols()).get(lc(a))?.symbol;
+    const who = `${sym ? `$${esc(sym)} ` : ""}<code>${a}</code>`;
+    return { text: had ? `Stopped: no more alerts for ${who}.` : `You were not following ${who}.`, markup: { inline_keyboard: [[checkBtn(a), { ...followBtn(a), text: had ? "Alert me again" : "Alert me on changes" }]] } };
   }
   const { ponsState } = await import("./robinhood.mjs");
   const C = await import("./check.mjs");

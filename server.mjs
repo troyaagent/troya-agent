@@ -30,6 +30,7 @@ const ROUTES = {
   "/": "/index.html",
   "/capabilities": "/capabilities.html",
   "/philosophy": "/philosophy.html",
+  "/start": "/start.html",
   "/plans": "/plans.html",
   "/api-and-mcp": "/api-and-mcp.html",
   "/risk-controls": "/risk-controls.html",

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troya Agent | Start here</title>
+<meta name="description" content="New to Troya? What it is in one minute, the three things to try first, and every feature name in plain words: where it lives and whether it can move money.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Troya Agent">
+<meta property="og:title" content="Troya Agent | Start here">
+<meta property="og:description" content="Every Troya feature name in plain words: where it lives and whether it can move money.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Troyaagent">
+<link rel="canonical" href="https://troya.codes/start">
+<meta property="og:url" content="https://troya.codes/start">
+<meta property="og:image" content="https://troya.codes/og.png?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Troya Agent: every token opened at the gate before you sign">
+<meta name="twitter:image" content="https://troya.codes/og.png?v=2">
+<meta name="theme-color" content="#0d0c0b">
+<link rel="icon" href="/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/img/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<link rel="preload" href="/home/fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/home/pages.css">
+<link rel="stylesheet" href="/css/buybar.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js"}}</script>
+<script src="/config.js"></script>
+<script src="/js/i18n.js"></script>
+</head>
+<body class="site pn">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="pn-nav" data-pn-nav>
+  <a class="pn-logo" href="/" aria-label="Troya Agent home"><span>Troya</span><b>Agent</b><small>MMXXVI</small></a>
+  <div class="pn-r">
+    <nav class="bb-soc" aria-label="Troya elsewhere"><a class="bb-com" href="/proof">Proof</a><a class="bb-com" href="/roadmap">Roadmap</a><a class="bb-com" href="/community">Community</a><a class="bb-com" href="/stake">Stake</a><a href="https://x.com/Troyaagent" target="_blank" rel="noopener" aria-label="Troya on X" title="X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.12z"/></svg></a><a href="https://t.me/troyaagent" target="_blank" rel="noopener" aria-label="Troya on Telegram" title="Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg></a><a href="https://github.com/troyaagent/troya-agent" target="_blank" rel="noopener" aria-label="Troya on GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg></a></nav>
+    <div class="bb-buy" data-bb><button class="bb-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="bb-menu" data-bb-btn><img src="/img/logo-3d-128.png" alt="" width="24" height="24">Buy<span class="bb-t">$TROYA</span><svg class="bb-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button><div class="bb-menu" id="bb-menu" hidden data-bb-menu><a class="bb-i bb-main" href="/agent/#/swap?out=0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="/agent/#/swap?out={ca}"><img src="/img/logo-3d-128.png" alt="" width="36" height="36"><span><b>Troya Swap</b><small>Our own desk. The Gate checks $TROYA first, then Troya routes the best price on Robinhood Chain.</small></span><em>Best</em></a><a class="bb-i" href="https://ponsfamily.com/launchpad/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://ponsfamily.com/launchpad/{ca}" target="_blank" rel="noopener"><img src="/img/logos/pons.svg" alt="" width="36" height="36"><span><b>Pons</b><small>The launchpad where $TROYA started</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><a class="bb-i" href="https://fomo.family/tokens/robinhood/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://fomo.family/tokens/robinhood/{ca}" target="_blank" rel="noopener"><img src="/img/logos/fomo.png" alt="" width="36" height="36"><span><b>Fomo</b><small>The social trading app, on web and phone</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><a class="bb-i" href="https://dexscreener.com/robinhood/0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074" data-bb-href="https://dexscreener.com/robinhood/{ca}" target="_blank" rel="noopener"><img src="/img/logos/dexscreener.png" alt="" width="36" height="36"><span><b>DexScreener</b><small>Live chart, pools and trades</small></span><svg class="bb-out" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9"/></svg></a><button class="bb-ca" type="button" data-bb-ca><span>CA</span><code data-bb-ca-full>0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074</code><b>Copy</b></button></div></div>
+    <a class="pn-pill" href="/agent">Open app</a>
+    <button class="pn-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="pn-menu" data-pn-burger><i></i><i></i></button>
+  </div>
+</header>
+<nav class="pn-menu" id="pn-menu" aria-label="Site" data-pn-menu></nav>
+
+<main id="main">
+  <section class="page-hero" aria-labelledby="ph">
+    <canvas class="rain" data-rain aria-hidden="true"></canvas>
+    <span class="eyebrow"><i class="dot"></i>Start here</span>
+    <h1 id="ph" class="words" data-words>New to Troya? Start here</h1>
+    <p class="lead rv">Troya checks a coin before you buy it and keeps a public record of how its checks held up. It works on Robinhood Chain, with swaps on Base, Arbitrum and Solana and perps on Hyperliquid. It never holds your main wallet: you sign your own trades, or use an Agent Wallet with caps you set.</p>
+    <div class="hero-act rv"><a class="ulink" href="/check">Check a coin</a><a class="ulink" href="/agent">Open the app</a></div>
+  </section>
+
+  <section class="ip" aria-labelledby="first-h">
+    <div class="eyebrow-line"><span>01 / Three things to try first</span></div>
+    <h2 id="first-h" class="h2 words" data-words>Three things to try first</h2>
+    <ol class="st-steps">
+      <li><b>Check a coin.</b> Paste any Robinhood Chain contract at <a class="ulink" href="/check">troya.codes/check</a>, or send <code>/check 0x…</code> to the Troya bot in Telegram. You get one score out of 100 with the reasons behind it. Free, nothing to sign.</li>
+      <li><b>Run the Gate before a buy.</b> <a class="ulink" href="/agent#/gate">Gate a coin</a> simulates your exact buy and a test sell, and reads fees, taxes and liquidity. Swap runs it again every time you press Confirm.</li>
+      <li><b>See if the checks were right.</b> <a class="ulink" href="/record">The Record</a> grades every call in public, and Two Fates compares the coins the Gate passed with the ones it blocked, at 24 hours, 7 days and 30 days.</li>
+    </ol>
+    <p class="st-note">Everything Troya claims can be checked without a wallet on <a class="ulink" href="/proof">/proof</a>. Automated checks, never an audit and never a safe stamp. Questions: the Telegram group <a class="ulink" href="https://t.me/troyaagent" target="_blank" rel="noopener">t.me/troyaagent</a>, or <a class="ulink" href="mailto:team@troya.codes">team@troya.codes</a> in private.</p>
+  </section>
+
+  <section class="ip" aria-labelledby="gl-h">
+    <div class="eyebrow-line"><span>02 / Every name in plain words</span></div>
+    <h2 id="gl-h" class="h2 words" data-words>The glossary</h2>
+    <p class="lead rv">Troya names its parts after the Trojan War. Here is each one in plain words: what it does, where it lives, and whether it can move money. It is the same list the in-app Guide and the Troya bots answer from.</p>
+    <input class="st-search" type="search" placeholder="Search a name, like Heel or Scylla" aria-label="Search the glossary" data-st-q>
+    <div class="st-gl" data-st-gl><p class="st-note">Loading the glossary…</p></div>
+  </section>
+</main>
+
+<footer class="pn-foot" data-pn-foot></footer>
+<div class="toasts" aria-live="polite" data-toasts></div>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/home/pages.js"></script>
+<script src="/js/buybar.js" defer></script>
+<script src="/home/rain.js" defer></script>
+<script src="/home/start.js" defer></script>
+</body>
+</html>

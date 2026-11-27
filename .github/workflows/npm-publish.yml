@@ -1,0 +1,39 @@
+# Publishes one of Troya's npm packages from this repo with npm provenance, so anyone can see on npmjs.com that the
+# package was built from this exact commit by GitHub Actions (holder review fix 5, 27 Nov 2026).
+# One-time setup on npmjs.com, per package: Settings → Trusted publishing → GitHub Actions →
+#   repository troyaagent/troya-agent, workflow npm-publish.yml. No token is stored anywhere.
+# Run it from the Actions tab → "npm publish (provenance)" → Run workflow → pick the package folder.
+name: npm publish (provenance)
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package folder"
+        required: true
+        type: choice
+        options:
+          - mcp
+          - plugins/core
+          - plugins/elizaos
+          - plugins/agentkit
+          - plugins/virtuals-game
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: npm with trusted publishing support
+        run: npm install -g npm@latest
+      - name: Publish with provenance
+        working-directory: ${{ inputs.package }}
+        run: npm publish --provenance --access public

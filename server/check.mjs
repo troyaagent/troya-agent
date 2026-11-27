@@ -789,8 +789,10 @@ export async function boardView({ sort = "volume", dir = "desc", launchpad = "al
   const pads = new Map();
   if (board?.counts) for (const [id, n] of Object.entries(board.counts)) { if (id !== "all" && n > 0) pads.set(id, n); }
   else for (const t of trending) if (t.launchpad) pads.set(t.launchpad, (pads.get(t.launchpad) || 0) + 1);
+  // Check Watch: coins whose fee recipient, tax, code, owner or liquidity changed on chain, each checked again
+  const changed = deps.market ? [] : await import("./checkwatch.mjs").then((m) => m.recentChanges(8)).catch(() => []);
   const v = {
-    name: "Troya Check board", at: now, updatedAt: board?.updatedAt || null, total: board?.total ?? tokens.length, trending, checks, live, just, mostChecked24h, devs,
+    name: "Troya Check board", at: now, updatedAt: board?.updatedAt || null, total: board?.total ?? tokens.length, trending, checks, live, just, mostChecked24h, devs, changed,
     launchpads: [...pads.entries()].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ id, n })),
     windows: { change: ["1h", "24h"], volume: "24h", trades: "24h" },
     sorts: ["volume", "mcap", "change", "liquidity", "newest", "txns", "holders"],

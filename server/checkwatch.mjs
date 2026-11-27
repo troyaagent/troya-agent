@@ -276,6 +276,13 @@ export function watchOf(address) {
   return { since: f?.since || null, changes, followers: followed().get(a) || 0 };
 }
 
+/** the latest on-chain changes (the Troya Check board's "Changed on chain" panel), newest first */
+export function recentChanges(n = 8, days = 7) {
+  const since = Date.now() - days * 86400e3;
+  return state.events.filter((e) => e.at >= since && !e.queued).slice(-n).reverse()
+    .map((e) => ({ address: e.address, symbol: e.symbol || null, at: e.at, kinds: e.changes || [], text: e.text, before: e.before ?? null, after: e.after ?? null }));
+}
+
 export function summary() {
   return {
     name: "Troya Check Watch", watching: Object.keys(state.fp).length, followedCoins: followed().size, followingChats: Object.keys(follows.chats || {}).length,
@@ -322,7 +329,9 @@ export async function botCommand(cmd, arg, m) {
   const { ponsState } = await import("./robinhood.mjs");
   const C = await import("./check.mjs");
   const known = (await store.readJson("checks.json", []).catch(() => [])).some((r) => lc(r.address) === lc(a));
-  const isPons = known || (await ponsState(a).then((v) => !!v, () => false));
+  const { rpc } = await import("./robinhood.mjs");
+  const isPons = known || (await ponsState(a).then((v) => !!v, () => false))
+    || (await rpc("robinhood", "eth_getCode", [a, "latest"]).then((c) => String(c || "0x").length > 2, () => false));
   if (!isPons) return `Troya has not checked <code>${a}</code> yet. Send /check ${a} first, then /follow it.`;
   let full = false, already = false;
   await saveFollows((f) => {

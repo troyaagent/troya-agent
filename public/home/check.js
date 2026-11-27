@@ -138,6 +138,8 @@ function drawSide(d) {
   $("[data-ck-live]").innerHTML = d.live?.length ? d.live.map((r) => li(r, `<small class="mut">${ago(r.startedAt)}</small>`)).join("") : '<li class="ck-empty">Nothing is being read right now.</li>';
   $("[data-ck-just]").innerHTML = d.just?.length ? d.just.map((r) => li(r, lbl(r))).join("") : '<li class="ck-empty">No checks yet.</li>';
   $("[data-ck-most]").innerHTML = d.mostChecked24h?.length ? d.mostChecked24h.map((r) => li(r, `${lbl(r)}<small class="cnt">${r.checks}</small>`)).join("") : '<li class="ck-empty">No checks in the last 24 hours.</li>';
+  const ch = $("[data-ck-changed]");
+  if (ch) ch.innerHTML = d.changed?.length ? d.changed.map((r) => `<li class="ck-chg"><a href="/check/${esc(r.address)}">${icon(r, "ck-ico sm")}<b>${r.symbol ? `$${esc(r.symbol)}` : short(r.address)}</b></a><small class="mut" title="${esc(r.text)}">${esc(r.kinds.map((k) => ({ "fee-recipient": "fee recipient", tax: "tax", graduated: "graduated", upgrade: "code upgrade", owner: "owner", liquidity: "liquidity" }[k] || k)).join(", "))} · ${r.after != null ? `${r.before ?? "–"} → ${r.after}` : "re-checking"} · ${ago(r.at)}</small></li>`).join("") : '<li class="ck-empty">No on-chain change in the last 7 days.</li>';
   const devs = $("[data-ck-devsbox]");
   if (devs) { devs.hidden = !d.devs?.length; $("[data-ck-devs]").innerHTML = (d.devs || []).map((x) => `<li><a href="https://robinhoodchain.blockscout.com/address/${esc(x.dev)}" target="_blank" rel="noopener"><code>${short(x.dev)}</code></a><small class="${x.good ? "up" : "mut"}">${x.good} of ${x.coins} scored 50+</small></li>`).join(""); }
   const pads = $("[data-ck-pads]");

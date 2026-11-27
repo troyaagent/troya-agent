@@ -308,7 +308,7 @@ const TRADE = process.env.TG_TRADE === "1";
 // the coin page (the project's X beside the contract, market cap, chart, Gate verdict, Cluster map), then the Troya Check score
 const buttons = (a) => ({ inline_keyboard: [
   ...(TRADE ? [[{ text: "Trade in Telegram", url: `https://t.me/${process.env.TG_BOT_USERNAME || "TrojanTroya_bot"}?start=t_${a}` }]] : []),
-  [{ text: "Check in Troya", url: `${SITE}/agent#/token/${a}` }],
+  [{ text: "Check in Troya", url: `${SITE}/agent#/token/${a}` }, { text: "Alert me on changes", url: `https://t.me/${process.env.TG_BOT_USERNAME || "TrojanTroya_bot"}?start=follow_${a}` }],
   [{ text: "Troya Check score", url: `${SITE}/check/${a}` }, { text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${a}` }],
   [{ text: "Pons", url: PONS + a.toLowerCase() }, { text: "DexScreener", url: `https://dexscreener.com/robinhood/${a}` }],
   [{ text: "Every call graded: The Record", url: `${SITE}/record` }],
@@ -316,7 +316,7 @@ const buttons = (a) => ({ inline_keyboard: [
 
 const poolButtons = (a) => ({ inline_keyboard: [
   ...(TRADE ? [[{ text: "Trade in Telegram", url: `https://t.me/${process.env.TG_BOT_USERNAME || "TrojanTroya_bot"}?start=t_${a}` }]] : []),
-  [{ text: "Check in Troya", url: `${SITE}/agent#/token/${a}` }],
+  [{ text: "Check in Troya", url: `${SITE}/agent#/token/${a}` }, { text: "Alert me on changes", url: `https://t.me/${process.env.TG_BOT_USERNAME || "TrojanTroya_bot"}?start=follow_${a}` }],
   [{ text: "Troya Check score", url: `${SITE}/check/${a}` }, { text: "Buy on Fomo", url: `https://fomo.family/tokens/robinhood/${a}` }],
   [{ text: "DexScreener", url: `https://dexscreener.com/robinhood/${a}` }],
   [{ text: "Every call graded: The Record", url: `${SITE}/record` }],

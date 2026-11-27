@@ -68,14 +68,26 @@ async function compute(token) {
   };
 }
 
-/** The creator lens for one coin, or null when it is not a Pons coin or nothing could be read. */
+/** The creator lens for one coin, or null when it is not a Pons coin or nothing could be read.
+ * Stale while revalidate: Blockscout's log index can take 15 s or more, so a known answer is returned at once and read
+ * again in the background once it is old (1 minute for a read with a part missing, 10 minutes otherwise). A part that
+ * did not answer keeps its last value. */
+const inflight = new Map();
+const partialOf = (v) => !!v?.pons && (!v.deployerCoins || !v.fees);
 export async function creatorLens(token) {
   const k = lc(token);
   const hit = memo.get(k);
-  if (hit && Date.now() - hit.at < TTL) return hit.v;
-  const v = await compute(token).catch(() => null);
-  // a read with a part missing (Blockscout did not answer) is tried again after a minute instead of ten
-  if (v) memo.set(k, { at: Date.now() - (v.pons && (!v.deployerCoins || !v.fees) ? TTL - 60_000 : 0), v });
-  if (memo.size > 2000) memo.delete(memo.keys().next().value);
-  return v;
+  if (hit && Date.now() - hit.at < (partialOf(hit.v) ? 60_000 : TTL)) return hit.v;
+  let p = inflight.get(k);
+  if (!p) {
+    p = compute(token).catch(() => null).then((v) => {
+      inflight.delete(k);
+      const old = memo.get(k)?.v;
+      if (v?.pons && old?.pons) { v.deployerCoins = v.deployerCoins || old.deployerCoins; v.fees = v.fees || old.fees; if (v.deployerCoins && v.fees) v.note = null; }
+      if (v) { memo.set(k, { at: Date.now(), v }); if (memo.size > 2000) memo.delete(memo.keys().next().value); }
+      return v || old || null;
+    });
+    inflight.set(k, p);
+  }
+  return hit ? hit.v : p;
 }

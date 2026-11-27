@@ -139,7 +139,28 @@ async function recheck(a, list, fp) {
     ev.told = chats.length;
   }
   console.log(`[checkwatch] ${ev.symbol || a}: ${ev.text} · ${ev.before ?? "–"} → ${after ?? "–"} · told ${ev.told || 0}`);
+  if (after == null && state.fp[a]) state.fp[a].retry = { at: Date.now(), evAt: ev.at, tries: 0 };
   return ev;
+}
+
+/** a re-check that ran out of time: read again, fill the event's score, and tell followers who got "checking it again" */
+async function retryRecheck(a, now) {
+  const f = state.fp[a], rt = f?.retry;
+  if (!rt || now - rt.at < 5 * 60_000) return false;
+  const C = await import("./check.mjs");
+  const r = await C.checkForChat(getAddress(a), { via: "watch", budgetMs: 120_000, firstWaitMs: 60_000 }).catch(() => null);
+  const ev = state.events.find((e) => lc(e.address) === a && e.at === rt.evAt);
+  if (r && C.complete(r)) {
+    delete f.retry;
+    if (ev) {
+      ev.after = r.score; ev.label = r.label;
+      const chats = Object.entries(follows.chats || {}).filter(([, l]) => (l || []).some((x) => lc(x) === a)).map(([c]) => c);
+      for (const c of chats) await tgSend(c, `<b>Troya Check Watch</b> · ${ev.symbol ? `$${esc(ev.symbol)}` : short(ev.address)}\nNew score after the change (${esc(ev.text)}): <b>${ev.before ?? "–"} → ${r.score}</b> (${esc(r.label || "")})`, { inline_keyboard: [[checkBtn(ev.address), stopBtn(ev.address)]] });
+    }
+    console.log(`[checkwatch] ${ev?.symbol || a}: re-check done · ${ev?.before ?? "–"} → ${r.score}`);
+  } else if (++rt.tries >= 3) delete f.retry;
+  else rt.at = now;
+  return true;
 }
 
 async function tick() {
@@ -153,6 +174,7 @@ async function tick() {
     cursor = recent.length ? (cursor + SLICE) % recent.length : 0;
     const coins = [...[...fol.keys()].slice(0, FOLLOWED_PER_PASS), ...others];
     let rechecks = 0;
+    for (const [a, f] of Object.entries(state.fp)) if (f.retry && rechecks < 2 && (await retryRecheck(a, now).catch(() => false))) rechecks++;
     for (const a of coins) {
       if (!isAddress(a)) continue;
       const cur = await fingerprint(a).catch(() => null);
@@ -326,6 +348,11 @@ export async function register(r, ctx) {
   if (!Array.isArray(state.events)) state.events = [];
   follows = await store.readJson(FOLLOWS, { chats: {} }).catch(() => follows);
   if (!follows.chats) follows.chats = {};
+  // a re-check cut short by a restart (no score after it, in the last 6 hours) is tried again
+  for (const e of state.events.slice(-50)) {
+    const k = lc(e.address), f = state.fp[k];
+    if (f && !f.retry && !e.queued && e.after == null && Date.now() - e.at < 6 * 3600e3) f.retry = { at: 0, evAt: e.at, tries: 0 };
+  }
   r.get("/api/checkwatch", () => summary(), { weight: 1, perMin: 60 });
   if (process.env.CHECK_WATCH === "0") return;
   setTimeout(() => tick().catch((e) => console.warn("[checkwatch]", e.message)), 45_000).unref?.();

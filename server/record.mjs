@@ -207,6 +207,20 @@ export async function recordView({ limit = 100 } = {}) {
 export async function register(r, ctx) {
   store = ctx.store;
   r.get("/api/record", ({ query }) => recordView({ limit: query.limit }), { weight: 1 });
+  // the headline numbers and the rules written into /record itself (holder review, 27 Nov 2026: without JavaScript the page
+  // said "Loading" only), refreshed every 2 minutes
+  const escH = (x) => String(x ?? "").replace(/[<>"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])).replace(/&(?![a-z#0-9]+;)/gi, "&amp;");
+  const pctTxt = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${x.toFixed(1)}%`);
+  const writeHead = async () => {
+    try {
+      const { setFragment } = await import("./livehtml.mjs");
+      const v = await recordView({ limit: 1 }), st = v.stats;
+      setFragment("record-head", `<p class="rec-ssr">${st.calls.toLocaleString("en-US")} calls · ${st.graded.toLocaleString("en-US")} graded · ${st.wins.toLocaleString("en-US")} wins${st.winRate != null ? ` (${Math.round(st.winRate * 100)}%)` : ""} · median at 24 h ${pctTxt(st.median24h)} · ${st.reached2x} of ${st.reachedOf} reached 2x. Every call with its transaction: <a href="/api/record">/api/record</a>.</p>`);
+      setFragment("record-rules", escH(v.rules));
+    } catch (e) { console.warn("[record] html", e.message); }
+  };
+  setTimeout(writeHead, 15_000).unref?.();
+  setInterval(writeHead, 120_000).unref?.();
   if (process.env.RECORD === "0") return;
   clearInterval(timer);
   timer = setInterval(() => tick().catch(() => {}), 60_000);

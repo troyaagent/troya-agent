@@ -9,7 +9,7 @@ const frags = new Map();
 const vals = new Map();
 let gen = 0;
 // only these pages are rewritten; every other file goes out byte for byte
-const PAGES = new Set(["/index.html", "/verify.html", "/proof.html", "/flywheel.html", "/stats.html"]);
+const PAGES = new Set(["/index.html", "/verify.html", "/proof.html", "/flywheel.html", "/stats.html", "/record.html"]);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 export function setFragment(name, html) {

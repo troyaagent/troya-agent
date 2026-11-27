@@ -216,5 +216,16 @@ export async function register(r, ctx) {
   r.get("/api/fates", ({ query }) => fatesView({ limit: query.limit }), { weight: 1 });
   if (process.env.FATES === "0") return;
   setInterval(() => tick().catch(() => {}), 60_000).unref?.();
+  // the tables' numbers written into /record for readers without JavaScript, refreshed every 2 minutes
+  const writeHtml = async () => {
+    try {
+      const { setFragment } = await import("./livehtml.mjs");
+      const v = await fatesView({ limit: 1 });
+      const line = (h, t) => (t?.graded ? `${h}: passed ${t.passed.graded} (went bad ${t.passed.wentBad}, down 50% or more ${t.passed.down50}), blocked ${t.blocked.graded} (went bad ${t.blocked.wentBad}, down 50% or more ${t.blocked.down50})` : `${h}: not graded yet`);
+      setFragment("fates-head", `<p class="rec-ssr">${[line("24 hours", v.tables["24h"]), line("7 days", v.tables["7d"]), line("30 days", v.tables["30d"])].join("<br>")}<br>Went-bad rule ${WENT_BAD_RULE.version} (${WENT_BAD_RULE.setAt}). Raw data: <a href="/api/fates">/api/fates</a>.</p>`);
+    } catch (e) { console.warn("[fates] html", e.message); }
+  };
+  setTimeout(writeHtml, 25_000).unref?.();
+  setInterval(writeHtml, 120_000).unref?.();
   setTimeout(() => tick().catch(() => {}), 20_000).unref?.();
 }

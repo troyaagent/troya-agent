@@ -1195,7 +1195,12 @@ export async function renderPage(html, address) {
 <meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(img)}">`;
   // the first answer for the script (no second request) and for readers without JavaScript; never executed (type json)
   const data = JSON.stringify({ address: A, result: r ? publicResult(await enrich(r)) : null }).replace(/</g, "\\u003c");
-  const noscript = r ? `<p class="ck-ssr"><b>${esc(title)}</b><br>${(r.reasons || []).map((x) => esc(x.text)).join("<br>")}</p>` : `<p class="ck-ssr">Checking ${esc(A)}…</p>`;
+  // no finished check yet: the latest saved one goes into the HTML, marked as such (holder review, 27 Nov 2026: readers
+  // without JavaScript saw "Checking…" only)
+  const last = r ? null : latestChecks(await cachedRows().catch(() => [])).get(lc(A)) || null;
+  const noscript = r ? `<p class="ck-ssr"><b>${esc(title)}</b><br>${(r.reasons || []).map((x) => esc(x.text)).join("<br>")}</p>`
+    : last ? `<p class="ck-ssr"><b>${esc(`${last.symbol ? `$${last.symbol}` : short(A)}: ${last.label}, ${last.score}/100`)}</b> (last check ${esc(new Date(last.at).toISOString().slice(0, 16).replace("T", " "))} UTC; a new one is running)<br>${(last.reasons || []).map((x) => esc(x.text)).join("<br>")}</p>`
+    : `<p class="ck-ssr">Checking ${esc(A)}…</p>`;
   return { html: html.replace(/<!--meta-->[\s\S]*?<!--\/meta-->/, meta).replace("<!--check-data-->", `<script type="application/json" id="check-data">${data}</script>`).replace("<!--check-ssr-->", noscript), pending: !r };
 }
 

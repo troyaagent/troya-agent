@@ -754,6 +754,9 @@ export async function boardView({ sort = "volume", dir = "desc", launchpad = "al
   const tokens = [...(board?.tokens || [])];
   const have = new Set(tokens.map((t) => lc(t.address)));
   for (const t of ponsTop?.tokens || []) if (!have.has(lc(t.address))) { tokens.push(t); have.add(lc(t.address)); }
+  // $TROYA itself is always on the All view, scored like any other coin (it reads Some flags, with its own launch ring)
+  const TROYA_CA = "0x1fa81ddaaac83240803b3f2d20595e40edc1a074";
+  if (launchpad === "all" && !have.has(TROYA_CA)) { const t = M.indexRow?.(TROYA_CA); if (t) { tokens.push({ ...t, spark: M.sparkFor?.(TROYA_CA) || t.spark || null }); have.add(TROYA_CA); } }
   if (ponsTop?.tokens?.length && sort === "volume") tokens.sort((x, y) => (dir === "asc" ? 1 : -1) * ((x.volume24hUsd || 0) - (y.volume24hUsd || 0)));
   const trending = tokens.map((t) => joinRow(t, latest.get(lc(t.address))));
   // the checks lists: every coin checked this week, with the board's numbers when the board has the coin

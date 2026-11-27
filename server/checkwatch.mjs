@@ -293,7 +293,7 @@ export function summary() {
     name: "Troya Check Watch", watching: Object.keys(state.fp).length, followedCoins: followed().size, followingChats: Object.keys(follows.chats || {}).length,
     lastPassAt: state.passAt || null, everyMinutes: TICK_MS / 60_000,
     watched: "creator fee recipient, creator tax, graduation, code upgrades (EIP-1967), owner, pool liquidity falling by half (pools that can be pulled; a Pons coin's liquidity is locked)",
-    events: state.events.slice(-25).reverse(),
+    events: state.events.filter(shown).slice(-25).reverse(),
     howToFollow: `/follow 0x… in a private chat with @${BOT}, or t.me/${BOT}?start=follow_0x…`,
   };
 }

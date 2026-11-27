@@ -211,9 +211,67 @@ export async function fatesView({ limit = 100 } = {}) {
   };
 }
 
+/* ---------- the weekly scorecard (Xivor, 28 Nov 2026) ----------
+   Every Monday, the same format so weeks can be compared: the 2x2 table per horizon (passed / blocked × went bad / still
+   tradable) with the down-50%-or-more column and the base rate, plus two example coins, one passed and one blocked, picked
+   from the side that flatters the Gate least: the passed coin that did worst and the blocked coin that did best. Misses and
+   false alarms get the same space as hits. Draft only: sent to the owner on Monday from 09:00 UTC (first edition 7 Dec 2026,
+   after the first 7-day grades); nothing is posted until the owner approves it. GET /api/fates/scorecard shows the draft. */
+const SCORECARD_FROM = Date.UTC(2026, 11, 7);
+const pctTxt = (x) => (x == null ? "–" : `${Math.round(x * 1000) / 10}%`);
+const sgnPct = (x) => (x == null ? "–" : `${x > 0 ? "+" : ""}${Math.round(x)}%`);
+const dayTxt = (ms) => new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+function hzLine(t, h) {
+  if (!t?.graded) return `${h}: no grades yet`;
+  return `${h}: passed ${t.passed.graded} (went bad ${t.passed.wentBad}, down 50%+ ${t.passed.down50} = ${pctTxt(t.passedDown50Share)}) · blocked ${t.blocked.graded} (went bad ${t.blocked.wentBad}, down 50%+ ${t.blocked.down50} = ${pctTxt(t.blockedDown50Share)}) · base rate ${pctTxt(t.baseRate)}`;
+}
+export function scorecardDraft(v, now = Date.now()) {
+  const T = v.tables || {};
+  const h = T["30d"]?.graded ? ["30d", "change30d", "30 days"] : T["7d"]?.graded ? ["7d", "change7d", "7 days"] : ["24h", "change24h", "24 hours"];
+  const withCh = (v.recent || []).filter((c) => c[h[1]] != null);
+  const passedWorst = withCh.filter((c) => c.cohort === "passed").sort((a, b) => a[h[1]] - b[h[1]])[0] || null;
+  const blockedBest = withCh.filter((c) => c.cohort === "blocked").sort((a, b) => b[h[1]] - a[h[1]])[0] || null;
+  const name = (c) => (c.symbol ? `$${c.symbol}` : `${c.token.slice(0, 8)}…`);
+  const ex = [];
+  if (passedWorst) ex.push(`Passed, did worst: ${name(passedWorst)} ${sgnPct(passedWorst[h[1]])} at ${h[2]}${passedWorst[h[1]] <= -50 ? " (a miss)" : ""}. troya.codes/check/${passedWorst.token}`);
+  if (blockedBest) ex.push(`Blocked, did best: ${name(blockedBest)} ${sgnPct(blockedBest[h[1]])} at ${h[2]}${blockedBest[h[1]] > 0 ? " (a false alarm)" : ""}. Blocked for: ${blockedBest.reason || "a safety check"}. troya.codes/check/${blockedBest.token}`);
+  const head = `Two Fates, weekly scorecard · ${dayTxt(now)}`;
+  const t24 = T["24h"] || {}, t7 = T["7d"] || {};
+  const x = [
+    head,
+    t24.graded ? `24h: passed ${t24.passed.graded}, ${pctTxt(t24.passedDown50Share)} down 50%+ · blocked ${t24.blocked.graded}, ${pctTxt(t24.blockedDown50Share)} down 50%+` : null,
+    t7.graded ? `7d: passed ${t7.passed.graded}, ${pctTxt(t7.passedDown50Share)} down 50%+ · blocked ${t7.blocked.graded}, ${pctTxt(t7.blockedDown50Share)} down 50%+` : null,
+    "Misses and false alarms included. Tables + CSV: troya.codes/record#two-fates",
+  ].filter(Boolean).join("\n");
+  const telegram = [
+    `<b>${head}</b>`, "",
+    "Every launch Sentry checks: passed or blocked by the Gate, graded on the same clock.",
+    hzLine(T["24h"], "24 hours"), hzLine(T["7d"], "7 days"), hzLine(T["30d"], "30 days"), "",
+    ...(ex.length ? ["Two examples, from the side that flatters the Gate least:", ...ex.map((e) => `• ${e}`), ""] : []),
+    `Went bad: at most 10% of the price at the check, no price any more, or it cannot be sold (rule ${v.wentBadRule?.version || "v1"}, written down ${v.wentBadRule?.setAt || "27 Nov 2026"}, before the first 7-day grade).`,
+    "Every coin, the full tables and the CSV: troya.codes/record#two-fates",
+    "What the price did after the check; never a forecast.",
+  ].join("\n");
+  return { x, telegram, horizon: h[0], note: "Draft only: the owner approves it before it is posted on X and in the group." };
+}
+async function maybeSendScorecard(now = Date.now()) {
+  const d = new Date(now);
+  if (now < SCORECARD_FROM || d.getUTCDay() !== 1 || d.getUTCHours() < 9) return;
+  const key = d.toISOString().slice(0, 10);
+  const sent = await store.readJson("fates-scorecard.json", {}).catch(() => ({}));
+  if (sent[key]) return;
+  const dr = scorecardDraft(await fatesView({ limit: 3000 }), now);
+  const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const { tellOwner } = await import("./infrawatch.mjs");
+  await tellOwner(`<b>Two Fates scorecard: this week's draft</b>\nNot posted. Approve it in chat before anything goes out.\n\n<b>X</b>\n${esc(dr.x)}\n\n<b>Telegram</b>\n${dr.telegram}`);
+  await store.writeJson("fates-scorecard.json", { ...sent, [key]: now });
+}
+
 export async function register(r, ctx) {
   store = ctx.store;
   r.get("/api/fates", ({ query }) => fatesView({ limit: query.limit }), { weight: 1 });
+  r.get("/api/fates/scorecard", async () => scorecardDraft(await fatesView({ limit: 3000 })), { weight: 2, perMin: 20 });
+  setInterval(() => maybeSendScorecard().catch((e) => console.warn("[fates] scorecard", e.message)), 15 * 60_000).unref?.();
   if (process.env.FATES === "0") return;
   setInterval(() => tick().catch(() => {}), 60_000).unref?.();
   // the tables' numbers written into /record for readers without JavaScript, refreshed every 2 minutes

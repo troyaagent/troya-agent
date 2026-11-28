@@ -94,7 +94,11 @@ export function agendaLines(now = Date.now()) {
   let list = [];
   try { const o = JSON.parse(readFileSync(AGENDA_FILE, "utf8")); if (Array.isArray(o)) list = o; } catch { return ""; }
   const on = list.filter((e) => e && typeof e.text === "string" && (!e.from || Date.parse(e.from) <= now) && (!e.until || Date.parse(e.until) > now));
-  return on.length ? `Team agenda, dated (when someone asks what is coming or planned, say these plainly; times are UTC): ${on.map((e) => e.text.replace(/\s+/g, " ").trim().slice(0, 400)).join(" ")}` : "";
+  // 28 Nov 2026: each fact was cut at 400 characters, so 42 of 47 facts lost their second half (the vault's caps, pause
+  // and 48-hour rule among them) and the bot then "corrected" true answers as made up. A fact now keeps up to 1,200
+  // characters, ending on a whole sentence; write longer ones as two facts.
+  const keep = (t) => { const s = t.replace(/\s+/g, " ").trim(); if (s.length <= 1200) return s; const c = s.slice(0, 1200); const end = c.lastIndexOf(". "); return end > 600 ? c.slice(0, end + 1) : c; };
+  return on.length ? `Team agenda, dated (when someone asks what is coming or planned, say these plainly; times are UTC): ${on.map((e) => keep(e.text)).join(" ")}` : "";
 }
 
 // V9 F57 Phoenix (24 Nov 2026): the team's corrections (data/lessons-bot.json, [{ at, wrong, right, source }], seeded by

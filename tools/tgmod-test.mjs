@@ -202,5 +202,14 @@ ok(!r && !did("banChatMember").length, "an admin named Troya Agent is never touc
 for (const n of ["DEV", "Owner", "𝐀𝐝𝐦𝐢𝐧", "Support Team", "Moderator", "TIME IS PRECIOUS [ NEVER DM FISRT ]", "Admins will never DM you", "DM me for support"]) ok(mod.titleOnlyName({ first_name: n }), `"${n}" is only a team title`);
 for (const n of ["Dev Patel", "Owen", "Andi", "Troya fan", "Time is money"]) ok(!mod.titleOnlyName({ first_name: n }), `"${n}" is a real name, left alone`);
 
+// 28 Nov 2026: "I'd Liam" posted a fake relaunch ("send me any transaction hash", "redeploying CA ... allocating our holders")
+for (const s of [
+  "We will reIaunch  the project soon ... they will receive 75% of total lnvested in the project back to their wallets. Those that go with 2&3  send me  with any transactlon hash of your purchase",
+  "Hello everyone, We will be redeploying CA so we can carry out audit process. We will be allocating our holders and note we won't be sending out from snapshots",
+  "We are hosting a drop campaign for holder in the holders chat in few hours if you haven’t been added to the holders chat kindly message me now to get the group",
+]) ok(mod.score(s) >= 3, `fake relaunch caught: "${s.slice(0, 50)}"`);
+for (const s of ["will the vault create recurring revenue?", "is the team going to redeploy the contract?", "when relaunch of the site?", "I bought, here is my transaction hash 0xabc", "send me the link to the vault please"])
+  ok(mod.score(s) < 2, `ordinary line left alone: "${s}"`);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

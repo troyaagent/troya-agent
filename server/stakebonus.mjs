@@ -498,6 +498,8 @@ export async function recordWebSwap({ hash, session = null, built }) {
     return x;
   });
   evMemo = null;
+  // Exit Promise (pilot): a buy of a coin the Gate passes is covered for 7 days
+  if (!dup) import("./exitpromise.mjs").then((m) => m.noteWebBuy({ ...rec, tokenIn: b.tokenIn, tokenOut: b.tokenOut, eth: b.eth })).catch(() => {});
   return { ok: true, already: dup, counted: usd >= activeMinUsd(), usd, t, minUsd: activeMinUsd() };
 }
 

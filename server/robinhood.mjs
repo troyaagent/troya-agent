@@ -981,7 +981,8 @@ function noteBuilt(who, to, data, q) {
     const isEth = (t) => t?.address === "native" || lower(t?.address) === lower(ADDR.weth), isUsd = (t) => lower(t?.address) === lower(ADDR.usdg);
     const e = Number(q?.ethUsd) || 0;
     const usd = q?.venue === "wrap" ? 0 : isEth(q?.tokenIn) ? Number(q.amountIn) * e : isEth(q?.tokenOut) ? Number(q.amountOut) * e : isUsd(q?.tokenIn) ? Number(q.amountIn) : isUsd(q?.tokenOut) ? Number(q.amountOut) : 0;
-    BUILT.set(`${lower(who)}|${lower(to)}|${keccak256(data)}`, { at: Date.now(), usd: Number.isFinite(usd) ? usd : 0, venue: q?.venue || null });
+    BUILT.set(`${lower(who)}|${lower(to)}|${keccak256(data)}`, { at: Date.now(), usd: Number.isFinite(usd) ? usd : 0, venue: q?.venue || null,
+      tokenIn: q?.tokenIn?.address || null, tokenOut: q?.tokenOut?.address || null, eth: isEth(q?.tokenIn) ? Number(q.amountIn) || null : null });
     if (BUILT.size > 5000) BUILT.delete(BUILT.keys().next().value);
   } catch { /* never in the way of a build */ }
 }

@@ -79,6 +79,10 @@ On the web: troya.codes/agent#/create · in Telegram: send /launch to me in a pr
 One launch from X a day (3 in all) without 1M $TROYA; holders have no limit and keep the whole creator fee
 Claim your creator fees: troya.codes/agent#/creator
 
+<b>Vault and guarantees</b> (new, 28 Nov 2026)
+Troya Index: one token, TIDX, for ETH, USDG, SPY, NVDA and $TROYA, kept on target by Troya's keeper; redeem any time · troya.codes/agent#/vault
+Exit Promise (pilot): a coin the Gate passed, bought through Troya, that Troya's re-test cannot sell within 7 days is refunded, up to $10 · troya.codes/safety#exit-promise
+
 <b>Troya</b>
 /perks · what $TROYA holders get
 /ca · official contract address

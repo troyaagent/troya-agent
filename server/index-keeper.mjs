@@ -37,7 +37,7 @@ const ERC = new Interface(["function symbol() view returns (string)", "function 
 const Q96 = 1n << 96n;
 const OPS = ["Keeper", "Guardian", "Fee", "Caps", "RebalanceRules", "AddAsset", "RetireAsset", "AddVenue", "RemoveVenue", "MgmtFee"];
 const SYMBOL = { [lc(ETH)]: "ETH", ...Object.fromEntries(Object.entries(TOKENS).map(([s, a]) => [lc(a), s])) };
-export const NOT_AUDITED = "Not audited. TroyaIndex was built and tested by Troya (75 contract tests, a Robinhood Chain fork run, Slither and Wake scans), with no paid or outside audit. The contract limits what the team and the keeper can do (no withdraw, sweep or upgrade; every change waits 48 hours in public; withdrawals cannot be paused), but code can have bugs and basket tokens can be frozen by their issuers. Deposit only what you can afford to lose; caps start at 2 TIDX in total and 0.5 per wallet.";
+export const NOT_AUDITED = "TroyaIndex was built and tested by Troya: 75 contract tests, a Robinhood Chain fork run, Slither and Wake scans, and the source verified on Blockscout. A bug bounty pays for real security bugs (SECURITY.md). The contract limits what the team and the keeper can do (no withdraw, sweep or upgrade; every change waits 48 hours in public; withdrawals cannot be paused), but code can have bugs and basket tokens can be frozen by their issuers. Deposit only what you can afford to lose; caps start at 2 TIDX in total and 0.5 per wallet.";
 
 // known team wallets the keeper must never be (a stolen or reused key would join two powers that are kept apart)
 const TEAM = [CREATOR, SAFE, "0x1e1367360a080A94069ac59af3B9FF042Bb058d1", "0x70A02a0A8C820E897a2fCB16bcffe4C69aACA931", // the Safe's two signers

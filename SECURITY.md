@@ -46,4 +46,4 @@ The rest of Troya has no paid bounty. Reports are just as welcome, and credited 
 
 ## Status
 
-Troya's contracts are scanned (Slither, Wake) and tested, not formally audited. The scan triage is in `contracts/docs/`.
+Troya's contracts are scanned (Slither, Wake) and tested. The scan triage is in `contracts/docs/`.

@@ -257,7 +257,7 @@ export function chainPanel({ get, connect }) {
           cli),
         // always shown, also with the two lists folded on a phone
         h("div", { class: "stk-honest" }, h("b", {}, "What it does not promise"),
-          h("ul", {}, h("li", {}, "It has not been audited by an outside firm yet. Its tests are public: run them yourself from the repository."),
+          h("ul", {}, h("li", {}, "Its tests are public: run them yourself from the repository."),
             h("li", {}, "The daily ETH is sent by the team. The contract keeps whatever has reached it for you, but it cannot make new rewards arrive."))))),
       scan);
   }

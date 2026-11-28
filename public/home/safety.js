@@ -32,6 +32,24 @@
       ? `<ul class="alive-list">${list.map((c) => `<li><a class="ulink" href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a><span>${ago(c.at)}</span></li>`).join("")}</ul><p style="margin-top:12px"><a class="ulink" href="${esc(d.code.repo)}/commits/main" target="_blank" rel="noopener">Every change, newest first</a></p>`
       : '<p>The public repository could not be read just now. <a class="ulink" href="https://github.com/troyaagent/troya-agent/commits/main" target="_blank" rel="noopener">Open it on GitHub</a>.</p>';
   }
+  // Exit Promise pilot: the fund and its record, read live from /api/exitpromise.
+  async function loadExit() {
+    const el = $("[data-ep-stats]");
+    if (!el) return;
+    let d = null;
+    try { const r = await fetch("/api/exitpromise", { cache: "no-store" }); if (r.ok) d = await r.json(); } catch {}
+    if (!d || !d.fund) return;
+    const tile = (k, v, sub = "") => `<div class="rec-tile"><span>${k}</span><b>${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+    const f = d.fund, claims = Array.isArray(d.claims) ? d.claims : [];
+    const left = Math.max(0, (Number(f.capEth) || 0) - (Number(f.usedEth) || 0));
+    el.innerHTML = [
+      tile("Pilot fund left", `${left.toFixed(3)} ETH`, `of ${esc(f.capEth)} ETH, held by ${esc(f.holderIs || "the team Safe")}`),
+      tile("Covered buys", String(d.covered?.buys ?? 0), `${d.covered?.open ?? 0} still inside their 7 days`),
+      tile("Claims", String(claims.length), `${d.paidCount ?? 0} paid, each one a Gate miss`),
+    ].join("");
+  }
   load();
+  loadExit();
   setInterval(load, 5 * 60_000);
+  setInterval(loadExit, 5 * 60_000);
 })();

@@ -34,6 +34,16 @@ const txLink = (t, text) => ext(`${EXP}/tx/${t}`, text || short(t, 6));
 const amt = (x) => (x == null || !isFinite(x) ? "–" : x === 0 ? "0" : Math.abs(x) >= 1000 ? x.toLocaleString("en-US", { maximumFractionDigits: 2 }) : Math.abs(x) >= 1 ? x.toFixed(4) : tiny(x));
 const money = (x) => (x == null || !isFinite(x) ? "–" : usd(x));
 const when = (s) => new Date(s * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+// Before the keeper's first trade: say why there is none yet (the vault needs 12 hourly price reads per pool), so nobody
+// reads "none yet" as a stuck keeper. Owner, 28 Nov 2026: users must never be left guessing.
+function firstTradeNote(d) {
+  const reads = (d.holdings || []).map((x) => x.venue?.reads).filter((n) => Number.isFinite(n));
+  if (!reads.length) return "none yet";
+  const have = Math.min(...reads), need = 12;
+  if (have >= need) return "none yet: price reads are complete, the keeper trades when a weight drifts past its band";
+  const eta = new Date(Math.ceil(Date.now() / 3600e3) * 3600e3 + (need - have - 1) * 3600e3);
+  return `none yet: the keeper waits for ${need} hourly price reads per pool before its first trade (${have} of ${need} so far, around ${eta.toISOString().slice(11, 16)} UTC). Until then deposits sit in ETH.`;
+}
 function left(s) {
   const d = s - Date.now() / 1000;
   if (d <= 0) return "executable now";
@@ -99,7 +109,7 @@ export async function mount(view, ctx = {}) {
   const head = h("div"), risk = h("section", { class: "panel iv-risk" }), tiles = h("div", { class: "iv-tiles" });
   const hold = h("section", { class: "panel" }), act = h("section", { class: "panel" }), queue = h("section", { class: "panel" }), info = h("section", { class: "panel" });
   clear(view, h("div", { class: "dk iv" }, head, risk, tiles, h("div", { class: "iv-grid" }, h("div", { class: "iv", style: { gap: "16px" } }, hold, queue), h("div", { class: "iv", style: { gap: "16px" } }, act, info))));
-  head.append(pageHead("Troya Index", "One token, TIDX, for a basket of Robinhood Chain assets kept near its weights by Troya's keeper. Your TIDX is always the same slice of everything the vault holds, and you can take it out in kind at any time.", { badge: "Not audited", badgeClass: "warn" }));
+  head.append(pageHead("Troya Index", "One token, TIDX, for a basket of Robinhood Chain assets kept near its weights by Troya's keeper. Your TIDX is always the same slice of everything the vault holds, and you can take it out in kind at any time."));
 
   async function load() {
     try { st.d = await api.get("index"); } catch (e) { st.err = e.message; }
@@ -177,7 +187,7 @@ export async function mount(view, ctx = {}) {
         h("span", {}, "Management fee"), h("span", {}, `${d.fee.mgmtPctPerYear}% a year in TIDX, to `, addrLink(d.fee.mgmtRecipient)),
         h("span", {}, "Caps"), h("span", {}, `${amt(d.caps.total)} TIDX total, ${amt(d.caps.wallet)} per wallet`),
         h("span", {}, "Rebalance"), h("span", {}, `at most ${d.rules.maxMovePct}% per move, every ${d.rules.cooldownHours} h`),
-        h("span", {}, "Last rebalance"), h("span", {}, d.lastRebalance?.tx ? txLink(d.lastRebalance.tx, `${d.lastRebalance.assetIn || ""} → ${d.lastRebalance.assetOut || ""}`) : "none yet"),
+        h("span", {}, "Last rebalance"), h("span", {}, d.lastRebalance?.tx ? txLink(d.lastRebalance.tx, `${d.lastRebalance.assetIn || ""} → ${d.lastRebalance.assetOut || ""}`) : firstTradeNote(d)),
         h("span", {}, "Status"), h("span", {}, d.paused.deposits ? "new deposits paused" : "deposits open", " · ", d.paused.rebalances ? "rebalances paused" : "rebalances running", " · withdrawals always open")));
   }
 

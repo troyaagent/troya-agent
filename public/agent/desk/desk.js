@@ -93,7 +93,7 @@ export const GROUPS = [
   ["Agent", [["Chat", "#/agent", "chat"], ["Agent control", "#/agent/scepter", "scepter"], ["Agent Wallet", "#/agent/wallet", "wallet"], ["Autopilot", "#/agent/autopilot", "autopilot"], ["Launch Autopilot", "#/agent/sentry", "sentry"], ["Playbooks", "#/agent/playbooks", "playbooks"], ["Exit guard", "#/agent/aegis", "aegis"], ["Strategy arena", "#/agent/arena", "arena"], ["What the agents learned", "#/phoenix", "phoenix"]]],
   ["Portfolio", [["Overview", "#/portfolio", "portfolio"], ["Stake $TROYA", "#/stake", "stake"], ["Troya Index", "#/vault", "vault"], ["History", "#/portfolio/history", "history"], ["Weekly review", "#/portfolio/owl", "news"]]],
   // Safety, Verify and The Record are public pages: one entry, opened in a new tab so the app keeps its place
-  ["More", [["Invite & earn", "#/herald", "herald"], ["Holder tiers", "#/treasury", "treasury"], ["$TROYA flywheel", "#/flywheel", "flywheel"], ["AI calls", "#/registry", "agent"], ["Robinhood MCP rail", "#/rail", "rail"], ["Social", "#/social", "social"], ["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Safety", "/safety", "verify"], ["What's new", "/roadmap#v8", "news"], ["Plans and tiers", "/plans", "plans"], ["Report a bug", "/community", "bug"]]],
+  ["More", [["Invite & earn", "#/herald", "herald"], ["Holder tiers", "#/treasury", "treasury"], ["$TROYA flywheel", "#/flywheel", "flywheel"], ["AI calls", "#/registry", "agent"], ["Robinhood MCP rail", "#/rail", "rail"], ["Social", "#/social", "social"], ["Start in 60 seconds", "#/start", "start"], ["Docs", "#/docs", "docs"], ["Safety", "/safety", "verify"], ["What's new", "/roadmap#drops", "news"], ["Plans and tiers", "/plans", "plans"], ["Report a bug", "/community", "bug"]]],
 ];
 // not in the sidebar, still found by Search (⌘K): the Inbox has the bell and the Portfolio badge; Verify and The Record sit under Safety
 // About Troya has its own link at the foot of the sidebar, just above the $TROYA chip (community request, 23 Nov 2026)
@@ -280,9 +280,19 @@ setTimeout(startSilk, 6000);          // a first page whose mount never settles 
 
 /* ---------- sidebar ---------- */
 const external = (href) => href.startsWith("/") ? { target: "_blank", rel: "noopener" } : {};
+// "New" beside a page for 7 days after it shipped (owner, 28 Nov 2026: show what is new so nobody gets lost). Add a page
+// here the day it goes live; the label drops off by itself.
+const NEW_SINCE = {
+  "/check": "2026-11-27T00:00:00Z", "#/vault": "2026-11-28T04:45:00Z", "/safety": "2026-11-28T04:45:00Z",
+  "#/trident": "2026-11-25T15:00:00Z", "#/bow": "2026-11-25T15:00:00Z", "#/sirens": "2026-11-25T15:00:00Z", "#/proteus": "2026-11-25T15:00:00Z",
+  "#/voyage": "2026-11-25T15:00:00Z", "#/argus": "2026-11-25T15:00:00Z", "#/scylla": "2026-11-25T15:00:00Z", "#/mentor": "2026-11-25T15:00:00Z",
+  "#/nekyia": "2026-11-25T15:00:00Z", "#/tiresias": "2026-11-25T15:00:00Z",
+};
+const isNew = (href) => { const t = Date.parse(NEW_SINCE[href] || ""); return t && Date.now() - t < 7 * 86400e3; };
+const newTag = () => h("em", { class: "d-new", style: { marginLeft: "auto", fontStyle: "normal", font: "700 9px/1 var(--sans, inherit)", letterSpacing: ".08em", textTransform: "uppercase", padding: "4px 6px", borderRadius: "999px", color: "var(--on-accent, #04212b)", background: "var(--accent, #5fd3ef)" } }, "New");
 function navGroup([g, items]) {
   const list = h("div", { class: "d-group-items", style: { display: "grid", gap: "1px" } },
-    items.map(([t, href, ic]) => h("a", { href, ...external(href), ...(href === "#/leaderboard" ? { hidden: true, "data-leaderboard": "" } : {}) }, si(ic), h("span", {}, t))));
+    items.map(([t, href, ic]) => h("a", { href, ...external(href), ...(href === "#/leaderboard" ? { hidden: true, "data-leaderboard": "" } : {}) }, si(ic), h("span", {}, t), ...(isNew(href) ? [newTag()] : []))));
   if (!g) return h("div", { class: "d-group" }, list);
   const id = `d-grp-${g.toLowerCase()}`;
   list.id = id;

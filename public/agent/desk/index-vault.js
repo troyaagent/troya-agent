@@ -324,6 +324,7 @@ async function mountDeploy(view) {
     const r = st.run, b = st.build;
     const kids = [pageHead("Deploy Troya Index", "For the $TROYA creator wallet only. Three contracts are created from the tested build with the approved parameters, then the vault is handed to the team Safe. Each step is one transaction in your wallet.", { badge: "Owner", badgeClass: "warn" })];
     if (st.err) kids.push(h("div", { class: "alert error" }, st.err));
+    kids.push(proposerPanel());
     if (!wallet.address) kids.push(h("section", { class: "panel" }, h("p", {}, `Connect the creator wallet ${short(L.CREATOR)} to continue.`), h("button", { class: "btn primary", type: "button", onclick: openConnect }, "Connect wallet")));
     else if (!isCreator()) kids.push(h("section", { class: "panel" }, h("div", { class: "alert warn" }, `The connected wallet ${short(wallet.address)} is not the creator wallet ${short(L.CREATOR)}. This page only proceeds with the creator wallet.`)));
     // the parameters, always visible so they can be checked before connecting
@@ -436,6 +437,42 @@ async function mountDeploy(view) {
     st.busy = null; await readLive(); paint();
   }
 
+  // the server proposer: one EIP-712 signature from a Safe signer registers it with the Safe Transaction Service (free; the
+  // Safe app's own "Add proposer" is a paid feature). It can only queue transactions; owners still confirm and execute.
+  async function loadProposer() {
+    try { st.prop = await (await fetch("/api/safe/proposer")).json(); } catch { st.prop = null; }
+    if (alive) paint();
+  }
+  function proposerPanel() {
+    const p = st.prop;
+    const isOwner = p && wallet.address && (p.owners || []).some((o) => lc(o) === lc(wallet.address));
+    return h("section", { class: "panel" }, h("h3", {}, "Safe proposer (team)"),
+      h("p", { class: "fine" }, "The server's proposer wallet puts transactions in the team Safe's queue (for example: open deposits), so the team only confirms and executes them in the Safe app. It cannot confirm, execute or hold funds."),
+      !p ? h("p", { class: "muted" }, "Loading…")
+        : h("div", { class: "iv-kv" }, h("span", {}, "Proposer"), h("span", {}, p.proposer ? addrLink(p.proposer) : "not set on the server"),
+          h("span", {}, "Status"), h("span", {}, p.registered ? `registered (by ${short(p.delegators?.[0] || "")})` : "not registered yet")),
+      p && !p.registered && p.proposer ? (isOwner
+        ? h("button", { class: "btn primary", type: "button", disabled: st.busy === "prop", onclick: registerProposer }, st.busy === "prop" ? "Sign in your wallet…" : "Register the proposer (one signature, no gas)")
+        : h("p", { class: "fine" }, wallet.address ? `Connect one of the Safe's signers to register it (the connected wallet ${short(wallet.address)} is not one).` : "Connect one of the Safe's signers to register it.")) : null);
+  }
+  async function registerProposer() {
+    if (st.busy) return;
+    st.busy = "prop"; paint();
+    try {
+      const p = st.prop;
+      const totp = Math.floor(Date.now() / 1000 / 3600);
+      const signer = await signerFor("robinhood");
+      const domain = { name: "Safe Transaction Service", version: "1.0", chainId: 4663 };
+      const types = { Delegate: [{ name: "delegateAddress", type: "address" }, { name: "totp", type: "uint256" }] };
+      const signature = await signer.signTypedData(domain, types, { delegateAddress: p.proposer, totp });
+      const res = await fetch("/api/safe/delegate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ delegator: wallet.address, signature, totp }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      toast(j.already ? "The proposer was already registered." : "Proposer registered with the Safe.", "ok", 7000);
+    } catch (e) { toast(errText(e), "error", 9000); }
+    st.busy = null; await loadProposer();
+  }
+
   async function pauseStep() {
     if (st.busy) return;
     try {
@@ -450,5 +487,6 @@ async function mountDeploy(view) {
 
   const off = onWallet(() => { if (alive) paint(); });
   await load();
+  loadProposer();
   return () => { alive = false; off(); };
 }

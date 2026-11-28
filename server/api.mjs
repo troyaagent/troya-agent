@@ -65,6 +65,7 @@ const MODULES = [
   "./styx.mjs",        // V9 F55 Styx Promise: a paid Gate check that passed a coin which then went to zero within 7 days is refunded as Gate credit
   "./warroom.mjs",     // V9 F52 War Room + F53 Myrmidons: calls, challenges and rug reports graded in public (no stakes)
   "./heelhunt.mjs",    // V9 F50 Heel Hunt: talk the Vault Keeper AI into sending the prize (opens only when the team sets it open)
+  "./safeprop.mjs",   // the server proposer for the team Safe: registered once by an owner's signature, proposes only
   "./checkwatch.mjs",  // holder review idea E: Check Watch, a coin re-checked when its fee recipient, tax, code, owner or liquidity changes; /follow alerts
   "./fates.mjs",       // V9 F52 Two Fates (part 1): passed vs blocked launches graded on the same clock, GET /api/fates
   "./mentor.mjs",      // V10 F70 Mentor: weekly Blocked-and-why report from Two Fates, GET /api/mentor (drafts only, never posts; MENTOR_DRAFTS=1 DMs the owner Mondays)

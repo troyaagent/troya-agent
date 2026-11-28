@@ -192,6 +192,17 @@ async function tick() {
       for (const k of ["pons", "rec", "tax", "grad", "impl", "owner", "liq", "symbol"]) if (cur[k] !== undefined && cur[k] !== null) next[k] = cur[k];
       if (cur.liq !== undefined) next.liqRef = Math.max(cur.liq, old.liqRef || 0);
       if (list.some((c) => c.kind === "liquidity")) { next.liqRef = cur.liq; next.liqAt = now; }
+      // the liquidity-pulled cap (method v3): a non-Pons pool down 90%+ from its high; lifted once half of it is back
+      if (next.pons === false && cur.liq !== undefined) {
+        next.liqHigh = Math.max(old.liqHigh || 0, cur.liq);
+        if (old.pulled && cur.liq >= old.pulled.from * 0.5) { delete next.pulled; next.liqHigh = cur.liq; }
+        else if (old.pulled) next.pulled = { ...old.pulled, to: cur.liq };
+        else if (next.liqHigh >= LIQ_MIN_USD && cur.liq <= next.liqHigh * 0.1) {
+          next.pulled = { from: next.liqHigh, to: cur.liq, at: now };
+          if (!list.some((c) => c.kind === "liquidity")) list.push({ kind: "liquidity", text: `Pool liquidity was pulled: ${usd(next.liqHigh)} → ${usd(cur.liq)} (90% or more gone)` });
+        }
+        if ((!!old.pulled) !== (!!next.pulled) && list.length === 0) list.push({ kind: "liquidity", text: `Pool liquidity is back to ${usd(cur.liq)}: the liquidity-pulled cap is lifted` });
+      }
       state.fp[a] = next;
       if (list.length && rechecks < 3 && now - (old.recheckAt || 0) > RECHECK_GAP) {
         rechecks++;
@@ -270,6 +281,13 @@ export async function onCallback(cq, tg) {
   }
   return true;
 }
+
+/** the liquidity pull Check Watch saw on a non-Pons pool (method v3 cap), or null */
+export function pulledOf(address) {
+  const f = state.fp[lc(address)];
+  return f?.pons === false && f.pulled ? { from: f.pulled.from, to: f.pulled.to, at: f.pulled.at } : null;
+}
+const parseUsd = (t) => { const m = /^\$([\d.]+)(K|M)?$/.exec(String(t || "")); return m ? Number(m[1]) * (m[2] === "M" ? 1e6 : m[2] === "K" ? 1e3 : 1) : null; };
 
 /** for the coin page (enrich): since when the coin is watched and what changed */
 export function watchOf(address) {
@@ -362,6 +380,14 @@ export async function register(r, ctx) {
   if (!Array.isArray(state.events)) state.events = [];
   follows = await store.readJson(FOLLOWS, { chats: {} }).catch(() => follows);
   if (!follows.chats) follows.chats = {};
+  // the liquidity high of each non-Pons coin, from the liquidity notes already logged (before liqHigh was kept)
+  for (const e of state.events) {
+    const f = state.fp[lc(e.address)];
+    if (!f || f.pons !== false || !(e.changes || []).includes("liquidity")) continue;
+    const m = /from (\$[\d.]+[KM]?) to/.exec(e.text || "");
+    const v = m ? parseUsd(m[1]) : null;
+    if (v) f.liqHigh = Math.max(f.liqHigh || 0, v, f.liqRef || 0);
+  }
   // a re-check cut short by a restart (no score after it, in the last 6 hours) is tried again
   for (const e of state.events.slice(-50)) {
     const k = lc(e.address), f = state.fp[k];

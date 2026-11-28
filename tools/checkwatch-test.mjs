@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initStore } from "../server/store.mjs";
-import { _test, botCommand as bc0, watchOf, summary, onCallback, alertMessage } from "../server/checkwatch.mjs";
+import { _test, botCommand as bc0, watchOf, summary, onCallback, alertMessage, pulledOf } from "../server/checkwatch.mjs";
 const botCommand = async (...a) => { const o = await bc0(...a); return typeof o === "string" ? o : o.text; };
 
 let pass = 0, fail = 0;
@@ -95,6 +95,20 @@ await t("alert text and buttons", () => {
   const o = alertMessage({ address: "0x1FA81ddaAAc83240803B3F2d20595E40Edc1a074", symbol: "TROYA", text: "Ownership was renounced", before: 74, after: 80, label: "Fair" });
   assert.match(o.text, /\$TROYA\nWhat changed: Ownership was renounced\.\nTroya checked it again: <b>74 → 80<\/b>/);
   assert.equal(o.markup.inline_keyboard[0].length, 2);
+});
+
+// method v3: the liquidity-pulled cap
+const { marketPart, CAPS, METHOD } = await import("../server/check.mjs");
+await t("method is v3", () => assert.equal(METHOD.version, "v3"));
+await t("a pulled pool caps the market part at 35", () => {
+  const p = marketPart({ liquidityUsd: 999, holders: 40 }, A, { from: 16300, to: 999, at: now });
+  assert.equal(p.cap.at, CAPS.liqPulled); assert.equal(CAPS.liqPulled, 35);
+  assert.match(p.short, /Liquidity was pulled: \$16\.3K → \$999 \(94% gone\)/);
+});
+await t("no pull, no cap", () => assert.equal(marketPart({ liquidityUsd: 999, holders: 40 }, A).cap, null));
+await t("pulledOf: only non-Pons coins", () => {
+  _test.setState({ fp: { [A]: { pons: false, pulled: { from: 16300, to: 999, at: now } }, "0x0000000000000000000000000000000000000001": { pons: true, pulled: { from: 1, to: 0, at: now } } }, events: [], passAt: 0 });
+  assert.equal(pulledOf(A).from, 16300); assert.equal(pulledOf("0x0000000000000000000000000000000000000001"), null);
 });
 
 console.log(`${pass} passed, ${fail} failed`);

@@ -61,12 +61,13 @@ let store = null;
 // claims 10 → 8)
 export const WEIGHTS = { gate: 27, ring: 14, devside: 14, holders: 14, powers: 10, market: 5, heel: 2, clash: 3, age: 3, claims: 8 };
 // the scoring method's version: bump it with a line whenever weights or caps change, so old and new scores can be told apart
-export const METHOD = { version: "v2", note: "v2, 27 Nov 2026: Contract powers added (10 points; caps 40 mint, 45 blacklist/pause/trading, 60 upgradeable proxy), other weights rebalanced. v1, 26 Nov 2026: first public weights." };
+export const METHOD = { version: "v3", note: "v3, 28 Nov 2026: liquidity-pulled cap 35 (a non-Pons pool whose liquidity fell 90% or more from its high, as Check Watch reads it; lifted once half of it is back). v2, 27 Nov 2026: Contract powers added (10 points; caps 40 mint, 45 blacklist/pause/trading, 60 upgradeable proxy), other weights rebalanced. v1, 26 Nov 2026: first public weights." };
 export const CAPS = {
   gateFail: 15,       // the Gate failed a check that decides a buy: the test sell, the exact swap, the transfer tax or the fees
   ringRed: 20,        // Ring Radar: a rigged launch pattern
   noRoute: 25,        // the Gate finds no route to buy it at all
   lpPulled: 25,       // The Assay: the dev pulled liquidity
+  liqPulled: 35,      // Check Watch: a non-Pons pool lost 90%+ of its liquidity from its high (a Pons pool is locked, never capped here)
   devsideFail: 30,    // the dev and the wallets tied to it hold most of it or are selling now (the Gate blocks the buy)
   noSellRoute: 40,    // a buy works, but no route sells it back (on Troya or through KyberSwap)
   claimFalse: 35,     // the project claims liquidity locked, renounced, a tax, a supply or a burn that the chain contradicts
@@ -268,8 +269,14 @@ export function holdersPart(d, A) {
 }
 
 const usd = (v) => (v == null || !isFinite(v) ? null : v >= 1e6 ? `$${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}K` : `$${Number(v).toFixed(v < 10 ? 2 : 0)}`);
-export function marketPart(tok, A) {
+export function marketPart(tok, A, pulled = null) {
   const p = part("market", { links: [links.dex(A), links.explorer(A)] });
+  // Check Watch saw 90%+ of a non-Pons pool's liquidity leave (from its high): capped until half of it is back
+  if (pulled && pulled.from > 0) {
+    const t = `Liquidity was pulled: ${usd(pulled.from)} → ${usd(pulled.to)} (${Math.round((1 - pulled.to / pulled.from) * 100)}% gone)`;
+    p.evidence = [{ text: t }];
+    return score(p, 0, `${t}.`, { cap: { at: CAPS.liqPulled, why: `liquidity was pulled (${usd(pulled.from)} → ${usd(pulled.to)})` }, short: `${t}.` });
+  }
   if (!tok) return notRead(p, "Not read: no pool on the Robinhood Chain board or DexScreener answered.");
   const liq = tok.realLiquidityUsd ?? tok.liquidityUsd ?? null;
   const holders = tok.holders ?? null;
@@ -486,7 +493,7 @@ export function scoreCheck(f) {
     ].filter(Boolean).slice(0, 3);
     return { ...base, score: null, label: f.kind === "stock" ? "Tokenized stock" : "Major token", tone: "grey", headline: `${cap1(what)}, not a launch, so it gets no meme-coin score.`, reasons, parts: [gate, m], caps: [], gatePassed: gate.status === "scored" && gate.value >= 0.75 && !gate.cap, partial: gate.status === "not read", coin: coinFacts(f), priceUsd: Number(f.token?.priceUsd) > 0 ? Number(f.token.priceUsd) : null };
   }
-  const parts = [gate, ringPart(f.gate, f.ring, A), devsidePart(f.gate, f.devlinks, A), holdersPart(f.assay, A), marketPart(f.token, A), heelPart(f.heel, A), clashPart(f.clash, base.symbol, A), agePart(f.bornAt, f.bornSrc, A, base.checkedAt), claimsPart(f.claims), powersPart(f.health, A)];
+  const parts = [gate, ringPart(f.gate, f.ring, A), devsidePart(f.gate, f.devlinks, A), holdersPart(f.assay, A), marketPart(f.token, A, f.pulled || null), heelPart(f.heel, A), clashPart(f.clash, base.symbol, A), agePart(f.bornAt, f.bornSrc, A, base.checkedAt), claimsPart(f.claims), powersPart(f.health, A)];
   for (const p of parts) { p.summary = plainText(p.summary); if (p.short) p.short = plainText(p.short); for (const e of p.evidence || []) if (e.text) e.text = plainText(e.text); }
   const read = parts.filter((p) => p.status === "scored" && p.weight > 0);
   const W = read.reduce((s, p) => s + p.weight, 0);
@@ -593,7 +600,8 @@ async function gather(A, waitMs = WAIT_MS, hints = []) {
   const ring = RR?.ringCached?.(A) || (await ringP);
   const devlinks = await import("./devlinks.mjs").then((m) => m.devLinksCached(A)).catch(() => null);
   const bornSrc = await import("./tokenage.mjs").then((m) => m.bornSource(A)).catch(() => null);
-  return { address: A, kind: "coin", symbol: token?.symbol || gate?.symbol || meta.symbol, name: token?.name || gate?.name || meta.name, gate, ring, devlinks, assay, token, heel, clash, claims, health, bornAt: bornAt || token?.bornAt || null, bornSrc, now };
+  const pulled = await import("./checkwatch.mjs").then((m) => m.pulledOf(A)).catch(() => null);
+  return { address: A, kind: "coin", symbol: token?.symbol || gate?.symbol || meta.symbol, name: token?.name || gate?.name || meta.name, gate, ring, devlinks, assay, token, heel, clash, claims, health, pulled, bornAt: bornAt || token?.bornAt || null, bornSrc, now };
 }
 
 /* ---------- the cache, the queue and the record ---------- */

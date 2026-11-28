@@ -150,12 +150,14 @@ async function retryRecheck(a, now) {
   const f = state.fp[a], rt = f?.retry;
   if (!rt || now - rt.at < 5 * 60_000) return false;
   const C = await import("./check.mjs");
-  const r = await C.checkForChat(getAddress(a), { via: "watch", budgetMs: 120_000, firstWaitMs: 60_000 }).catch(() => null);
   const ev = state.events.find((e) => lc(e.address) === a && e.at === rt.evAt);
+  if (ev && ev.before == null) ev.before = C.latestChecks(await store.readJson("checks.json", []).catch(() => [])).get(a)?.score ?? null;
+  if (ev?.queued) C.forget?.(a);
+  const r = await C.checkForChat(getAddress(a), { via: "watch", budgetMs: 120_000, firstWaitMs: 60_000 }).catch(() => null);
   if (r && C.complete(r)) {
     delete f.retry;
     if (ev) {
-      ev.after = r.score; ev.label = r.label;
+      ev.after = r.score; ev.label = r.label; delete ev.queued;
       const chats = Object.entries(follows.chats || {}).filter(([, l]) => (l || []).some((x) => lc(x) === a)).map(([c]) => c);
       for (const c of chats) await tgSend(c, `<b>Troya Check Watch</b> · ${ev.symbol ? `$${esc(ev.symbol)}` : short(ev.address)}\nNew score after the change (${esc(ev.text)}): <b>${ev.before ?? "–"} → ${r.score}</b> (${esc(r.label || "")})`, { inline_keyboard: [[checkBtn(ev.address), stopBtn(ev.address)]] });
     }
@@ -210,6 +212,7 @@ async function tick() {
         await recheck(a, list, cur).catch((e) => console.warn("[checkwatch] recheck", e.message));
       } else if (list.length) {
         state.events.push({ at: now, address: getAddress(a), symbol: cur.symbol, changes: list.map((c) => c.kind), text: list.map((c) => c.text).join("; "), before: null, after: null, queued: true });
+        if (!state.fp[a].retry) state.fp[a].retry = { at: now, evAt: now, tries: 0 };
       }
     }
     // coins nobody checked for 30 days and nobody follows are dropped from the fingerprints
@@ -391,7 +394,7 @@ export async function register(r, ctx) {
   // a re-check cut short by a restart (no score after it, in the last 6 hours) is tried again
   for (const e of state.events.slice(-50)) {
     const k = lc(e.address), f = state.fp[k];
-    if (f && !f.retry && !e.queued && e.after == null && Date.now() - e.at < 6 * 3600e3) f.retry = { at: 0, evAt: e.at, tries: 0 };
+    if (f && !f.retry && e.after == null && Date.now() - e.at < 6 * 3600e3) f.retry = { at: 0, evAt: e.at, tries: 0 };
   }
   r.get("/api/checkwatch", () => summary(), { weight: 1, perMin: 60 });
   if (process.env.CHECK_WATCH === "0") return;

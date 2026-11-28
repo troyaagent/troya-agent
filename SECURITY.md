@@ -37,7 +37,7 @@ Fixed rewards, paid in ETH, for security bugs in the three Troya Index contracts
 | High | A way to break a vault rule: the total or per-wallet cap, the fees, the 48-hour timelock, the move cap or cooldown, or a rebalance outside its slippage limit | 0.03 ETH |
 
 - Everything paid under this bounty is capped at **0.2 ETH** in total. The first valid report of each issue is the one rewarded.
-- Paid in ETH on Robinhood Chain, to an address you choose, once the fix or mitigation is live.
+- Paid in ETH on Robinhood Chain, to an address you choose, once the fix or mitigation is live. The Troya team decides whether a report is valid and how severe it is, and sends each payment by hand; nothing is paid automatically.
 - Report privately to **team@troya.codes** as described above. Test only on a fork or a local chain, never against live funds, and keep the details private until we have fixed it.
 - Not eligible: Troya team members and anyone who wrote or reviewed these contracts for Troya.
 - Not covered: anything that needs the team Safe (2 of 3) or the owner to act maliciously; price moves of the basket's assets (ETH, USDG, SPY, NVDA, $TROYA); bugs in third-party contracts (Uniswap, the Pons hook, the basket's tokens) unless the vault's own use of them is the problem; the keeper's choice of timing within its limits; gas griefing with no effect on funds; the risks already listed on the vault page.

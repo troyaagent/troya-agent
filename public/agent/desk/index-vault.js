@@ -22,6 +22,7 @@ const VAULT = new Interface([
   "function balanceOf(address) view returns (uint256)",
   "function owner() view returns (address)", "function pendingOwner() view returns (address)", "function keeper() view returns (address)",
   "function transferOwnership(address)",
+  "function depositsPaused() view returns (bool)", "function rebalancesPaused() view returns (bool)", "function setPaused(bool deposits, bool rebalances)",
   "error NotEthOnly()", "error SharesBelowMinimum(uint256 shares, uint256 minimum)", "error WalletCapExceeded()", "error TotalCapExceeded()", "error DepositsPaused()", "error NotEnoughEth(uint256 needed, uint256 sent)",
 ]);
 const ZAP = new Interface(["function zap(uint256 shares, address receiver, uint256[] venueIds) payable returns (uint256 ethSpent)", "error ReceivedLess(address asset, uint256 needed, uint256 received)", "error BadVenue()"]);
@@ -313,7 +314,7 @@ async function mountDeploy(view) {
     try {
       const rd = reader("robinhood");
       const dec = async (fn) => VAULT.decodeFunctionResult(fn, await rd.call({ to: v, data: VAULT.encodeFunctionData(fn, []) }))[0];
-      st.live = { owner: await dec("owner"), pending: await dec("pendingOwner"), keeper: await dec("keeper") };
+      st.live = { owner: await dec("owner"), pending: await dec("pendingOwner"), keeper: await dec("keeper"), paused: await dec("depositsPaused").catch(() => null) };
     } catch {}
   }
   const isCreator = () => lc(wallet.address) === lc(L.CREATOR);
@@ -369,6 +370,14 @@ async function mountDeploy(view) {
         h("span", {}, "Owner now"), h("span", {}, live.owner ? addrLink(live.owner, accepted ? "the Safe (accepted)" : short(live.owner)) : "–"),
         h("span", {}, "Pending owner"), h("span", {}, live.pending && !/^0x0{40}$/i.test(live.pending) ? addrLink(live.pending, lc(live.pending) === lc(L.SAFE) ? "the Safe (waiting for it to accept)" : short(live.pending)) : accepted ? "none" : "–"),
         h("span", {}, "Keeper"), h("span", {}, live.keeper ? addrLink(live.keeper) : "–")),
+      // deposits stay shut until the bounty is published and the opening is announced (the creator can pause only before the Safe accepts)
+      h("h3", { style: { marginTop: "14px" } }, "0. Keep deposits shut until the opening"),
+      live.paused === true
+        ? h("p", { class: "fine" }, "Deposits are paused. Withdrawals always stay open. The Safe resumes deposits (setPaused false, false) when the opening is announced.")
+        : accepted
+          ? h("p", { class: "fine" }, "Deposits are open on chain. The Safe owns the vault now, so pause them from the Safe: setPaused(true, true).")
+          : h("div", {}, h("p", { class: "fine" }, "Deposits are open on chain right now. Pause them from this wallet before the Safe accepts ownership (after that, only the Safe can). Withdrawals cannot be paused."),
+            h("button", { class: "btn primary", type: "button", disabled: !!st.busy || !isCreator(), onclick: pauseStep }, st.busy === "pause" ? "Confirm in your wallet…" : "Pause deposits now")),
       h("h3", { style: { marginTop: "14px" } }, "1. The Safe accepts ownership"),
       h("p", { class: "fine" }, "Until the Safe accepts, your wallet stays the owner (every change still waits 48 hours). In the Safe app (app.safe.global, Robinhood Chain): New transaction → Transaction Builder → address ", h("span", { class: "mono" }, r.vault.address), ", enter the raw data below with value 0, then two of the three signers sign and one executes."),
       h("pre", { class: "iv-pre" }, `to:    ${r.vault.address}\nvalue: 0\ndata:  ${L.acceptData()}   (acceptOwnership())`),
@@ -423,6 +432,18 @@ async function mountDeploy(view) {
       r.transfer = { hash };
       saveRun(r);
       toast("Ownership offered to the Safe. Now the Safe accepts.", "ok", 7000);
+    } catch (e) { toast(errText(e), "error", 9000); }
+    st.busy = null; await readLive(); paint();
+  }
+
+  async function pauseStep() {
+    if (st.busy) return;
+    try {
+      if (!isCreator()) throw new Error("Connect the creator wallet.");
+      const r = st.run;
+      if (!(await review({ title: "Pause deposits", summary: "setPaused(true, true): new deposits and rebalances stop. Withdrawals stay open. No ETH is sent; only gas.", rows: [["Vault", short(r.vault.address)], ["Signer", `${short(wallet.address)} (creator wallet)`]], confirmLabel: "Pause" }))) return;
+      await send("pause", { to: r.vault.address, data: VAULT.encodeFunctionData("setPaused", [true, true]), value: 0n });
+      toast("Deposits paused. Next: the Safe accepts ownership.", "ok", 7000);
     } catch (e) { toast(errText(e), "error", 9000); }
     st.busy = null; await readLive(); paint();
   }

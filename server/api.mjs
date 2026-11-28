@@ -67,6 +67,7 @@ const MODULES = [
   "./heelhunt.mjs",    // V9 F50 Heel Hunt: talk the Vault Keeper AI into sending the prize (opens only when the team sets it open)
   "./safeprop.mjs",
   "./exitpromise.mjs", // Exit Promise pilot: a coin the Gate passed that cannot be sold within 7 days → refund up to $10, proposed to the Safe   // the server proposer for the team Safe: registered once by an owner's signature, proposes only
+  "./herotrend.mjs",   // homepage hero word + Trade pill: the most traded company on trade.xyz, once per UTC day (owner, 28 Nov 2026)
   "./checkwatch.mjs",  // holder review idea E: Check Watch, a coin re-checked when its fee recipient, tax, code, owner or liquidity changes; /follow alerts
   "./fates.mjs",       // V9 F52 Two Fates (part 1): passed vs blocked launches graded on the same clock, GET /api/fates
   "./mentor.mjs",      // V10 F70 Mentor: weekly Blocked-and-why report from Two Fates, GET /api/mentor (drafts only, never posts; MENTOR_DRAFTS=1 DMs the owner Mondays)

@@ -26,7 +26,7 @@ export async function mountHorse(canvas, { base = -0.45, exposure = 0.90 } = {})
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(28, 1, 0.1, 200);
   const mat = new THREE.MeshPhysicalMaterial({ color: 0xc0dbe4, metalness: 0.96, roughness: 0.31, clearcoat: 0.61, clearcoatRoughness: 0.14, envMapIntensity: 1.93, envMap: studioEnv(renderer) });
   const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([import("/vendor/three/addons/loaders/GLTFLoader.js"), import("/vendor/three/addons/libs/meshopt_decoder.module.js")]);
-  const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync("/img/hero/horse.glb");
+  const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync("/img/hero/horse.glb?v=light");
   const root = gltf.scene;
   root.traverse((o) => { if (o.isMesh) o.material = mat; });
   const size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3());

@@ -571,6 +571,12 @@ body { touch-action: manipulation; }
 @media (max-aspect-ratio: 1/1) and (min-width: 641px) {
   .ant-pill { position: absolute; left: 50%; top: calc(max(150px, 19vh) - 54px - var(--pills-top)); translate: -50% 0; white-space: nowrap; }
 }
+/* portrait screens have one slot above the title, so only the first orange pill (the newest feature) shows there; the
+   Trade pill stays on wide screens, and the hero word behind the title still names the day's company (28 Nov 2026:
+   the two pills sat on top of each other on phones) */
+@media (max-width: 640px), (max-aspect-ratio: 1/1) and (min-width: 641px) {
+  .hero-pills .ant-pill ~ .ant-pill { display: none; }
+}
 
 /* 22: the posters' black ground melts into the page (dark themes), and their edges soften */
 html:is([data-t="A"], [data-t="D"]) :is(.iw-film, .iw-art-m, .iw-frame) img { mix-blend-mode: lighten; }

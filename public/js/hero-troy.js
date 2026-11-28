@@ -161,7 +161,7 @@ async function placeholderHorse(mat) {
 async function loadHorse(mat, glbMat) {
   try {
     const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([import("/vendor/three/addons/loaders/GLTFLoader.js"), import("/vendor/three/addons/libs/meshopt_decoder.module.js")]);
-    const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync("/img/hero/horse.glb");
+    const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync("/img/hero/horse.glb?v=light");
     const root = gltf.scene;
     // the model already carries its slats as geometry, so it gets the chrome with the light sweep but no painted seams
     root.traverse((o) => { if (o.isMesh) { o.material = glbMat; o.castShadow = false; } });

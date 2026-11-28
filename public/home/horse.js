@@ -54,7 +54,7 @@ async function mount(canvas) {
   const afterLoad = new Promise((r) => (document.readyState === "complete" ? r() : addEventListener("load", () => r(), { once: true })))
     .then(() => new Promise((r) => ("requestIdleCallback" in window ? requestIdleCallback(() => r(), { timeout: 1500 }) : setTimeout(r, 300))));
   const loading = afterLoad.then(() => Promise.all([import("/vendor/three/addons/loaders/GLTFLoader.js"), import("/vendor/three/addons/libs/meshopt_decoder.module.js")])
-    .then(([{ GLTFLoader }, { MeshoptDecoder }]) => new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync("/img/hero/horse.glb")));
+    .then(([{ GLTFLoader }, { MeshoptDecoder }]) => new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync("/img/hero/horse.glb?v=light")));
   loading.catch(() => {});                       // handled below; avoids an unhandled rejection if we bail out first
 
   let renderer, failed = false, raf = 0, io = null;

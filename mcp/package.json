@@ -1,14 +1,35 @@
 {
   "name": "@troyaagent/mcp",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "MCP server for Troya Agent: Robinhood Chain and Hyperliquid market tools with hard limits. Read tools work without a key; execution is dry-run by default.",
   "type": "module",
-  "bin": { "troya-mcp": "index.mjs" },
-  "files": ["index.mjs", "README.md"],
-  "engines": { "node": ">=18" },
-  "keywords": ["mcp", "model-context-protocol", "robinhood-chain", "hyperliquid", "pons", "trading", "agent"],
+  "bin": {
+    "troya-mcp": "index.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "robinhood-chain",
+    "hyperliquid",
+    "pons",
+    "trading",
+    "agent"
+  ],
   "homepage": "https://troya.codes/api-and-mcp",
-  "repository": { "type": "git", "url": "git+https://github.com/troyaagent/troya-agent.git", "directory": "mcp" },
-  "bugs": { "url": "https://github.com/troyaagent/troya-agent/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/troyaagent/troya-agent.git",
+    "directory": "mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/troyaagent/troya-agent/issues"
+  },
   "license": "MIT"
 }

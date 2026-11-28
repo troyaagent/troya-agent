@@ -1,33 +1,72 @@
 {
   "name": "@troyaagent/plugin-elizaos",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "ElizaOS plugin for Troya: read-only Robinhood Chain safety checks as actions (TROYA_GATE_CHECK, TROYA_TRIDENT_CHECK, TROYA_BRIDGE_SAFETY, TROYA_AGENT_PASSPORT, TROYA_WEAK_SPOT, TROYA_REAL_DEPTH). Never trades or signs.",
   "type": "module",
   "main": "./src/index.js",
   "types": "./src/index.d.ts",
   "exports": {
-    ".": { "types": "./src/index.d.ts", "import": "./src/index.js", "default": "./src/index.js" }
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    }
   },
-  "files": ["src", "README.md", "LICENSE"],
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "sideEffects": false,
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@troyaagent/sdk": "^0.1.0"
   },
   "peerDependencies": {
     "@elizaos/core": "^1.0.0 || ^2.0.0"
   },
-  "keywords": ["elizaos", "eliza", "elizaos-plugin", "plugin", "troya", "robinhood-chain", "ai-agent", "token-safety", "firewall"],
+  "keywords": [
+    "elizaos",
+    "eliza",
+    "elizaos-plugin",
+    "plugin",
+    "troya",
+    "robinhood-chain",
+    "ai-agent",
+    "token-safety",
+    "firewall"
+  ],
   "agentConfig": {
     "pluginType": "elizaos:plugin:1.0.0",
     "pluginParameters": {
-      "TROYA_API_KEY": { "type": "string", "description": "Optional Troya API token (troya_…) so signed Gate checks use your wallet's free checks and USDG credit.", "required": false, "sensitive": true },
-      "TROYA_BASE_URL": { "type": "string", "description": "Optional, default https://troya.codes", "required": false },
-      "TROYA_TIMEOUT_MS": { "type": "number", "description": "Optional per-call timeout, default 30000", "required": false }
+      "TROYA_API_KEY": {
+        "type": "string",
+        "description": "Optional Troya API token (troya_…) so signed Gate checks use your wallet's free checks and USDG credit.",
+        "required": false,
+        "sensitive": true
+      },
+      "TROYA_BASE_URL": {
+        "type": "string",
+        "description": "Optional, default https://troya.codes",
+        "required": false
+      },
+      "TROYA_TIMEOUT_MS": {
+        "type": "number",
+        "description": "Optional per-call timeout, default 30000",
+        "required": false
+      }
     }
   },
   "homepage": "https://troya.codes",
-  "repository": { "type": "git", "url": "git+https://github.com/troyaagent/troya-agent.git", "directory": "plugins/elizaos" },
-  "bugs": { "url": "https://github.com/troyaagent/troya-agent/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/troyaagent/troya-agent.git",
+    "directory": "plugins/elizaos"
+  },
+  "bugs": {
+    "url": "https://github.com/troyaagent/troya-agent/issues"
+  },
   "license": "MIT"
 }

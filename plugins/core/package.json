@@ -1,20 +1,49 @@
 {
   "name": "@troyaagent/sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Tiny, dependency-free client for Troya's read-only API on Robinhood Chain: Gate pre-trade check, Trident firewall, Scylla bridge safety, Bow agent passport, Heel weak spot and Sirens real depth. Never trades or signs.",
   "type": "module",
   "main": "./src/index.js",
   "types": "./src/index.d.ts",
   "exports": {
-    ".": { "types": "./src/index.d.ts", "import": "./src/index.js", "default": "./src/index.js" }
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    }
   },
-  "files": ["src", "README.md", "LICENSE"],
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "sideEffects": false,
-  "engines": { "node": ">=18" },
-  "scripts": { "test": "node test/live.mjs" },
-  "keywords": ["troya", "robinhood-chain", "agent", "ai-agent", "token-safety", "honeypot", "firewall", "bridge", "erc-8004", "x402"],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test/live.mjs"
+  },
+  "keywords": [
+    "troya",
+    "robinhood-chain",
+    "agent",
+    "ai-agent",
+    "token-safety",
+    "honeypot",
+    "firewall",
+    "bridge",
+    "erc-8004",
+    "x402"
+  ],
   "homepage": "https://troya.codes",
-  "repository": { "type": "git", "url": "git+https://github.com/troyaagent/troya-agent.git", "directory": "plugins/core" },
-  "bugs": { "url": "https://github.com/troyaagent/troya-agent/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/troyaagent/troya-agent.git",
+    "directory": "plugins/core"
+  },
+  "bugs": {
+    "url": "https://github.com/troyaagent/troya-agent/issues"
+  },
   "license": "MIT"
 }
